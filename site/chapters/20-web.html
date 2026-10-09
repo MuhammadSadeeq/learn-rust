@@ -262,7 +262,7 @@ pub async fn show(
             ["extract", "State gives show a clone of AppState. Path<u64> parses 1. Both succeed."],
             ["handler", "show finds note 1 and returns Ok(Json(note))."],
             ["into", "IntoResponse turns the value into a Response. Json sets the content type, and Ok means status 200."],
-            ["out", "TraceLogs status 200, and the response is sent."]
+            ["out", "TraceLayer logs status 200, and the response is sent."]
           ],
           back: { before: "out", stages: [
             ["layers", "The response passes back out through TraceLayer and TimeoutLayer."]

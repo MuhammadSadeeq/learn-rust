@@ -844,7 +844,7 @@ document.addEventListener("DOMContentLoaded", function () {
     else if (grew) msg = "The Vec had no plot yet. Alloc hands it one with room for " + after + ".";
     else msg = "There was room, so Alloc did nothing. Length " + state.len + " fits in capacity " + after + ".";
     if (state.len === MAX) {
-      msg += " The Vec is full at 12 items.";
+      msg += " This demo stops at 12 items.";
       state.seen[state.mode] = true;
       if (state.seen.new && state.seen.cap8 && !state.awarded && window.Ox && Ox.award) {
         state.awarded = true;
