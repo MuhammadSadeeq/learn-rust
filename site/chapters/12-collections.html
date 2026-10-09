@@ -790,6 +790,8 @@ fn main() {
 
 <p><code>sort</code> changes the list in place, so the variable must be <code>mut</code>. Text sorts by character code, so capital letters come before lowercase ones: <code>"Ana"</code> and <code>"Cy"</code> come before <code>"bo"</code>.</p>
 
+<p>A borrowed slice, <code>&amp;[T]</code>, can't be sorted, because you only have a reference. Copy it into a <code>Vec</code> you own with <code>to_vec()</code>, and sort the copy. After a sort, <code>truncate(n)</code> keeps the first <code>n</code> items and drops the rest, which gives you the top <code>n</code>.</p>
+
 <p><code>sort</code> is <strong>stable</strong>. Items that compare equal keep the order they had. <code>sort_unstable</code> may reorder equal items. It is usually faster, and it does not allocate a buffer for the sort. Use it when the order of equal items does not matter. The <code>_by</code> and <code>_by_key</code> forms below have unstable versions too, such as <code>sort_unstable_by_key</code>, and they follow the same comparison rules.</p>
 
 <h3>Sort by a key</h3>

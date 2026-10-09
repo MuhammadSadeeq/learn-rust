@@ -2,16 +2,17 @@
    Each case is a program an AI agent wrote for the task. `rust` is that
    program as written; `smells` name the 1-based lines of `rust` a senior
    reviewer would flag (lines shared by a smell are one finding). `idiomatic`
-   is the reviewed version. It prints the same as `rust` except in the two
-   cases where the fix changes behavior on purpose: audit-log and
-   webhook-handler (the agent version hid a failure). Both must compile
-   (tools/check-snippets.mjs). */
+   is the reviewed version. It prints the same as `rust` except in three
+   cases. audit-log and webhook-handler change behavior on purpose (the
+   agent version hid a failure), and webhook-handler also drops its log
+   lines. upload-async's reviewed main runs the futures and prints their
+   results. Both must compile (tools/check-snippets.mjs). */
 window.OX_DOJO = [
   {
     id: "invoice-total",
     title: "Invoice total",
     task: "Add a function that totals an invoice's line items for the PDF footer, and a helper that lists the item descriptions.",
-    chapter: 7,
+    chapter: 12,
     check: "ok",
     rust: String.raw`#[derive(Debug, Clone)]
 struct LineItem {
@@ -107,7 +108,7 @@ fn main() {
     id: "port-from-config",
     title: "Port from config",
     task: "Write the function in the shared crate that reads the HTTP port and the worker count from the config text.",
-    chapter: 11,
+    chapter: 12,
     check: "ok",
     rust: String.raw`use std::collections::HashMap;
 
@@ -162,14 +163,20 @@ enum ConfigError {
 impl fmt::Display for ConfigError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ConfigError::BadNumber { key, source } => {
-                write!(f, "{key} must be a number: {source}")
+            ConfigError::BadNumber { key, .. } => {
+                write!(f, "{key} must be a number")
             }
         }
     }
 }
 
-impl std::error::Error for ConfigError {}
+impl std::error::Error for ConfigError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            ConfigError::BadNumber { source, .. } => Some(source),
+        }
+    }
+}
 
 // Shared config parser used by the API and the worker.
 fn parse_config(text: &str) -> HashMap<String, String> {
@@ -212,7 +219,7 @@ fn main() -> Result<(), ConfigError> {
     id: "normalize-username",
     title: "Normalize a username",
     task: "Add a helper that normalizes a username before it is compared with the database, and a lookup that uses it.",
-    chapter: 8,
+    chapter: 15,
     check: "ok",
     rust: String.raw`fn normalize(name: String) -> String {
     name.trim().to_lowercase()
@@ -289,7 +296,7 @@ fn main() {
     id: "settings-loader",
     title: "Settings loader",
     task: "Write the settings loader that the shared crate exports, so the CLI and the web app can both call it.",
-    chapter: 11,
+    chapter: 13,
     check: "ok",
     rust: String.raw`use std::collections::BTreeMap;
 use std::error::Error;
@@ -502,6 +509,7 @@ fn main() {
         explain: "<p>The <code>_ =&gt; \"Unknown\"</code> arm turns every unexpected string into a label, so a typo shows up as \"Unknown\" and nothing reports it. With an enum and no catch-all arm, a new state makes the <code>match</code> fail to compile until someone handles it.</p>" },
     ],
     idiomatic: String.raw`#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)] // Done is a real state; this demo never reaches it.
 enum Status {
     Queued,
     Running,
@@ -550,7 +558,7 @@ fn main() {
     id: "audit-log",
     title: "Audit log",
     task: "Write an audit line for every charge, and make sure a failed audit write cannot go unnoticed.",
-    chapter: 11,
+    chapter: 14,
     check: "ok",
     rust: String.raw`use std::io::{self, Write};
 
@@ -803,7 +811,7 @@ fn main() {
     id: "point-derive",
     title: "Point type",
     task: "Add a Point type for the geometry module, with copying, equality, debug output and a default value.",
-    chapter: 9,
+    chapter: 14,
     check: "ok",
     rust: String.raw`use std::fmt;
 
@@ -868,7 +876,7 @@ fn main() {
     id: "retry-backoff",
     title: "Retry with backoff",
     task: "Add a retry helper for the payment gateway client, with exponential backoff, and report each failed attempt.",
-    chapter: 4,
+    chapter: 14,
     check: "ok",
     rust: String.raw`use std::time::Duration;
 
@@ -904,7 +912,7 @@ fn main() {
       { lines: [8, 12], kind: "magic numbers", severity: "idiom",
         explain: "<p>The attempt limit <code>5</code>, the base delay <code>250</code> and the doubling <code>2</code> are unnamed. Changing the policy means finding every copy, and a reader cannot tell a limit from a delay. Name the limits as constants at the top of the module.</p>" },
       { lines: [11], kind: "wait after the last attempt", severity: "perf",
-        explain: "<p>The <code>Err</code> arm waits even after the final attempt, so the caller pays for a delay that leads nowhere before it receives the error. Return the error on the last attempt, before any wait.</p>" },
+        explain: "<p>The <code>Err</code> arm logs a wait even after the final attempt. A real client would sleep for that wait, so the caller pays for a delay that leads nowhere before it receives the error. Return the error on the last attempt, before any wait.</p>" },
       { lines: [7], kind: "sentinel error value", severity: "design",
         explain: "<p><code>GatewayError(\"never called\")</code> is a placeholder. Every failed attempt replaces it, so it is never returned, but it still has to be built and read. Let the last attempt return its own error, and drop the placeholder.</p>" },
     ],
@@ -947,7 +955,7 @@ fn main() {
     id: "webhook-handler",
     title: "Webhook handler",
     task: "Write the handler for billing webhooks: check the signature, read the event, and return an HTTP status and a message.",
-    chapter: 10,
+    chapter: 12,
     check: "ok",
     rust: String.raw`use std::collections::HashMap;
 
@@ -1048,7 +1056,7 @@ fn main() {
     println!("{:?}", handle_webhook(&headers, "order.paid lots", "whsec_demo"));
     println!("{:?}", handle_webhook(&headers, "ping", "whsec_demo"));
 }`,
-    takeaway: "A handler that does everything is hard to test: parse the input into types first, then decide what to do with it.",
+    takeaway: "A handler that does everything is hard to test: parse the input into types first, then decide what to do with it. The signature check here compares the shared secret with a plain <code>!=</code>. A real webhook check computes an HMAC of the body and compares it in constant time, so treat this check as a stand-in.",
   },
   {
     id: "active-names",
@@ -1264,7 +1272,7 @@ async fn main() {
     id: "product-import",
     title: "Product import",
     task: "Write the parser for one product row in the CSV import, shared by the importer and the admin API.",
-    chapter: 11,
+    chapter: 13,
     check: "ok",
     rust: String.raw`#[derive(Debug)]
 struct Product {
@@ -1296,14 +1304,14 @@ fn main() {
 use std::num::ParseIntError;
 
 #[derive(Debug)]
-struct Product {
-    sku: String,
-    price_cents: u32,
-    stock: u16,
+pub struct Product {
+    pub sku: String,
+    pub price_cents: u32,
+    pub stock: u16,
 }
 
 #[derive(Debug)]
-enum ImportError {
+pub enum ImportError {
     MissingField(&'static str),
     BadNumber { field: &'static str, source: ParseIntError },
 }
@@ -1312,12 +1320,19 @@ impl fmt::Display for ImportError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ImportError::MissingField(field) => write!(f, "missing {field}"),
-            ImportError::BadNumber { field, source } => write!(f, "{field}: {source}"),
+            ImportError::BadNumber { field, .. } => write!(f, "{field} is not a number"),
         }
     }
 }
 
-impl std::error::Error for ImportError {}
+impl std::error::Error for ImportError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            ImportError::BadNumber { source, .. } => Some(source),
+            ImportError::MissingField(_) => None,
+        }
+    }
+}
 
 pub fn parse_product(line: &str) -> Result<Product, ImportError> {
     let mut fields = line.split(',').map(str::trim);
@@ -1349,7 +1364,7 @@ fn main() {
     id: "thumb-cache",
     title: "Thumbnail cache",
     task: "Add a thumbnail cache lookup that returns the stored bytes, and a helper that reports how big an entry is.",
-    chapter: 8,
+    chapter: 12,
     check: "ok",
     rust: String.raw`use std::collections::HashMap;
 
