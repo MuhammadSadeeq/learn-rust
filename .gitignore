@@ -6,3 +6,7 @@
 
 # local test pages
 site/_scratch/
+
+# promo video renders (rebuild with promo/README.md)
+promo/out/
+promo/node_modules/
