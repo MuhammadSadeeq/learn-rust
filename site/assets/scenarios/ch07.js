@@ -92,7 +92,7 @@ fn main() {
           q: "The buffer is full. If Rust let <code>push</code> run, what would happen to <code>first</code>?",
           choices: [
             "Nothing. <code>first</code> still points at element 0.",
-            "The push needs a bigger buffer. The numbers are copied there and the old buffer is freed, so <code>first</code> would point at freed memory.",
+            "The push may need a bigger buffer. The numbers move there and the old buffer is freed, so <code>first</code> would point at freed memory.",
             "The push writes 4 into spare room, and <code>first</code> sees the new number."
           ],
           answer: 1,

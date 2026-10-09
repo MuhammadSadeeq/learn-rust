@@ -272,7 +272,7 @@ fn main() {
 
 <p>The second half protects against something you can't see from the reference. A change to the owner can move the memory the reference points into.</p>
 
-<p>Take a <code>Vec</code>. Its elements live in a heap buffer with a fixed size. When a <code>push</code> finds the buffer full, it allocates a bigger one, copies the elements across and frees the old one. A reference into the old buffer is then a pointer to freed memory. Rust refuses that. This diagram shows where it stops:</p>
+<p>Take a <code>Vec</code>. Its elements live in a heap buffer with a fixed size. When a <code>push</code> finds the buffer full, it needs a bigger allocation, and the elements may be moved into it. The old buffer is then freed. A reference into the old buffer would point at freed memory. Rust refuses that. This diagram shows where it stops:</p>
 
 <div class="ox-xray ox-wide" data-scenario="invalidate"></div>
 
