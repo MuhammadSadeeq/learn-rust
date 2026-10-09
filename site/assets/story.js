@@ -1,9 +1,13 @@
-/* Ownership Story: the Memory X-Ray scenarios acted out by characters.
-   Crabs are variables, fluffies are heap values, leashes are pointers, and
-   the Inspector is the borrow checker. The states come from the X-Ray's own
-   model (OxXray.build), so every scenario works in both views.
-   Markup: <div class="ox-story" data-scenario="move-error,clone-string"></div>
-   Needs xray.js and the scenario files loaded first. */
+/* Story view of the Memory X-Ray: the scenario acted out by the shared cast.
+   Crabs are variables, fluffies are heap values, leashes are pointers, the
+   Inspector (borrow checker) and the Forge (every other compile error) reject
+   the program, and Alloc hands out the heap. All art comes from cast-art.js
+   (OxCast); this file places it and moves it.
+
+   xray.js owns the Story / Diagram switch. OxStory.mount(el, start) draws the
+   story view into a .ox-xray (start = { id, step } picks the scenario and the
+   step). A bare .ox-story[data-scenario] mounts the story view on its own.
+   Needs xray.js, cast-art.js and the scenario files loaded first. */
 (function () {
   "use strict";
   const $ = (s, r = document) => r.querySelector(s);
@@ -11,66 +15,13 @@
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const reduce = () => window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
   const wait = (ms) => new Promise((r) => setTimeout(r, reduce() ? 0 : ms));
+  // Borrow-checker errors belong to the Inspector; every other compile error is the Forge's.
+  const BORROW = new Set(["E0382", "E0499", "E0502", "E0505", "E0506", "E0507", "E0373", "E0597", "E0716", "E0503", "E0713"]);
 
-  /* ------------------------------------------------------------ art */
-  function claw(cx, cy, r, dir, open) {
-    const half = open ? 34 : 8, rad = (d) => (d * Math.PI) / 180;
-    const x1 = cx + r * Math.cos(rad(dir - half)), y1 = cy + r * Math.sin(rad(dir - half));
-    const x2 = cx + r * Math.cos(rad(dir + half)), y2 = cy + r * Math.sin(rad(dir + half));
-    return `M${cx},${cy} L${x2.toFixed(1)},${y2.toFixed(1)} A${r},${r} 0 1 1 ${x1.toFixed(1)},${y1.toFixed(1)} Z`;
-  }
-  const LEGS = "M32 64 Q18 66 13 78 M36 70 Q24 76 22 88 M44 75 Q38 82 38 92 M88 64 Q102 66 107 78 M84 70 Q96 76 98 88 M76 75 Q82 82 82 92";
-  function crabSvg(extra = "") {
-    return `<svg viewBox="0 0 120 96" aria-hidden="true">
-      <path class="cr-leg" d="${LEGS}"/>
-      <path class="cr-arm" d="M36 52 Q22 50 19 37"/><path class="cr-arm" d="M84 52 Q98 50 101 37"/>
-      <path class="cr-claw cr-claw-l" d="${claw(17, 28, 11, -125, true)}"/>
-      <path class="cr-claw cr-claw-r" d="${claw(103, 28, 11, -55, true)}"/>
-      <ellipse class="cr-pebble" cx="111" cy="15" rx="9" ry="7"/>
-      <path class="cr-stalk" d="M51 40 L47 25 M69 40 L73 25"/>
-      <ellipse class="cr-body" cx="60" cy="58" rx="35" ry="23"/>
-      <ellipse class="cr-shine" cx="49" cy="48" rx="13" ry="5"/>
-      <g class="cr-eye"><circle class="cr-eye-white" cx="47" cy="20" r="7.5"/><circle class="cr-pupil" cx="48" cy="21" r="3.3"/></g>
-      <g class="cr-eye"><circle class="cr-eye-white" cx="73" cy="20" r="7.5"/><circle class="cr-pupil" cx="74" cy="21" r="3.3"/></g>
-      <path class="cr-mouth cr-shut" d="M41 21 Q47 25 53 21 M67 21 Q73 25 79 21"/>
-      <g class="cr-glasses"><circle cx="47" cy="20" r="10"/><circle cx="73" cy="20" r="10"/><path d="M57 20 L63 20"/></g>
-      <circle class="cr-cheek" cx="43" cy="62" r="4.5"/><circle class="cr-cheek" cx="77" cy="62" r="4.5"/>
-      <path class="cr-mouth cr-mouth-smile" d="M53 62 Q60 68 67 62"/>
-      <path class="cr-mouth cr-mouth-sad" d="M54 67 Q60 62 66 67"/>
-      <ellipse class="cr-mouth cr-mouth-o" cx="60" cy="65" rx="3.2" ry="4"/>
-      ${extra}
-    </svg>`;
-  }
-  const OXI_EXTRA = `<path class="oxi-hat" d="M49 37 Q49 22 60 22 Q71 22 71 37 Z"/><path class="oxi-hat-ridge" d="M60 23 V36"/><path class="oxi-brim" d="M45 37.5 H75"/>
-      <path class="cr-mouth oxi-happy-eye" d="M41 22 Q47 14 53 22 M67 22 Q73 14 79 22"/>
-      <path class="oxi-sweat" d="M92 8 Q96 15 92 18 Q88 15 92 8 Z" fill="#7cc7f5"/>
-      <text class="oxi-q" x="96" y="6" fill="var(--oxide)" style="font:900 22px var(--font-display)">?</text>`;
-  const INSPECTOR_EXTRA = `<path class="in-cap" d="M37 11 Q60 -7 83 11 L88 14 L32 14 Z"/><circle class="in-badge" cx="60" cy="6" r="3"/>
-      <rect class="in-handle" x="104" y="0" width="6" height="12" rx="2"/><rect class="in-stamp" x="97" y="11" width="20" height="7" rx="2"/>`;
-
-  function fluffPath(cx, cy, r, n, bump) {
-    let d = "";
-    for (let k = 0; k <= n; k++) {
-      const a = (k / n) * Math.PI * 2 - Math.PI / 2;
-      const x = cx + r * Math.cos(a), y = cy + r * Math.sin(a);
-      if (k === 0) { d += `M${x.toFixed(1)},${y.toFixed(1)}`; continue; }
-      const m = ((k - 0.5) / n) * Math.PI * 2 - Math.PI / 2;
-      d += ` Q${(cx + (r + bump) * Math.cos(m)).toFixed(1)},${(cy + (r + bump) * Math.sin(m)).toFixed(1)} ${x.toFixed(1)},${y.toFixed(1)}`;
-    }
-    return d + " Z";
-  }
-  const FLUFF_BODY = fluffPath(50, 54, 33, 13, 8);
-  function fluffySvg() {
-    return `<svg viewBox="0 0 100 100" aria-hidden="true">
-      <ellipse class="fl-foot" cx="39" cy="91" rx="8" ry="4"/><ellipse class="fl-foot" cx="61" cy="91" rx="8" ry="4"/>
-      <path class="fl-body" d="${FLUFF_BODY}"/>
-      <ellipse class="fl-eye" cx="40" cy="50" rx="3.4" ry="4.4"/><ellipse class="fl-eye" cx="60" cy="50" rx="3.4" ry="4.4"/>
-      <circle class="fl-shine" cx="41.3" cy="48.3" r="1.3"/><circle class="fl-shine" cx="61.3" cy="48.3" r="1.3"/>
-      <path class="fl-x" d="M37 47 L43 53 M43 47 L37 53 M57 47 L63 53 M63 47 L57 53"/>
-      <circle class="fl-cheek" cx="31" cy="59" r="5"/><circle class="fl-cheek" cx="69" cy="59" r="5"/>
-      <path class="fl-mouth" d="M45 60 Q47.5 63.5 50 60 Q52.5 63.5 55 60"/>
-    </svg>`;
-  }
+  /* ------------------------------------------------------------ art (OxCast) */
+  // A variable crab: gear for glasses (& borrows) and a pebble (plain values).
+  const crabHtml = () => `<span class="ca ca-crab" data-toggle-gear>${OxCast.svg("crab", { gear: ["pebble", "glasses"], holding: false })}</span>`;
+  const caOf = (node) => (node ? $(".ca", node) : null);
 
   /* ------------------------------------------------------------ helpers */
   function kindOf(val) {
@@ -89,8 +40,8 @@
     const pad = spare ? `<i>${listy ? ", " : ""}${"·".repeat(Math.min(spare, 6))}</i>` : "";
     return listy ? `[${b.cells.map(esc).join(", ")}${pad}]` : `"${esc(b.cells.join(""))}"${pad}`;
   }
-  // Position of an element's box relative to the stage, ignoring CSS
-  // transforms, so leashes land where characters settle, not mid-hop.
+  // Position of an element's box relative to a positioned ancestor, ignoring
+  // CSS transforms, so leashes land where characters settle, not mid-hop.
   function boxIn(el, stage) {
     let x = 0, y = 0, n = el;
     while (n && n !== stage) { x += n.offsetLeft; y += n.offsetTop; n = n.offsetParent; }
@@ -98,70 +49,63 @@
   }
 
   /* ------------------------------------------------------------ widget */
-  function mountStory(el) {
-    if (el.dataset.stDone) return;
+  function mountStory(el, start = {}) {
+    if (!window.OxXray || !window.OxCast) { el.textContent = "Memory X-Ray needs xray.js and cast-art.js."; return; }
+    OxXray.enter(el, "story");
     el.dataset.stDone = "1";
-    if (!window.OxXray) { el.textContent = "Ownership Story needs xray.js."; return; }
     const lib = window.OX_XRAY || [];
     const ids = (el.dataset.scenario || "").split(",").map((s) => s.trim()).filter(Boolean);
     const scens = ids.map((id) => lib.find((s) => s.id === id)).filter(Boolean);
-    if (!scens.length) { el.innerHTML = `<p style="padding:14px">Story scenario <code>${esc(ids.join(", "))}</code> not found.</p>`; return; }
+    if (!scens.length) { el.innerHTML = `<p style="padding:14px">Memory X-Ray scenario <code>${esc(ids.join(", "))}</code> not found.</p>`; return; }
 
     el.innerHTML = `
-      <div class="st-head">
-        <span class="ox-label">Ownership Story</span>
-        <span class="st-title"></span>
-        <span class="ox-btn-group" role="group" aria-label="View">
-          <button type="button" class="ox-btn is-small is-primary" data-view="story" aria-pressed="true">Story</button>
-          <button type="button" class="ox-btn is-small" data-view="diagram" aria-pressed="false">Diagram</button>
-        </span>
-      </div>
-      ${scens.length > 1 ? `<div class="st-picker"></div>` : ""}
-      <div class="st-main">
+      <div class="st-root">
+        <div class="xr-head">
+          <span class="ox-label">Memory X-Ray</span>
+          <span class="xr-title"></span>
+          <span class="xr-legend"><span class="ox-chip is-own">owner</span><span class="ox-chip is-ref">&amp; borrow</span><span class="ox-chip is-mut">&amp;mut</span></span>
+          ${OxXray.viewControl("story")}
+        </div>
+        ${scens.length > 1 ? `<div class="xr-head xr-picker" role="group" aria-label="Programs"></div>` : ""}
         <div class="st-body">
-          <div class="st-code"><pre></pre></div>
+          <div class="xr-code st-code"><pre></pre></div>
           <div class="st-stage">
             <div class="st-zone is-stack"><span class="st-zone-title">Stack<small>one tide pool per call</small></span><div class="st-pools"></div></div>
-            <div class="st-zone is-heap"><span class="st-zone-title">Heap<small>where owned data lives</small></span><div class="st-bank"></div></div>
+            <div class="st-zone is-heap"><span class="st-zone-title">Heap<small>where owned data lives</small></span><div class="st-bank"></div><div class="st-alloc" hidden></div></div>
             <pre class="st-term" hidden></pre>
+            <div class="st-inspector" hidden><div class="st-bubble"></div><div class="st-guard"></div></div>
             <svg class="st-leashes" aria-hidden="true"></svg>
-            <div class="st-inspector" hidden><div class="st-bubble"></div><div class="st-crab-art">${crabSvg(INSPECTOR_EXTRA)}</div></div>
           </div>
         </div>
         <div class="st-foot">
-          <div class="st-oxi" aria-hidden="true">${crabSvg(OXI_EXTRA)}</div>
+          <div class="st-oxi" aria-hidden="true">${OxCast.el("oxi")}</div>
           <div class="st-say"></div>
         </div>
-        <div class="st-controls">
+        <div class="xr-controls">
           <button type="button" class="ox-btn is-small" data-act="restart" title="Restart">⟲</button>
           <button type="button" class="ox-btn is-small" data-act="prev" title="Previous step (←)">◀ Back</button>
           <button type="button" class="ox-btn is-small is-primary" data-act="next" title="Next step (→)">Step ▶</button>
-          <button type="button" class="ox-btn is-small" data-act="auto">Autoplay</button>
-          <span class="st-progress"><i></i></span>
-          <span class="st-count"></span>
+          <button type="button" class="ox-btn is-small" data-act="auto" title="Play automatically">Autoplay</button>
+          <span class="xr-progress"><i></i></span>
+          <span class="xr-count"></span>
         </div>
-      </div>
-      <div class="st-diagram" hidden></div>
-      <div class="st-sr" aria-live="polite"></div>`;
-    el.tabIndex = 0;
+        <div class="st-sr" aria-live="polite"></div>
+      </div>`;
 
-    const stage = $(".st-stage", el), pools = $(".st-pools", el), bank = $(".st-bank", el);
-    const svg = $(".st-leashes", el), term = $(".st-term", el), inspector = $(".st-inspector", el);
-    const say = $(".st-say", el), oxi = $(".st-oxi", el), live = $(".st-sr", el);
-    const codePre = $(".st-code pre", el), nextBtn = $('[data-act="next"]', el), autoBtn = $('[data-act="auto"]', el);
+    const root = $(".st-root", el), stage = $(".st-stage", el), pools = $(".st-pools", el), bank = $(".st-bank", el);
+    const heapZone = $(".is-heap", el), alloc = $(".st-alloc", el), svg = $(".st-leashes", el), term = $(".st-term", el);
+    const inspector = $(".st-inspector", el), guard = $(".st-guard", el), say = $(".st-say", el), oxi = $(".st-oxi", el);
+    const live = $(".st-sr", el), codePre = $(".st-code pre", el), progEl = $(".xr-progress i", el), countEl = $(".xr-count", el);
+    const nextBtn = $('[data-act="next"]', el), prevBtn = $('[data-act="prev"]', el), autoBtn = $('[data-act="auto"]', el);
     const crabEls = new Map(), fluffEls = new Map(), poolEls = new Map(), leashEls = new Map(), listyBlocks = new Map();
     let scen, states, i = 0, asked = {}, autoTimer = null, prevState = null;
+    alloc.innerHTML = OxCast.el("alloc");
 
-    /* ---------- Oxi */
-    let moodTimer = 0;
-    function mood(m, ms) {
-      clearTimeout(moodTimer);
-      oxi.className = "st-oxi" + (m ? " is-" + m : "");
-      if (ms) moodTimer = setTimeout(() => (oxi.className = "st-oxi"), ms);
-    }
+    /* ---------- Oxi and the cast's poses */
+    const mood = (m, ms) => OxCast.pose(caOf(oxi), m || null, ms);
     function confetti() {
       if (reduce()) return;
-      const o = boxIn(oxi, el);
+      const o = boxIn(oxi, root);
       const colors = ["var(--oxide)", "var(--borrow)", "var(--mut)", "var(--ok)", "#f0c674"];
       for (let k = 0; k < 14; k++) {
         const c = document.createElement("i");
@@ -169,28 +113,35 @@
         c.style.left = o.x + o.w / 2 + "px";
         c.style.top = o.y + 10 + "px";
         c.style.background = colors[k % colors.length];
-        el.appendChild(c);
+        root.appendChild(c);
         const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.2, v = 60 + Math.random() * 70;
         c.animate([{ transform: "translate(0,0) rotate(0)", opacity: 1 }, { transform: `translate(${Math.cos(a) * v}px, ${Math.sin(a) * v + 60}px) rotate(${Math.random() * 540}deg)`, opacity: 0 }], { duration: 900 + Math.random() * 300, easing: "cubic-bezier(.2,.7,.4,1)" }).onfinish = () => c.remove();
       }
     }
 
-    /* ---------- load */
-    function load(s) {
+    /* ---------- load a scenario at a step */
+    function load(s, step = 0) {
       scen = s;
-      states = window.OxXray.build(s);
+      states = OxXray.build(s);
+      i = Math.max(0, Math.min(states.length - 1, step));
+      // Steps already passed were answered (or skipped) before the switch.
       asked = {};
+      for (let j = 0; j <= i; j++) asked[j] = true;
       prevState = null;
       [crabEls, fluffEls, poolEls, listyBlocks].forEach((m) => m.clear());
       leashEls.clear();
       pools.innerHTML = ""; bank.innerHTML = ""; svg.innerHTML = "";
-      $(".st-title", el).textContent = s.title || "";
+      inspector.hidden = true; delete inspector.dataset.who;
+      $(".xr-title", el).textContent = s.title || "";
       const hl = window.Ox && Ox.highlight ? Ox.highlight(s.code.replace(/^\n/, ""), "rust") : esc(s.code);
       const lines = window.Ox && Ox.splitLines ? Ox.splitLines(hl) : hl.split("\n");
       codePre.innerHTML = lines.map((l, k) => `<span class="ln" data-line="${k + 1}"><span class="lnno">${k + 1}</span>${l || " "}</span>`).join("");
-      $$(".st-picker button", el).forEach((b) => b.classList.toggle("is-primary", b.dataset.id === s.id));
-      if (!$(".st-diagram", el).hidden) showDiagram();
-      show(0, { instant: true });
+      // Alloc keeps its corner in every scenario that ever uses the heap.
+      const heap = states.some((st) => st.heap.length > 0);
+      alloc.hidden = !heap;
+      heapZone.classList.toggle("has-alloc", heap);
+      $$(".xr-picker button", el).forEach((b) => b.classList.toggle("is-primary", b.dataset.id === s.id));
+      show(i, { instant: true });
     }
 
     /* ---------- render one state */
@@ -222,9 +173,10 @@
           if (!ce || ce.parentElement !== row) {
             if (ce) ce.remove();
             ce = document.createElement("div");
+            ce.className = "st-crab";
             ce.dataset.id = v.id;
             ce.style.setProperty("--phase", (-Math.random() * 3).toFixed(2) + "s");
-            ce.innerHTML = `<div class="st-crab-art">${crabSvg()}<i class="st-anchor"></i></div><div class="st-tag"></div>`;
+            ce.innerHTML = `<div class="st-crab-art">${crabHtml()}<i class="st-anchor"></i></div><div class="st-tag"></div>`;
             row.appendChild(ce);
             crabEls.set(v.id, ce);
             if (fresh(prevVars, v.id)) { ce.classList.add("is-entering"); setTimeout(() => ce.classList.remove("is-entering"), 600); }
@@ -251,7 +203,7 @@
           fe = document.createElement("div");
           fe.dataset.id = b.id;
           fe.style.setProperty("--phase", (-Math.random() * 3).toFixed(2) + "s");
-          fe.innerHTML = `<div class="st-fluffy-art">${fluffySvg()}</div><div class="st-tag"></div>`;
+          fe.innerHTML = `<div class="st-fluffy-art">${OxCast.el("fluffy")}</div><div class="st-tag"></div>`;
           bank.appendChild(fe);
           fluffEls.set(b.id, fe);
           if (!instant && !prevBlocks.has(b.id)) {
@@ -276,7 +228,16 @@
       if (!st.heap.length && !$(".st-empty", bank)) bank.innerHTML = `<span class="st-empty">Nothing on the heap.</span>`;
       if (st.heap.length) { const e = $(".st-empty", bank); if (e) e.remove(); }
 
-      // stdout, current line, inspector, screen-reader summary
+      // Alloc talks when a block appears, is reallocated or is freed. It
+      // hops toward the new block on a realloc. Jumps (Back, restart) stay quiet.
+      if (!instant) {
+        const nowMap = new Map(st.heap.map((b) => [b.id, b]));
+        const appeared = st.heap.filter((b) => !prevBlocks.has(b.id));
+        const lost = [...prevBlocks.values()].filter((b) => !nowMap.has(b.id) || (nowMap.get(b.id).status === "freed" && b.status !== "freed"));
+        if (appeared.length || lost.length) allocBeat(appeared, lost.length > 0);
+      }
+
+      // stdout, current line, the Inspector or Forge, the screen-reader summary
       term.hidden = !st.out.length;
       term.textContent = st.out.join("\n");
       $$(".ln", codePre).forEach((ln) => {
@@ -284,26 +245,45 @@
         ln.classList.toggle("is-now", n === st.line && !step.error);
         ln.classList.toggle("is-err", n === st.line && !!step.error);
       });
-      const now = $(`.ln[data-line="${st.line}"]`, codePre);
-      if (now) { const c = $(".st-code", el); if (now.offsetTop < c.scrollTop || now.offsetTop + now.offsetHeight > c.scrollTop + c.clientHeight) c.scrollTop = Math.max(0, now.offsetTop - 40); }
+      const curLn = $(`.ln[data-line="${st.line}"]`, codePre);
+      if (curLn) { const c = $(".st-code", el); if (curLn.offsetTop < c.scrollTop || curLn.offsetTop + curLn.offsetHeight > c.scrollTop + c.clientHeight) c.scrollTop = Math.max(0, curLn.offsetTop - 40); }
       inspect(st, step);
       live.textContent = describe(st, step);
       leashes(st, before, instant);
       prevState = st;
     }
 
+    // One crab from its variable: kind classes go on the cast wrapper (.ca),
+    // the claw follows what it holds, the tag and the rejection marks follow the status.
     function paintCrab(ce, v) {
       const s = v.status || "";
       const kind = kindOf(v.val);
       const ghost = s.includes("moved"), ended = s.includes("ended");
       const holding = !ghost && !ended && (kind === "owner" || kind === "plain");
-      ce.className = ["st-crab", "is-" + kind, kind === "plain" && !ghost && "has-pebble", ghost && "is-ghost", ended && "is-ended", s.includes("err") && "is-err", v.flash && "is-flash", ce.classList.contains("is-entering") && "is-entering"].filter(Boolean).join(" ");
-      $(".cr-claw-r", ce).setAttribute("d", claw(103, 28, 11, -55, !holding));
+      const rejected = s.includes("err"), code = errCode(), forge = !!code && !BORROW.has(code);
+      const art = caOf(ce);
+      art.classList.toggle("is-ref", kind === "ref");
+      art.classList.toggle("is-mutref", kind === "mutref");
+      art.classList.toggle("is-ghost", ghost);
+      art.classList.toggle("is-ended", ended);
+      art.classList.toggle("has-pebble", kind === "plain" && !ghost);
+      OxCast.pose(art, rejected ? "wow" : null);
+      $(".ca-claw-r", art).setAttribute("d", OxCast.claw(103, 28, 11, -55, !holding));
+      ce.classList.toggle("is-err", rejected);
+      ce.classList.toggle("is-flash", !!v.flash);
       const state = ghost ? "moved: can't be used" : ended ? "done borrowing" : kind === "plain" ? `= ${esc(v.val.v)}` : "";
       $(".st-tag", ce).innerHTML = `${v.mut ? '<span style="font-weight:400;color:var(--muted)">mut </span>' : ""}${esc(v.name)}<small>${esc(v.type || "")}</small>${state ? `<em>${state}</em>` : ""}`;
-      const stamp = $(".st-stamp", ce);
-      if (s.includes("err") && !stamp) ce.insertAdjacentHTML("beforeend", `<span class="st-stamp">${esc(errCode() || "error")}</span>`);
-      if (!s.includes("err") && stamp) stamp.remove();
+      // A borrow error is stamped on the crab (the Inspector's mark); any
+      // other compile error is an error scroll from the Forge in the same spot.
+      const stamp = $(".st-stamp", ce), scroll = $(".st-scroll", ce);
+      const stampOn = rejected && !forge, scrollOn = rejected && forge;
+      if (stampOn && !stamp) ce.insertAdjacentHTML("beforeend", `<span class="st-stamp">${esc(code || "error")}</span>`);
+      if (!stampOn && stamp) stamp.remove();
+      if (scrollOn && (!scroll || scroll.dataset.code !== code)) {
+        if (scroll) scroll.remove();
+        ce.insertAdjacentHTML("beforeend", `<span class="st-scroll" data-code="${esc(code)}">${OxCast.prop("errscroll", { label: code })}</span>`);
+      }
+      if (!scrollOn && scroll) scroll.remove();
     }
 
     function leave(ce, map, instant) {
@@ -330,7 +310,21 @@
       setTimeout(() => fe.remove(), 460);
     }
 
-    /* ---------- the Inspector (borrow checker) */
+    function allocBeat(appeared, realloc) {
+      if (alloc.hidden) return;
+      OxCast.pose(caOf(alloc), "talk", 900);
+      const to = realloc && appeared.length ? fluffEls.get(appeared[0].id) : null;
+      if (!to || reduce()) return;
+      const p = boxIn(alloc, stage), q = boxIn(to, stage);
+      const dx = q.x - p.x, dy = q.y - p.y;
+      alloc.animate([
+        { transform: "translate(0,0)" },
+        { transform: `translate(${dx * 0.6}px, ${dy * 0.6 - 26}px)`, offset: 0.5 },
+        { transform: "translate(0,0)" },
+      ], { duration: 760, easing: "ease-in-out" });
+    }
+
+    /* ---------- the rejections: Inspector (borrow checker) and Forge (the rest) */
     function errCode() {
       const step = scen.steps[i] || {};
       const m = /error\[(E\d{4})\]/.exec(step.say || "");
@@ -339,14 +333,18 @@
     function inspect(st, step) {
       const bad = step.error || st.frames.some((f) => f.vars.some((v) => (v.status || "").includes("err")));
       if (!bad) { inspector.hidden = true; return; }
+      const code = errCode(), forge = !!code && !BORROW.has(code);
+      const who = forge ? "forge" : "inspector";
+      if (inspector.dataset.who !== who) { guard.innerHTML = OxCast.el(who); inspector.dataset.who = who; }
+      OxCast.pose(caOf(guard), forge ? "oops" : null);
       const text = (step.say || "").replace(/<\/p>/g, "\n").replace(/<[^>]+>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
       const m = /error\[(E\d{4})\]:\s*([^\n]*)/.exec(text);
-      $(".st-bubble", inspector).innerHTML = `<b>${esc(m ? m[1] : errCode() || "rejected")}</b>${m ? esc(m[2].trim()) : "The compiler refuses this program."}`;
+      $(".st-bubble", inspector).innerHTML = `<b>${esc(m ? m[1] : code || "rejected")}</b>${m ? esc(m[2].trim()) : "The compiler refuses this program."}`;
       if (inspector.hidden) { inspector.hidden = false; inspector.style.animation = "none"; void inspector.offsetWidth; inspector.style.animation = ""; }
     }
 
     /* ---------- leashes (pointers) */
-    function anchors(v, st) {
+    function anchors(v) {
       const ce = crabEls.get(v.id);
       if (!ce || ce.classList.contains("is-leaving")) return null;
       const a = boxIn($(".st-anchor", ce), stage);
@@ -379,7 +377,7 @@
       return out;
     }
     function drawLeash(g, L) {
-      const pos = anchors(L.v, prevState || {});
+      const pos = anchors(L.v);
       if (!pos) return false;
       const d = rope(pos);
       const cls = { own: "lz-own", ref: "lz-ref", mut: "lz-mut", bad: "lz-bad" }[L.kind];
@@ -402,6 +400,7 @@
         g.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
       }, reduce() ? 0 : delay);
     }
+    // The handoff: a move carries the leash from the old owner to the new one.
     function travel(fromV, toV, delay) {
       if (reduce()) return;
       const a = crabEls.get(fromV), b = crabEls.get(toV);
@@ -475,7 +474,7 @@
       const step = scen.steps[i];
       render(states[i], step, opts);
       narrate(step);
-      if (!opts.keepMood) mood(step.error ? "wow" : opts.instant ? "" : "talk", step.error ? 0 : 900);
+      if (!opts.keepMood) mood(step.error ? "wow" : opts.instant ? null : "talk", step.error ? 0 : 900);
       controls();
     }
     function ask(step) {
@@ -503,16 +502,13 @@
         box.appendChild(b);
       });
       nextBtn.disabled = true;
-      count();
-    }
-    function count() {
-      $(".st-progress i", el).style.width = ((i + 1) / states.length) * 100 + "%";
-      $(".st-count", el).textContent = `${i + 1} / ${states.length}`;
+      controls();
     }
     function controls() {
-      count();
+      progEl.style.width = ((i + 1) / states.length) * 100 + "%";
+      countEl.textContent = `${i + 1} / ${states.length}`;
       nextBtn.disabled = i >= states.length - 1;
-      $('[data-act="prev"]', el).disabled = i <= 0;
+      prevBtn.disabled = i <= 0;
       if (i >= states.length - 1) { stopAuto(); if (window.Ox && Ox.award) Ox.award(5, "x-ray complete", "xray-done:" + scen.id); }
     }
     function stopAuto() { clearInterval(autoTimer); autoTimer = null; autoBtn.textContent = "Autoplay"; }
@@ -523,51 +519,41 @@
       show(i + 1);
     }
 
-    /* ---------- diagram view: the same scenario in the classic X-Ray */
-    function showDiagram() {
-      const host = $(".st-diagram", el);
-      host.innerHTML = `<div class="ox-xray" data-scenario="${esc(scen.id)}" style="margin:0;border:0;border-radius:0;box-shadow:none"></div>`;
-      window.OxXray.mount(host.firstChild);
-    }
-    $$("[data-view]", el).forEach((b) => b.addEventListener("click", () => {
-      const diagram = b.dataset.view === "diagram";
-      stopAuto();
-      $$("[data-view]", el).forEach((x) => { const on = x === b; x.classList.toggle("is-primary", on); x.setAttribute("aria-pressed", String(on)); });
-      $(".st-main", el).hidden = diagram;
-      $(".st-diagram", el).hidden = !diagram;
-      if (diagram) showDiagram(); else { $(".st-diagram", el).innerHTML = ""; show(i, { instant: true }); }
-    }));
-
     nextBtn.addEventListener("click", next);
-    $('[data-act="prev"]', el).addEventListener("click", () => { stopAuto(); show(i - 1, { instant: true }); });
-    $('[data-act="restart"]', el).addEventListener("click", () => { stopAuto(); load(scen); });
+    prevBtn.addEventListener("click", () => { stopAuto(); show(i - 1, { instant: true }); });
+    $('[data-act="restart"]', el).addEventListener("click", () => { stopAuto(); load(scen, 0); });
     autoBtn.addEventListener("click", () => {
       if (autoTimer) return stopAuto();
       autoBtn.textContent = "Pause";
       next();
       autoTimer = setInterval(() => { const ask = i < states.length - 1 && scen.steps[i + 1].ask && !asked[i + 1]; next(); if (ask || i >= states.length - 1) stopAuto(); }, 2800);
     });
-    el.addEventListener("keydown", (e) => {
-      if (e.target.closest("button") && (e.key === " " || e.key === "Enter")) return;
-      if (e.key === "ArrowRight") { e.preventDefault(); next(); }
-      if (e.key === "ArrowLeft") { e.preventDefault(); stopAuto(); show(i - 1, { instant: true }); }
-    });
-    const picker = $(".st-picker", el);
+    const picker = $(".xr-picker", el);
     if (picker) scens.forEach((s) => {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "ox-btn is-small";
       b.dataset.id = s.id;
       b.textContent = s.title;
-      b.addEventListener("click", () => { stopAuto(); load(s); });
+      b.addEventListener("click", () => { stopAuto(); load(s, 0); });
       picker.appendChild(b);
     });
-    if ("ResizeObserver" in window) new ResizeObserver(() => redraw()).observe(stage);
-    load(scens[0]);
+    // The host (xray.js) routes keys and the Story / Diagram switch here.
+    el._oxKey = (e) => {
+      if (e.target.closest("button") && (e.key === " " || e.key === "Enter")) return;
+      if (e.key === "ArrowRight") { e.preventDefault(); next(); }
+      if (e.key === "ArrowLeft") { e.preventDefault(); stopAuto(); show(i - 1, { instant: true }); }
+    };
+    el._oxStart = () => ({ id: scen.id, step: i });
+    el._oxStop = () => stopAuto();
+    if ("ResizeObserver" in window) { el._oxRO = new ResizeObserver(() => redraw()); el._oxRO.observe(stage); }
+    load(scens.find((s) => s.id === start.id) || scens[0], start.step || 0);
   }
 
-  function mountAll() { $$(".ox-story[data-scenario]").forEach(mountStory); }
-  window.OxStory = { mount: mountStory, art: { crab: crabSvg, fluffy: fluffySvg, oxi: () => crabSvg(OXI_EXTRA), inspector: () => crabSvg(INSPECTOR_EXTRA) } };
+  function mountAll() {
+    $$(".ox-story[data-scenario]").forEach((el) => { if (!el.dataset.stDone) mountStory(el); });
+  }
+  window.OxStory = { mount: mountStory };
   if (window.Ox && window.Ox.ready) mountAll();
   else document.addEventListener("ox:ready", mountAll);
 })();

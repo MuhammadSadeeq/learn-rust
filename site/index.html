@@ -16,6 +16,7 @@
 <link rel="stylesheet" href="assets/cast.css">
 <link rel="stylesheet" href="assets/motion.css">
 <link rel="stylesheet" href="assets/story.css">
+<link rel="stylesheet" href="assets/rustopia.css">
 <style>
   /* Home: a workshop wall. Big stamped headline, the live X-Ray as the
      opening exhibit, then the route map down the page. */
@@ -134,11 +135,62 @@
   .h-reset { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 0.9rem; color: var(--muted); }
 
   .h-foot { margin-top: 4rem; padding-top: 1.4rem; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; font-size: 0.88rem; color: var(--muted); }
+
+  /* the route map: rustopia.js art with stones, Oxi and the cast on top */
+  .h-acts[hidden], .mp-frame[hidden], .mp-hint[hidden] { display: none !important; }
+  .mp-hint { display: none; margin: 0 0 8px; font: 600 0.74rem/1.3 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .mp-frame { position: relative; margin: 0; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; background: #cfe6f3; box-shadow: var(--shadow); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .mp-frame { background: #0f2638; } }
+  :root[data-theme="dark"] .mp-frame { background: #0f2638; }
+  .mp-scroll { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; }
+  .mp-stage { position: relative; width: 100%; }
+  @media (max-width: 639px) { .mp-hint { display: block; } .mp-stage { min-width: 720px; } }
+
+  .mp-stone { position: absolute; z-index: 2; box-sizing: border-box; width: 34px; height: 34px; margin: -17px 0 0 -17px; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--muted); background: #fff; color: #12171c; font: 900 1rem/1 var(--font-display); text-decoration: none; transition: transform 0.15s; }
+  .mp-stone:hover { transform: scale(1.1); color: #12171c; }
+  .mp-stone.is-done { background: var(--oxide); border-color: var(--oxide); color: #fff; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3); }
+  .mp-stone.is-done:hover { color: #fff; }
+  .mp-stone.is-current { border: 3px solid var(--oxide); }
+  .mp-stone.is-current::after { content: ""; position: absolute; inset: -7px; border-radius: 50%; border: 2px solid var(--oxide); opacity: 0; animation: mp-pulse 2.6s ease-out infinite; pointer-events: none; }
+  .mp-tick { position: absolute; right: -6px; bottom: -6px; width: 15px; height: 15px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1.5px var(--oxide); }
+  .mp-tick svg { display: block; width: 100%; height: 100%; }
+  .mp-tick path { fill: none; stroke: var(--oxide); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .mp-frame.is-narrow .mp-stone { width: 28px; height: 28px; margin: -14px 0 0 -14px; font-size: 0.86rem; }
+
+  .mp-card { position: absolute; z-index: 5; top: 0; left: 0; box-sizing: border-box; width: 250px; max-width: calc(100% - 16px); display: grid; gap: 4px; padding: 10px 12px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-lift); font-size: 0.86rem; line-height: 1.4; pointer-events: none; visibility: hidden; opacity: 0; transition: opacity 0.15s; }
+  .mp-card.is-on { visibility: visible; opacity: 1; }
+  .mp-card b { font: 800 1.1rem/1.1 var(--font-display); text-transform: uppercase; color: var(--ink); }
+  .mp-card span { color: var(--ink-2); }
+  .mp-card small { font: 600 0.72rem/1.2 var(--font-mono); color: var(--muted); }
+
+  .mp-char { position: absolute; z-index: 1; display: block; width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%; transition: transform 0.15s; }
+  .mp-char .ca { display: block; width: 100%; height: 100%; }
+  a.mp-char:hover, a.mp-char:focus-visible { transform: scale(1.12); }
+  .mp-char.is-unmet { opacity: 0.22; filter: brightness(0); pointer-events: none; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .mp-char.is-unmet { opacity: 0.18; filter: brightness(0) invert(1); } }
+  :root[data-theme="dark"] .mp-char.is-unmet { opacity: 0.18; filter: brightness(0) invert(1); }
+
+  .mp-oxi { position: absolute; z-index: 3; width: 0; height: 0; pointer-events: none; }
+  .mp-oxi-body { position: absolute; left: 0; top: 0; width: 56px; transform: translate(-50%, calc(-100% - 12px)); }
+  .mp-oxi-body .ca { display: block; width: 100%; animation: mp-bob 2.6s ease-in-out infinite; }
+  .mp-progress { fill: none; stroke: var(--oxide); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
+  @keyframes mp-pulse { 0% { transform: scale(0.8); opacity: 0.8; } 100% { transform: scale(1.6); opacity: 0; } }
+  @keyframes mp-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+  @media (prefers-reduced-motion: reduce) {
+    .mp-stone, .mp-char, .mp-card { transition: none; }
+    .mp-stone.is-current::after { animation: none; display: none; }
+    .mp-oxi-body .ca { animation: none; }
+  }
+
+  .mp-switch { display: inline-flex; gap: 4px; margin: 14px 0 26px; padding: 4px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+  .mp-switch button { appearance: none; min-width: 96px; min-height: 40px; padding: 0 18px; border: 0; border-radius: 999px; background: transparent; color: var(--ink-2); font: 800 1.02rem/1 var(--font-display); text-transform: uppercase; letter-spacing: 0.04em; cursor: pointer; }
+  .mp-switch button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
 </style>
 <script src="assets/course-data.js" defer></script>
 <script src="assets/quests-data.js" defer></script>
 <script src="assets/scenarios/ch06.js" defer></script>
 <script src="assets/oxidize.js" defer></script>
+<script src="assets/rustopia.js" defer></script>
 <script src="assets/cast-art.js" defer></script>
 <script src="assets/cast.js" defer></script>
 <script src="assets/motion.js" defer></script>
@@ -185,6 +237,16 @@
 <section class="h-section" id="map" aria-labelledby="map-h">
   <h2 id="map-h">The route</h2>
   <p class="h-sub">Five acts, named after how iron becomes steel. Your progress lights the route as you go. It's saved in this browser.</p>
+  <p class="mp-hint" id="mp-hint">Swipe to explore the island</p>
+  <div class="mp-frame" id="mp-frame">
+    <div class="mp-scroll" id="mp-scroll">
+      <div class="mp-stage" id="mp-stage"></div>
+    </div>
+  </div>
+  <div class="mp-switch" role="group" aria-label="Show the route as a map or a list">
+    <button type="button" id="mp-view-map" aria-pressed="true">Map</button>
+    <button type="button" id="mp-view-list" aria-pressed="false">List</button>
+  </div>
   <div class="h-acts" id="h-acts"></div>
 </section>
 
@@ -316,6 +378,209 @@ Edit <span class="b">quests/06_ownership/move1.rs</span>
   }
   if (window.Ox && window.Ox.ready) start();
   else document.addEventListener("ox:ready", start);
+})();
+
+/* The route map: the island (rustopia.js) with stones, the trail, Oxi and
+   the cast. Needs OxMap and OxCast, which load after this inline script, so
+   it waits for DOMContentLoaded. Everything here degrades to the list view. */
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  var reduced = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  function boot() {
+    if (!window.OxMap || !window.OxCast || !window.Ox || !window.Ox.state) return;
+    var frame = document.getElementById("mp-frame"), scroll = document.getElementById("mp-scroll"), stage = document.getElementById("mp-stage");
+    if (!frame || !scroll || !stage) return;
+    var hint = document.getElementById("mp-hint"), list = document.getElementById("h-acts");
+    var bMap = document.getElementById("mp-view-map"), bList = document.getElementById("mp-view-list");
+    var C = window.OX_COURSE || { chapters: [] }, Q = window.OX_QUESTS || [];
+    var M = window.OxMap, CAST = window.OxCast, W = M.w, H = M.h, S = M.stones, N = S.length;
+    var st = Ox.state(), esc = Ox.esc;
+
+    function done(n) { return !!(st.chapters && st.chapters[n]); }
+    function pct(v, max) { return (v / max * 100).toFixed(3) + "%"; }
+    // calc(base +/- d px), so a negative offset is written correctly
+    function off(base, d) { return "calc(" + base + (d < 0 ? " - " : " + ") + Math.abs(d).toFixed(1) + "px)"; }
+    function chOf(n) { return C.chapters.find(function (c) { return c.n === n; }) || { n: n, title: "", idea: "", mins: 0, slug: "" }; }
+    function qCount(n) { return Q.filter(function (q) { return q.chapter === n; }).length; }
+    function met(id) {
+      try { if (window.OxCastUI && typeof window.OxCastUI.met === "function") return !!window.OxCastUI.met(id); } catch (e) { /* fall back to saved state */ }
+      return !!(st.cast && st.cast[id]);
+    }
+    // Unit normal of the trail at stone i (index), so characters sit beside the path.
+    function normalAt(i) {
+      var a = S[Math.max(0, i - 1)], b = S[Math.min(N - 1, i + 1)];
+      var tx = b.x - a.x, ty = b.y - a.y, len = Math.hypot(tx, ty) || 1;
+      return { x: -ty / len, y: tx / len };
+    }
+
+    // Progress: the first chapter not done is "current"; Oxi stands on it.
+    var curN = null;
+    for (var i = 1; i <= N; i++) { if (!done(i)) { curN = i; break; } }
+    var allDone = curN === null;
+    var stopN = allDone ? N : curN;
+    var sNow = S[stopN - 1];
+    var prevN = stopN - 1;
+
+    // Oxi hops in once per browser session (a reload in the same tab does not repeat it).
+    var firstVisit = false;
+    try { firstVisit = sessionStorage.getItem("oxidize:map-hop") !== "1"; sessionStorage.setItem("oxidize:map-hop", "1"); } catch (e) { firstVisit = false; }
+    var hopPending = firstVisit && prevN >= 1 && !reduced;
+    var fromStone = prevN >= 1 ? S[prevN - 1] : null;
+
+    // Characters: every registry entry but Oxi and the graduate, grouped by chapter.
+    var byCh = {};
+    CAST.list.filter(function (e) { return e.id !== "oxi" && e.id !== "graduate"; })
+      .forEach(function (e) { (byCh[e.ch] = byCh[e.ch] || []).push(e); });
+
+    var stones = S.map(function (s) {
+      var c = chOf(s.n), d = done(s.n), cur = !allDone && s.n === curN;
+      var state = d ? "is-done" : cur ? "is-current" : "is-later";
+      var label = "Chapter " + s.n + ": " + c.title + ", " + (d ? "done" : cur ? "up next" : "to do");
+      return '<a class="mp-stone ' + state + '" href="chapters/' + esc(c.slug) + '.html" aria-label="' + esc(label) +
+        '" data-n="' + s.n + '" style="left:' + pct(s.x, W) + ';top:' + pct(s.y, H) + '"><span class="mp-stone-n">' + s.n + '</span>' +
+        (d ? '<span class="mp-tick"><svg viewBox="0 0 15 15" aria-hidden="true"><path d="M4.2 7.8 L6.4 10 L10.8 5.2"/></svg></span>' : "") + "</a>";
+    }).join("");
+
+    var chars = Object.keys(byCh).map(function (k) {
+      var n = +k, s = S[n - 1], nrm = normalAt(n - 1), base = n % 2 ? 1 : -1;
+      return byCh[k].map(function (e, j) {
+        var side = j % 2 ? -base : base, D = 40;
+        var pos = "left:" + off(pct(s.x, W), side * D * nrm.x) + ";top:" + off(pct(s.y, H), side * D * nrm.y);
+        var art = CAST.entry(e.id);
+        return met(e.id)
+          ? '<a class="mp-char" href="labs/cast.html" aria-label="' + esc(e.name + ": " + e.rust) + '" style="' + pos + '">' + art + "</a>"
+          : '<span class="mp-char is-unmet" aria-hidden="true" style="' + pos + '">' + art + "</span>";
+      }).join("");
+    }).join("");
+
+    var oxi = '<div class="mp-oxi" aria-hidden="true" style="left:' + pct(sNow.x, W) + ';top:' + pct(sNow.y, H) + '"><div class="mp-oxi-body">' +
+      CAST.el(allDone ? "graduate" : "oxi") + "</div></div>";
+
+    stage.innerHTML = M.svg() + stones + chars + oxi + '<div class="mp-card" id="mp-card" aria-hidden="true"></div>';
+
+    var svg = stage.querySelector("svg.mp-svg"), trail = svg.querySelector(".mp-trail");
+    var card = document.getElementById("mp-card"), oxiEl = stage.querySelector(".mp-oxi");
+
+    // Progress path over the trail, revealed up to the current stone.
+    var prog = document.createElementNS(NS, "path");
+    prog.setAttribute("class", "mp-progress");
+    prog.setAttribute("d", M.trail);
+    trail.parentNode.insertBefore(prog, trail.nextSibling);
+    var L = prog.getTotalLength(), SAMPLES = 600, reachLen = 0, bestD = Infinity;
+    for (var k = 0; k < SAMPLES; k++) {
+      var len = L * k / (SAMPLES - 1), p = prog.getPointAtLength(len);
+      var dd = (p.x - sNow.x) * (p.x - sNow.x) + (p.y - sNow.y) * (p.y - sNow.y);
+      if (dd < bestD) { bestD = dd; reachLen = len; }
+    }
+    var GAP = (L + 10).toFixed(1);
+    function setDash(v) { prog.setAttribute("stroke-dasharray", v.toFixed(1) + " " + GAP); }
+    setDash(0);
+
+    function hopOffset(from) {
+      var SW = stage.clientWidth, SH = stage.clientHeight;
+      return { x: (from.x - sNow.x) / W * SW, y: (from.y - sNow.y) / H * SH };
+    }
+    function hop() {
+      if (!hopPending || !fromStone) return;
+      hopPending = false;
+      var o = hopOffset(fromStone), frames = [], STEPS = 24, ARC = 46;
+      for (var j = 0; j <= STEPS; j++) {
+        var t = j / STEPS;
+        frames.push({ transform: "translate(" + (o.x * (1 - t)).toFixed(1) + "px," + (o.y * (1 - t) - ARC * 4 * t * (1 - t)).toFixed(1) + "px)" });
+      }
+      var anim = oxiEl.animate(frames, { duration: 800, easing: "linear" });
+      anim.onfinish = function () { oxiEl.style.transform = ""; };
+    }
+    function drawTrail(then) {
+      var t0 = null, D = 1400;
+      prog.style.opacity = "1";
+      requestAnimationFrame(function step(now) {
+        if (t0 === null) t0 = now;
+        var p = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - p, 3);
+        setDash(reachLen * e);
+        if (p < 1) requestAnimationFrame(step); else then();
+      });
+    }
+    var played = false;
+    function play() {
+      if (played) return;
+      played = true;
+      if (reduced) { setDash(reachLen); prog.style.opacity = "1"; return; }
+      if (hopPending) { var o = hopOffset(fromStone); oxiEl.style.transform = "translate(" + o.x.toFixed(1) + "px," + o.y.toFixed(1) + "px)"; }
+      drawTrail(hop);
+    }
+    // Play once, when the map first scrolls into view (or is switched to).
+    if ("IntersectionObserver" in window) {
+      var io = new IntersectionObserver(function (entries) {
+        if (entries.some(function (e) { return e.isIntersecting; })) { io.disconnect(); play(); }
+      }, { threshold: 0.25 });
+      io.observe(frame);
+    } else { play(); }
+
+    // Hover and focus card, flipped to the left near the right edge.
+    function fillCard(n) {
+      var c = chOf(n), q = qCount(n);
+      card.innerHTML = "<b>Chapter " + String(n).padStart(2, "0") + " · " + esc(c.title) + "</b><span>" + esc(c.idea) + "</span><small>" +
+        c.mins + " min · " + q + (q === 1 ? " quest" : " quests") + "</small>";
+    }
+    function placeCard(n) {
+      var s = S[n - 1], SW = stage.clientWidth, SH = stage.clientHeight;
+      var r = frame.classList.contains("is-narrow") ? 22 : 25;
+      var cx = s.x / W * SW, cy = s.y / H * SH, cw = card.offsetWidth, ch = card.offsetHeight;
+      var left = cx + r;
+      if (left + cw > SW - 8) left = cx - r - cw;
+      left = Math.max(8, Math.min(SW - cw - 8, left));
+      var top = Math.max(8, Math.min(SH - ch - 8, cy - ch / 2));
+      card.style.left = left.toFixed(1) + "px";
+      card.style.top = top.toFixed(1) + "px";
+    }
+    Array.prototype.forEach.call(stage.querySelectorAll(".mp-stone"), function (a) {
+      var n = +a.getAttribute("data-n");
+      var show = function () { fillCard(n); placeCard(n); card.classList.add("is-on"); };
+      var hide = function () { card.classList.remove("is-on"); };
+      a.addEventListener("mouseenter", show);
+      a.addEventListener("focus", show);
+      a.addEventListener("mouseleave", hide);
+      a.addEventListener("blur", hide);
+    });
+
+    // Narrow map box: smaller stones (under 640px wide).
+    function sizeCheck() {
+      var w = stage.clientWidth;
+      if (!w) return;
+      frame.classList.toggle("is-narrow", w < 640);
+    }
+    sizeCheck();
+    if ("ResizeObserver" in window) new ResizeObserver(sizeCheck).observe(scroll);
+    else window.addEventListener("resize", sizeCheck);
+
+    // Phones: the map is wider than the screen, so bring Oxi into view.
+    function centerOxi() {
+      var SW = stage.clientWidth, VW = scroll.clientWidth;
+      if (!SW || SW <= VW) return;
+      scroll.scrollLeft = Math.max(0, Math.min(SW - VW, sNow.x / W * SW - VW / 2));
+    }
+
+    // Map or list, remembered in Ox.state().homeView.
+    function setView(v, remember) {
+      var isList = v === "list";
+      frame.hidden = isList;
+      if (hint) hint.hidden = isList;
+      if (list) list.hidden = !isList;
+      bMap.setAttribute("aria-pressed", String(!isList));
+      bList.setAttribute("aria-pressed", String(isList));
+      if (remember) { try { st.homeView = v; Ox.save(); } catch (e) { /* storage unavailable: this view only */ } }
+      if (!isList) centerOxi();
+    }
+    bMap.addEventListener("click", function () { setView("map", true); });
+    bList.addEventListener("click", function () { setView("list", true); });
+    setView(st.homeView === "list" ? "list" : "map", false);
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
 })();
 </script>
 </body>

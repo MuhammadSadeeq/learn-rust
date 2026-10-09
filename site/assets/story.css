@@ -1,52 +1,46 @@
-/* Ownership Story: the Memory X-Ray acted out by characters.
-   Crabs are variables, fluffies are heap values, leashes are pointers.
-   Colors keep the course's semantics: oxide = owner, blue = & borrow,
-   magenta = &mut, grey = moved. Every animation stops under reduced motion. */
+/* Story view of the Memory X-Ray (story.js). The frame, header, code panel and
+   controls are the X-Ray's own (oxidize.css: .ox-xray, .xr-head, .xr-code,
+   .xr-controls), so both views read as one widget. The characters are drawn
+   by cast-art.js (.ca-*), and their colors and poses live in cast-art.css.
+   This file only lays them out and moves the tags, leashes and stamps.
+   Colors keep the course's meaning: oxide = owner, blue = & borrow,
+   magenta = &mut, grey = moved, red = rejected or freed. */
 
 :root {
   --st-sand: var(--heap-soft);
   --st-pool: var(--stack-soft);
-  --st-fluff: #fff6ea;
-  --st-fluff-ink: #b07a3a;
-  --st-blush: #ff8fa3;
-  --crab: var(--oxide);
-  --crab-ink: var(--oxide-ink);
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --st-fluff: #3b3026; --st-fluff-ink: #e0b07a; --st-blush: #ff7d95; }
-}
-:root[data-theme="dark"] { --st-fluff: #3b3026; --st-fluff-ink: #e0b07a; --st-blush: #ff7d95; }
+
+/* The bare .ox-story markup gets the same frame as an .ox-xray. */
 .ox-story {
-  margin: 28px 0;
+  margin: 1.8rem 0;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--line);
-  border-radius: 12px;
   background: var(--surface);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-lift);
   overflow: hidden;
-  outline: none;
 }
-.ox-story:focus-visible { box-shadow: 0 0 0 3px var(--oxide-soft), var(--shadow); }
+.ox-xray:focus-visible, .ox-story:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--oxide-soft), var(--shadow-lift); }
 
-.st-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 12px 16px; border-bottom: 1px solid var(--line-2); }
-.st-title { font: 700 1rem/1.3 var(--font-body); color: var(--ink); flex: 1; min-width: 12rem; }
-.ox-btn-group { display: inline-flex; gap: 4px; }
-.st-picker { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--line-2); background: var(--surface-2); }
+.st-root { position: relative; }
 
+/* Story / Diagram switch: one segmented control in the header. */
+.xr-view { display: inline-flex; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.xr-view .ox-btn { border: 0; border-radius: 0; }
+.xr-view .ox-btn + .ox-btn { border-left: 1px solid var(--line); }
+
+/* ------------------------------------------------------------ layout */
 .st-body { display: grid; grid-template-columns: minmax(0, 1fr); }
-@media (min-width: 900px) { .st-body { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.5fr); } }
-.st-code { background: var(--code-bg); color: var(--code-ink); overflow: auto; max-height: 26rem; }
-.st-code pre { margin: 0; padding: 14px 0; font: 400 0.8rem/1.65 var(--font-mono); white-space: pre; }
-.st-code .ln { display: block; padding: 0 14px 0 0; border-left: 3px solid transparent; }
-.st-code .lnno { display: inline-block; width: 2.4em; padding-right: 0.8em; text-align: right; color: var(--code-dim); user-select: none; }
-.st-code .ln.is-now { background: var(--c-hl); border-left-color: var(--c-kw); }
-.st-code .ln.is-err { background: rgba(255, 80, 80, 0.16); border-left-color: #ff6b6b; }
+@media (min-width: 860px) { .st-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1.12fr); } }
+.st-code { max-height: 26rem; overflow: auto; }
 
-/* ------------------------------------------------------------ stage */
-.st-stage { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 14px; min-height: 19rem; background: var(--surface-2); }
+.st-stage { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-content: start; padding: 14px; min-height: 19rem; background: var(--surface-2); }
 @media (min-width: 640px) { .st-stage { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); } }
 .st-zone { position: relative; border-radius: 10px; padding: 30px 10px 12px; min-height: 9rem; }
 .st-zone.is-stack { background: repeating-linear-gradient(-45deg, transparent 0 14px, color-mix(in srgb, var(--stack) 5%, transparent) 14px 15px), var(--st-pool); }
 .st-zone.is-heap { background: radial-gradient(circle at 20% 30%, color-mix(in srgb, var(--heap) 9%, transparent) 0 2px, transparent 3px) 0 0 / 22px 22px, var(--st-sand); }
+/* Alloc keeps the bottom-right corner of the heap, so no fluffy sits under it. */
+.st-zone.is-heap.has-alloc { padding-bottom: 66px; }
 .st-zone-title { position: absolute; top: 8px; left: 12px; font: 600 0.7rem/1 var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--stack); }
 .st-zone.is-heap .st-zone-title { color: var(--heap); }
 .st-zone-title small { font-weight: 400; letter-spacing: 0.02em; text-transform: none; opacity: 0.8; margin-left: 6px; }
@@ -59,82 +53,64 @@
 .st-crabs { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: flex-end; min-height: 96px; }
 .st-bank { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; align-content: flex-start; }
 
-/* ------------------------------------------------------------ crabs */
+/* Alloc: the allocator, in the heap's bottom-right corner. */
+.st-alloc { position: absolute; right: 8px; bottom: 6px; z-index: 1; width: 64px; height: 50px; }
+.st-alloc[hidden] { display: none; }
+.st-alloc > .ca { display: block; width: 64px; height: 50px; }
+
+.st-term { grid-column: 1 / -1; margin: 0; padding: 8px 12px; border-radius: 8px; background: var(--code-bg); color: var(--c-st); font: 400 0.8rem/1.5 var(--font-mono); white-space: pre-wrap; }
+.st-term::before { content: "stdout"; display: block; color: var(--code-dim); font-size: 0.66rem; letter-spacing: 0.1em; text-transform: uppercase; }
+.st-term[hidden] { display: none; }
+
+/* ------------------------------------------------------------ crabs (variables) */
 .st-crab { position: relative; width: 96px; display: grid; justify-items: center; }
-.st-crab-art { position: relative; width: 92px; height: 74px; }
-.st-crab-art svg { width: 100%; height: 100%; overflow: visible; }
-.st-anchor { position: absolute; left: 87%; top: 27%; width: 1px; height: 1px; }
-.is-owner, .is-plain { --crab: var(--oxide); --crab-ink: var(--oxide-ink); }
-.st-crab.is-ref { --crab: var(--borrow); --crab-ink: color-mix(in srgb, var(--borrow) 70%, #000); }
-.st-crab.is-mutref { --crab: var(--mut); --crab-ink: color-mix(in srgb, var(--mut) 70%, #000); }
-.st-crab.is-ghost, .st-crab.is-ended { --crab: var(--ghost); --crab-ink: var(--ghost); }
+.st-crab-art { position: relative; width: 92px; height: 78px; }
+.st-crab-art > .ca { display: block; width: 100%; height: 100%; animation: st-bob 2.6s ease-in-out infinite; animation-delay: var(--phase, 0s); }
+.st-crab-art > .ca.is-ghost, .st-crab-art > .ca.is-ended { animation: none; }
+/* The leash attaches at the right claw. */
+.st-anchor { position: absolute; left: 86%; top: 33%; width: 1px; height: 1px; }
+.st-crab .ca.is-ghost .ca-body { fill-opacity: 0.35; stroke: var(--ghost); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.st-crab .ca.is-ended .ca-svg { opacity: 0.6; }
 
-.cr-body, .cr-claw, .cr-stalk-dot { fill: var(--crab); }
-.cr-shine { fill: #fff; opacity: 0.2; }
-.cr-leg, .cr-arm, .cr-stalk { stroke: var(--crab); stroke-width: 4; stroke-linecap: round; fill: none; }
-.cr-eye-white { fill: #fff; stroke: var(--crab-ink); stroke-width: 1.5; }
-.cr-pupil { fill: #12171c; }
-.cr-mouth { stroke: #12171c; stroke-width: 2.2; fill: none; stroke-linecap: round; }
-.cr-cheek { fill: var(--st-blush); opacity: 0.5; }
-.cr-glasses { display: none; stroke: #12171c; stroke-width: 2; fill: rgba(255, 255, 255, 0.12); }
-.is-ref .cr-glasses { display: inline; }
-.cr-pebble { display: none; fill: var(--surface-3); stroke: var(--ghost); stroke-width: 1.5; }
-.has-pebble .cr-pebble { display: inline; }
-.cr-mouth-sad, .cr-mouth-o, .cr-shut { display: none; }
-.st-crab.is-ghost .cr-mouth-smile, .st-crab.is-err .cr-mouth-smile { display: none; }
-.st-crab.is-ghost .cr-mouth-sad { display: inline; }
-.st-crab.is-err .cr-mouth-o { display: inline; }
-.st-crab.is-ended .cr-eye-white, .st-crab.is-ended .cr-pupil { display: none; }
-.st-crab.is-ended .cr-shut { display: inline; }
-.st-crab.is-ghost .st-crab-art { opacity: 0.42; }
-.st-crab.is-ghost .cr-body { fill-opacity: 0.35; stroke: var(--ghost); stroke-width: 1.5; stroke-dasharray: 4 3; }
-.st-crab.is-ghost .cr-claw { fill-opacity: 0.35; }
-.st-crab.is-ended .st-crab-art { opacity: 0.6; }
-
-.st-crab-art svg { animation: st-bob 2.6s ease-in-out infinite; animation-delay: var(--phase, 0s); }
-.cr-eye { transform-box: fill-box; transform-origin: center; animation: st-blink 5.2s infinite; animation-delay: var(--phase, 0s); }
-.st-crab.is-ghost .st-crab-art svg, .st-crab.is-ended .st-crab-art svg { animation: none; }
 .st-crab.is-entering .st-crab-art { animation: st-drop 0.55s cubic-bezier(.3, 1.5, .5, 1) both; }
 .st-crab.is-leaving { pointer-events: none; animation: st-sink 0.5s ease-in forwards; }
 .st-crab.is-err .st-crab-art { animation: st-shake 0.45s ease-in-out 2; }
 .st-crab.is-flash .st-tag { animation: st-glow 0.9s ease-out; }
 
 @keyframes st-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
-@keyframes st-blink { 0%, 95%, 100% { transform: scaleY(1); } 97% { transform: scaleY(0.12); } }
 @keyframes st-drop { 0% { transform: translateY(-46px) scaleY(1.1); opacity: 0; } 60% { transform: translateY(3px) scaleY(0.88); opacity: 1; } 100% { transform: none; } }
 @keyframes st-sink { 0% { transform: none; opacity: 1; } 30% { transform: translateY(-6px) rotate(-6deg); } 100% { transform: translateY(26px) scale(0.7); opacity: 0; } }
 @keyframes st-shake { 0%, 100% { transform: none; } 25% { transform: translateX(-4px) rotate(-3deg); } 75% { transform: translateX(4px) rotate(3deg); } }
-@keyframes st-glow { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--crab) 60%, transparent); } 100% { box-shadow: 0 0 0 10px transparent; } }
+@keyframes st-glow { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--oxide) 60%, transparent); } 100% { box-shadow: 0 0 0 10px transparent; } }
 
 .st-tag { margin-top: 2px; padding: 2px 7px; max-width: 100%; border-radius: 6px; background: var(--surface); border: 1px solid var(--line); text-align: center; font: 600 0.74rem/1.25 var(--font-mono); color: var(--ink); }
 .st-tag small { display: block; font-weight: 400; font-size: 0.66rem; color: var(--muted); overflow-wrap: anywhere; }
 .st-tag em { display: block; font-style: normal; font-weight: 600; font-size: 0.66rem; color: var(--ghost); }
 .st-crab.is-err .st-tag { border-color: var(--bad); }
 
+/* The Inspector's stamp on a borrow error. */
 .st-stamp { position: absolute; left: 50%; top: 18px; padding: 2px 8px; border: 2.5px solid var(--bad); border-radius: 6px; color: var(--bad); background: color-mix(in srgb, var(--surface) 80%, transparent); font: 800 0.85rem/1.2 var(--font-mono); letter-spacing: 0.04em; transform: translateX(-50%) rotate(-10deg); animation: st-stamp 0.45s cubic-bezier(.2, 1.4, .5, 1) both; animation-delay: 0.35s; pointer-events: none; z-index: 2; }
 @keyframes st-stamp { 0% { transform: translateX(-50%) rotate(-24deg) scale(2.4); opacity: 0; } 100% { transform: translateX(-50%) rotate(-10deg) scale(1); opacity: 1; } }
 
-/* ------------------------------------------------------------ fluffies */
+/* The Forge's error scroll on any other compile error, in the stamp's place. */
+.st-scroll { position: absolute; left: 50%; top: -8px; z-index: 2; pointer-events: none; transform: translateX(-50%) rotate(-8deg); animation: st-scroll-in 0.5s cubic-bezier(.2, 1.4, .5, 1) both; animation-delay: 0.35s; }
+.st-scroll > .ca { display: block; width: 58px; height: 39px; }
+@keyframes st-scroll-in { 0% { transform: translateX(-50%) rotate(-24deg) scale(2); opacity: 0; } 100% { transform: translateX(-50%) rotate(-8deg) scale(1); opacity: 1; } }
+
+/* ------------------------------------------------------------ fluffies (heap values) */
 .st-fluffy { position: relative; width: 104px; display: grid; justify-items: center; }
 .st-fluffy-art { position: relative; width: 74px; height: 74px; }
-.st-fluffy-art svg { width: 100%; height: 100%; overflow: visible; animation: st-breathe 3.2s ease-in-out infinite; animation-delay: var(--phase, 0s); transform-origin: 50% 90%; }
-.fl-body { fill: var(--st-fluff); stroke: var(--st-fluff-ink); stroke-width: 2; }
-.fl-eye { fill: #12171c; }
-.fl-shine { fill: #fff; }
-.fl-mouth { stroke: #12171c; stroke-width: 2; fill: none; stroke-linecap: round; }
-.fl-cheek { fill: var(--st-blush); opacity: 0.45; }
-.fl-foot { fill: var(--st-fluff-ink); opacity: 0.6; }
-.fl-x { display: none; stroke: #12171c; stroke-width: 2.2; stroke-linecap: round; }
-.st-fluffy.is-freed .fl-eye, .st-fluffy.is-freed .fl-shine { display: none; }
-.st-fluffy.is-freed .fl-x { display: inline; }
+.st-fluffy-art > .ca { display: block; width: 100%; height: 100%; animation: st-breathe 3.2s ease-in-out infinite; animation-delay: var(--phase, 0s); transform-origin: 50% 90%; }
+/* A freed fluffy: red dashed outline and X eyes. */
+.st-fluffy.is-freed .ca-body { fill: var(--bad-soft); stroke: var(--bad); stroke-dasharray: 5 4; }
+.st-fluffy.is-freed .ca-eye { display: none; }
+.st-fluffy.is-freed .ca-xeye { display: inline; }
 .st-fluffy.is-freed .st-fluffy-art { opacity: 0.55; }
-.st-fluffy.is-freed .fl-body { fill: var(--bad-soft); stroke: var(--bad); stroke-dasharray: 5 4; }
-.st-fluffy.is-freed .st-fluffy-art svg { animation: none; }
+.st-fluffy.is-freed .st-fluffy-art > .ca { animation: none; }
 .st-fluffy.is-freed .st-tag { border-color: var(--bad); color: var(--bad); }
 .st-fluffy.is-entering .st-fluffy-art { animation: st-pop 0.55s cubic-bezier(.3, 1.6, .5, 1) both; }
 .st-fluffy.is-flash .st-fluffy-art { animation: st-jelly 0.6s ease-out; }
 .st-fluffy.is-leaving { pointer-events: none; animation: st-fade 0.45s ease-in forwards; }
-.st-fluffy .st-tag b { font-weight: 600; }
 .st-cells { display: block; font-weight: 400; white-space: nowrap; }
 .st-cells i { font-style: normal; opacity: 0.35; }
 .st-rc { position: absolute; top: -4px; right: 6px; min-width: 28px; padding: 1px 6px; border-radius: 999px; background: var(--oxide); color: #fff; font: 700 0.7rem/1.4 var(--font-mono); text-align: center; box-shadow: 0 0 0 2px var(--surface); }
@@ -160,64 +136,40 @@
 .lz-warn circle { fill: var(--bad); } .lz-warn text { fill: #fff; font: 800 11px/1 var(--font-mono); }
 .st-handle { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--oxide); box-shadow: 0 0 0 3px color-mix(in srgb, var(--oxide) 30%, transparent); z-index: 4; pointer-events: none; }
 
-/* ------------------------------------------------------------ inspector, terminal */
+/* ------------------------------------------------------------ the rejecting character and its bubble */
 .st-inspector { grid-column: 1 / -1; justify-self: end; display: flex; align-items: flex-end; gap: 6px; z-index: 5; max-width: min(26rem, 100%); animation: st-slide 0.5s cubic-bezier(.3, 1.3, .5, 1) both; }
 .st-inspector[hidden] { display: none; }
-.st-inspector svg { width: 82px; height: 74px; flex: none; overflow: visible; }
-.st-inspector .st-crab-art { width: 82px; height: 74px; }
-.st-inspector, .is-inspector { --crab: #3b4a5a; --crab-ink: #26313c; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) :is(.st-inspector, .is-inspector) { --crab: #7d8fa3; --crab-ink: #5b6b7c; } }
-:root[data-theme="dark"] :is(.st-inspector, .is-inspector) { --crab: #7d8fa3; --crab-ink: #5b6b7c; }
+.st-guard { flex: none; width: 84px; height: 76px; }
+.st-guard > .ca { display: block; width: 100%; height: 100%; }
 .st-bubble { position: relative; padding: 8px 11px; border-radius: 10px; background: var(--surface); border: 2px solid var(--bad); color: var(--ink); font: 400 0.8rem/1.35 var(--font-body); box-shadow: var(--shadow); margin-bottom: 22px; }
 .st-bubble b { display: block; color: var(--bad); font: 800 0.82rem/1.3 var(--font-mono); }
 .st-bubble::after { content: ""; position: absolute; right: -9px; bottom: 12px; border: 8px solid transparent; border-left-color: var(--bad); border-right: 0; }
-.in-cap { fill: #26313c; } .in-badge { fill: #f0c674; } .in-stamp { fill: var(--bad); } .in-handle { fill: #8a5a12; }
 @keyframes st-slide { 0% { transform: translateX(40px); opacity: 0; } 100% { transform: none; opacity: 1; } }
 
-.st-term { grid-column: 1 / -1; margin: 0; padding: 8px 12px; border-radius: 8px; background: var(--code-bg); color: var(--c-st); font: 400 0.8rem/1.5 var(--font-mono); white-space: pre-wrap; }
-.st-term::before { content: "stdout"; display: block; color: var(--code-dim); font-size: 0.66rem; letter-spacing: 0.1em; text-transform: uppercase; }
-.st-term[hidden] { display: none; }
-
-/* ------------------------------------------------------------ Oxi + narration */
+/* ------------------------------------------------------------ Oxi and the narration */
 .st-foot { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 4px 12px; align-items: start; padding: 14px 16px 6px; border-top: 1px solid var(--line-2); }
 .st-oxi { width: 76px; height: 64px; }
-.st-oxi svg { width: 100%; height: 100%; overflow: visible; }
-.st-oxi { --crab: var(--oxide); --crab-ink: var(--oxide-ink); }
-.oxi-hat { fill: #f2b632; stroke: #8a5a12; stroke-width: 1.5; } .oxi-hat-ridge { stroke: #8a5a12; stroke-width: 1.5; } .oxi-brim { stroke: #8a5a12; stroke-width: 4; stroke-linecap: round; }
-.st-oxi .oxi-happy-eye, .st-oxi .oxi-sweat, .st-oxi .oxi-q { display: none; }
-.st-oxi.is-happy .cr-eye { display: none; } .st-oxi.is-happy .oxi-happy-eye { display: inline; }
-.st-oxi.is-happy svg { animation: st-hop 0.55s cubic-bezier(.3, 1.6, .5, 1) 2; }
-.st-oxi.is-oops svg { animation: st-tilt 0.6s ease-out both; }
-.st-oxi.is-oops .oxi-sweat { display: inline; animation: st-drip 1s ease-in 0.2s both; }
-.st-oxi.is-oops .cr-mouth-smile, .st-oxi.is-wow .cr-mouth-smile { display: none; }
-.st-oxi.is-oops .cr-mouth-sad, .st-oxi.is-wow .cr-mouth-o { display: inline; }
-.st-oxi.is-think .oxi-q { display: inline; animation: st-pop 0.4s ease-out both; }
-.st-oxi.is-think .cr-pupil { transform: translate(1px, -2px); }
-.st-oxi.is-talk .cr-mouth-smile { animation: st-talk 0.18s ease-in-out 5; transform-box: fill-box; transform-origin: center; }
-@keyframes st-hop { 0%, 100% { transform: none; } 45% { transform: translateY(-12px) rotate(-4deg); } }
-@keyframes st-tilt { to { transform: rotate(-9deg); } }
-@keyframes st-drip { 0% { transform: translateY(-4px); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(8px); opacity: 0; } }
-@keyframes st-talk { 50% { transform: scaleY(1.9); } }
+.st-oxi > .ca { display: block; width: 100%; height: 100%; }
 .st-say { position: relative; padding: 10px 14px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); color: var(--ink); font: 400 0.95rem/1.55 var(--font-body); min-height: 3.2rem; }
 .st-say::before { content: ""; position: absolute; left: -9px; top: 18px; border: 8px solid transparent; border-right-color: var(--line); border-left: 0; }
 .st-say p { margin: 0 0 6px; } .st-say p:last-child { margin-bottom: 0; }
 .st-say.is-error { border-color: var(--bad); background: var(--bad-soft); }
 .st-ask { display: grid; gap: 6px; margin-top: 8px; }
 .st-confetti { position: absolute; width: 7px; height: 7px; border-radius: 2px; pointer-events: none; z-index: 6; }
-
-.st-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 16px 14px; }
-.st-progress { flex: 1; min-width: 4rem; height: 6px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
-.st-progress i { display: block; height: 100%; width: 0; background: var(--oxide); transition: width 0.3s; }
-.st-count { font: 600 0.75rem/1 var(--font-mono); color: var(--muted); }
 .st-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
+/* ------------------------------------------------------------ narrow screens */
 @media (max-width: 520px) {
-  .st-crab { width: 80px; } .st-crab-art { width: 76px; height: 62px; }
+  .st-crab { width: 80px; } .st-crab-art { width: 76px; height: 65px; }
   .st-fluffy { width: 92px; } .st-fluffy-art { width: 62px; height: 62px; }
+  .st-zone.is-heap.has-alloc { padding-bottom: 54px; }
+  .st-alloc { width: 52px; height: 41px; } .st-alloc > .ca { width: 52px; height: 41px; }
+  .st-scroll > .ca { width: 46px; height: 31px; }
+  .st-guard { width: 68px; height: 62px; }
   .st-foot { grid-template-columns: 56px minmax(0, 1fr); } .st-oxi { width: 56px; height: 48px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ox-story *, .ox-story *::before, .ox-story *::after { animation: none !important; transition: none !important; }
+  .st-root *, .st-root *::before, .st-root *::after { animation: none !important; transition: none !important; }
   .st-crab.is-leaving, .st-fluffy.is-leaving, .st-pool.is-leaving { opacity: 0; }
 }
