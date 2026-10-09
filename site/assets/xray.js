@@ -9,6 +9,9 @@
      (window.OX_XRAY = window.OX_XRAY || []).push({ id, title, code, steps })
      (window.OX_TIMELINES = window.OX_TIMELINES || []).push({ ... })
    See docs/AUTHORING.md for the op reference.
+   Every Memory X-Ray has a Story / Diagram switch. Story is drawn by story.js
+   (OxStory.mount); the choice is one preference, Ox.state().view, shared by
+   every X-Ray on the page (they follow on the "ox:view" document event).
    ========================================================================== */
 (function () {
   "use strict";
@@ -200,9 +203,10 @@
     return parts.join("") || `<span style="opacity:.5">—</span>`;
   }
 
-  function mountXray(el) {
-    if (el.dataset.xrDone) return;
-    el.dataset.xrDone = "1";
+  // The Diagram view: the classic Memory X-Ray. start = { id, step } picks the
+  // scenario and the step it opens at (both default to the first).
+  function mountDiagram(el, start = {}) {
+    enter(el, "diagram");
     const lib = window.OX_XRAY || [];
     const ids = (el.dataset.scenario || "").split(",").map((s) => s.trim()).filter(Boolean);
     const scens = ids.map((id) => lib.find((s) => s.id === id)).filter(Boolean);
@@ -215,8 +219,9 @@
         <span class="xr-legend">
           <span class="ox-chip is-own">owner</span><span class="ox-chip is-ref">&amp; borrow</span><span class="ox-chip is-mut">&amp;mut</span>
         </span>
+        ${viewControl("diagram")}
       </div>
-      ${scens.length > 1 ? `<div class="xr-head xr-picker" role="tablist"></div>` : ""}
+      ${scens.length > 1 ? `<div class="xr-head xr-picker" role="group" aria-label="Programs"></div>` : ""}
       <div class="xr-body">
         <div class="xr-code"><pre></pre></div>
         <div class="xr-stage">
