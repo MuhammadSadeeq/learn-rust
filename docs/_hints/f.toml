@@ -1,0 +1,71 @@
+[[quest]]
+name = "box1"
+hint = """
+1. The error is E0072, recursive type has infinite size. Which field makes List contain itself directly?
+2. Box<T> is a pointer, and every pointer has the same size. Change the Cons field so the tail sits behind a Box.
+3. sum can match on self: Cons adds its value to rest.sum(), and Nil gives 0. For from_slice, walk the slice in reverse and wrap each new value around the list built so far with Box::new.
+"""
+
+[[quest]]
+name = "rc1"
+hint = """
+1. Every viewer needs a handle to the same Document. Rc::clone does not copy the Document. It adds one more owner.
+2. (0..n) gives you n steps. Map each step to a Viewer, then collect the results into a Vec.
+3. Inside the map, the Viewer's doc field is Rc::clone of the Rc you were given.
+"""
+
+[[quest]]
+name = "refcell1"
+hint = """
+1. send only gets &self, so you cannot push to sent directly. Which type lets you change data behind a shared reference?
+2. self.sent.borrow_mut() gives you a mutable guard. Push a (String, String) pair built from to and body.
+3. welcome loops over the users. For each one, call mailer.send with the user's name and a body built with format!.
+"""
+
+[[quest]]
+name = "rc_refcell1"
+hint = """
+1. Give each view a clone of the Rc with Rc::clone(cart). Clone the Rc, not the Vec inside it. A cloned Vec would be a separate cart.
+2. add needs a mutable borrow. self.cart.borrow_mut() gives a guard you can push a (String, u32) tuple into.
+3. total borrows the cart with borrow(), then adds up the cents of every item. Iterate, pick out the cents, and sum.
+"""
+
+[[quest]]
+name = "boss4_template"
+hint = """
+1. Build the small pieces first. Each filter's apply is one line. tokens can use str::find to look for "{{" and then "}}".
+2. In tokens, a Tag holds the name and the filters, and both are slices of the template. Split the text between the braces on '|' and trim each piece. Return Err(RenderError::Unclosed) when there is no "}}".
+3. render calls tokens(template)? first. For each Tag, look up the name in ctx, then apply each filter from self.filters in order, feeding each result into the next. Engine::new registers the three built-in filters with register.
+"""
+
+[[quest]]
+name = "threads1"
+hint = """
+1. Read the E0597 error. It says data must be borrowed for 'static, because a spawned thread can run after parallel_sum returns.
+2. Adding move is not enough, because chunk is still a slice of data. Each thread needs numbers that it owns.
+3. Use data.into_iter() and pull each chunk out with by_ref().take(chunk_size).collect(). Move each owned chunk into its thread, and stop when a chunk comes back empty.
+"""
+
+[[quest]]
+name = "channels1"
+hint = """
+1. Make the channel with mpsc::channel(). Each worker needs its own clone of the sender, moved into its thread.
+2. The receiver's iterator ends only when every sender is dropped. Look at the sender you created in the function itself.
+3. After starting the workers, call drop on the original sender. Then collect the receiver into a Vec and call sort().
+"""
+
+[[quest]]
+name = "mutex1"
+hint = """
+1. Rc and RefCell are for one thread. Which types in std::sync are the thread-safe versions of each?
+2. Arc replaces Rc. Mutex replaces RefCell, and lock() replaces borrow_mut(). lock() returns a Result, so unwrap it.
+3. Call lock() both inside the threads and for the final read. The guard unlocks at the end of the statement.
+"""
+
+[[quest]]
+name = "scoped1"
+hint = """
+1. thread::scope(|s| ...) lets threads borrow local data. Inside it, s.spawn starts a thread and returns a handle you can join.
+2. data.chunks(chunk) gives you slices. Pass each slice into its own spawn with move, and take the max of that slice.
+3. Collect the handles into a Vec, then join them in order and collect the results. The value the scope closure returns is what thread::scope returns.
+"""

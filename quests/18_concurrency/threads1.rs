@@ -2,7 +2,7 @@
 //  QUEST threads1 · Spawn and join             Chapter 18 · Fearless Concurrency
 // ----------------------------------------------------------------------------
 //  parallel_sum splits the numbers into chunks, runs one thread per chunk, and
-//  adds up the partial sums. The starter does not compile (E0373). Make it
+//  adds up the partial sums. The starter does not compile (E0597). Make it
 //  compile and pass WITHOUT .clone() or .to_vec() on the numbers. Keep the
 //  signature.
 //
@@ -24,7 +24,10 @@ fn parallel_sum(data: Vec<u64>, threads: usize) -> u64 {
         handles.push(thread::spawn(|| chunk.iter().sum::<u64>()));
     }
 
-    handles.into_iter().map(|handle| handle.join().unwrap()).sum()
+    handles
+        .into_iter()
+        .map(|handle| handle.join().unwrap())
+        .sum()
 }
 
 fn main() {

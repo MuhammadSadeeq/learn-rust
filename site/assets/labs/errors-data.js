@@ -981,11 +981,6 @@ fn main() {
   3 |     println!("{}", name.to_uppercase());
     |                         ^^^^^^^^^^^^ method not found in \`Option<&str>\`
     |
-note: the method \`to_uppercase\` exists on the type \`&str\`
-   --> /root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/str.rs:640:5
-    |
-640 |     pub fn to_uppercase(&self) -> String {
-    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 help: consider using \`Option::expect\` to unwrap the \`&str\` value, panicking if the value is an \`Option::None\`
     |
   3 |     println!("{}", name.expect("REASON").to_uppercase());

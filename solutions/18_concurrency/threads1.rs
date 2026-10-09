@@ -25,7 +25,10 @@ fn parallel_sum(data: Vec<u64>, threads: usize) -> u64 {
         handles.push(thread::spawn(move || chunk.iter().sum::<u64>()));
     }
 
-    handles.into_iter().map(|handle| handle.join().unwrap()).sum()
+    handles
+        .into_iter()
+        .map(|handle| handle.join().unwrap())
+        .sum()
 }
 
 fn main() {

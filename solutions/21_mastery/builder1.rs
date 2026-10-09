@@ -62,6 +62,7 @@ impl RequestBuilder {
 
 fn main() {
     let request = RequestBuilder::new()
+        .method("POST")
         .url("https://api.example.com/orders")
         .header("Accept", "application/json")
         .timeout(5)

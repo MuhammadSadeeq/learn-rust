@@ -72,7 +72,13 @@
   .rv-missed { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: var(--ink-2); font-size: 0.95rem; }
   .rv-missed .ox-label { margin-right: 6px; }
 
-  .rv-mastery { --rv-b1: color-mix(in srgb, var(--ok) 50%, var(--surface)); --rv-b2: color-mix(in srgb, var(--ok) 62%, var(--surface)); --rv-b3: color-mix(in srgb, var(--ok) 75%, var(--surface)); --rv-b4: color-mix(in srgb, var(--ok) 88%, var(--surface)); --rv-b5: var(--ok); }
+  /* One-hue ordinal ramp, box 1 (lightest) to box 5. Light and dark steps are
+     chosen separately, each passing the ordinal checks on its own surface. */
+  .rv-mastery { --rv-b1: color-mix(in srgb, var(--ok) 50%, var(--surface)); --rv-b2: color-mix(in srgb, var(--ok) 67%, var(--surface)); --rv-b3: color-mix(in srgb, var(--ok) 83%, var(--surface)); --rv-b4: var(--ok); --rv-b5: color-mix(in srgb, var(--ok) 40%, var(--ink)); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .rv-mastery { --rv-b1: color-mix(in srgb, var(--ok) 48%, var(--surface)); --rv-b2: color-mix(in srgb, var(--ok) 61%, var(--surface)); --rv-b3: color-mix(in srgb, var(--ok) 75%, var(--surface)); --rv-b4: color-mix(in srgb, var(--ok) 88%, var(--surface)); --rv-b5: var(--ok); }
+  }
+  :root[data-theme="dark"] .rv-mastery { --rv-b1: color-mix(in srgb, var(--ok) 48%, var(--surface)); --rv-b2: color-mix(in srgb, var(--ok) 61%, var(--surface)); --rv-b3: color-mix(in srgb, var(--ok) 75%, var(--surface)); --rv-b4: color-mix(in srgb, var(--ok) 88%, var(--surface)); --rv-b5: var(--ok); }
   .rv-b1 { background: var(--rv-b1); }
   .rv-b2 { background: var(--rv-b2); }
   .rv-b3 { background: var(--rv-b3); }
