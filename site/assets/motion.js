@@ -561,6 +561,26 @@
     }
     function drawLinks() {
       Array.from(links.keys()).forEach(drawLink);
+      nudgeLabels();
+    }
+    // A label centred under an actor can run past the stage edge on a narrow
+    // phone. Shift it back inside by the overflow, and leave every other label
+    // where it is. Reads all rectangles first, then writes, to avoid repeated
+    // layout work.
+    function nudgeLabels() {
+      if (!stage || !stage.isConnected) return;
+      const sr = stage.getBoundingClientRect();
+      if (!sr.width) return;
+      const els = Array.from(stage.querySelectorAll(".mo-tag, .mo-text-body"));
+      els.forEach((el) => { el.style.translate = ""; });
+      const shifts = els.map((el) => {
+        const r = el.getBoundingClientRect();
+        if (!r.width) return 0;
+        if (r.left < sr.left + 2) return sr.left + 2 - r.left;
+        if (r.right > sr.right - 2) return sr.right - 2 - r.right;
+        return 0;
+      });
+      els.forEach((el, i) => { if (shifts[i]) el.style.translate = shifts[i].toFixed(1) + "px 0"; });
     }
 
     /* ------------------------------------------------------ beats and caption */
@@ -783,6 +803,7 @@
         </div>`;
       $(".mo-title", root).textContent = scene.title || scene.id;
       stage = $(".mo-stage", root);
+      window.addEventListener("resize", () => { if (stage && stage.isConnected) nudgeLabels(); });
       sayBody = $(".mo-say", root);
       oxiNode = $(".mo-oxi .ca", root);
       ctl.count = $(".mo-count", root);
