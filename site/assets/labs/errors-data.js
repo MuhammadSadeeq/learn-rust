@@ -424,12 +424,12 @@ For more information about this error, try \`rustc --explain E0596\`.`,
         note: `\`mut\` says this binding will change. Add it only to the bindings that really need to change.`
       },
       {
-        title: "Build it in one step",
+        title: "Alternative: build it in one step",
         rust: `fn main() {
     let names = vec!["Ada"];
     println!("{names:?}");
 }`,
-        note: `If nothing changes after creation, leave the binding immutable and build the value in one expression with \`vec!\`.`
+        note: `This changes the program: the push is gone. If nothing changes after creation, leave the binding immutable and build the value in one expression with \`vec!\`.`
       }
     ]
   },
@@ -609,15 +609,15 @@ fn main() {
         note: `The caller gets its own copy, so no lifetime is needed. The cost is one allocation per call.`
       },
       {
-        title: "One reference input",
-        rust: `fn first_word(text: &str) -> &str {
-    text.split(' ').next().unwrap_or("")
+        title: "Tie the output to one input",
+        rust: `fn longer<'a>(a: &'a str, _b: &str) -> &'a str {
+    a
 }
 
 fn main() {
-    println!("{}", first_word("hello there"));
+    println!("{}", longer("pear", "banana"));
 }`,
-        note: `With exactly one reference parameter, lifetime elision ties the output to it, so no name is needed. Two reference inputs are the case where rustc cannot guess.`
+        note: `When the answer can only come from \`a\`, say so. The output then borrows \`a\` alone, and \`_b\` can be any length. Use this shape only when one input really is the answer. Otherwise name the lifetime, as in the first fix.`
       }
     ]
   },
@@ -737,12 +737,12 @@ For more information about this error, try \`rustc --explain E0384\`.`,
         note: `\`mut\` lets the binding change. Use it when a value is accumulated step by step.`
       },
       {
-        title: "Compute it in one expression",
+        title: "Alternative: compute it in one expression",
         rust: `fn main() {
     let total: i32 = [5, 7, 9].iter().sum();
     println!("{total}");
 }`,
-        note: `Nothing is reassigned. \`sum\` builds the total from the iterator, which is often clearer than a loop that updates a variable.`
+        note: `This changes the program. Nothing is reassigned, and \`sum\` builds the total from an iterator, which Chapter 13 explains. It is often clearer than a loop that updates a variable.`
       }
     ]
   },
@@ -1067,7 +1067,7 @@ use pricing::with_vat;
 fn main() {
     println!("{}", with_vat(100));
 }`,
-        note: `\`use\` brings the name into scope for the rest of the file, the way a PHP \`use\` statement imports a class.`
+        note: `\`use\` brings the name into scope for the whole module or block it sits in, the way a PHP \`use\` statement imports a class.`
       },
       {
         title: "Use the full path",
@@ -1567,7 +1567,7 @@ fn main() {
 fn main() {
     println!("{}", vault::check(4242));
 }`,
-        note: `The module keeps the value private and offers a function that answers the question callers have. Keeping internals hidden is the point of \`pub\`.`
+        note: `The module keeps the value private and offers a function that answers the question callers have. Keeping internals hidden is the point of private-by-default.`
       }
     ]
   },
@@ -1610,12 +1610,12 @@ fn main() {
       },
       {
         title: "Return a slice of the input",
-        rust: `fn shout(text: &str) -> &str {
+        rust: `fn trimmed(text: &str) -> &str {
     text.trim()
 }
 
 fn main() {
-    println!("{}", shout("  hello  "));
+    println!("{}", trimmed("  hello  "));
 }`,
         note: `When the result is a part of the input, return a borrow of the input. The lifetime then comes from the argument, which is valid for the whole call.`
       }

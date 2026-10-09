@@ -965,6 +965,13 @@ For more information about this error, try `rustc --explain E0499`.</pre>
 
 <p>The compiler points at the second <code>&amp;mut s</code>. It labels the first borrow and marks where it is still used, on line 5. The fix is to finish with <code>a</code> before you create <code>b</code>, or to keep only one of them.</p>
 
+<details class="ox-think">
+  <summary>In the E0499 report, the compiler points at the second borrow, not the first. Why?</summary>
+  <div class="ox-think-body">
+    <p>The first borrow is fine by itself. What breaks the rule is creating the second borrow while the first is still used later. The error belongs to the access that conflicts, and the label on the first borrow explains why it conflicts.</p>
+  </div>
+</details>
+
 <h3>E0506: assigning to a borrowed value</h3>
 
 <pre class="rs" data-check="E0506">
@@ -988,6 +995,8 @@ fn main() {
 
 
 For more information about this error, try `rustc --explain E0506`.</pre>
+
+<p>You can't overwrite <code>s</code> while <code>r</code> still needs the old value. Finish with <code>r</code> first, or copy out whatever you still need before the assignment.</p>
 
 <h3>E0505: moving a value that is still borrowed</h3>
 
@@ -1074,14 +1083,6 @@ For more information about this error, try `rustc --explain E0597`.</pre>
 
 <p>E0597 is the cousin of E0515. <code>x</code> lives only inside the inner block, but <code>r</code> is still used after the block ends, so the borrow would outlive <code>x</code>. The compiler marks the closing brace, where <code>x</code> is dropped. The fix is to give the value a scope at least as long as the borrow. Declare <code>x</code> outside the block, and <code>r</code> can point at it.</p>
 
-<p>You can't overwrite <code>s</code> while <code>r</code> still needs the old value. Finish with <code>r</code> first, or copy out whatever you still need before the assignment.</p>
-
-<details class="ox-think">
-  <summary>In the E0499 report, the compiler points at the second borrow, not the first. Why?</summary>
-  <div class="ox-think-body">
-    <p>The first borrow is fine by itself. What breaks the rule is creating the second borrow while the first is still used later. The error belongs to the access that conflicts, and the label on the first borrow explains why it conflicts.</p>
-  </div>
-</details>
 
 <details class="ox-callout" data-kind="deep">
   <summary>Two-phase borrows: why v.push(v.len()) compiles</summary>

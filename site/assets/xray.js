@@ -419,25 +419,28 @@
           let tEl = be;
           if (v.val.at !== undefined) tEl = $(`.xr-byte[data-i="${v.val.at}"]`, be) || be;
           const T = center(tEl.getBoundingClientRect(), base);
-          // An owner's line leaves the bottom of its ptr cell, drops below the row
-          // and runs up the gutter beside the variable box, so it never crosses the
-          // len and cap cells. (A line to a byte keeps the plain curve.)
-          const sx = cell ? S.x : S.r, sy = cell ? S.b : S.y, gx = V.r + 12;
+          // An owner's line leaves the top of its ptr cell, runs along the gap
+          // above the variable box and down the gutter beside it, so it never
+          // crosses the len and cap cells (cap wraps under ptr). A line to a byte
+          // keeps a curve.
+          const sx = cell ? S.x : S.r, top = cell ? S.t : S.y, bot = cell ? S.b : S.y;
+          // Borrows run in a second gutter, so an owner's line and a borrow's line never overlap.
+          const run = V.t - 8, gx = V.r + (kind === "ref" || kind === "mut" ? 22 : 12);
           if (T.l > S.r + 8) {
             ex = T.l - 2; ey = v.val.at !== undefined ? T.t - 1 : T.y;
             if (v.val.at !== undefined) {
               ex = T.x; ey = T.t - 2;
               const dx = Math.max(30, (ex - sx) * 0.5);
-              d = `M${sx},${sy} C${sx + dx * 0.4},${sy + 24} ${ex},${ey - 40} ${ex},${ey}`;
+              d = `M${sx},${bot} C${sx + dx * 0.4},${bot + 24} ${ex},${ey - 40} ${ex},${ey}`;
               ang = Math.PI / 2;
             } else {
-              d = cell ? `M${sx},${sy} V${sy + 20} H${gx} V${ey} H${ex}` : `M${sx},${sy} H${ex}`;
+              d = cell ? `M${sx},${top} V${run} H${gx} V${ey} H${ex}` : `M${S.r},${S.y} H${ex}`;
               ang = 0;
             }
           } else {
-            // heap is below (narrow layout): down the gutter, then into the block from above
+            // heap is below (narrow layout): up and over, then down the gutter into the block
             ex = T.x; ey = T.t - 2;
-            d = cell ? `M${sx},${sy} V${sy + 20} H${gx} V${ey - 14} H${ex} V${ey}` : `M${sx},${sy} C${sx},${sy + 30} ${ex},${ey - 60} ${ex},${ey}`;
+            d = cell ? `M${sx},${top} V${run} H${gx} V${ey - 14} H${ex} V${ey}` : `M${S.r},${S.y} C${S.r + 60},${S.y} ${ex},${ey - 60} ${ex},${ey}`;
             ang = Math.PI / 2;
           }
         } else if (tv) {
