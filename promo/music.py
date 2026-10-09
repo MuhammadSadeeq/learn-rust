@@ -762,9 +762,9 @@ def finish(g, duck=None, ir=None, wet_level=0.9):
 
 DRONE_GAIN = 0.30     # sub drone group gain (S1 sub share)
 BODY_GAIN = 0.25      # warm D2+A2+D3 body under the drone (S1 mid share)
-PLUCK_GAIN = 0.40    # glass plucks group gain
+PLUCK_GAIN = 0.25    # glass plucks group gain
 TICK_GAIN = 0.19     # S1 clock ticks (hats) gain
-CARD_BRIGHT = 2.5     # bright filter-opening layer on the S2 error stabs
+CARD_BRIGHT = 3.5     # bright filter-opening layer on the S2 error stabs
 TP_LIMIT = 10.0 ** (-1.5 / 20.0)   # limiter ceiling, linear (-1.5 dBTP)
 
 
