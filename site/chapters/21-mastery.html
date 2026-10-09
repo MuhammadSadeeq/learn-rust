@@ -265,7 +265,7 @@ fn main() {
 </table>
 </div>
 
-<p>Everything else in an <code>unsafe</code> block is ordinary Rust. The borrow checker still runs, and so does the type checker. Predict first: which line below needs an <code>unsafe</code> block?</p>
+<p>Everything else in an <code>unsafe</code> block is ordinary Rust. The borrow checker still runs, and so does the type checker. Predict before you read the explanation.</p>
 
 <div class="ox-quiz" data-id="21:raw-deref" data-label="Check yourself">
   <p class="ox-q">Does this compile?</p>
@@ -431,7 +431,8 @@ panic = "abort"
 
 <ul>
   <li>Cloning to satisfy the borrow checker. A <code>clone()</code> inside a loop allocates on every pass.</li>
-  <li>Building a <code>String</code> with <code>format!</code> for each line, then copying it into a bigger one. Write into one buffer instead.</li>
+  <li>Calling <code>to_string()</code> on each item in a loop when a <code>&amp;str</code> would do.</li>
+  <li>Building a <code>String</code> with <code>format!</code> for each line, then copying it into a bigger one. Write into one buffer instead, and reuse that buffer across passes: <code>clear()</code> empties a <code>String</code> but keeps its capacity, so the next pass doesn't allocate again.</li>
   <li>Collecting into a <code>Vec</code> only to loop over it again. Chain the iterators.</li>
   <li>Growing a <code>Vec</code> or <code>String</code> without a size hint. <code>with_capacity</code> allocates once.</li>
   <li>Taking <code>String</code> or <code>Vec&lt;T&gt;</code> parameters where <code>&amp;str</code> or <code>&amp;[T]</code> would do. Every caller then has to allocate before it can call you.</li>
@@ -1158,7 +1159,7 @@ fn main() {
 
 <p>Six checks, one for each idea that is easy to get wrong. Answer each one before you open its explanation.</p>
 
-<div class="ox-quiz" data-id="21:quiz-repeat" data-label="Does this compile?">
+<div class="ox-quiz" data-id="21:quiz-repeat" data-label="Check 1 of 6">
   <p class="ox-q">Does this compile?</p>
   <pre class="rs" data-check="error">
 macro_rules! sum {
@@ -1199,7 +1200,7 @@ note: while trying to match meta-variable `$n:expr`
 
 error: aborting due to 1 previous error</pre>
 
-<div class="ox-quiz" data-id="21:unsafe-not" data-label="What does unsafe leave on?">
+<div class="ox-quiz" data-id="21:unsafe-not" data-label="Check 2 of 6">
   <p class="ox-q">Does this compile?</p>
   <pre class="rs" data-check="E0499">
 fn main() {
@@ -1222,7 +1223,7 @@ fn main() {
   </div>
 </div>
 
-<div class="ox-quiz" data-id="21:typestate" data-label="Which error?">
+<div class="ox-quiz" data-id="21:typestate" data-label="Check 3 of 6">
   <p class="ox-q">Which error does this produce?</p>
   <pre class="rs" data-check="E0599">
 use std::marker::PhantomData;
@@ -1276,7 +1277,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try `rustc --explain E0599`.</pre>
 
-<div class="ox-quiz" data-id="21:smell-unwrap" data-label="Name the smell">
+<div class="ox-quiz" data-id="21:smell-unwrap" data-label="Check 4 of 6">
   <p class="ox-q">A library function. What is the first smell a reviewer should flag?</p>
   <pre class="rs">
 fn load_port(raw: &amp;str) -&gt; u16 {
@@ -1292,7 +1293,7 @@ fn load_port(raw: &amp;str) -&gt; u16 {
   </div>
 </div>
 
-<div class="ox-fill" data-id="21:fill-macro">
+<div class="ox-fill" data-id="21:fill-macro" data-label="Check 5 of 6">
   <p class="ox-q">Complete the matcher so the trailing comma is accepted. Blank: the optional trailing comma.</p>
   <pre class="rs" data-stdout="2">
 macro_rules! hashmap {
@@ -1310,7 +1311,7 @@ fn main() {
   <div class="ox-why"><p>The repetition <code>$( ... ),*</code> handles the commas between pairs. The optional comma after the last pair is <code>$(,)?</code>: a repetition of zero or one commas. Without it, the trailing comma has nothing to match, and the call fails as it did in the first quiz.</p></div>
 </div>
 
-<div class="ox-match" data-id="21:match" data-label="Match each smell to its fix" data-left-label="Smell" data-right-label="Fix">
+<div class="ox-match" data-id="21:match" data-label="Check 6 of 6" data-left-label="Smell" data-right-label="Fix">
   <ul>
     <li data-left="fn total(items: &amp;Vec&lt;Item&gt;) -&gt; u32">Take <code>&amp;[Item]</code>. Any slice works, and the caller doesn't have to own a Vec.</li>
     <li data-left="status: String, holding &quot;paid&quot; or &quot;unpaid&quot;">An enum with one variant per state, so a typo can't compile.</li>

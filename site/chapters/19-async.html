@@ -153,34 +153,34 @@ fn main() {}</pre>
 </aside>
 
 <figure class="ox-figure">
-<svg viewBox="0 0 640 196" width="640" role="img" aria-label="Four boxes in a row: Start, Waiting on fetch_user, Waiting on load_orders, and Done. Arrows labeled poll connect them from left to right. A note under the boxes says each poll either moves to the next state or stays where it is and returns Pending.">
-  <text x="17" y="22" class="t-muted" font-size="12">ONE ENUM, ONE VARIANT PER STATE</text>
-  <rect x="17" y="40" width="120" height="96" rx="8" class="f-plain" stroke-width="1.5"/>
-  <text x="29" y="70" font-size="13" font-weight="700">Start</text>
-  <text x="29" y="90" font-size="11" class="t-muted">holds: id</text>
-  <text x="29" y="110" font-size="11" class="t-muted">not polled yet</text>
-  <path d="M139 88 H168" class="s-ink" stroke-width="2" fill="none"/>
-  <polyline points="162,82 169,88 162,94" class="s-ink" stroke-width="2" fill="none"/>
-  <text x="158" y="80" font-size="11" class="t-muted" text-anchor="middle">poll</text>
-  <rect x="179" y="40" width="120" height="96" rx="8" class="f-stack" stroke-width="1.5"/>
-  <text x="191" y="70" font-size="12" font-weight="700">Waiting on</text>
-  <text x="191" y="88" font-size="12" font-weight="700">fetch_user</text>
-  <text x="191" y="110" font-size="11" class="t-muted">holds: inner future</text>
-  <path d="M301 88 H330" class="s-ink" stroke-width="2" fill="none"/>
-  <polyline points="324,82 331,88 324,94" class="s-ink" stroke-width="2" fill="none"/>
-  <text x="320" y="80" font-size="11" class="t-muted" text-anchor="middle">poll</text>
-  <rect x="341" y="40" width="120" height="96" rx="8" class="f-stack" stroke-width="1.5"/>
-  <text x="353" y="70" font-size="12" font-weight="700">Waiting on</text>
-  <text x="353" y="88" font-size="12" font-weight="700">load_orders</text>
-  <text x="353" y="110" font-size="11" class="t-muted">holds: user</text>
-  <path d="M463 88 H492" class="s-ink" stroke-width="2" fill="none"/>
-  <polyline points="486,82 493,88 486,94" class="s-ink" stroke-width="2" fill="none"/>
-  <text x="482" y="80" font-size="11" class="t-muted" text-anchor="middle">poll</text>
-  <rect x="503" y="40" width="120" height="96" rx="8" class="f-ok" stroke-width="1.5"/>
-  <text x="515" y="70" font-size="13" font-weight="700" class="t-ok">Done</text>
-  <text x="515" y="90" font-size="11" class="t-muted">returns String</text>
-  <text x="515" y="110" font-size="11" class="t-muted">Ready(value)</text>
-  <text x="17" y="168" font-size="11" class="t-muted">Each poll either moves to the next state, or stays where it is and returns Pending.</text>
+<svg viewBox="0 0 360 296" width="360" role="img" aria-label="Four states in a loop: Start, then Waiting on fetch_user, then Waiting on load_orders, then Done. Arrows labeled poll connect them in order. A note says a Pending state stays where it is.">
+  <text x="20" y="18" class="t-muted" font-size="11">ONE ENUM, ONE VARIANT PER STATE</text>
+  <rect x="20" y="30" width="130" height="96" rx="8" class="f-plain" stroke-width="1.5"/>
+  <text x="32" y="60" font-size="13" font-weight="700">Start</text>
+  <text x="32" y="80" font-size="11" class="t-muted">holds: id</text>
+  <text x="32" y="100" font-size="11" class="t-muted">not polled yet</text>
+  <path d="M152 78 H204" class="s-ink" stroke-width="2" fill="none"/>
+  <polyline points="198,72 205,78 198,84" class="s-ink" stroke-width="2" fill="none"/>
+  <text x="178" y="70" font-size="11" class="t-muted" text-anchor="middle">poll</text>
+  <rect x="210" y="30" width="130" height="96" rx="8" class="f-stack" stroke-width="1.5"/>
+  <text x="222" y="60" font-size="12" font-weight="700">Waiting on</text>
+  <text x="222" y="78" font-size="12" font-weight="700">fetch_user</text>
+  <text x="222" y="100" font-size="11" class="t-muted">inner future</text>
+  <path d="M275 128 V162" class="s-ink" stroke-width="2" fill="none"/>
+  <polyline points="269,156 275,163 281,156" class="s-ink" stroke-width="2" fill="none"/>
+  <text x="287" y="150" font-size="11" class="t-muted">poll</text>
+  <rect x="210" y="170" width="130" height="96" rx="8" class="f-stack" stroke-width="1.5"/>
+  <text x="222" y="200" font-size="12" font-weight="700">Waiting on</text>
+  <text x="222" y="218" font-size="12" font-weight="700">load_orders</text>
+  <text x="222" y="240" font-size="11" class="t-muted">holds: user</text>
+  <path d="M206 218 H156" class="s-ink" stroke-width="2" fill="none"/>
+  <polyline points="162,212 155,218 162,224" class="s-ink" stroke-width="2" fill="none"/>
+  <text x="181" y="210" font-size="11" class="t-muted" text-anchor="middle">poll</text>
+  <rect x="20" y="170" width="130" height="96" rx="8" class="f-ok" stroke-width="1.5"/>
+  <text x="32" y="200" font-size="13" font-weight="700" class="t-ok">Done</text>
+  <text x="32" y="220" font-size="11" class="t-muted">returns String</text>
+  <text x="32" y="240" font-size="11" class="t-muted">Ready(value)</text>
+  <text x="20" y="286" font-size="11" class="t-muted">Pending means the state stays where it is.</text>
 </svg>
 <figcaption>Conceptually, the compiler turns an async fn into an enum with one variant per <code>.await</code>. Each variant holds what must survive that pause: the arguments, the inner future being waited on, and any value that future borrows. Each poll moves the enum to the next state, or leaves it where it is when the answer is Pending.</figcaption>
 </figure>

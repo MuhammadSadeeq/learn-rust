@@ -104,34 +104,34 @@ pub async fn show(
 <p>An axum app is built once. <code>main</code> builds the router and the state, binds a port, and starts serving. After that, each request runs only the per-request stages. The two lanes below handle the same request. Press a button and watch each lane walk its stages. A request stops at the first stage that fails, and the stages after it are skipped.</p>
 
 <style>
-#lifecycle .lc-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 16px; }
-#lifecycle .lc-controls .ox-label { margin-right: 4px; }
-#lifecycle .lc-startup { margin: 0 0 14px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: var(--radius); background: var(--surface-2); }
-#lifecycle .lc-startup ol { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; padding: 0; list-style: none; }
-#lifecycle .lc-startup li { flex: 1 1 180px; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); font-size: 0.86rem; }
-#lifecycle .lc-startup li b { display: block; font: 700 0.8rem/1.3 var(--font-mono); }
-#lifecycle .lc-startup li span { color: var(--ok); font-weight: 700; margin-right: 4px; }
-#lifecycle .lc-lane { margin: 0 0 14px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); }
-#lifecycle .lc-lane-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-#lifecycle .lc-result { margin-left: auto; padding: 0 8px; border-radius: 4px; font: 700 0.8rem/1.7 var(--font-mono); }
-#lifecycle .lc-result:empty { display: none; }
-#lifecycle .lc-result.is-ok { color: var(--ok); background: var(--ok-soft); }
-#lifecycle .lc-result.is-bad { color: var(--bad); background: var(--bad-soft); }
-#lifecycle .lc-track { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px 8px; margin: 12px 0 0; padding: 0; list-style: none; }
-#lifecycle .lc-stage { position: relative; min-height: 88px; padding: 8px 10px; border: 1.5px solid var(--line); border-radius: var(--radius); background: var(--surface-2); font-size: 0.84rem; line-height: 1.35; transition: border-color 0.2s, background 0.2s, opacity 0.2s; }
-#lifecycle .lc-stage b { display: block; font: 700 0.8rem/1.3 var(--font-mono); margin: 2px 0; }
-#lifecycle .lc-n { font: 700 0.72rem/1 var(--font-mono); color: var(--muted); }
-#lifecycle .lc-stage.is-done { border-color: var(--ok); }
-#lifecycle .lc-stage.is-done::after { content: "✓"; position: absolute; right: 8px; bottom: 4px; color: var(--ok); font-weight: 700; }
-#lifecycle .lc-stage.is-on { border-color: var(--oxide); background: var(--oxide-soft); }
-#lifecycle .lc-stage.is-stop { border-color: var(--bad); background: var(--bad-soft); }
-#lifecycle .lc-stage.is-skip { opacity: 0.45; border-style: dashed; }
-#lifecycle .lc-token { position: absolute; top: -11px; right: -6px; padding: 1px 7px; border-radius: 999px; background: var(--oxide); color: #fff; font: 700 0.7rem/1.5 var(--font-mono); }
-#lifecycle .lc-say { min-height: 3.4em; margin: 12px 0 0; font-size: 0.92rem; color: var(--ink-2); }
-#lifecycle .lc-status { margin: 0; font-weight: 600; }
+#lc-widget .lc-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 16px; }
+#lc-widget .lc-controls .ox-label { margin-right: 4px; }
+#lc-widget .lc-startup { margin: 0 0 14px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: var(--radius); background: var(--surface-2); }
+#lc-widget .lc-startup ol { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; padding: 0; list-style: none; }
+#lc-widget .lc-startup li { flex: 1 1 180px; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); font-size: 0.86rem; }
+#lc-widget .lc-startup li b { display: block; font: 700 0.8rem/1.3 var(--font-mono); }
+#lc-widget .lc-startup li span { color: var(--ok); font-weight: 700; margin-right: 4px; }
+#lc-widget .lc-lane { margin: 0 0 14px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); }
+#lc-widget .lc-lane-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+#lc-widget .lc-result { margin-left: auto; padding: 0 8px; border-radius: 4px; font: 700 0.8rem/1.7 var(--font-mono); }
+#lc-widget .lc-result:empty { display: none; }
+#lc-widget .lc-result.is-ok { color: var(--ok); background: var(--ok-soft); }
+#lc-widget .lc-result.is-bad { color: var(--bad); background: var(--bad-soft); }
+#lc-widget .lc-track { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px 8px; margin: 12px 0 0; padding: 0; list-style: none; }
+#lc-widget .lc-stage { position: relative; min-height: 88px; padding: 8px 10px; border: 1.5px solid var(--line); border-radius: var(--radius); background: var(--surface-2); font-size: 0.84rem; line-height: 1.35; transition: border-color 0.2s, background 0.2s, opacity 0.2s; }
+#lc-widget .lc-stage b { display: block; font: 700 0.8rem/1.3 var(--font-mono); margin: 2px 0; }
+#lc-widget .lc-n { font: 700 0.72rem/1 var(--font-mono); color: var(--muted); }
+#lc-widget .lc-stage.is-done { border-color: var(--ok); }
+#lc-widget .lc-stage.is-done::after { content: "✓"; position: absolute; right: 8px; bottom: 4px; color: var(--ok); font-weight: 700; }
+#lc-widget .lc-stage.is-on { border-color: var(--oxide); background: var(--oxide-soft); }
+#lc-widget .lc-stage.is-stop { border-color: var(--bad); background: var(--bad-soft); }
+#lc-widget .lc-stage.is-skip { opacity: 0.45; border-style: dashed; }
+#lc-widget .lc-token { position: absolute; top: -11px; right: -6px; padding: 1px 7px; border-radius: 999px; background: var(--oxide); color: #fff; font: 700 0.7rem/1.5 var(--font-mono); }
+#lc-widget .lc-say { min-height: 3.4em; margin: 12px 0 0; font-size: 0.92rem; color: var(--ink-2); }
+#lc-widget .lc-status { margin: 0; font-weight: 600; }
 </style>
 
-<div class="ox-figure ox-wide" id="lifecycle">
+<div class="ox-figure ox-wide" id="lc-widget">
   <div class="lc-controls" role="group" aria-label="Send a request">
     <span class="ox-label">Send one request</span>
     <button type="button" class="ox-btn is-small" data-req="show">GET /api/notes/1</button>
@@ -184,7 +184,7 @@ pub async fn show(
 
 <script>
 (function () {
-  var root = document.getElementById("lifecycle");
+  var root = document.getElementById("lc-widget");
   if (!root) return;
   var STEP = 700;
   var run = 0;
