@@ -1,0 +1,1515 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mastery · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/quests-data.js" defer></script>
+<script src="../assets/cards/ch21.js" defer></script>
+<script src="../assets/scenarios/ch21.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+<script src="../assets/xray.js" defer></script>
+</head>
+<body data-chapter="21">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<div class="ox-page">
+<aside class="ox-rail" aria-label="Chapter contents"></aside>
+<main class="ox-main" id="main">
+
+<header class="ox-hero" data-auto>
+  <ul>
+    <li>Write declarative macros with <code>macro_rules!</code>, and recognize what a procedural macro does to your code.</li>
+    <li>Explain what <code>unsafe</code> allows, and which checks it leaves switched on.</li>
+    <li>Measure before you optimize, and spot the allocations that waste time.</li>
+    <li>Use the idioms that mark expert Rust, and review AI-written Rust with a checklist.</li>
+  </ul>
+</header>
+
+<section>
+<h2 id="macros">Macros: code that writes code</h2>
+
+<p>You have called macros since your first program. <code>println!</code>, <code>vec!</code> and <code>format!</code> all end in <code>!</code>, and that bang is the signal. A macro is not a function call. The compiler runs it while it is still reading your source. The macro replaces the tokens you wrote with other tokens, and then the compiler type-checks the result as if you had typed it yourself.</p>
+
+<p>That is why <code>println!</code> can check your format string when you compile. A function receives values, so it has to take a fixed number of arguments with fixed types. A macro receives the raw tokens, so it can accept any number of arguments and any syntax its author allows.</p>
+
+<aside class="ox-callout" data-kind="php">
+  <p>Laravel's <code>Macroable</code> trait adds methods at runtime, as in <code>Collection::macro('avg', ...)</code>. The program is different while it runs. A Rust macro changes the source before the binary exists, and the result is fixed at build time. The nearest PHP idea is a code generator that writes <code>.php</code> files before you deploy.</p>
+</aside>
+
+<div class="ox-quiz" data-id="21:square" data-label="Predict first">
+  <p class="ox-q">What does this program print?</p>
+  <pre class="rs" data-stdout="16">
+macro_rules! square {
+    ($x:expr) =&gt; {
+        $x * $x
+    };
+}
+
+fn main() {
+    let n = square!(3 + 1);
+    println!("{n}");
+}</pre>
+  <ol class="ox-choices">
+    <li>7</li>
+    <li data-correct>16</li>
+    <li>4</li>
+    <li>It doesn't compile. A macro can't do arithmetic.</li>
+  </ol>
+  <div class="ox-why">
+    <p>The fragment <code>$x:expr</code> captures <code>3 + 1</code> as one complete expression, so the expansion is <code>(3 + 1) * (3 + 1)</code>, which is 16. The grouping survives because the macro works on syntax, not on text.</p>
+    <p>A C preprocessor macro pastes text. The same mistake there gives <code>3 + 1 * 3 + 1</code>, which is 7. That bug is why Rust macros parse their input before they substitute it.</p>
+  </div>
+</div>
+
+<h3>Matchers, fragments and repetition</h3>
+
+<p>A <code>macro_rules!</code> macro is a list of rules. Each rule has a matcher on the left and a transcriber on the right. The compiler tries the rules from top to bottom and uses the first one that matches. Inside a matcher, a name with a fragment specifier captures a piece of your input:</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Fragment</th><th>Matches</th><th>Examples</th></tr></thead>
+  <tbody>
+    <tr><td><code>expr</code></td><td>one expression</td><td><code>3 + 1</code>, <code>"ana"</code>, <code>f(x)</code></td></tr>
+    <tr><td><code>ident</code></td><td>one identifier</td><td><code>total</code>, <code>Point</code></td></tr>
+    <tr><td><code>ty</code></td><td>one type</td><td><code>Vec&lt;u8&gt;</code>, <code>&amp;str</code></td></tr>
+    <tr><td><code>literal</code></td><td>one literal value</td><td><code>42</code>, <code>"hi"</code>, <code>true</code></td></tr>
+    <tr><td><code>tt</code></td><td>one token tree: a single token, or a whole group in <code>()</code>, <code>[]</code> or <code>{}</code></td><td><code>+</code>, <code>(a, b)</code>, <code>{ x }</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>There are more specifiers, such as <code>pat</code>, <code>block</code> and <code>path</code>, but these five cover most of the macros you will read.</p>
+
+<p>A repetition <code>$( ... ),*</code> matches the pattern inside it zero or more times, with a comma between matches. <code>+</code> means one or more, and <code>?</code> means zero or one. Real code often ends a list with a comma, so the idiom <code>$(,)?</code> accepts one optional trailing comma. Practice has a quiz on what goes wrong without it.</p>
+
+<p>Macros also keep their own local variables to themselves. A <code>let</code> inside the macro body cannot collide with a name at the call site. This is called hygiene, and it is why this example prints 20:</p>
+
+<pre class="rs" data-run data-stdout="20">
+macro_rules! double_it {
+    ($e:expr) =&gt; {{
+        let x = 2;
+        $e * x
+    }};
+}
+
+fn main() {
+    let x = 10;
+    println!("{}", double_it!(x));
+}</pre>
+
+<p>The <code>x</code> inside the macro is a different <code>x</code> from yours. Without hygiene, the macro's <code>let x = 2;</code> would shadow your <code>x</code>, and the answer would be 4.</p>
+
+<h3>Build hashmap! one step at a time</h3>
+
+<p>Start with one pair. The matcher captures a key and a value, and the transcriber builds a <code>HashMap</code> and inserts the pair. The doubled braces matter. The outer pair belongs to <code>macro_rules!</code>. The inner pair makes a block, which is an expression, and the block keeps <code>map</code> out of the caller's scope.</p>
+
+<pre class="rs" data-run data-stdout="3">
+macro_rules! hashmap {
+    ($key:expr =&gt; $value:expr) =&gt; {{
+        let mut map = std::collections::HashMap::new();
+        map.insert($key, $value);
+        map
+    }};
+}
+
+fn main() {
+    let one = hashmap! { "ana" =&gt; 3 };
+    println!("{}", one["ana"]);
+}</pre>
+
+<p>Now accept any number of pairs. The matcher's <code>$( ... ),*</code> captures a list of pairs, and the transcriber's <code>$( map.insert($key, $value); )*</code> repeats its body once for each pair. The output is sorted, and that is deliberate.</p>
+
+<pre class="rs" data-run data-stdout="ana: 3\nbo: 5">
+macro_rules! hashmap {
+    ($( $key:expr =&gt; $value:expr ),*) =&gt; {{
+        let mut map = std::collections::HashMap::new();
+        $( map.insert($key, $value); )*
+        map
+    }};
+}
+
+fn main() {
+    let scores = hashmap! { "ana" =&gt; 3, "bo" =&gt; 5 };
+    let mut keys: Vec&lt;_&gt; = scores.iter().collect();
+    keys.sort();
+    for (name, score) in keys {
+        println!("{name}: {score}");
+    }
+}</pre>
+
+<p>Finish with the trailing comma. The matcher gains <code>$(,)?</code>, and the rest is unchanged. A <code>HashMap</code> iterates in an order that can change from one run to the next, so a program that prints a map without sorting can pass once and fail the next time.</p>
+
+<pre class="rs" data-run data-stdout="ana: 3\nbo: 5">
+macro_rules! hashmap {
+    ($( $key:expr =&gt; $value:expr ),* $(,)?) =&gt; {{
+        let mut map = std::collections::HashMap::new();
+        $( map.insert($key, $value); )*
+        map
+    }};
+}
+
+fn main() {
+    let scores = hashmap! { "ana" =&gt; 3, "bo" =&gt; 5, };
+    let mut keys: Vec&lt;_&gt; = scores.iter().collect();
+    keys.sort();
+    for (name, score) in keys {
+        println!("{name}: {score}");
+    }
+}</pre>
+
+<h3>When not to write a macro</h3>
+
+<p>Write a function unless you can name a reason it cannot do the job. A function is easier to read, its errors name the types involved, and every editor can complete it. Reach for a macro when:</p>
+
+<ul>
+  <li>the input is syntax rather than a value: a field name, a type, or a whole <code>struct</code> or <code>impl</code>;</li>
+  <li>the number of arguments varies, as it does with <code>vec!</code> or <code>hashmap!</code>;</li>
+  <li>you need the compiler to check a literal, as <code>println!</code> checks its format string.</li>
+</ul>
+
+<p>An error inside a macro points at the expansion, which you may never have looked at. If you cannot read the expansion, you cannot debug the macro.</p>
+
+<h3>Procedural macros: programs that rewrite tokens</h3>
+
+<p>A procedural macro is a Rust function that runs during the build. It receives a stream of tokens and returns a new stream, and the compiler puts that result where the macro was. Procedural macros must live in their own crate, marked <code>proc-macro = true</code>. There are three kinds, and you have met them already:</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Kind</th><th>Written as</th><th>Crate</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td>Derive</td><td><code>#[derive(Serialize)]</code></td><td>serde</td><td>Writes an <code>impl</code> for the type below it.</td></tr>
+    <tr><td>Attribute</td><td><code>#[tokio::main]</code></td><td>tokio</td><td>Rewrites the item it sits on.</td></tr>
+    <tr><td>Function-like</td><td><code>sqlx::query!("...")</code></td><td>sqlx</td><td>Looks like a call and returns code. sqlx checks the SQL against a real database schema when the program compiles.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<aside class="ox-callout" data-kind="trap">
+  <p>A procedural macro is a program that the compiler runs on your machine, during every build. Treat a macro crate like any other dependency: check what it does, and pin the version you use.</p>
+</aside>
+
+<h3>Macro Expansion Viewer</h3>
+
+<p>Pick an invocation, then switch between what you wrote and what the compiler sees. The highlighted tokens are the ones your code supplied. Everything else is the macro's own code, copied into every call.</p>
+
+<style>
+#expander .ox-ex-bar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; margin: 0 0 12px; }
+#expander .ox-ex-group { display: flex; flex-wrap: wrap; gap: 6px; }
+#expander .ox-ex-btn { font: 600 0.84rem/1 var(--font-mono); min-height: 34px; padding: 8px 12px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-2); cursor: pointer; }
+#expander .ox-ex-btn:hover { border-color: var(--ink-2); color: var(--ink); }
+#expander .ox-ex-btn:focus-visible { outline: 2px solid var(--borrow); outline-offset: 2px; }
+#expander .ox-ex-btn[aria-pressed="true"] { background: var(--oxide-soft); border-color: var(--oxide); color: var(--oxide-ink); }
+#expander .ox-ex-stage { display: grid; background: var(--code-bg); border: 1px solid var(--code-line); border-radius: var(--radius-lg); overflow: auto; }
+#expander .ox-ex-pre { grid-area: 1 / 1; min-width: 0; margin: 0; padding: 14px 16px 16px; background: transparent; color: var(--code-ink); font: 400 0.86rem/1.62 var(--font-mono); white-space: pre; tab-size: 4; transition: opacity 0.28s ease, transform 0.28s ease, visibility 0.28s; }
+#expander .ox-ex-pre[data-show="false"] { opacity: 0; visibility: hidden; transform: translateY(4px); }
+#expander mark.ox-arg { background: var(--c-hl); color: inherit; box-shadow: inset 0 -2px 0 var(--c-kw); border-radius: 3px; padding: 0 1px; }
+#expander .ox-ex-note { margin: 12px 0 0; min-height: 3.4em; font-size: 0.92rem; color: var(--ink-2); }
+@media (prefers-reduced-motion: reduce) { #expander .ox-ex-pre { transition: none; } }
+</style>
+
+<div class="ox-figure ox-wide" id="expander">
+  <div class="ox-ex-bar">
+    <div class="ox-ex-group" role="group" aria-label="Choose an invocation">
+      <button type="button" class="ox-ex-btn" data-ex="vec" aria-pressed="true">vec!</button>
+      <button type="button" class="ox-ex-btn" data-ex="hashmap" aria-pressed="false">hashmap!</button>
+      <button type="button" class="ox-ex-btn" data-ex="derive" aria-pressed="false">#[derive(Debug)]</button>
+      <button type="button" class="ox-ex-btn" data-ex="tokio" aria-pressed="false">#[tokio::main]</button>
+    </div>
+    <div class="ox-ex-group" role="group" aria-label="Show source or expansion">
+      <button type="button" class="ox-ex-btn" data-view="source" aria-pressed="true">Source</button>
+      <button type="button" class="ox-ex-btn" data-view="expanded" aria-pressed="false">Expanded</button>
+    </div>
+  </div>
+  <div class="ox-ex-stage">
+    <pre class="ox-pre ox-ex-pre" data-pane="source" data-show="true"></pre>
+    <pre class="ox-pre ox-ex-pre" data-pane="expanded" data-show="false" aria-hidden="true"></pre>
+  </div>
+  <p class="ox-ex-note" aria-live="polite"></p>
+  <p class="ox-caption">Expansions are simplified by hand, except <code>hashmap!</code>, which is our own macro. The real expansions of the others use compiler internals.</p>
+</div>
+
+<details class="ox-callout" data-kind="deep">
+  <summary>How to see the real expansion</summary>
+  <p><code>rustc -Zunpretty=expanded</code> prints a file after every macro has run. The flag belongs to nightly Rust. Stable Rust accepts it only when you set <code>RUSTC_BOOTSTRAP=1</code>, which is fine for reading output and wrong for real builds. The expansions in the viewer were checked against this output, and they can change between compiler versions.</p>
+</details>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Agents add macros and <code>derive</code> lists readily, because they save typing. A macro is harder to review than the function it replaces, since the reviewer has to picture the expansion. When an agent writes one, ask for the function version and compare the two. Ask for the expanded code too. <code>cargo expand</code> is a third-party tool that prints a crate after its macros run.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="unsafe">unsafe: the five superpowers</h2>
+
+<p><code>unsafe</code> is not a switch that turns Rust off. It is a promise you make about one block, and it unlocks exactly five operations that the compiler cannot check for you:</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Operation</th><th>Example</th><th>Why the compiler can't check it</th></tr></thead>
+  <tbody>
+    <tr><td>Dereference a raw pointer</td><td><code>*p</code></td><td>The address might be null, dangling or misaligned.</td></tr>
+    <tr><td>Call an <code>unsafe fn</code></td><td><code>abs(-7)</code> from C</td><td>The function's rules depend on facts the compiler can't see.</td></tr>
+    <tr><td>Read or write a <code>static mut</code></td><td><code>COUNTER = 5;</code></td><td>Any code can touch a global at any time.</td></tr>
+    <tr><td>Implement an <code>unsafe trait</code></td><td><code>unsafe impl Send for Handle {}</code></td><td>The type has to keep a promise the compiler can't verify.</td></tr>
+    <tr><td>Read a field of a <code>union</code></td><td><code>u.i</code></td><td>The bytes may not be a valid value for that field's type.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Everything else in an <code>unsafe</code> block is ordinary Rust. The borrow checker still runs, and so does the type checker. Predict first: which line below needs an <code>unsafe</code> block?</p>
+
+<div class="ox-quiz" data-id="21:raw-deref" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0133">
+fn main() {
+    let x = 5;
+    let p = &amp;x as *const i32;
+    let y = *p;
+    println!("{y}");
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. A raw pointer is only an address, and reading an address is safe.</li>
+    <li data-correct>No. Dereferencing <code>p</code> is one of the five operations, so it needs an <code>unsafe</code> block. This is error E0133.</li>
+    <li>No. Creating a raw pointer with <code>as</code> needs an <code>unsafe</code> block.</li>
+  </ol>
+  <div class="ox-why">
+    <p><code>&amp;x as *const i32</code> is safe. Making a raw pointer is harmless, so it never needs <code>unsafe</code>. Reading through the pointer is the dangerous step, and the compiler points at the <code>*p</code>.</p>
+  </div>
+</div>
+
+<p>Keep the creation outside the block and the dereference inside it:</p>
+
+<pre class="rs" data-run data-stdout="15">
+fn main() {
+    let mut n = 10;
+    let p = &amp;mut n as *mut i32;   // safe: creating a raw pointer
+    unsafe {
+        *p += 5;                  // unsafe: dereferencing it
+    }
+    println!("{n}");
+}</pre>
+
+<h3>Every unsafe block explains itself</h3>
+
+<p>A reviewer should not need the rest of the program to check an <code>unsafe</code> block. So every block gets a <code>// SAFETY:</code> comment that names the invariant it depends on. The comment is a claim, and a reviewer can check the claim.</p>
+
+<pre class="rs" data-run data-stdout="4\n-1">
+fn first_or(v: &amp;[i32], default: i32) -> i32 {
+    if v.is_empty() {
+        return default;
+    }
+    // SAFETY: the check above proves `v` has at least one element,
+    // so index 0 is in bounds.
+    unsafe { *v.get_unchecked(0) }
+}
+
+fn main() {
+    println!("{}", first_or(&amp;[4, 9], -1));
+    println!("{}", first_or(&amp;[], -1));
+}</pre>
+
+<p>The comment proves the one thing the compiler could not check here: the index is in bounds. In real code you would write <code>v[0]</code> or <code>v.first()</code>, and the bounds check those carry costs little. Reach for <code>get_unchecked</code> only when a measurement says the check matters, and let the SAFETY comment be the proof.</p>
+
+<p>Comments can be wrong, so test the code too. Miri is an interpreter for Rust programs that runs your tests and reports many kinds of undefined behavior it sees, such as out-of-bounds access, use after free and misaligned pointers. Run it with <code>cargo +nightly miri test</code>. It is slow, so point it at the tests for the code that uses <code>unsafe</code>.</p>
+
+<h3>Calling C: the everyday reason</h3>
+
+<p>The most common reason to write <code>unsafe</code> code is to call a C library. The C standard library's <code>abs</code> is a good first example:</p>
+
+<pre class="rs" data-run data-stdout="7">
+unsafe extern "C" {
+    // Unsafe to call: the compiler can't check C's preconditions for us.
+    fn abs(x: i32) -> i32;
+}
+
+fn main() {
+    // SAFETY: abs is in the C standard library that Rust links on every
+    // platform, and -7 is a valid argument.
+    let n = unsafe { abs(-7) };
+    println!("{n}");
+}</pre>
+
+<p>Since edition 2024, an <code>extern</code> block must be marked <code>unsafe extern</code>. Here is the older form, and the error it now produces:</p>
+
+<pre class="rs" data-check="error">
+extern "C" {
+    fn abs(x: i32) -&gt; i32;
+}
+
+fn main() {
+    let n = unsafe { abs(-7) };
+    println!("{n}");
+}</pre>
+
+<pre class="rustc">
+error: extern blocks must be unsafe
+ --&gt; src/main.rs:1:1
+  |
+1 | / extern "C" {
+2 | |     fn abs(x: i32) -&gt; i32;
+3 | | }
+  | |_^
+
+error: aborting due to 1 previous error</pre>
+
+<p>Inside an <code>unsafe extern</code> block, each function is unsafe to call. You can mark one <code>safe fn</code> if you accept responsibility for its contract. Be careful with that choice.</p>
+
+<aside class="ox-callout" data-kind="trap">
+  <p><code>safe fn abs(x: i32) -&gt; i32;</code> compiles, but it promises that every <code>i32</code> is a valid argument. In C, applying <code>abs</code> to the smallest <code>i32</code> is undefined behavior, so that promise would be false. Keep the declaration unsafe unless you have read the function's contract and it really holds.</p>
+</aside>
+
+<aside class="ox-callout" data-kind="php">
+  <p>ext-php-rs lets you write PHP extensions in Rust, and it is a good project for this course. Most of the <code>unsafe</code> code lives inside the crate, at the boundary with PHP's C engine. Your extension code can be ordinary safe Rust most of the time. Your job is to know where that boundary is.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="performance">Performance: measure first</h2>
+
+<p>Rust is fast by default, and the fastest code is usually code that does less work. Slow programs rarely hide their cost in a clever part. The cost is in a clone inside a loop, a <code>String</code> built one piece at a time, or a query run once per row. You find those with a measurement, not a hunch.</p>
+
+<p>Always measure a release build. <code>cargo run</code> builds a debug binary, which has no optimizations and extra checks, so its timings say little about the program you ship. Build with <code>cargo build --release</code>, and time the binary that lands in <code>target/release/</code>.</p>
+
+<h3>The release profile</h3>
+
+<p>The release profile lives in <code>Cargo.toml</code>. Cargo reads it only from the root of a workspace, and it applies to every dependency as well:</p>
+
+<pre class="toml">
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+</pre>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Setting</th><th>Default for release</th><th>What a change trades</th></tr></thead>
+  <tbody>
+    <tr><td><code>opt-level</code></td><td><code>3</code></td><td><code>"s"</code> and <code>"z"</code> aim for a smaller binary. Lower levels compile faster and produce slower code.</td></tr>
+    <tr><td><code>lto</code></td><td><code>false</code>, which optimizes each crate on its own</td><td>Link-time optimization lets the optimizer see across crate boundaries. Builds take longer. <code>"thin"</code> is a cheaper middle ground.</td></tr>
+    <tr><td><code>codegen-units</code></td><td><code>16</code></td><td>Fewer units give the optimizer more to work with. Builds become slower and less parallel.</td></tr>
+    <tr><td><code>panic</code></td><td><code>"unwind"</code></td><td><code>"abort"</code> ends the process on a panic. The binary gets smaller, but <code>catch_unwind</code> stops working and <code>Drop</code> code doesn't run during the panic.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Tools for measuring</h3>
+
+<ul>
+  <li><strong>criterion</strong> runs a function many times and reports a statistical estimate with a confidence interval. Add it as a dev-dependency, put the benchmark in <code>benches/</code>, and run <code>cargo bench</code>.</li>
+  <li><code>std::hint::black_box</code> stops the optimizer from deleting work whose result nobody uses. Without it, a benchmark can measure nothing at all.</li>
+  <li><strong>cargo flamegraph</strong> is a third-party tool that records where the time goes and draws it as a flame graph. Wide boxes are where the program spends its time. On Linux it uses <code>perf</code> underneath.</li>
+  <li>Add <code>debug = true</code> under <code>[profile.release]</code> so profiler output shows function names and line numbers.</li>
+</ul>
+
+<div class="ox-quiz" data-id="21:measure" data-label="Predict first">
+  <p class="ox-q">A function is slow. What do you do first?</p>
+  <ol class="ox-choices">
+    <li>Rewrite the hot loop with <code>unsafe</code> and raw pointers.</li>
+    <li data-correct>Build in release mode, reproduce the slow case, and profile it.</li>
+    <li>Add threads, so the work runs in parallel.</li>
+    <li>Switch the loop to recursion, which is faster.</li>
+  </ol>
+  <div class="ox-why">
+    <p>Without a measurement you are guessing, and guesses about speed are often wrong. Unsafe code and threads add complexity, and threads add overhead. Recursion is not faster in general.</p>
+  </div>
+</div>
+
+<h3>Waste that allocates</h3>
+
+<p>Most allocation waste comes from a few habits:</p>
+
+<ul>
+  <li>Cloning to satisfy the borrow checker. A <code>clone()</code> inside a loop allocates on every pass.</li>
+  <li>Building a <code>String</code> with <code>format!</code> for each line, then copying it into a bigger one. Write into one buffer instead.</li>
+  <li>Collecting into a <code>Vec</code> only to loop over it again. Chain the iterators.</li>
+  <li>Growing a <code>Vec</code> or <code>String</code> without a size hint. <code>with_capacity</code> allocates once.</li>
+  <li>Taking <code>String</code> or <code>Vec&lt;T&gt;</code> parameters where <code>&amp;str</code> or <code>&amp;[T]</code> would do. Every caller then has to allocate before it can call you.</li>
+</ul>
+
+<p>Here is the <code>format!</code> habit fixed. <code>writeln!</code> writes into one buffer, and <code>with_capacity</code> sizes that buffer once:</p>
+
+<pre class="rs" data-run data-stdout="ana: 3\nbo: 5">
+use std::fmt::Write;
+
+fn report(rows: &amp;[(&amp;str, u32)]) -&gt; Result&lt;String, std::fmt::Error&gt; {
+    let mut out = String::with_capacity(rows.len() * 16);
+    for (name, n) in rows {
+        writeln!(out, "{name}: {n}")?;
+    }
+    Ok(out)
+}
+
+fn main() {
+    let rows = [("ana", 3), ("bo", 5)];
+    print!("{}", report(&amp;rows).unwrap());
+}</pre>
+
+<p><code>writeln!</code> works on any type that implements <code>fmt::Write</code>, and <code>String</code> does. The function returns a <code>Result</code> because the write can fail in principle, and the <code>?</code> keeps that visible. The buffer is sized once, using the row count as a rough guess.</p>
+
+<h3>Measure, then change</h3>
+
+<div class="ox-order" data-id="21:order-measure" data-label="Put the fix in order">
+  <ol>
+    <li>Reproduce the slow case in a release build, with realistic input.</li>
+    <li>Profile it to find the hot code.</li>
+    <li>Change one thing.</li>
+    <li>Measure again on the same input.</li>
+    <li>Keep the change if the number moved. Otherwise revert it.</li>
+  </ol>
+  <div class="ox-why">
+    <p>Profiling comes before any change, because the hot code is rarely where you expect it. One change at a time means that when the number moves, you know which change moved it. The same input keeps the comparison honest.</p>
+  </div>
+</div>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Agents tend to optimize by guessing. They add <code>unsafe</code>, add a cache, or swap in a clever data structure, then say the code is faster. Ask what they measured, and on which input. If the answer is nothing, the change is a guess, and you can review it like one.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="idioms">Idioms that mark expert code</h2>
+
+<p>An idiom is a shape of code that experienced Rust developers reach for again and again, because it prevents a specific bug. Code that uses them reads like Rust. Code that doesn't often compiles and still carries the bug.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Idiom</th><th>The bug it prevents</th></tr></thead>
+  <tbody>
+    <tr><td>Newtype</td><td>A value of the right type with the wrong meaning, such as an unchecked string used as an email address.</td></tr>
+    <tr><td>Builder</td><td>Settings that are half applied, or a value that changes after it was built.</td></tr>
+    <tr><td>Typestate</td><td>A method called at the wrong moment, such as sending a request twice.</td></tr>
+    <tr><td>RAII guard</td><td>Forgetting to release a lock, a connection or a transaction on an early return.</td></tr>
+    <tr><td><code>From</code> and <code>?</code></td><td>Losing the original error, or writing the same conversion by hand at every call.</td></tr>
+    <tr><td><code>#[must_use]</code> and exhaustive <code>match</code></td><td>Ignoring a value, or failing to handle a variant that someone added later.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Newtype: give a value a meaning</h3>
+
+<p>A newtype wraps one value in a struct of its own. <code>Email(String)</code> is a different type from <code>String</code>, so a function that wants an <code>Email</code> can't be handed any string by accident. Make the field private, and make the only constructor validate. Then every <code>Email</code> you can hold has passed the check.</p>
+
+<pre class="rs" data-run data-stdout="welcome, ana@example.test\nErr(NoAt)">
+#[derive(Debug)]
+struct Email(String);
+
+#[derive(Debug)]
+enum EmailError {
+    Missing,
+    NoAt,
+}
+
+impl Email {
+    fn parse(raw: &amp;str) -&gt; Result&lt;Self, EmailError&gt; {
+        let raw = raw.trim();
+        if raw.is_empty() {
+            return Err(EmailError::Missing);
+        }
+        if !raw.contains('@') {
+            return Err(EmailError::NoAt);
+        }
+        Ok(Email(raw.to_lowercase()))
+    }
+
+    fn as_str(&amp;self) -&gt; &amp;str {
+        &amp;self.0
+    }
+}
+
+fn send_welcome(to: &amp;Email) {
+    println!("welcome, {}", to.as_str());
+}
+
+fn main() {
+    match Email::parse("  Ana@Example.test ") {
+        Ok(email) =&gt; send_welcome(&amp;email),
+        Err(e) =&gt; println!("rejected: {e:?}"),
+    }
+    println!("{:?}", Email::parse("no-at-sign"));
+}</pre>
+
+<aside class="ox-callout" data-kind="trap">
+  <p>Privacy in Rust works per module. This example keeps everything in one module, so <code>main</code> could still write <code>Email("x".into())</code> directly. In real code, put the newtype in its own module so the constructor really is the only way in.</p>
+</aside>
+
+<h3>Builder and typestate</h3>
+
+<p>A builder collects settings one call at a time and produces the finished value at the end. Each setter takes <code>self</code> and returns it, so the calls chain. <code>build</code> consumes the builder, so the finished value can't change later through the builder.</p>
+
+<pre class="rs" data-run data-stdout="Request { url: &quot;https://example.test&quot;, timeout_secs: 5, retries: 2 }">
+#[derive(Debug)]
+struct Request {
+    url: String,
+    timeout_secs: u64,
+    retries: u32,
+}
+
+struct RequestBuilder {
+    url: String,
+    timeout_secs: u64,
+    retries: u32,
+}
+
+impl RequestBuilder {
+    fn new(url: impl Into&lt;String&gt;) -&gt; Self {
+        RequestBuilder {
+            url: url.into(),
+            timeout_secs: 30,
+            retries: 0,
+        }
+    }
+
+    fn timeout_secs(mut self, secs: u64) -&gt; Self {
+        self.timeout_secs = secs;
+        self
+    }
+
+    fn retries(mut self, n: u32) -&gt; Self {
+        self.retries = n;
+        self
+    }
+
+    fn build(self) -&gt; Request {
+        Request {
+            url: self.url,
+            timeout_secs: self.timeout_secs,
+            retries: self.retries,
+        }
+    }
+}
+
+fn main() {
+    let req = RequestBuilder::new("https://example.test")
+        .timeout_secs(5)
+        .retries(2)
+        .build();
+    println!("{req:?}");
+}</pre>
+
+<aside class="ox-callout" data-kind="php">
+  <p>A PHP fluent setter usually ends with <code>return $this</code>, so every call changes the same shared object. A Rust builder moves the value through each call, and there is no shared object to change. Nothing outside the chain can see the half-built state.</p>
+</aside>
+
+<p>Typestate goes one step further. Sometimes the state of a value decides which methods make sense. A request that hasn't been sent has no response to read. Typestate puts that state in the type, using a marker type for each state:</p>
+
+<pre class="rs" data-run data-stdout="sending https://example.test/api\nstatus 200">
+use std::marker::PhantomData;
+
+struct Unsent;
+struct Sent;
+
+struct Request&lt;State&gt; {
+    url: String,
+    _state: PhantomData&lt;State&gt;,
+}
+
+impl Request&lt;Unsent&gt; {
+    fn new(url: &amp;str) -&gt; Self {
+        Request { url: url.to_string(), _state: PhantomData }
+    }
+
+    fn send(self) -&gt; Request&lt;Sent&gt; {
+        println!("sending {}", self.url);
+        Request { url: self.url, _state: PhantomData }
+    }
+}
+
+impl Request&lt;Sent&gt; {
+    fn status(&amp;self) -&gt; u16 {
+        200
+    }
+}
+
+fn main() {
+    let req = Request::new("https://example.test/api");
+    let sent = req.send();
+    println!("status {}", sent.status());
+}</pre>
+
+<p><code>send</code> takes <code>self</code> by value and returns a <code>Request&lt;Sent&gt;</code>. The unsent value is gone after the call, so it can't be sent twice. <code>status</code> exists only for <code>Request&lt;Sent&gt;</code>. Practice has a quiz on what happens when you call <code>send</code> on the sent value.</p>
+
+<h3>RAII guards: cleanup you can't forget</h3>
+
+<p>RAII stands for resource acquisition is initialization. The rule behind the name is simple: a value that holds a resource releases it in its <code>Drop</code>. Chapter 06 introduced <code>Drop</code>. A guard puts that pattern to work. It does its cleanup on every exit path, including an early return and a <code>?</code>.</p>
+
+<pre class="rs" data-run data-stdout="BEGIN\nCOMMIT\nBEGIN\nwork is done, but we forgot to commit\nROLLBACK">
+struct Transaction {
+    committed: bool,
+}
+
+impl Transaction {
+    fn begin() -&gt; Self {
+        println!("BEGIN");
+        Transaction { committed: false }
+    }
+
+    fn commit(mut self) {
+        self.committed = true;
+        println!("COMMIT");
+    }
+}
+
+impl Drop for Transaction {
+    fn drop(&amp;mut self) {
+        if !self.committed {
+            println!("ROLLBACK");
+        }
+    }
+}
+
+fn main() {
+    let tx = Transaction::begin();
+    tx.commit();
+    let _tx2 = Transaction::begin();
+    println!("work is done, but we forgot to commit");
+}</pre>
+
+<p>The second transaction was never committed. It rolls back at the end of <code>main</code>, when its scope ends, and nothing had to remember to do that.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+DB::transaction(function () use ($data) {
+    $order = Order::create($data);
+    throw new PaymentDeclined();  // rolls back
+});</pre>
+  <pre class="rs" data-check="skip">
+fn place_order(card_ok: bool) -&gt; Result&lt;(), String&gt; {
+    let tx = Transaction::begin();
+    if !card_ok {
+        return Err("card declined".into());  // tx drops here: ROLLBACK
+    }
+    tx.commit();
+    Ok(())
+}</pre>
+  <div class="ox-bridge-note"><p>Laravel's transaction is a callback. The framework wraps your closure and rolls back if it throws. The Rust guard needs no callback: the rollback happens when the scope ends, so every return path is covered, including ones you add later. The guard only works while it stays in a variable. <code>let _ = Transaction::begin();</code> drops it at once, which is the Chapter 06 trap again.</p></div>
+</div>
+
+<h3>From and ?: converting errors</h3>
+
+<p><code>?</code> on an error calls <code>From::from</code> to turn it into the function's error type. Implement <code>From</code> once, and every <code>?</code> in that function converts for you.</p>
+
+<pre class="rs" data-run data-stdout="Ok(8080)\nbad port: invalid digit found in string">
+#[derive(Debug)]
+enum AppError {
+    Parse(std::num::ParseIntError),
+}
+
+impl From&lt;std::num::ParseIntError&gt; for AppError {
+    fn from(e: std::num::ParseIntError) -&gt; Self {
+        AppError::Parse(e)
+    }
+}
+
+impl AppError {
+    fn reason(&amp;self) -&gt; String {
+        match self {
+            AppError::Parse(e) =&gt; format!("bad port: {e}"),
+        }
+    }
+}
+
+fn read_port(s: &amp;str) -&gt; Result&lt;u16, AppError&gt; {
+    let port: u16 = s.trim().parse()?;
+    Ok(port)
+}
+
+fn main() {
+    println!("{:?}", read_port(" 8080 "));
+    match read_port("http") {
+        Ok(port) =&gt; println!("port {port}"),
+        Err(e) =&gt; println!("{}", e.reason()),
+    }
+}</pre>
+
+<p>The <code>parse</code> call returns a <code>ParseIntError</code>, and the function returns an <code>AppError</code>. The <code>?</code> calls <code>AppError::from</code> in between. That call is the whole conversion, and you can see it in the source.</p>
+
+<h3>Parameters that accept both</h3>
+
+<p>Take <code>impl Into&lt;String&gt;</code> when you need to own the text, and <code>impl AsRef&lt;str&gt;</code> when you only read it. Both accept a <code>&amp;str</code> and a <code>String</code>, so callers don't have to convert before they call you.</p>
+
+<pre class="rs" data-run data-stdout="user:ana\nuser:bo\nHI\nTHERE">
+fn label(name: impl Into&lt;String&gt;) -&gt; String {
+    let name: String = name.into();
+    format!("user:{name}")
+}
+
+fn shout(text: impl AsRef&lt;str&gt;) -&gt; String {
+    text.as_ref().to_uppercase()
+}
+
+fn main() {
+    println!("{}", label("ana"));
+    println!("{}", label(String::from("bo")));
+    println!("{}", shout("hi"));
+    println!("{}", shout(String::from("there")));
+}</pre>
+
+<h3>Let the compiler find every place to change</h3>
+
+<p>Two attributes and one habit do the same job. <code>#[must_use]</code> asks for a warning when a value is ignored. <code>#[non_exhaustive]</code> lets a library add an enum variant later without breaking its callers, because callers must keep a <code>_</code> arm. Inside the crate that defines the enum, that attribute has no effect. The habit is to leave <code>match</code> arms unwritten as a wildcard, so the compiler lists the places that need the new case.</p>
+
+<div class="ox-quiz" data-id="21:must-use" data-label="Does rustc object?">
+  <p class="ox-q">Does this compile, and does rustc say anything about it?</p>
+  <pre class="rs" data-check="ok">
+fn save(n: u32) -&gt; Result&lt;(), String&gt; {
+    if n &gt; 0 { Ok(()) } else { Err("empty".to_string()) }
+}
+
+fn main() {
+    save(3);
+}</pre>
+  <ol class="ox-choices">
+    <li>No. A <code>Result</code> can be dropped without a word.</li>
+    <li>Yes, with no warning. Ignoring a value is allowed.</li>
+    <li data-correct>Yes, with a warning. The <code>Result</code> is unused, and rustc says it must be used.</li>
+  </ol>
+  <div class="ox-why">
+    <p>The standard library marks <code>Result</code> as <code>#[must_use]</code>, so ignoring one produces a warning that it may hold an error. Handle it with <code>?</code>, match on it, or write <code>let _ = save(3);</code> when dropping it is truly intended. The underscore makes the decision visible in the code.</p>
+  </div>
+</div>
+
+<p>A <code>match</code> with no <code>_</code> arm works as a to-do list. Here is an enum with a new variant that one function forgot to handle:</p>
+
+<pre class="rs" data-check="E0004">
+enum Status {
+    Paid,
+    Unpaid,
+    Refunded,
+}
+
+fn label(s: &amp;Status) -&gt; &amp;'static str {
+    match s {
+        Status::Paid =&gt; "paid",
+        Status::Unpaid =&gt; "unpaid",
+    }
+}
+
+fn main() {
+    println!("{}", label(&amp;Status::Refunded));
+}</pre>
+
+<pre class="rustc">
+error[E0004]: non-exhaustive patterns: `&amp;Status::Refunded` not covered
+  --&gt; src/main.rs:8:11
+   |
+ 8 |     match s {
+   |           ^ pattern `&amp;Status::Refunded` not covered
+   |
+note: `Status` defined here
+  --&gt; src/main.rs:1:6
+   |
+ 1 | enum Status {
+   |      ^^^^^^
+...
+ 4 |     Refunded,
+   |     -------- not covered
+   = note: the matched value is of type `&amp;Status`
+help: ensure that all possible cases are being handled by adding a match arm with a wildcard pattern or an explicit pattern as shown
+   |
+10 ~         Status::Unpaid =&gt; "unpaid",
+11 ~         &amp;Status::Refunded =&gt; todo!(),
+   |
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0004`.</pre>
+
+<p>Read the note first. It names the variant the match doesn't cover. The help suggests a wildcard arm, which would hide the next new variant. Write the missing arm by name instead, and the compiler will keep checking it.</p>
+
+<h3>Error layering: a typed library, a flexible app</h3>
+
+<p>A library should return an error type its callers can match on. An application mostly needs to report errors with context. Two crates cover those jobs, and most Rust projects use one or both. <code>thiserror</code> writes the boilerplate for a typed error. <code>anyhow</code> gives you one error type that carries context. Libraries use <code>thiserror</code>, and applications use <code>anyhow</code>.</p>
+
+<p>With <code>thiserror = "2"</code> in <code>Cargo.toml</code>, a library error looks like this:</p>
+
+<pre class="rs" data-check="skip">
+#[derive(Debug, thiserror::Error)]
+pub enum ConfigError {
+    #[error("missing key `{0}`")]
+    Missing(String),
+    #[error("`{0}` must be a number")]
+    NotNumber(String, #[source] std::num::ParseIntError),
+}
+
+fn port(raw: Option&lt;&amp;str&gt;) -&gt; Result&lt;u16, ConfigError&gt; {
+    let raw = raw.ok_or_else(|| ConfigError::Missing("PORT".to_string()))?;
+    raw.parse::&lt;u16&gt;()
+        .map_err(|e| ConfigError::NotNumber("PORT".to_string(), e))
+}
+
+fn main() {
+    println!("{:?}", port(Some("8080")));
+    println!("{:?}", port(None));
+    match port(Some("http")) {
+        Ok(p) =&gt; println!("port {p}"),
+        Err(e) =&gt; println!("error: {e}"),
+    }
+}</pre>
+
+<p>An application with <code>anyhow = "1"</code> can skip the enum. It adds context at each step, and <code>main</code> reports the whole chain:</p>
+
+<pre class="rs" data-check="skip">
+use anyhow::Context;
+
+fn load_port(raw: &amp;str) -&gt; anyhow::Result&lt;u16&gt; {
+    let port = raw.trim().parse::&lt;u16&gt;().context("reading PORT")?;
+    Ok(port)
+}
+
+fn main() -&gt; anyhow::Result&lt;()&gt; {
+    let port = load_port(" 8080 ")?;
+    println!("listening on {port}");
+    load_port("http")?;
+    Ok(())
+}</pre>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Agents often pick <code>Box&lt;dyn Error&gt;</code> for every function, because it compiles everywhere. In a library, that choice takes away the caller's ability to match on what went wrong. When you review a library's error type, ask which cases a caller would need to handle, and write those as variants.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="review">Reading Rust an AI wrote</h2>
+
+<p>Agents are good at getting Rust to compile. Compiling is the first test, and the easiest. The second test is whether a reviewer would merge the code. The smells below all compile. Each one is a question to ask before you approve.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Smell</th><th>Why it matters</th><th>Fix</th></tr></thead>
+  <tbody>
+    <tr><td>Needless <code>clone()</code></td><td>Allocates on every call, and hides the ownership design.</td><td>Borrow with <code>&amp;T</code> if the function only reads. Move if the caller is done with the value.</td></tr>
+    <tr><td><code>unwrap()</code> or <code>expect()</code> on input in library code</td><td>A bad value from a caller panics the caller's program.</td><td>Return a <code>Result</code> and pass the error up with <code>?</code>. Unwrapping is fine in tests and in <code>main</code>.</td></tr>
+    <tr><td><code>&amp;String</code> or <code>&amp;Vec&lt;T&gt;</code> parameters</td><td>Callers who hold a <code>&amp;str</code> or an array can't call you.</td><td>Take <code>&amp;str</code> or <code>&amp;[T]</code>.</td></tr>
+    <tr><td><code>Box&lt;dyn Error&gt;</code> in a library's public API</td><td>Callers can't match on the error or handle one case.</td><td>Define a typed error enum, with <code>thiserror</code>.</td></tr>
+    <tr><td><code>Arc&lt;Mutex&lt;_&gt;&gt;</code> where one owner would do</td><td>Adds locks and runtime failure modes to code that never shares anything.</td><td>Give the value to one owner, or pass it through a channel.</td></tr>
+    <tr><td>Blocking calls inside <code>async fn</code></td><td>Blocks an executor thread, so every other task on it waits.</td><td>Use the async version, such as <code>tokio::fs</code> or <code>tokio::time::sleep</code>, or move the work with <code>spawn_blocking</code>.</td></tr>
+    <tr><td>A lock held across <code>.await</code></td><td>The lock stays held while the task waits, so every other task that needs it waits too.</td><td>Drop the guard before the <code>.await</code>, or put the locked part in its own block.</td></tr>
+    <tr><td>Collect, then iterate</td><td>Builds an intermediate <code>Vec</code> that nothing needs.</td><td>Chain the iterators.</td></tr>
+    <tr><td>Index loops, such as <code>for i in 0..v.len()</code></td><td>An extra bounds check on each access, and an off-by-one error waiting to happen.</td><td>Iterate over <code>&amp;v</code>, or use an iterator adapter.</td></tr>
+    <tr><td>Stringly typed states</td><td><code>"actve"</code> compiles, and nothing catches the typo.</td><td>An <code>enum</code> with one variant per state.</td></tr>
+    <tr><td>Ignored <code>Result</code>, as in <code>let _ = ...;</code></td><td>The error disappears without a trace.</td><td>Handle it, pass it up with <code>?</code>, or leave a comment that says why dropping it is safe.</td></tr>
+    <tr><td><code>unsafe</code> with no <code>SAFETY</code> comment</td><td>Nobody can check the claim the block depends on.</td><td>State the invariant, and test the block with Miri.</td></tr>
+    <tr><td>One giant function</td><td>Hard to test, and the reviewer has to hold all of it in mind at once.</td><td>Extract each step into a function named after what it does.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Find the smells</h3>
+
+<p>Here is a function an agent wrote. It compiles, and it prints the right answer for the input it was given. Read it once, and then open the think block to check what you found.</p>
+
+<pre class="rs" data-run data-stdout="[&quot;ana&quot;, &quot;di&quot;]">
+#[derive(Clone)]
+struct User {
+    name: String,
+    status: String,
+    age: String,
+}
+
+fn active_adults(users: &amp;Vec&lt;User&gt;) -&gt; Vec&lt;String&gt; {
+    let copy = users.clone();
+    let mut names = Vec::new();
+    for u in copy.iter() {
+        if u.status == "active" {
+            let age: u32 = u.age.parse().unwrap();
+            if age &gt;= 18 {
+                names.push(u.name.clone());
+            }
+        }
+    }
+    names
+}
+
+fn main() {
+    let users = vec![
+        User { name: "ana".into(), status: "active".into(), age: "34".into() },
+        User { name: "bo".into(), status: "banned".into(), age: "40".into() },
+        User { name: "cy".into(), status: "active".into(), age: "16".into() },
+        User { name: "di".into(), status: "active".into(), age: "22".into() },
+    ];
+    println!("{:?}", active_adults(&amp;users));
+}</pre>
+
+<details class="ox-think">
+  <summary>Four smells. Did you find them before you looked?</summary>
+  <div class="ox-think-body">
+    <p>The parameter is <code>&amp;Vec&lt;User&gt;</code>, which forces callers to own a Vec. The function also clones the entire list just to read it. The status is a string, so <code>"actve"</code> would compile and quietly match nothing. And <code>unwrap()</code> on the age means one bad value from the caller panics the whole program.</p>
+  </div>
+</details>
+
+<p>Here is the reviewed version. It returns the same output, <code>["ana", "di"]</code>, from a design where the bad input is caught when it enters.</p>
+
+<pre class="rs" data-run data-stdout="[&quot;ana&quot;, &quot;di&quot;]">
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Status {
+    Active,
+    Banned,
+}
+
+struct User {
+    name: String,
+    status: Status,
+    age: u32,
+}
+
+fn active_adults(users: &amp;[User]) -&gt; Vec&lt;&amp;str&gt; {
+    users
+        .iter()
+        .filter(|u| u.status == Status::Active &amp;&amp; u.age &gt;= 18)
+        .map(|u| u.name.as_str())
+        .collect()
+}
+
+fn main() {
+    let users = vec![
+        User { name: "ana".into(), status: Status::Active, age: 34 },
+        User { name: "bo".into(), status: Status::Banned, age: 40 },
+        User { name: "cy".into(), status: Status::Active, age: 16 },
+        User { name: "di".into(), status: Status::Active, age: 22 },
+    ];
+    println!("{:?}", active_adults(&amp;users));
+}</pre>
+
+<p>What changed, in order of importance. The age is parsed once, where the input enters, so this function has nothing left to panic on. The status is an enum, so a typo is a compile error. The parameter is a slice, so any caller can use it. And the function borrows the names instead of cloning them.</p>
+
+<p>The last change alters the signature. A caller that stored the result as <code>Vec&lt;String&gt;</code> must change too, and that is part of the review. A reviewer checks the callers of a changed signature, not only the function.</p>
+
+<h3>Give the agent a rulebook</h3>
+
+<p>The fastest review is the one that doesn't need to happen, because the agent followed the rules from the start. Put these in <code>CLAUDE.md</code> or <code>AGENTS.md</code> at the repository root. Agents read those files before they start, and you can review the result against the same list.</p>
+
+<pre class="text">
+## Rust workflow
+Before you report a task as finished:
+1. Run `cargo fmt`.
+2. Run `cargo clippy --all-targets -- -D warnings` and fix every warning.
+3. Run `cargo test`.
+
+## Rules
+- No `unwrap()` or `expect()` outside tests and `main`. Return a `Result` and use `?`.
+- Take `&amp;str` and `&amp;[T]` parameters, not `&amp;String` or `&amp;Vec&lt;T&gt;`. Borrow unless you need ownership.
+- Library errors are typed enums (`thiserror`). Application code may use `anyhow`.
+- No blocking calls inside `async fn`. Use the async version, or `spawn_blocking`.
+- Give every new dependency an explicit major version in Cargo.toml, and say why it is needed.
+- Every `unsafe` block has a `// SAFETY:` comment that states the invariant.
+- Model states with enums and newtypes, not strings and bare integers.
+- Don't ignore a `Result`. Handle it, pass it up, or explain in a comment why dropping it is safe.</pre>
+
+<p>Practice these reviews in the <a href="../labs/ai-dojo.html">Agent Code Review Dojo</a>.</p>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Never approve code only because it compiles and the tests pass. An agent can write a test that asserts whatever the code happens to do. For each test, ask whether it would fail if the code were wrong. A test that can't fail is not a check.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="forge-source">Read the Forge</h2>
+
+<p>The course has its own trainer. The Forge is the program behind <code>cargo forge</code>. It watches your quest files, compiles each one with <code>rustc</code>, runs its tests, and moves you on when they pass. It is about 1,200 lines of standard-library Rust with no dependencies, so every technique in it comes from this course.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>File</th><th>What it does</th><th>Lines</th></tr></thead>
+  <tbody>
+    <tr><td><code>forge/src/main.rs</code></td><td>Commands, the watch loop, and the thread that reads stdin</td><td>598</td></tr>
+    <tr><td><code>forge/src/runner.rs</code></td><td>Compiles one quest, runs its tests, and enforces the timeout</td><td>205</td></tr>
+    <tr><td><code>forge/src/quests.rs</code></td><td>Reads <code>quests/quests.toml</code> and records your progress</td><td>268</td></tr>
+    <tr><td><code>forge/src/ui.rs</code></td><td>Terminal colors, the progress bar, and trimmed compiler output</td><td>149</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Start with two files: <code>main.rs</code> for the watch loop, and <code>runner.rs</code> for the timeout. Between them they use enums, threads, channels and a deadline, and each piece is something you have already met.</p>
+
+<h3>The watch loop</h3>
+
+<p>Watch mode has two jobs. It waits for a line you type, and it notices when a file changes. A blocking read can't do both at once. So <code>main.rs</code> puts stdin on its own thread, sends each line through a channel, and makes the main loop wait on that channel with a 300 ms timeout. When the wait times out, the loop checks the quest file's modified time, and it recompiles only if the time changed.</p>
+
+<p>Here is the same pattern as a standalone program. It reads three fixed lines instead of the keyboard, so it finishes without any typing:</p>
+
+<pre class="rs" data-run data-stdout="got: check\ngot: hint\ngot: quit\ndone">
+use std::sync::mpsc::{self, RecvTimeoutError};
+use std::thread;
+use std::time::Duration;
+
+enum Input {
+    Line(String),
+    Closed,
+}
+
+fn main() {
+    let (tx, rx) = mpsc::channel::&lt;Input&gt;();
+
+    // The Forge reads io::stdin() on this thread. This demo sends fixed
+    // lines so the example finishes without waiting for a keyboard.
+    thread::spawn(move || {
+        for line in ["check", "hint", "quit"] {
+            thread::sleep(Duration::from_millis(50));
+            if tx.send(Input::Line(line.to_string())).is_err() {
+                return;
+            }
+        }
+        let _ = tx.send(Input::Closed);
+    });
+
+    loop {
+        match rx.recv_timeout(Duration::from_millis(300)) {
+            Ok(Input::Line(line)) =&gt; {
+                println!("got: {line}");
+                if line == "quit" {
+                    break;
+                }
+            }
+            Ok(Input::Closed) =&gt; break,
+            // Nothing typed for 300 ms. The Forge checks file timestamps here.
+            Err(RecvTimeoutError::Timeout) =&gt; {}
+            Err(RecvTimeoutError::Disconnected) =&gt; break,
+        }
+    }
+    println!("done");
+}</pre>
+
+<p>The <code>move</code> closure takes ownership of <code>tx</code>. <code>thread::spawn</code> requires that, because the thread can outlive the function that started it. The receiver stays with the main loop. <code>recv_timeout</code> returns <code>Timeout</code> when nothing has arrived, and <code>Disconnected</code> when every sender is gone.</p>
+
+<details class="ox-think">
+  <summary>Read the real watch loop. Three questions to answer first</summary>
+  <div class="ox-think-body">
+    <ol>
+      <li>In <code>watch</code>, why does the spawned closure need <code>move</code>? Answer: the thread may outlive the function that started it, so the closure must own <code>tx</code>.</li>
+      <li>Why does the loop call <code>rx.recv_timeout</code> and not <code>rx.recv</code>? Answer: <code>recv</code> blocks until a line arrives, so the loop could never check the file in the meantime.</li>
+      <li>What happens once stdin closes? Answer: <code>stdin_open</code> becomes false, and the loop switches from receiving to sleeping. File saves are still noticed, because the loop keeps checking the modified time.</li>
+    </ol>
+  </div>
+</details>
+
+<h3>The timeout</h3>
+
+<p>A quest with an endless loop must not hang the Forge. <code>runner.rs</code> starts the test binary, then checks it in a loop. <code>try_wait</code> returns straight away, with nothing, while the child is still running. After 20 seconds the loop kills the child. <code>wait</code> would block until the child exited, so it could never give up.</p>
+
+<pre class="rs" data-check="skip" data-title="forge/src/runner.rs, lines 97 to 108">
+    let started = Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait()? {
+            break Some(status);
+        }
+        if started.elapsed() &gt; TEST_TIMEOUT {
+            let _ = child.kill();
+            let _ = child.wait();
+            break None;
+        }
+        thread::sleep(Duration::from_millis(20));
+    };</pre>
+
+<p>The same file reads the child's stdout and stderr on helper threads. A pipe holds only a small buffer. A test that prints a lot, with nobody reading, blocks on its next write and never exits, and the Forge then waits out the whole timeout. Reading on separate threads keeps the buffer empty.</p>
+
+<p>The file's header comment explains one more choice. The Forge calls <code>rustc</code> directly instead of Cargo, because each quest is a single file, and one broken quest can never stop another from building. Read <code>runner.rs</code> from the top to see the other half of that decision.</p>
+
+<p>Look for the newer syntax as well. The Forge uses <code>let ... else</code>, <code>matches!</code>, and let chains such as <code>if let Some(minor) = minor &amp;&amp; minor &lt; 85</code>. Let chains are the newest of these, so they are worth looking up in the Rust reference.</p>
+</section>
+
+<section>
+<h2 id="roadmap">Where to go next</h2>
+
+<p>The course ends here, but the material does not. These resources go deeper, roughly in the order they're useful to someone who has finished this course:</p>
+
+<ol>
+  <li><a href="https://doc.rust-lang.org/book/">The Rust Book</a>, the official guide. Read the chapters you skipped.</li>
+  <li><a href="https://doc.rust-lang.org/rust-by-example/">Rust by Example</a>, short runnable programs for each feature.</li>
+  <li><a href="https://github.com/rust-lang/rustlings">Rustlings</a>, small exercises you run in your terminal, like the Forge.</li>
+  <li><a href="https://doc.rust-lang.org/nomicon/">The Rustonomicon</a>, the rules of <code>unsafe</code> in depth. Read it before you write <code>unsafe</code> for a real project.</li>
+  <li><a href="https://rust-lang.github.io/async-book/">The Async Book</a>, then the <a href="https://tokio.rs/tokio/tutorial">tokio tutorial</a>.</li>
+  <li><em>Rust for Rustaceans</em> by Jon Gjengset, for traits, unsafe code, async and API design at the next level.</li>
+  <li><em>Rust Atomics and Locks</em> by Mara Bos, for how threads and memory ordering really work.</li>
+  <li><em>Zero To Production in Rust</em> by Luca Palmieri, for building a real web service with tests from the start.</li>
+  <li>Jon Gjengset's videos, for long walkthroughs of how the standard library and popular crates work.</li>
+</ol>
+
+<h3>Projects for a PHP developer</h3>
+
+<ul>
+  <li><strong>A PHP extension in Rust</strong>, with ext-php-rs. You will meet the <code>unsafe</code> boundary from section two directly.</li>
+  <li><strong>A queue worker</strong> that reads Laravel-style job payloads from Redis and runs them on a thread pool. It is the same shape as the boss quest.</li>
+  <li><strong>A CLI tool</strong> with clap, to replace one of the scripts in your own repositories.</li>
+  <li><strong>A small JSON API</strong> with sqlx, so the SQL in your queries is checked when the program compiles.</li>
+  <li><strong>An MCP server or agent harness</strong> in Rust: a process that offers tools to a model and runs them with limits you define.</li>
+</ul>
+
+<details class="ox-think">
+  <summary>Pick one project. What is the first thing you would build?</summary>
+  <div class="ox-think-body">
+    <p>Start with something you can run in a terminal and test before you write the rest. For a CLI, that is one command with a fixed input and an expected output. For a worker, it is one job that runs once and leaves a visible result. Build that first, and add the second feature only when the first one has a passing test.</p>
+  </div>
+</details>
+</section>
+
+<section>
+<h2 id="practice">Practice</h2>
+
+<p>Six checks, one for each idea that is easy to get wrong. Answer each one before you open its explanation.</p>
+
+<div class="ox-quiz" data-id="21:quiz-repeat" data-label="Does this compile?">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="error">
+macro_rules! sum {
+    ($($n:expr),+) =&gt; {
+        0 $(+ $n)+
+    };
+}
+
+fn main() {
+    let total = sum!(1, 2, 3,);
+    println!("{total}");
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. <code>$(...)+</code> skips a trailing comma.</li>
+    <li data-correct>No. The matcher has no optional trailing comma, so the last <code>,</code> has nothing to match.</li>
+    <li>No. A macro can take at most two arguments.</li>
+  </ol>
+  <div class="ox-why">
+    <p><code>$($n:expr),+</code> matches one or more expressions separated by commas. It does not allow a comma after the last one. Add <code>$(,)?</code> to the matcher, as in <code>($($n:expr),+ $(,)?)</code>, and the trailing comma is accepted.</p>
+  </div>
+</div>
+
+<pre class="rustc">
+error: unexpected end of macro invocation
+ --&gt; src/main.rs:8:30
+  |
+1 | macro_rules! sum {
+  | ---------------- when calling this macro
+...
+8 |     let total = sum!(1, 2, 3,);
+  |                              ^ missing tokens in macro arguments
+  |
+note: while trying to match meta-variable `$n:expr`
+ --&gt; src/main.rs:2:8
+  |
+2 |     ($($n:expr),+) =&gt; {
+  |        ^^^^^^^
+
+error: aborting due to 1 previous error</pre>
+
+<div class="ox-quiz" data-id="21:unsafe-not" data-label="What does unsafe leave on?">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0499">
+fn main() {
+    let mut x = 5;
+    let r1 = &amp;mut x;
+    unsafe {
+        let p = &amp;mut x as *mut i32;
+        *p += 1;
+    }
+    *r1 += 1;
+    println!("{x}");
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. The <code>unsafe</code> block switches off the borrow checker.</li>
+    <li data-correct>No. The borrow checker still runs inside <code>unsafe</code>, and this is error E0499.</li>
+    <li>Yes, with a warning. <code>unsafe</code> only silences lints.</li>
+  </ol>
+  <div class="ox-why">
+    <p><code>unsafe</code> adds five operations, and it switches off no checks. <code>r1</code> is still alive when the block creates a second <code>&amp;mut</code> to <code>x</code>, and that conflict is an error whether the block is unsafe or not. Dereferencing <code>p</code> is allowed here, but that doesn't help the borrow.</p>
+  </div>
+</div>
+
+<div class="ox-quiz" data-id="21:typestate" data-label="Which error?">
+  <p class="ox-q">Which error does this produce?</p>
+  <pre class="rs" data-check="E0599">
+use std::marker::PhantomData;
+
+struct Unsent;
+struct Sent;
+
+struct Request&lt;State&gt; {
+    url: String,
+    _state: PhantomData&lt;State&gt;,
+}
+
+impl Request&lt;Unsent&gt; {
+    fn new(url: &amp;str) -&gt; Self {
+        Request { url: url.to_string(), _state: PhantomData }
+    }
+
+    fn send(self) -&gt; Request&lt;Sent&gt; {
+        Request { url: self.url, _state: PhantomData }
+    }
+}
+
+fn main() {
+    let sent = Request::new("https://example.test/api").send();
+    let again = sent.send();
+    println!("{}", again.url);
+}</pre>
+  <ol class="ox-choices">
+    <li>E0382, a value used after it was moved.</li>
+    <li data-correct>E0599, a method that doesn't exist for this type: <code>send</code> is defined only for <code>Request&lt;Unsent&gt;</code>.</li>
+    <li>No error. Every <code>Request</code> has a <code>send</code> method.</li>
+  </ol>
+  <div class="ox-why">
+    <p>The first <code>send</code> consumes the unsent request, and the result is a <code>Request&lt;Sent&gt;</code>. That type has no <code>send</code> method at all, so the compiler reports E0599 for the second call. The error names the type it found, which is the clue you need.</p>
+  </div>
+</div>
+
+<pre class="rustc">
+error[E0599]: no method named `send` found for struct `Request&lt;Sent&gt;` in the current scope
+  --&gt; src/main.rs:23:22
+   |
+ 6 | struct Request&lt;State&gt; {
+   | --------------------- method `send` not found for this struct
+...
+23 |     let again = sent.send();
+   |                      ^^^^ method not found in `Request&lt;Sent&gt;`
+   |
+   = note: the method was found for `Request&lt;Unsent&gt;`
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0599`.</pre>
+
+<div class="ox-quiz" data-id="21:smell-unwrap" data-label="Name the smell">
+  <p class="ox-q">A library function. What is the first smell a reviewer should flag?</p>
+  <pre class="rs">
+fn load_port(raw: &amp;str) -&gt; u16 {
+    raw.trim().parse().unwrap()
+}</pre>
+  <ol class="ox-choices">
+    <li>It takes <code>&amp;str</code>. It should take a <code>String</code>.</li>
+    <li data-correct>It calls <code>unwrap()</code> on input from the caller, so a bad value panics the caller's program.</li>
+    <li>It calls <code>trim()</code>, which allocates a new string.</li>
+  </ol>
+  <div class="ox-why">
+    <p>Input from outside a function can be anything. A library that panics on bad input turns a typo into a crash. Return <code>Result&lt;u16, ParseIntError&gt;</code> and let the caller decide. <code>&amp;str</code> is the right parameter type, and <code>trim()</code> returns a view without allocating.</p>
+  </div>
+</div>
+
+<div class="ox-fill" data-id="21:fill-macro">
+  <p class="ox-q">Complete the matcher so the trailing comma is accepted. Blank: the optional trailing comma.</p>
+  <pre class="rs" data-stdout="2">
+macro_rules! hashmap {
+    ($( $k:expr =&gt; $v:expr ),* [[$(,)?]]) =&gt; {{
+        let mut map = std::collections::HashMap::new();
+        $( map.insert($k, $v); )*
+        map
+    }};
+}
+
+fn main() {
+    let m = hashmap! { "a" =&gt; 1, "b" =&gt; 2, };
+    println!("{}", m.len());
+}</pre>
+  <div class="ox-why"><p>The repetition <code>$( ... ),*</code> handles the commas between pairs. The optional comma after the last pair is <code>$(,)?</code>: a repetition of zero or one commas. Without it, the trailing comma has nothing to match, and the call fails as it did in the first quiz.</p></div>
+</div>
+
+<div class="ox-match" data-id="21:match" data-label="Match each smell to its fix" data-left-label="Smell" data-right-label="Fix">
+  <ul>
+    <li data-left="fn total(items: &amp;Vec&lt;Item&gt;) -&gt; u32">Take <code>&amp;[Item]</code>. Any slice works, and the caller doesn't have to own a Vec.</li>
+    <li data-left="status: String, holding &quot;paid&quot; or &quot;unpaid&quot;">An enum with one variant per state, so a typo can't compile.</li>
+    <li data-left="let _ = writer.flush();">Propagate with <code>?</code>, or leave a comment that explains why dropping the error is safe.</li>
+    <li data-left="Box&lt;dyn Error&gt; returned by a library">A typed error enum with <code>thiserror</code>, so callers can match on each case.</li>
+    <li data-left="Arc&lt;Mutex&lt;Vec&lt;Job&gt;&gt;&gt; used by one thread">Move the Vec into that thread. One owner needs no lock.</li>
+  </ul>
+</div>
+
+<h3>After the checks</h3>
+
+<p>Each of those is a shape you will see in real diffs. The compiler catches some of them, and a reviewer catches the rest. Practice finding the second kind, because the compiler can't.</p>
+</section>
+
+<section>
+<h2 id="finale">You made it</h2>
+
+<p>You started this course with a single <code>println!</code>. Since then you have learned to make values, move them, borrow them, share them across threads, and wait on async work without blocking a thread. You can read a macro's expansion, see when <code>unsafe</code> is doing real work, and review an agent's Rust for the smells that compile fine.</p>
+
+<p>That does not finish Rust, and nobody finishes it. What changes is how you read a compiler error. It stops being a wall of text and becomes a note about one line, written by a reviewer who has read every line of your program.</p>
+
+<p class="ox-pull">The compiler reads every line. Review is deciding whether it read the right thing.</p>
+
+<p>The last quest is the job queue, <code>boss5_job_queue</code>. It is a worker pool built from threads and channels, the same kind of machine a Laravel queue worker runs, and it combines most of the course. Pass it in the Forge. Then keep the two labs you will return to: the <a href="../labs/ai-dojo.html">Agent Code Review Dojo</a> for review practice, and the Recall Deck for the cards in this chapter.</p>
+
+<details class="ox-think">
+  <summary>Before you close this page: which check do you run first on an agent's diff?</summary>
+  <div class="ox-think-body">
+    <p>Start with ownership at the boundary. Does each function take what it needs, and does it clone to hide a design problem? The compiler has already checked the rest, so the questions a reviewer adds are about design, error handling and what the agent claimed to have tested.</p>
+  </div>
+</details>
+</section>
+
+<section>
+<h2 id="quests">Forge quests</h2>
+<p>Four quests cover this chapter: a macro, a newtype, a builder, and the job queue that ends the course. They run locally against the real compiler, and the last one is a boss.</p>
+<div class="ox-quests" data-chapter="21"></div>
+</section>
+
+<section>
+<h2 id="recap">Recap</h2>
+
+<div class="ox-recap">
+  <h3>What to carry out of this chapter</h3>
+  <ul>
+    <li>A <code>macro_rules!</code> macro matches syntax with fragments such as <code>expr</code>, <code>ident</code>, <code>ty</code> and <code>tt</code>, and repeats with <code>$( ... ),*</code>. Write a function first, and reach for a macro when the input is syntax.</li>
+    <li>A procedural macro is a program that rewrites tokens. Derive adds <code>impl</code>s, attribute macros rewrite the item they sit on, and function-like macros look like calls.</li>
+    <li><code>unsafe</code> unlocks five operations: dereferencing raw pointers, calling unsafe functions, using <code>static mut</code>, implementing unsafe traits, and reading union fields. It never turns off the borrow checker or the type checker. Every block gets a <code>SAFETY</code> comment.</li>
+    <li>Measure a release build, profile before you change code, and change one thing at a time.</li>
+    <li>Idioms prevent specific bugs. Newtypes guard meaning, typestate puts state in the type, RAII guards clean up on every path, and <code>From</code> lets <code>?</code> convert errors.</li>
+    <li>Review agent code for the smells that compile: needless clones, <code>unwrap</code> on input, stringly typed states, ignored results, and <code>unsafe</code> without a reason.</li>
+  </ul>
+</div>
+
+<div class="ox-deck" data-chapter="21"></div>
+
+<details class="ox-think">
+  <summary>Explain it back: pick one idiom from this chapter and explain what bug it prevents.</summary>
+  <div class="ox-think-body">
+    <p>Typestate is a good pick. A <code>Request&lt;Unsent&gt;</code> has a <code>send</code> method, and a <code>Request&lt;Sent&gt;</code> does not. Because <code>send</code> takes <code>self</code>, the unsent value is gone after the call, so the program can't send it twice. A <code>status</code> method that exists only on the sent type can't be called before the request goes out. The bug it prevents is the kind that appears only in production: a request sent twice, or a response read before it exists. The compiler catches both before the program runs.</p>
+    <p>A newtype answer works just as well. <code>Email</code> makes a string that was never validated impossible to pass where an <code>Email</code> is expected.</p>
+  </div>
+</details>
+
+<div class="ox-complete-host"></div>
+</section>
+
+</main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var MARK_OPEN = "⟦";
+  var MARK_CLOSE = "⟧";
+  var root = document.getElementById("expander");
+  if (!root) return;
+
+  var panes = {
+    source: root.querySelector('[data-pane="source"]'),
+    expanded: root.querySelector('[data-pane="expanded"]')
+  };
+  var note = root.querySelector(".ox-ex-note");
+  var picks = Array.prototype.slice.call(root.querySelectorAll("[data-ex]"));
+  var views = Array.prototype.slice.call(root.querySelectorAll("[data-view]"));
+  var state = { ex: "vec", view: "source" };
+
+  function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  function highlight(code) {
+    return window.Ox && window.Ox.highlight ? window.Ox.highlight(code, "rust") : esc(code);
+  }
+
+  // Remove the markers and remember which character ranges they enclosed.
+  function parse(marked) {
+    var clean = "", ranges = [], start = -1;
+    for (var i = 0; i < marked.length; i++) {
+      var c = marked.charAt(i);
+      if (c === MARK_OPEN) {
+        start = clean.length;
+      } else if (c === MARK_CLOSE) {
+        if (start >= 0) ranges.push([start, clean.length]);
+        start = -1;
+      } else {
+        clean += c;
+      }
+    }
+    return { clean: clean, ranges: ranges };
+  }
+
+  function inside(ranges, p) {
+    for (var k = 0; k < ranges.length; k++) {
+      if (p >= ranges[k][0] && p < ranges[k][1]) return true;
+    }
+    return false;
+  }
+
+  // Wrap the visible characters of highlighted HTML that fall in a range in
+  // <mark>. Token spans are flat, so a mark boundary inside one closes and
+  // reopens it.
+  function overlay(html, ranges) {
+    var re = /<\/?span[^>]*>|&(?:amp|lt|gt|quot);|[\s\S]/g;
+    var out = "", pos = 0, inMark = false, span = null, m;
+    while ((m = re.exec(html))) {
+      var t = m[0];
+      if (t.charAt(0) === "<") {
+        span = t.charAt(1) === "/" ? null : t;
+        out += t;
+        continue;
+      }
+      var want = inside(ranges, pos);
+      if (want !== inMark) {
+        if (span) out += "</span>";
+        out += want ? '<mark class="ox-arg">' : "</mark>";
+        if (span) out += span;
+        inMark = want;
+      }
+      out += t;
+      pos++;
+    }
+    if (inMark) out += "</mark>";
+    return out;
+  }
+
+  function current(items) {
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].id === state.ex) return items[i];
+    }
+    return items[0];
+  }
+
+  function render(items) {
+    var item = current(items);
+    if (!item) return;
+    var src = parse(item.src);
+    var exp = parse(item.marked);
+    panes.source.innerHTML = overlay(highlight(src.clean), src.ranges);
+    panes.expanded.innerHTML = overlay(highlight(exp.clean), exp.ranges);
+    note.textContent = item.note || "";
+    picks.forEach(function (b) {
+      b.setAttribute("aria-pressed", b.getAttribute("data-ex") === state.ex ? "true" : "false");
+    });
+  }
+
+  function setView(v) {
+    state.view = v;
+    panes.source.setAttribute("data-show", v === "source" ? "true" : "false");
+    panes.source.setAttribute("aria-hidden", v === "source" ? "false" : "true");
+    panes.expanded.setAttribute("data-show", v === "expanded" ? "true" : "false");
+    panes.expanded.setAttribute("aria-hidden", v === "expanded" ? "false" : "true");
+    views.forEach(function (b) {
+      b.setAttribute("aria-pressed", b.getAttribute("data-view") === v ? "true" : "false");
+    });
+    if (v === "expanded" && window.Ox && window.Ox.award) {
+      window.Ox.award(2, "read an expansion", "expand:" + state.ex);
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    var items = window.OX_CH21_EXPAND || [];
+    if (!items.length) return;
+    render(items);
+    setView(state.view);
+    picks.forEach(function (b) {
+      b.addEventListener("click", function () {
+        state.ex = b.getAttribute("data-ex");
+        render(items);
+      });
+    });
+    views.forEach(function (b) {
+      b.addEventListener("click", function () {
+        setView(b.getAttribute("data-view"));
+      });
+    });
+  });
+})();
+</script>
+</div>
+</body>
+</html>

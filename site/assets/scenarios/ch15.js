@@ -108,24 +108,30 @@ struct Excerpt<'a> {
     part: &'a str,
 }
 
+impl<'a> Excerpt<'a> {
+    fn text(&self) -> &'a str {
+        self.part
+    }
+}
+
 fn main() {
     let text = String::from("call me Ishmael. Some years ago");
     let excerpt = Excerpt { part: &text[..15] };
-    println!("{}", excerpt.part);
+    println!("{}", excerpt.text());
 }`,
     vars: [
-      { name: "text", kind: "own", from: 6, to: 9 },
-      { name: "excerpt", kind: "ref", from: 7, to: 8, label: "&text" }
+      { name: "text", kind: "own", from: 12, to: 15 },
+      { name: "excerpt", kind: "ref", from: 13, to: 14, label: "&text" }
     ],
     marks: [
-      { var: "excerpt", line: 7, text: "borrow" },
-      { var: "excerpt", line: 8, text: "use" }
+      { var: "excerpt", line: 13, text: "borrow" },
+      { var: "excerpt", line: 14, text: "use" }
     ],
     steps: [
-      { line: 6, say: "<p><code>text</code> owns the String. It lives until the end of <code>main</code>.</p>" },
-      { line: 7, say: "<p>The slice <code>&amp;text[..15]</code> is stored inside an <code>Excerpt</code>. The <code>'a</code> in the struct ties the slice to <code>text</code>, so this bar sits inside the bar for <code>text</code>.</p>" },
-      { line: 8, say: "<p>The print reads through <code>excerpt</code>. <code>text</code> is still alive, so the slice is valid.</p>" },
-      { line: 9, say: "<p><code>main</code> ends. <code>excerpt</code> is dropped first, then <code>text</code>. The struct never outlives the text it borrows.</p>" }
+      { line: 12, say: "<p><code>text</code> owns the String. It lives until the end of <code>main</code>.</p>" },
+      { line: 13, say: "<p>The slice <code>&amp;text[..15]</code> is stored inside an <code>Excerpt</code>. The <code>'a</code> in the struct ties the slice to <code>text</code>, so this bar sits inside the bar for <code>text</code>.</p>" },
+      { line: 14, say: "<p><code>excerpt.text()</code> returns the slice with the same <code>'a</code>. <code>text</code> is still alive, so the slice is valid.</p>" },
+      { line: 15, say: "<p><code>main</code> ends. <code>excerpt</code> is dropped first, then <code>text</code>. The struct never outlives the text it borrows.</p>" }
     ]
   }
 );
@@ -181,7 +187,7 @@ fn main() {
     bars: { x: [6, 13], y: [9, 12], result: [10, 11] },
     borrows: "x",
     message: null,
-    reason: "first ties result to x alone, so y's length never matters. The print runs inside y's block and reads only the borrow of x."
+    reason: "first ties result to x alone, so how long y lives does not matter. The print runs inside y's block and reads only the borrow of x."
   },
   {
     id: "inner-after-longest",

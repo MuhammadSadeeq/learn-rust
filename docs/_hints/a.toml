@@ -1,0 +1,150 @@
+[[quest]]
+name = "hello1"
+hint = """
+1. Read the first error. It says Rust expected a function and found a macro.
+2. Macros are called with a `!` after their name, such as `vec!` or `format!`.
+3. Add the `!` right after `println`, the way `println!` is written.
+"""
+
+[[quest]]
+name = "hello2"
+hint = """
+1. `format!` takes the same kind of template as `println!`. Return its result
+   instead of printing it.
+2. Any variable in scope can go inside the braces: `format!("Hi {name}")`. For
+   the cents, `/` gives the whole dollars and `%` gives the leftover cents.
+3. `{rest:02}` pads a number to two digits with leading zeros, so use it on the
+   cents to make 5 print as 05.
+"""
+
+[[quest]]
+name = "vars1"
+hint = """
+1. The error names the variable that is assigned twice: `total`. Which bindings
+   in Rust can change after they are created?
+2. Bindings are immutable by default. `mut` makes one changeable. Put it on the
+   binding that changes, and only on that one.
+3. The warning points at `label`. Remove the `mut` there, so every `mut` you
+   keep means something.
+"""
+
+[[quest]]
+name = "vars2"
+hint = """
+1. The error points at the assignment. Compare the type `number` started with
+   against the type of the value being put into it.
+2. An assignment has to keep the variable's type. A new `let` with the same
+   name creates a fresh variable, and that one can have a new type.
+3. Turn the assignment into a `let`, and drop the `mut` that the line no longer
+   needs.
+"""
+
+[[quest]]
+name = "vars3"
+hint = """
+1. Read the first error. It says a const is missing its type. Compare the first
+   line with the other two.
+2. A const needs `: Type` between its name and the `=`, the same way the other
+   two lines have it.
+3. The other two use `u64`, so give the first one the same type.
+"""
+
+[[quest]]
+name = "types1"
+hint = """
+1. The panic message says "attempt to add with overflow". Which variable is
+   growing past its limit, and what type is it?
+2. A u8 holds at most 255. Choose a wider integer type for the running total,
+   and convert each age into it with `u32::from`.
+3. Return 0 early for an empty list. Otherwise total in the wider type, divide
+   by the count, and cast the result back to u8.
+"""
+
+[[quest]]
+name = "types2"
+hint = """
+1. A tuple is written in parentheses. A function returns its last expression,
+   so ending with `(low, high)` hands back both values.
+2. Start `low` and `high` from the first value. Then go through the rest and
+   update either one when you see a smaller or larger value.
+3. `let (a, b) = pair;` takes a tuple apart. Build the reversed tuple from those
+   two names.
+"""
+
+[[quest]]
+name = "types3"
+hint = """
+1. `[u32; 7]` always holds seven values. Index them from 0, with `days[0]`
+   through `days[6]`.
+2. For the total, start a counter at 0 and add each day. A `for day in days`
+   loop visits every value.
+3. For the busiest day, remember the best day and its hours so far. Replace both
+   only for a strictly larger value, which keeps the earlier day on a tie.
+"""
+
+[[quest]]
+name = "types4"
+hint = """
+1. `300 as u8` compiles and gives 44, with no error at all. Decide what an
+   out-of-range value should mean before you cast.
+2. `u8::try_from(x)` gives back a Result. The `.ok()` method turns an Ok into
+   Some and an Err into None.
+3. Limit the value with `x.clamp(0, 255)` before the cast. For `truncate`, a
+   plain `as` already does the job.
+"""
+
+[[quest]]
+name = "functions1"
+hint = """
+1. The compiler reports each function separately. Fix one error, run cargo
+   forge again, and the next error will show up.
+2. A block's value is its last line, but only when that line has no semicolon.
+3. Every parameter needs `name: Type`, and a function that returns a value needs
+   `-> Type` after its parameter list.
+"""
+
+[[quest]]
+name = "control1"
+hint = """
+1. An `if` produces a value, so the chain can be the function's last expression.
+   Don't add `return`, and don't put a semicolon after the chain.
+2. Test the highest band first. The first condition that is true wins, so
+   `score >= 90` already covers everything above 90.
+3. For `abs_diff`, subtract the smaller number from the larger one. An `if` can
+   decide which subtraction to run.
+"""
+
+[[quest]]
+name = "control2"
+hint = """
+1. `loop` runs until it reaches a `break`. `break candidate;` ends the loop and
+   makes `candidate` the value of the whole loop.
+2. Try each number in turn, starting at `start`. If it divides evenly by `by`,
+   break with it. If not, add one and go around again.
+3. For the Collatz count, `while n != 1` keeps going until the sequence reaches
+   1. On each pass, pick the next number with an `if` and add one to the count.
+"""
+
+[[quest]]
+name = "control3"
+hint = """
+1. A `match` can take a tuple, so `match (n % 3, n % 5)` looks at both
+   remainders together.
+2. Arms are checked from the top, and `_` matches anything. Put the arm for
+   numbers that divide by both 3 and 5 first, because 15 also matches the Fizz arm.
+3. `for i in 1..=n` includes `n`. Start with `let mut lines = Vec::new();`, push
+   `fizzbuzz(i)` on each pass, and return `lines` at the end.
+"""
+
+[[quest]]
+name = "boss1_receipt"
+hint = """
+1. Build from the bottom up. `line_total` and `subtotal` come first, and each
+   later function calls the earlier ones, so get those right before you move on.
+2. In `format_money`, work in whole dollars and leftover cents. Count the dollar
+   digits from the right to find where commas go, and put one before each group
+   of three, except at the start.
+3. In `render`, format each item row with `{name:<16}{qty:>3}{price:>10}`. Pad
+   the summary labels to 19 so their prices line up with the item prices, and
+   join the rows with a newline.
+"""

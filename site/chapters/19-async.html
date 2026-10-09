@@ -1,0 +1,1239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Async Rust · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/quests-data.js" defer></script>
+<script src="../assets/cards/ch19.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+<script src="../assets/xray.js" defer></script>
+</head>
+<body data-chapter="19">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<div class="ox-page">
+<aside class="ox-rail" aria-label="Chapter contents"></aside>
+<main class="ox-main" id="main">
+
+<header class="ox-hero" data-auto>
+  <ul>
+    <li>Explain when async beats threads, and when it doesn't.</li>
+    <li>Say what a future is, and why nothing runs until it is polled.</li>
+    <li>Write async code with tokio: spawn, join!, select!, timeouts and channels.</li>
+    <li>Avoid the classic mistakes: blocking calls, locks held across <code>.await</code>, and forgotten futures.</li>
+  </ul>
+</header>
+
+<section>
+<h2 id="waiting">The waiting problem</h2>
+
+<p>Most of a web request is spent waiting. It waits for the database to answer, for an HTTP call to come back, for a file to be read. The CPU does real work for a small share of the time.</p>
+
+<p>The classic model gives each connection its own thread. That thread handles the request from start to finish, and while it waits it does nothing useful. It still holds its stack, and the operating system still has to schedule it. Ten thousand slow connections means ten thousand threads, most of them asleep.</p>
+
+<p>Async changes what a waiting connection costs. A task that is waiting is not a thread. It is a small saved state that says where to resume. One thread can keep thousands of those tasks, and run only the ones that are ready.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Kind of work</th><th>Better tool</th></tr></thead>
+  <tbody>
+    <tr><td>Many connections that spend most of their time waiting on a database, an HTTP call or a socket</td><td>Async, with a runtime such as tokio</td></tr>
+    <tr><td>Heavy computation: hashing a large file, resizing images, parsing a huge dataset</td><td>Threads, or rayon for parallel iterators</td></tr>
+    <tr><td>A blocking library you cannot change</td><td><code>spawn_blocking</code>, or a dedicated thread</td></tr>
+  </tbody>
+</table>
+</div>
+
+<aside class="ox-callout" data-kind="php">
+  <p>PHP-FPM runs one request per worker. When your controller calls Eloquent and the worker waits for MySQL, that worker is blocked until the answer comes back. You scale by adding workers.</p>
+  <p>ReactPHP, Amp and Swoole bring event loops to PHP, and PHP 8.1 added Fibers, which can pause a call stack. The closest model you already know is JavaScript's <code>async</code> and <code>await</code>: an <code>await</code> pauses one function and lets the event loop run something else.</p>
+</aside>
+
+<p>Async does not make code faster. A loop that crunches numbers takes the same time inside an async function, and while it runs, every other task on that thread waits too. The gain is in how cheaply the waiting is handled.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+public function show(int $id): JsonResponse
+{
+    $user = User::findOrFail($id);     // this worker waits for MySQL here
+    $orders = $user->orders()->get();  // and waits again here
+    return response()->json(['user' => $user, 'orders' => $orders]);
+}</pre>
+  <pre class="rs" data-check="skip">
+async fn show(db: &amp;Db, id: u32) -&gt; String {
+    let user = db.find_user(id).await;    // this task parks; the thread serves others
+    let orders = db.orders_for(&amp;user).await;
+    format!("{} has {} orders", user.name, orders.len())
+}</pre>
+  <div class="ox-bridge-note"><p>The Rust version reads almost the same. The <code>Db</code> type stands in for your database layer, so this sketch is not meant to compile on its own. The difference is what happens at each <code>.await</code>. The thread is free to run another task. In PHP the worker waits, and nothing else runs on it.</p></div>
+</div>
+
+<details class="ox-think"><summary>Think first: what is the PHP worker's thread doing while MySQL is slow?</summary>
+  <div class="ox-think-body"><p>Nothing useful. It is blocked, and that request is its only job. In Rust, the same wait returns <code>Pending</code> to the executor, so the same thread can poll another ready task. The waiting task costs only its saved state.</p></div></details>
+</section>
+
+<section>
+<h2 id="futures">A future is a paused computation</h2>
+
+<p>An <code>async fn</code> looks like a normal function with one extra word. The difference is what calling it does. Calling an async fn does not run its body. It returns a <em>future</em>: a value that describes work that has not happened yet.</p>
+
+<p>Here is a program with two async functions. Predict what it prints, then open the answer.</p>
+
+<pre class="rs" data-title="src/main.rs">
+async fn fetch() -&gt; u32 {
+    println!("fetch runs");
+    42
+}
+
+async fn report() {
+    fetch();
+    println!("report runs");
+}
+
+fn main() {
+    let _report = report();
+}</pre>
+
+<details class="ox-think"><summary>Predict: what does this program print?</summary>
+  <div class="ox-think-body"><p>Nothing. <code>report()</code> creates a future and stores it in <code>_report</code>, but nothing polls it, so its body never runs. Even <code>fetch()</code> never runs, because <code>report</code> never gets to that line.</p></div></details>
+
+<p>The compiler warns about the line <code>fetch();</code>:</p>
+
+<pre class="rustc">
+warning: unused implementer of `Future` that must be used
+ --&gt; src/main.rs:7:5
+  |
+7 |     fetch();
+  |     ^^^^^^^
+  |
+  = note: futures do nothing unless you `.await` or poll them
+  = note: `#[warn(unused_must_use)]` (part of `#[warn(unused)]`) on by default</pre>
+
+<p>The warning states the rule. A future does nothing until you <code>.await</code> it or poll it. In <code>report</code>, the call to <code>fetch()</code> made a future and dropped it on the spot. The fix is <code>fetch().await</code>, inside another async function.</p>
+
+<h3>What a future actually is</h3>
+
+<p>Every future implements one trait from the standard library. It has one method, <code>poll</code>. An executor calls <code>poll</code>, and the future answers with one of two results.</p>
+
+<pre class="rs" data-title="the shape of std::future::Future">
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
+// The real trait lives in std::future. This copy has the same shape.
+trait Future {
+    type Output;
+    fn poll(self: Pin&lt;&amp;mut Self&gt;, cx: &amp;mut Context&lt;'_&gt;) -&gt; Poll&lt;Self::Output&gt;;
+}
+
+fn main() {}</pre>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Result</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>Poll::Ready(value)</code></td><td>The work is finished. Here is the output.</td></tr>
+    <tr><td><code>Poll::Pending</code></td><td>Not yet. The future has arranged to be polled again, and it gave its waker to whatever it waits on.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>The <code>Waker</code> is what makes <code>Pending</code> workable. When a future returns <code>Pending</code>, it hands its waker to the thing it is waiting on, such as a socket. When the data arrives, that source calls <code>wake()</code>, and the executor knows which task to poll again. A task that never gets its <code>wake()</code> is never polled again.</p>
+
+<aside class="ox-callout" data-kind="insight">
+  <p>A future is a <strong>paused recipe</strong>. The executor is the cook who resumes whichever recipe is ready. <code>.await</code> means "pause here, and let the cook work on something else".</p>
+</aside>
+
+<figure class="ox-figure">
+<svg viewBox="0 0 640 196" width="640" role="img" aria-label="Four boxes in a row: Start, Waiting on fetch_user, Waiting on load_orders, and Done. Arrows labeled poll connect them from left to right. A note under the boxes says each poll either moves to the next state or stays where it is and returns Pending.">
+  <text x="17" y="22" class="t-muted" font-size="12">ONE ENUM, ONE VARIANT PER STATE</text>
+  <rect x="17" y="40" width="120" height="96" rx="8" class="f-plain" stroke-width="1.5"/>
+  <text x="29" y="70" font-size="13" font-weight="700">Start</text>
+  <text x="29" y="90" font-size="11" class="t-muted">holds: id</text>
+  <text x="29" y="110" font-size="11" class="t-muted">not polled yet</text>
+  <path d="M139 88 H168" class="s-ink" stroke-width="2" fill="none"/>
+  <polyline points="162,82 169,88 162,94" class="s-ink" stroke-width="2" fill="none"/>
+  <text x="158" y="80" font-size="11" class="t-muted" text-anchor="middle">poll</text>
+  <rect x="179" y="40" width="120" height="96" rx="8" class="f-stack" stroke-width="1.5"/>
+  <text x="191" y="70" font-size="12" font-weight="700">Waiting on</text>
+  <text x="191" y="88" font-size="12" font-weight="700">fetch_user</text>
+  <text x="191" y="110" font-size="11" class="t-muted">holds: inner future</text>
+  <path d="M301 88 H330" class="s-ink" stroke-width="2" fill="none"/>
+  <polyline points="324,82 331,88 324,94" class="s-ink" stroke-width="2" fill="none"/>
+  <text x="320" y="80" font-size="11" class="t-muted" text-anchor="middle">poll</text>
+  <rect x="341" y="40" width="120" height="96" rx="8" class="f-stack" stroke-width="1.5"/>
+  <text x="353" y="70" font-size="12" font-weight="700">Waiting on</text>
+  <text x="353" y="88" font-size="12" font-weight="700">load_orders</text>
+  <text x="353" y="110" font-size="11" class="t-muted">holds: user</text>
+  <path d="M463 88 H492" class="s-ink" stroke-width="2" fill="none"/>
+  <polyline points="486,82 493,88 486,94" class="s-ink" stroke-width="2" fill="none"/>
+  <text x="482" y="80" font-size="11" class="t-muted" text-anchor="middle">poll</text>
+  <rect x="503" y="40" width="120" height="96" rx="8" class="f-ok" stroke-width="1.5"/>
+  <text x="515" y="70" font-size="13" font-weight="700" class="t-ok">Done</text>
+  <text x="515" y="90" font-size="11" class="t-muted">returns String</text>
+  <text x="515" y="110" font-size="11" class="t-muted">Ready(value)</text>
+  <text x="17" y="168" font-size="11" class="t-muted">Each poll either moves to the next state, or stays where it is and returns Pending.</text>
+</svg>
+<figcaption>Conceptually, the compiler turns an async fn into an enum with one variant per <code>.await</code>. Each variant holds what must survive that pause: the arguments, the inner future being waited on, and any value that future borrows. Each poll moves the enum to the next state, or leaves it where it is when the answer is Pending.</figcaption>
+</figure>
+
+<details class="ox-think"><summary>Think first: the "Waiting on load_orders" state keeps <code>user</code>. The function only needs <code>user</code> to call <code>load_orders</code>. Why must the state keep it?</summary>
+  <div class="ox-think-body"><p><code>load_orders(&amp;user)</code> returns a future that borrows <code>user</code>. That future lives inside the state while it waits, so the value it borrows must stay in the state too. This is the self-reference that the Pin callout later in this chapter explains.</p></div></details>
+</section>
+
+<section>
+<h2 id="tiny-executor">A runtime in 20 lines</h2>
+
+<p>You can drive a future with nothing but the standard library. This <code>block_on</code> takes one future and polls it until it returns <code>Ready</code>. It is a busy loop, which is fine for a demo and wasteful for real work. A real executor sleeps until a waker fires.</p>
+
+<pre class="rs" data-run data-stdout="fetching user\ngot id 7\nhello, user 7">
+use std::future::Future;
+use std::pin::pin;
+use std::task::{Context, Poll, Waker};
+
+fn block_on&lt;F: Future&gt;(fut: F) -&gt; F::Output {
+    let waker = Waker::noop();
+    let mut cx = Context::from_waker(waker);
+    let mut fut = pin!(fut);
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&amp;mut cx) {
+            return v;
+        }
+    }
+}
+
+async fn fetch_user() -&gt; u32 {
+    println!("fetching user");
+    7
+}
+
+async fn greet() -&gt; String {
+    let id = fetch_user().await;
+    println!("got id {id}");
+    format!("hello, user {id}")
+}
+
+fn main() {
+    let msg = block_on(greet());
+    println!("{msg}");
+}</pre>
+
+<p>Read <code>greet</code> line by line. The <code>.await</code> on <code>fetch_user()</code> polls the inner future. It is ready at once, so <code>greet</code> keeps going. If it had returned <code>Pending</code>, <code>greet</code> would return <code>Pending</code> as well, all the way up to <code>block_on</code>, which would then poll again.</p>
+
+<h3>A future that returns Pending</h3>
+
+<p>Here is a future you write yourself. <code>Countdown</code> returns <code>Pending</code> three times before it is ready. Each time it asks to be polled again by calling <code>wake_by_ref</code>. This <code>block_on</code> ignores that request, because it polls in a loop anyway. A real executor uses the request to put the task back on its ready queue.</p>
+
+<div class="ox-quiz" data-id="19:countdown" data-xp="10" data-label="Check yourself">
+  <p class="ox-q">How many times does <code>block_on</code> call <code>poll</code> on <code>Countdown { left: 3, polls: 0 }</code>?</p>
+  <pre class="rs" data-stdout="poll 1: 3 left\npoll 2: 2 left\npoll 3: 1 left\npoll 4: 0 left\nfinished after 4 polls">
+use std::future::Future;
+use std::pin::{Pin, pin};
+use std::task::{Context, Poll, Waker};
+
+fn block_on&lt;F: Future&gt;(fut: F) -&gt; F::Output {
+    let waker = Waker::noop();
+    let mut cx = Context::from_waker(waker);
+    let mut fut = pin!(fut);
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&amp;mut cx) {
+            return v;
+        }
+    }
+}
+
+struct Countdown {
+    left: u32,
+    polls: u32,
+}
+
+impl Future for Countdown {
+    type Output = u32;
+
+    fn poll(mut self: Pin&lt;&amp;mut Self&gt;, cx: &amp;mut Context&lt;'_&gt;) -&gt; Poll&lt;u32&gt; {
+        self.polls += 1;
+        println!("poll {}: {} left", self.polls, self.left);
+        if self.left == 0 {
+            return Poll::Ready(self.polls);
+        }
+        self.left -= 1;
+        cx.waker().wake_by_ref();
+        Poll::Pending
+    }
+}
+
+fn main() {
+    let polls = block_on(Countdown { left: 3, polls: 0 });
+    println!("finished after {polls} polls");
+}</pre>
+  <ol class="ox-choices">
+    <li>Once. It is ready as soon as it is polled.</li>
+    <li data-feedback="Close. There are three Pending results, but the poll that returns Ready is one more call.">Three times, one for each Pending.</li>
+    <li data-correct>Four times: three Pending results, then one Ready.</li>
+    <li>Never. A future that returns Pending can't finish without a timer.</li>
+  </ol>
+  <div class="ox-why"><p>Each poll prints one line. Polls 1 to 3 decrement <code>left</code> and return <code>Pending</code>. Poll 4 sees <code>left == 0</code> and returns <code>Ready(4)</code>, so the program prints <code>finished after 4 polls</code>.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="executor-sim">One cook, many orders</h2>
+
+<p>A kitchen has one cook and several orders. Some dishes need the cook's hands for a minute. Others go in the oven and need nothing from the cook for ten minutes. A good cook puts the oven dish in, and starts another order. That is an executor. It runs whichever task is ready, and it never stands still waiting for a task that is waiting on I/O.</p>
+
+<p>Each task below is a script of steps. A compute step takes one tick of the cook's time. An I/O wait takes the number of ticks shown, and the task cannot run during that wait. Each tick, the cook polls the first ready task in the queue. When an I/O finishes, <code>wake()</code> puts that task at the back of the queue.</p>
+
+<style>
+#execsim .es-controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+#execsim .es-mode[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+#execsim .es-stats { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0 0 14px; font: 500 0.8rem/1.5 var(--font-mono); color: var(--muted); }
+#execsim .es-stats b { color: var(--ink); font-weight: 700; }
+#execsim .es-board { display: grid; grid-template-columns: 62px repeat(var(--cols, 10), minmax(22px, 1fr)); gap: 3px; font: 600 0.66rem/1 var(--font-mono); }
+#execsim .es-board > div { min-height: 26px; min-width: 0; display: flex; align-items: center; justify-content: center; border-radius: 4px; overflow: hidden; white-space: nowrap; }
+#execsim .es-board > .es-lab { justify-content: flex-start; padding-left: 2px; color: var(--ink-2); font-weight: 700; font-size: 0.72rem; }
+#execsim .es-board > .es-tick-h { min-height: 16px; color: var(--muted); font-weight: 500; }
+#execsim .es-board > .es-tick-h.is-now { color: var(--ink); font-weight: 800; }
+#execsim .es-board > div.is-now { box-shadow: inset 0 0 0 2px var(--ink-2); }
+#execsim .es-board > .es-c-empty { border: 1px solid var(--line-2); }
+#execsim .es-c-run { background: var(--oxide); color: var(--surface); }
+#execsim .es-c-wait, #execsim .es-c-idle { background: repeating-linear-gradient(-45deg, var(--surface-3) 0 3px, var(--surface-2) 3px 6px); color: var(--muted); border: 1px dashed var(--ghost); }
+#execsim .es-c-ready { background: var(--borrow-soft); color: var(--borrow); }
+#execsim .es-c-done { background: var(--ok-soft); }
+#execsim .es-log { margin: 14px 0 6px; min-height: 4.5em; font-size: 0.95rem; color: var(--ink); }
+#execsim .es-queue { margin: 0 0 12px; font: 500 0.8rem/1.5 var(--font-mono); color: var(--muted); }
+#execsim .es-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+#execsim .es-card { min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); }
+#execsim .es-card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+#execsim .es-name { font-family: var(--font-display); font-weight: 900; font-size: 1.4rem; line-height: 1; }
+#execsim .es-state { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; background: var(--surface-3); color: var(--ink-2); font: 600 0.72rem/1.6 var(--font-mono); }
+#execsim .es-state.is-run { background: var(--oxide-soft); color: var(--oxide-ink); }
+#execsim .es-state.is-wait { background: var(--surface-3); color: var(--muted); }
+#execsim .es-state.is-ready { background: var(--borrow-soft); color: var(--borrow); }
+#execsim .es-state.is-done { background: var(--ok-soft); color: var(--ok); }
+#execsim .es-steps { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+#execsim .es-step { padding: 0 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--muted); font: 500 0.7rem/1.6 var(--font-mono); }
+#execsim .es-step.is-past { opacity: 0.5; }
+#execsim .es-step.is-now { border-color: var(--oxide); color: var(--oxide-ink); font-weight: 700; }
+#execsim .es-bell { width: 14px; height: 14px; flex: none; color: var(--oxide); }
+#execsim .es-bell.is-ring { animation: ox-shake 0.5s ease 2; }
+#execsim .es-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 14px; font-size: 0.82rem; color: var(--muted); }
+#execsim .es-key { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; height: 20px; margin-right: 4px; padding: 0 4px; border-radius: 4px; font: 600 0.62rem/1 var(--font-mono); vertical-align: middle; }
+</style>
+<div class="ox-figure ox-wide" id="execsim">
+  <p class="ox-label">Executor Simulator · the same three tasks, run two ways</p>
+  <div class="es-controls">
+    <button type="button" class="ox-btn is-primary is-small" id="es-tick">Tick</button>
+    <button type="button" class="ox-btn is-small" id="es-run">Run to completion</button>
+    <button type="button" class="ox-btn is-small" id="es-reset">Reset</button>
+    <button type="button" class="ox-btn is-small es-mode" id="es-mode" aria-pressed="false">Thread per task</button>
+  </div>
+  <div class="es-stats">
+    <span>Tick <b id="es-now">0</b> of <span id="es-total">10</span></span>
+    <span>Tasks done <b id="es-done">0 of 3</b></span>
+    <span>Threads used <b id="es-threads">1</b></span>
+    <span><span id="es-extra-label">Executor idle ticks so far</span> <b id="es-extra">0</b></span>
+  </div>
+  <div class="es-board" id="es-board" aria-hidden="true"></div>
+  <p class="es-log" id="es-log" aria-live="polite"></p>
+  <p class="es-queue" id="es-queue"></p>
+  <div class="es-cards" id="es-cards"></div>
+  <div class="es-legend">
+    <span><span class="es-key es-c-run">run</span>computing</span>
+    <span><span class="es-key es-c-wait">io</span>waiting on I/O</span>
+    <span><span class="es-key es-c-ready">q</span>in the ready queue</span>
+    <span><span class="es-key es-c-done">&nbsp;&nbsp;&nbsp;</span>finished</span>
+    <span><span class="es-key es-c-idle">idle</span>cook has nothing ready</span>
+  </div>
+</div>
+
+<p>Press Tick a few times and watch the queue. Then press Run to completion, and turn on Thread per task. Both versions run the same scripts on the same tick count.</p>
+
+<p>With these scripts, the thread version finishes at tick 8 and the async version at tick 10. Threads win on wall-clock time here, because each task gets a cook of its own for its compute steps. Async wins on the cost of waiting. The async version used one thread. Its three waiting tasks cost saved state, not threads. The thread version used three threads, and they sat blocked for 13 thread-ticks, doing nothing.</p>
+
+<aside class="ox-callout" data-kind="insight">
+  <p><strong>Async is cheap waiting, not extra speed.</strong> It wins when tasks mostly wait: a thousand connections that each spend most of their time on a database cost a thousand small tasks, not a thousand threads. It loses when tasks mostly compute. Then the one cook is the bottleneck, and you need more cooks, which means more threads or more cores.</p>
+</aside>
+
+<div class="ox-quiz" data-id="19:sim-thread" data-xp="10" data-label="Check yourself">
+  <p class="ox-q">In thread-per-task mode, what is a thread doing while its task waits on I/O?</p>
+  <ol class="ox-choices">
+    <li data-feedback="A thread runs only its own task. The other tasks have their own threads.">Running another task's compute step.</li>
+    <li data-correct>Blocked. It keeps its stack and does nothing until the I/O returns.</li>
+    <li data-feedback="Threads are not returned to the operating system during a wait. The thread stays with its task.">Handed back to the operating system, so it costs nothing while it waits.</li>
+    <li data-feedback="That would be a busy loop, which is what block_on does while it polls.">Polling the I/O source in a loop until the data arrives.</li>
+  </ol>
+  <div class="ox-why"><p>That is the cost the simulator shows. In thread mode, every waiting task keeps a thread, and the thread is blocked on the I/O call. In async mode the waiting task has no thread at all, so the same wait costs only its saved state.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="tokio">tokio: the runtime you'll actually use</h2>
+
+<p>tokio is the runtime most async Rust code uses. It supplies the executor, the I/O drivers, timers and channels. The language gives you <code>async</code> and <code>.await</code>, but nothing runs a future by itself. You need a runtime.</p>
+
+<pre class="toml">[dependencies]
+tokio = { version = "1", features = ["full"] }</pre>
+
+<h3>Start the runtime and spawn a task</h3>
+
+<pre class="rs" data-check="skip">
+use std::time::Duration;
+
+async fn fetch_user(id: u32) -&gt; String {
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    format!("user {id}")
+}
+
+#[tokio::main]
+async fn main() {
+    let handle = tokio::spawn(fetch_user(1));
+    let name = handle.await.unwrap();
+    println!("{name}");
+}</pre>
+
+<p><code>#[tokio::main]</code> turns <code>main</code> into a runtime starter. It builds the runtime and runs <code>main</code> on it. <code>tokio::spawn</code> hands a future to the runtime, which runs it on one of its worker threads, and returns a <code>JoinHandle</code>. Awaiting the handle gives you the task's output. If the task panicked, you get a <code>JoinError</code> instead.</p>
+
+<h3>The spawn rules</h3>
+
+<p>A spawned task can outlive the function that spawned it, so its future must be <code>Send + 'static</code>. <code>Send</code> means the future can move to another thread. <code>'static</code> means it holds no borrows of local variables. It may own its data. Here is the common mistake:</p>
+
+<pre class="rs" data-check="skip">
+#[tokio::main]
+async fn main() {
+    let name = String::from("Ana");
+    let handle = tokio::spawn(async {
+        println!("hello {name}");
+    });
+    handle.await.unwrap();
+}</pre>
+
+<pre class="rustc">
+error[E0373]: async block may outlive the current function, but it borrows `name`, which is owned by the current function
+ --&gt; src/main.rs:4:31
+  |
+4 |     let handle = tokio::spawn(async {
+  |                               ^^^^^ may outlive borrowed value `name`
+5 |         println!("hello {name}");
+  |                          ---- `name` is borrowed here
+  |
+  = note: async blocks are not executed immediately and must either take a reference or ownership of outside variables they use
+help: to force the async block to take ownership of `name` (and any other referenced variables), use the `move` keyword
+  |
+4 |     let handle = tokio::spawn(async move {
+  |                                     ++++
+
+For more information about this error, try `rustc --explain E0373`.</pre>
+
+<p>The compiler's fix is printed for you: <code>move</code>. It hands the async block ownership of <code>name</code>, so the task no longer borrows from <code>main</code>.</p>
+
+<h3>Run futures side by side</h3>
+
+<p><code>join!</code> polls several futures together and waits for all of them. The two sleeps below run at the same time, so the whole program takes about 100 ms, not 200 ms.</p>
+
+<pre class="rs" data-check="skip">
+use std::time::Duration;
+
+async fn get_user() -&gt; String {
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    String::from("ana")
+}
+
+async fn get_orders() -&gt; u32 {
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    3
+}
+
+#[tokio::main]
+async fn main() {
+    let (user, orders) = tokio::join!(get_user(), get_orders());
+    println!("{user} has {orders} orders");
+}</pre>
+
+<p><code>select!</code> waits for the first branch to finish and runs only that branch's handler. The other branches are dropped. Here the 500 ms lookup loses to the 100 ms timer, so the program prints <code>gave up after 100 ms</code>.</p>
+
+<pre class="rs" data-check="skip">
+use std::time::Duration;
+
+async fn slow_lookup() -&gt; &amp;'static str {
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    "found it"
+}
+
+#[tokio::main]
+async fn main() {
+    tokio::select! {
+        answer = slow_lookup() =&gt; println!("answer: {answer}"),
+        _ = tokio::time::sleep(Duration::from_millis(100)) =&gt; println!("gave up after 100 ms"),
+    }
+}</pre>
+
+<p>Dropping a future is how Rust cancels it. The future stops at its last <code>.await</code>, and anything it owns is dropped. This program has a guard whose <code>Drop</code> prints a line, so you can see the cancellation happen:</p>
+
+<pre class="rs" data-check="skip">
+use std::time::Duration;
+
+struct Guard(&amp;'static str);
+
+impl Drop for Guard {
+    fn drop(&amp;mut self) {
+        println!("dropped {}", self.0);
+    }
+}
+
+async fn slow_work() {
+    let _guard = Guard("slow_work");
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    println!("slow_work finished");
+}
+
+#[tokio::main]
+async fn main() {
+    tokio::select! {
+        _ = slow_work() =&gt; println!("slow_work won"),
+        _ = tokio::time::sleep(Duration::from_millis(100)) =&gt; println!("timer won"),
+    }
+    println!("main continues");
+}</pre>
+
+<pre class="text">dropped slow_work
+timer won
+main continues</pre>
+
+<p>The guard's message comes before <code>timer won</code>. The losing branch is dropped before the winning handler runs, and <code>slow_work finished</code> never prints.</p>
+
+<h3>Time limits, groups of tasks and channels</h3>
+
+<p><code>timeout</code> wraps any future with a deadline. It returns <code>Ok(value)</code> or <code>Err(Elapsed)</code>.</p>
+
+<pre class="rs" data-check="skip">
+use std::time::Duration;
+use tokio::time::timeout;
+
+async fn slow() -&gt; u32 {
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    42
+}
+
+#[tokio::main]
+async fn main() {
+    match timeout(Duration::from_millis(100), slow()).await {
+        Ok(value) =&gt; println!("got {value}"),
+        Err(err) =&gt; println!("timed out: {err}"),
+    }
+}</pre>
+
+<p><code>JoinSet</code> owns a group of spawned tasks. <code>join_next</code> returns each result as its task finishes, in completion order, not spawn order.</p>
+
+<pre class="rs" data-check="skip">
+use std::time::Duration;
+use tokio::task::JoinSet;
+
+#[tokio::main]
+async fn main() {
+    let mut set = JoinSet::new();
+    for id in 1..=3u64 {
+        set.spawn(async move {
+            tokio::time::sleep(Duration::from_millis(10 * id)).await;
+            id * id
+        });
+    }
+    let mut total = 0;
+    while let Some(result) = set.join_next().await {
+        total += result.unwrap();
+    }
+    println!("total {total}");
+}</pre>
+
+<p><code>mpsc</code> is a channel with many senders and one receiver. <code>recv</code> returns <code>None</code> only after every sender has been dropped. That is why the code below drops <code>tx</code> before the loop. The order in which messages arrive can vary, so the program counts them.</p>
+
+<pre class="rs" data-check="skip">
+use tokio::sync::mpsc;
+
+#[tokio::main]
+async fn main() {
+    let (tx, mut rx) = mpsc::channel::&lt;String&gt;(8);
+    for id in 1..=3 {
+        let tx = tx.clone();
+        tokio::spawn(async move {
+            tx.send(format!("job {id} done")).await.unwrap();
+        });
+    }
+    drop(tx); // the loop below ends only when every sender is gone
+    let mut count = 0;
+    while let Some(_message) = rx.recv().await {
+        count += 1;
+    }
+    println!("received {count} messages");
+}</pre>
+
+<details class="ox-think"><summary>Think first: you call two APIs and need both answers before you can respond. Which macro do you want, <code>join!</code> or <code>select!</code>?</summary>
+  <div class="ox-think-body"><p><code>join!</code>. It waits for every branch and returns every result. <code>select!</code> would give you the first answer and drop the other one, which is the wrong behavior when both are needed.</p></div></details>
+</section>
+
+<section>
+<h2 id="mistakes">The mistakes everyone makes</h2>
+
+<h3>Blocking inside async</h3>
+
+<pre class="rs" data-check="skip">
+use std::time::Duration;
+
+async fn handler() {
+    std::thread::sleep(Duration::from_secs(1));           // freezes the whole thread
+    tokio::time::sleep(Duration::from_secs(1)).await;     // gives the thread back
+}</pre>
+
+<p>The first line freezes the thread that runs the executor. Every task scheduled on that thread waits, including tasks that have nothing to do with this one. The second line yields to the executor. A blocking call inside async code compiles without any complaint, and it shows up later as latency under load.</p>
+
+<p>Use the async version: <code>tokio::time::sleep</code>, <code>tokio::fs</code>, or an async database driver. For CPU-heavy work or a blocking library, use <code>spawn_blocking</code>, which runs the closure on a separate pool of threads:</p>
+
+<pre class="rs" data-check="skip">
+#[tokio::main]
+async fn main() {
+    let sum = tokio::task::spawn_blocking(|| {
+        // CPU-heavy work runs on a separate thread pool,
+        // so the async workers keep serving other tasks.
+        (1..=1_000_000u64).sum::&lt;u64&gt;()
+    })
+    .await
+    .unwrap();
+    println!("{sum}");
+}</pre>
+
+<h3>Holding a lock across an .await</h3>
+
+<details class="ox-think"><summary>Think first: the lock is taken and released inside one function. Will <code>tokio::spawn</code> accept <code>record</code>?</summary>
+  <div class="ox-think-body"><p>No. The guard is still alive at the <code>.await</code> on line 7, so the guard is held across that await. A <code>std</code> <code>MutexGuard</code> is not <code>Send</code>, so the future that holds it is not <code>Send</code> either.</p></div></details>
+
+<pre class="rs" data-check="skip">
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+async fn record(log: Arc&lt;Mutex&lt;Vec&lt;&amp;'static str&gt;&gt;&gt;) {
+    let mut guard = log.lock().unwrap();
+    guard.push("start");
+    tokio::time::sleep(Duration::from_millis(10)).await; // guard is still alive here
+    guard.push("end");
+}
+
+#[tokio::main]
+async fn main() {
+    let log = Arc::new(Mutex::new(Vec::new()));
+    tokio::spawn(record(log.clone())).await.unwrap();
+    println!("{:?}", log.lock().unwrap());
+}</pre>
+
+<pre class="rustc">
+error: future cannot be sent between threads safely
+   --&gt; src/main.rs:14:18
+    |
+ 14 |     tokio::spawn(record(log.clone())).await.unwrap();
+    |                  ^^^^^^^^^^^^^^^^^^^ future returned by `record` is not `Send`
+    |
+    = help: within `impl Future&lt;Output = ()&gt;`, the trait `Send` is not implemented for `std::sync::MutexGuard&lt;'_, Vec&lt;&amp;str&gt;&gt;`
+note: future is not `Send` as this value is used across an await
+   --&gt; src/main.rs:7:51
+    |
+  5 |     let mut guard = log.lock().unwrap();
+    |         --------- has type `std::sync::MutexGuard&lt;'_, Vec&lt;&amp;str&gt;&gt;` which is not `Send`
+  6 |     guard.push("start");
+  7 |     tokio::time::sleep(Duration::from_millis(10)).await; // guard is still alive here
+    |                                                   ^^^^^ await occurs here, with `mut guard` maybe used later
+note: required by a bound in `tokio::spawn`
+   --&gt; …/tokio-1.53.2/src/task/spawn.rs:176:21
+    |
+174 |     pub fn spawn&lt;F&gt;(future: F) -&gt; JoinHandle&lt;F::Output&gt;
+    |            ----- required by a bound in this function
+175 |     where
+176 |         F: Future + Send + 'static,
+    |                     ^^^^ required by this bound in `spawn`</pre>
+
+<p>The paths in the last note depend on your machine. The <code>…</code> stands for the cargo registry folder.</p>
+
+<p>The compiler points at the guard, not at the lock. The lock itself is fine. The problem is that the guard is alive across the <code>.await</code>, so the future has to store it while it waits. There are two fixes. The first ends the guard's life before the await:</p>
+
+<pre class="rs" data-check="skip">
+async fn record(log: Arc&lt;Mutex&lt;Vec&lt;&amp;'static str&gt;&gt;&gt;) {
+    {
+        let mut guard = log.lock().unwrap();
+        guard.push("start");
+    } // the guard is dropped here, before the await
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    log.lock().unwrap().push("end");
+}</pre>
+
+<p>The second swaps in <code>tokio::sync::Mutex</code>. Its guard is designed to be held across awaits. Use it when the lock must span an await, and prefer the first fix when it doesn't.</p>
+
+<pre class="rs" data-check="skip">
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::Mutex;
+
+async fn record(log: Arc&lt;Mutex&lt;Vec&lt;&amp;'static str&gt;&gt;&gt;) {
+    let mut guard = log.lock().await;
+    guard.push("start");
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    guard.push("end");
+}
+
+#[tokio::main]
+async fn main() {
+    let log = Arc::new(Mutex::new(Vec::new()));
+    tokio::spawn(record(log.clone())).await.unwrap();
+    println!("{:?}", log.lock().await);
+}</pre>
+
+<h3>Forgetting .await, and runtime shutdown</h3>
+
+<p>A future you never await or poll does nothing. The warning from section two is the compiler telling you that. Treat it as an error in your own code.</p>
+
+<p>Also, when <code>main</code> returns, the runtime shuts down, and any spawned task still running is dropped. If the work matters, keep its <code>JoinHandle</code> and await it.</p>
+
+<details class="ox-callout" data-kind="deep">
+  <summary>Why does Pin exist?</summary>
+  <p>An async fn can hold a reference to one of its own locals across an <code>.await</code>. That reference points into the future's state, so the state must not move in memory once it has been polled. <code>Pin&lt;&amp;mut T&gt;</code> is the promise that a value stays where it is, for types that are not <code>Unpin</code>. You rarely write <code>Pin</code> yourself: <code>.await</code> and tokio's macros pin futures for you, and <code>Pin</code> mostly shows up in signatures such as <code>fn poll(self: Pin&lt;&amp;mut Self&gt;, ...)</code>.</p>
+</details>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>AI coding agents put async in the wrong places. They mix blocking calls into async handlers, hold a lock across an <code>.await</code>, call <code>block_on</code> inside code that is already async, and spawn tasks whose handles nobody checks. When you review agent-written async code, check four things:</p>
+  <ol>
+    <li>Is there a <code>std::thread::sleep</code>, a blocking file or network call, or a long CPU loop inside an async fn?</li>
+    <li>Is a lock guard (<code>MutexGuard</code> or an <code>RwLock</code> guard) still alive at an <code>.await</code>?</li>
+    <li>Does the code start a second runtime, or call <code>block_on</code>, inside something that already runs on one?</li>
+    <li>Is every future awaited or spawned, and is every <code>JoinHandle</code> checked?</li>
+  </ol>
+</aside>
+</section>
+
+<section>
+<h2 id="practice">Practice</h2>
+<p>Seven checks. Each one applies a rule from this chapter to code you have not seen before.</p>
+
+<div class="ox-quiz" data-id="19:laziness" data-xp="10" data-label="Check yourself">
+  <p class="ox-q">What does this program print?</p>
+  <pre class="rs" data-stdout="start\nend">
+async fn fetch() -&gt; u32 {
+    println!("fetch runs");
+    42
+}
+
+fn main() {
+    println!("start");
+    fetch();
+    println!("end");
+}</pre>
+  <ol class="ox-choices">
+    <li data-feedback="fetch() only creates the future. Something has to poll it, and nothing does here."><code>start</code>, <code>fetch runs</code>, <code>end</code></li>
+    <li data-correct><code>start</code>, then <code>end</code>. Nothing else.</li>
+    <li><code>fetch runs</code>, <code>start</code>, <code>end</code></li>
+    <li data-feedback="It compiles. The warning is about the unused future, and the program runs.">It does not compile, because a future cannot be dropped without running.</li>
+  </ol>
+  <div class="ox-why"><p><code>fetch()</code> creates a future, and the future is dropped at the end of its statement, never polled. Its <code>println!</code> never runs. The compiler warns about exactly this. A future only does work when something polls it, and an <code>.await</code> needs an async context to live in.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="19:pipeline" data-xp="10" data-label="Check yourself">
+  <p class="ox-q">What does this program print?</p>
+  <pre class="rs" data-stdout="step one\nstep two\nONE-TWO">
+use std::future::Future;
+use std::pin::pin;
+use std::task::{Context, Poll, Waker};
+
+fn block_on&lt;F: Future&gt;(fut: F) -&gt; F::Output {
+    let waker = Waker::noop();
+    let mut cx = Context::from_waker(waker);
+    let mut fut = pin!(fut);
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&amp;mut cx) {
+            return v;
+        }
+    }
+}
+
+async fn step(name: &amp;str) -&gt; String {
+    println!("step {name}");
+    name.to_uppercase()
+}
+
+async fn pipeline() -&gt; String {
+    let a = step("one").await;
+    let b = step("two").await;
+    format!("{a}-{b}")
+}
+
+fn main() {
+    println!("{}", block_on(pipeline()));
+}</pre>
+  <ol class="ox-choices">
+    <li data-feedback="The two step lines print first. Each step prints before it returns."><code>ONE-TWO</code>, and nothing else.</li>
+    <li data-correct><code>step one</code>, then <code>step two</code>, then <code>ONE-TWO</code>.</li>
+    <li data-feedback="pipeline awaits step one first, so its line prints first."><code>step two</code>, then <code>step one</code>, then <code>ONE-TWO</code>.</li>
+    <li data-feedback="main prints the result only after pipeline has finished both steps, so ONE-TWO comes last."><code>step one</code>, then <code>ONE-TWO</code>, then <code>step two</code>.</li>
+  </ol>
+  <div class="ox-why"><p>The awaits run in order. <code>step("one")</code> prints and returns <code>ONE</code>. Then <code>step("two")</code> prints and returns <code>TWO</code>. <code>format!</code> joins them, and <code>block_on</code> drives <code>pipeline</code> until it is <code>Ready</code>. Each step is ready at once here, so nothing returns <code>Pending</code>.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="19:select" data-xp="10" data-label="Check yourself">
+  <p class="ox-q"><code>fetch_quick</code> is ready in 10 ms and <code>fetch_slow</code> needs 500 ms. What does this program print, and what happens to <code>fetch_slow</code>?</p>
+  <pre class="rs" data-check="skip" data-stdout="quick: 1">
+use std::time::Duration;
+
+async fn fetch_quick() -&gt; u32 {
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    1
+}
+
+async fn fetch_slow() -&gt; u32 {
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    2
+}
+
+#[tokio::main]
+async fn main() {
+    tokio::select! {
+        v = fetch_quick() =&gt; println!("quick: {v}"),
+        v = fetch_slow() =&gt; println!("slow: {v}"),
+    }
+}</pre>
+  <ol class="ox-choices">
+    <li data-feedback="select! does not leave losing branches running. It drops them."><code>quick: 1</code>. <code>fetch_slow</code> keeps running in the background until it finishes.</li>
+    <li data-correct><code>quick: 1</code>. <code>fetch_slow</code> is dropped at its last <code>.await</code>, so it never prints.</li>
+    <li data-feedback="Only the winning branch's handler runs."><code>quick: 1</code>, then <code>slow: 2</code> after 500 ms.</li>
+    <li data-feedback="select! does not require every branch to finish.">It does not compile, because <code>select!</code> needs every branch to finish.</li>
+  </ol>
+  <div class="ox-why"><p>The first branch to finish wins, and its handler runs. The other future is dropped right away. It is not left running, and its output is never used. Compare this with <code>join!</code>, which waits for every branch.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="19:sleep" data-xp="10" data-label="Check yourself">
+  <p class="ox-q"><code>heartbeat</code> runs on a multi-thread tokio runtime. What happens to its worker thread while <code>std::thread::sleep</code> runs?</p>
+  <pre class="rs">
+use std::time::Duration;
+
+async fn heartbeat() {
+    loop {
+        println!("alive");
+        std::thread::sleep(Duration::from_secs(1));
+    }
+}</pre>
+  <ol class="ox-choices">
+    <li data-feedback="std::thread::sleep does not yield. The worker has no chance to run anything else."><code>Other tasks on that worker keep running</code>, and only <code>heartbeat</code> pauses.</li>
+    <li data-correct>That worker is blocked for the whole second. Tasks queued on it wait, while the other worker threads carry on.</li>
+    <li data-feedback="tokio does not move a blocked task to another thread.">tokio moves <code>heartbeat</code> to a new thread, so nothing else is affected.</li>
+    <li data-feedback="The call compiles. Blocking is a runtime problem, not a type error.">It is a compile error, because async code cannot call <code>std::thread::sleep</code>.</li>
+  </ol>
+  <div class="ox-why"><p><code>std::thread::sleep</code> parks the operating system thread. The executor cannot switch tasks while its thread is parked. Use <code>tokio::time::sleep(...).await</code> instead, which hands the thread back to the executor until the timer fires.</p></div>
+</div>
+
+<div class="ox-fill" data-id="19:fill-await">
+  <p class="ox-q">Fill in the two blanks, so <code>fetch_user</code> is an async function and <code>greet</code> waits for its result.</p>
+  <pre class="rs">use std::future::Future;
+use std::pin::pin;
+use std::task::{Context, Poll, Waker};
+
+fn block_on&lt;F: Future&gt;(fut: F) -&gt; F::Output {
+    let waker = Waker::noop();
+    let mut cx = Context::from_waker(waker);
+    let mut fut = pin!(fut);
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&amp;mut cx) {
+            return v;
+        }
+    }
+}
+
+[[async]] fn fetch_user() -&gt; u32 {
+    println!("fetching user");
+    7
+}
+
+async fn greet() -&gt; String {
+    let id = fetch_user()[[.await]];
+    println!("got id {id}");
+    format!("hello, user {id}")
+}
+
+fn main() {
+    let msg = block_on(greet());
+    println!("{msg}");
+}</pre>
+  <div class="ox-why"><p>Only an async function can use <code>.await</code>. Without <code>async</code>, <code>fetch_user</code> returns a plain <code>u32</code>, and <code>.await</code> on a <code>u32</code> does not compile. Once the function is async, <code>fetch_user()</code> returns a future, and <code>.await</code> polls it to get the <code>u32</code>.</p></div>
+</div>
+
+<div class="ox-order" data-id="19:order-poll" data-label="Put one poll cycle in order">
+  <ol>
+    <li>The executor calls <code>poll</code> on the task.</li>
+    <li>The future starts its I/O and gives its waker to the I/O source.</li>
+    <li>The future returns <code>Poll::Pending</code>, and the executor parks the task.</li>
+    <li>The I/O completes, and the source calls <code>wake()</code> on the stored waker.</li>
+    <li>The executor calls <code>poll</code> on the task again.</li>
+    <li>The future returns <code>Poll::Ready</code> with its output.</li>
+  </ol>
+  <div class="ox-why"><p>The waker has to be registered before <code>Pending</code> is returned. If it were not, step 4 would have nowhere to send its <code>wake()</code>, and the task would never be polled again.</p></div>
+</div>
+
+<div class="ox-match" data-id="19:match" data-left-label="JavaScript" data-right-label="Rust">
+  <ul>
+    <li data-left="await">the <code>.await</code> operator</li>
+    <li data-left="Promise">the <code>Future</code> trait</li>
+    <li data-left="Promise.all([...])"><code>tokio::join!</code></li>
+    <li data-left="Promise.race([...])"><code>tokio::select!</code></li>
+    <li data-left="setTimeout(fn, ms)"><code>tokio::time::sleep(duration)</code></li>
+    <li data-left="the event loop">the executor, such as tokio's runtime</li>
+  </ul>
+</div>
+
+<aside class="ox-callout" data-kind="trap">
+  <p>The matches are close, not identical. A JavaScript promise starts running as soon as you create it. A Rust future does nothing until something polls it. Also, <code>Promise.race</code> leaves the losing promises running, while <code>select!</code> drops the losing futures.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="quests">Forge quests</h2>
+<p>Reading builds recognition. Writing a <code>block_on</code> and a <code>Future</code> by hand builds the mental model. These quests use std only, and they run locally against the real compiler.</p>
+<div class="ox-quests" data-chapter="19"></div>
+</section>
+
+<section>
+<h2 id="recap">Recap</h2>
+
+<div class="ox-recap">
+  <h3>Waiting, not working</h3>
+  <ul>
+    <li>Async is for work that waits. Many waiting tasks cost saved state, not threads. CPU-heavy work still needs threads or rayon.</li>
+    <li>An <code>async fn</code> returns a <strong>future</strong>. Nothing runs until something polls it: an <code>.await</code> in another async function, or an executor.</li>
+    <li><code>poll</code> returns <code>Ready(value)</code> or <code>Pending</code>. <code>Pending</code> means the future gave its waker to whatever it waits on, and it will be polled again after <code>wake()</code>.</li>
+    <li><code>.await</code> polls the inner future, and pauses the current one whenever that future returns <code>Pending</code>.</li>
+    <li>The executor, such as tokio's runtime, is the cook. It polls ready tasks, one step at a time.</li>
+    <li><code>tokio::spawn</code> needs <code>Send + 'static</code>. <code>join!</code> waits for all branches. <code>select!</code> takes the first and drops the rest. Dropping a future cancels it at its last <code>.await</code>.</li>
+    <li>Never block a worker thread with <code>std::thread::sleep</code>, heavy CPU work or blocking I/O. Use the async version, or <code>spawn_blocking</code>.</li>
+    <li>Never hold a <code>std</code> <code>MutexGuard</code> across an <code>.await</code>. Drop it first, or use <code>tokio::sync::Mutex</code>.</li>
+  </ul>
+</div>
+
+<div class="ox-deck" data-chapter="19"></div>
+
+<details class="ox-think">
+  <summary>Explain it back: a PHP colleague asks how one async thread can serve thousands of connections. What do you say in three sentences?</summary>
+  <div class="ox-think-body">
+    <p>One good answer: "A PHP worker is busy from the start of a request to the end, including the time it spends waiting for the database. A Rust task that is waiting is not running on a thread at all. It is a saved state that says where to resume, and its future returns <code>Pending</code> while the I/O is in flight. When the data arrives, the I/O source wakes the task, and the thread that polls it does the next step."</p>
+    <p>If your version said <em>waiting costs saved state, not a thread</em>, and <em>the thread is free to run other tasks</em>, you have the core idea. Add that it only helps when most of the time is waiting, and you have the limit too.</p>
+  </div>
+</details>
+
+<div class="ox-complete-host"></div>
+</section>
+
+</main>
+</div>
+
+<script>
+/* The Executor Simulator. Pure logic first, then the page wiring. Plain JS,
+   no libraries. Everything starts from the same default scripts. */
+(function () {
+  "use strict";
+
+  /* ES-CORE-BEGIN */
+  /* Executor Simulator core: pure logic, no DOM.
+     A script is a list of steps. Steps alternate: ["c"] = compute (1 tick, the
+     cook runs it), ["io", n] = I/O wait (n ticks, the task cannot run). A script
+     starts and ends with a compute step.
+
+     Tick model (one tick = one unit of the cook's time):
+     - Start of tick: every task that is Ready is a candidate.
+     - Async mode: the cook polls the front of the ready queue (round robin, FIFO).
+       That poll runs one compute step. If the next step is I/O, the task returns
+       Pending and keeps the I/O count. If there is no next step, it is Done.
+       If the queue is empty, the cook is idle this tick.
+     - Thread mode: every Ready task runs on its own thread, so all of them run
+       their compute step in the same tick. There is no queue and no idle cook.
+     - End of tick: every task that was Pending at the start of the tick counts
+       its I/O down by one. A task that reaches 0 is woken: wake() puts it at the
+       back of the ready queue, and it can run from the next tick on.
+     So an I/O wait of n ticks means the task is Pending for exactly n ticks. */
+  function esValidate(scripts) {
+    scripts.forEach((steps, i) => {
+      if (!Array.isArray(steps) || steps.length < 3) throw new Error("script " + i + " too short");
+      steps.forEach((s, j) => {
+        const even = j % 2 === 0;
+        if (even && !(s[0] === "c" && s.length === 1)) throw new Error("script " + i + " step " + j + " must be compute");
+        if (!even && !(s[0] === "io" && s[1] >= 1)) throw new Error("script " + i + " step " + j + " must be io");
+      });
+      if (steps.length % 2 === 0) throw new Error("script " + i + " must end with compute");
+    });
+  }
+
+  function esSnapTasks(tasks) {
+    return tasks.map((k) => ({ state: k.state, left: k.left, step: k.pc, doneAt: k.doneAt || 0 }));
+  }
+
+  function esRun(scripts, threads) {
+    esValidate(scripts);
+    const tasks = scripts.map((steps) => ({ steps, pc: 0, state: "ready", left: 0, doneAt: 0 }));
+    let queue = tasks.map((_, i) => i);
+    const snaps = [{ t: 0, polled: [], woke: [], idle: false, cells: tasks.map(() => "ready"), tasks: esSnapTasks(tasks), queue: queue.slice() }];
+    let t = 0;
+    while (tasks.some((k) => k.state !== "done")) {
+      t += 1;
+      if (t > 500) throw new Error("simulation did not finish");
+      const start = tasks.map((k) => k.state);
+      const cells = start.map((s) => (s === "done" ? "done" : s === "pending" ? "wait" : "ready"));
+      let polled = [];
+      if (threads) {
+        polled = tasks.map((_, i) => i).filter((i) => start[i] === "ready");
+      } else if (queue.length) {
+        polled = [queue.shift()];
+      }
+      polled.forEach((i) => {
+        const k = tasks[i];
+        cells[i] = "run";
+        k.pc += 1; // the compute step at k.pc
+        if (k.pc >= k.steps.length) {
+          k.state = "done";
+          k.doneAt = t;
+        } else {
+          const io = k.steps[k.pc];
+          k.pc += 1;
+          k.state = "pending";
+          k.left = io[1];
+        }
+      });
+      const woke = [];
+      tasks.forEach((k, i) => {
+        if (start[i] === "pending" && k.state === "pending") {
+          k.left -= 1;
+          if (k.left === 0) {
+            k.state = "ready";
+            woke.push(i);
+            if (!threads) queue.push(i);
+          }
+        }
+      });
+      const idle = !threads && polled.length === 0;
+      snaps.push({ t, polled, woke, idle, cells, tasks: esSnapTasks(tasks), queue: queue.slice() });
+    }
+    return snaps;
+  }
+
+  /* Totals and counters for a run, up to tick `upTo`. */
+  function esCounts(snaps, upTo) {
+    const last = snaps[snaps.length - 1];
+    const s = snaps[Math.min(upTo, snaps.length - 1)];
+    let idle = 0, blocked = 0;
+    for (let t = 1; t <= s.t; t++) {
+      if (snaps[t].idle) idle++;
+      snaps[t].cells.forEach((c) => { if (c === "wait") blocked++; });
+    }
+    return { total: last.t, idle, blocked, done: s.tasks.every((k) => k.state === "done") };
+  }
+
+  /* One short paragraph per tick, for the live log. names: ["A","B","C"]. */
+  function esJoin(list) {
+    if (list.length <= 1) return list.join("");
+    return list.slice(0, -1).join(", ") + " and " + list[list.length - 1];
+  }
+  function esTicks(n) { return n + (n === 1 ? " tick" : " ticks"); }
+  function esNarrate(snaps, t, names, threads) {
+    if (t === 0) {
+      return threads
+        ? "Three threads are ready to start, one per task. Press Tick."
+        : "All three tasks are ready and the ready queue holds A, B, C. The cook has not started. Press Tick.";
+    }
+    const s = snaps[t];
+    const parts = [];
+    if (threads) {
+      const running = [], blocked = [], finishing = [];
+      s.cells.forEach((c, i) => {
+        if (c === "run") (s.tasks[i].state === "done" ? finishing : running).push(names[i]);
+        else if (c === "wait") blocked.push(names[i]);
+      });
+      if (running.length) parts.push(esJoin(running) + (running.length > 1 ? " compute" : " computes") + ".");
+      if (finishing.length) parts.push(esJoin(finishing) + (finishing.length > 1 ? " finish this tick, after their last compute step." : " finishes this tick, after its last compute step."));
+      if (blocked.length) parts.push(esJoin(blocked) + (blocked.length > 1 ? " are" : " is") + " blocked on I/O and doing nothing.");
+      if (s.woke.length) parts.push("The I/O for " + esJoin(s.woke.map((i) => names[i])) + " completes, so " + (s.woke.length > 1 ? "they can" : "it can") + " run again on the next tick.");
+      return "Tick " + t + ". " + parts.join(" ");
+    }
+    parts.push("Tick " + t + ".");
+    if (s.polled.length) {
+      const i = s.polled[0];
+      const k = s.tasks[i];
+      parts.push("The cook polls " + names[i] + ", and its compute step runs for one tick.");
+      if (k.state === "pending") parts.push(names[i] + " reaches I/O, returns Pending and gives its waker to the I/O source. It waits " + esTicks(k.left) + ".");
+      else parts.push(names[i] + " has no steps left, so it returns Ready.");
+    } else if (s.tasks.some((k) => k.state !== "done")) {
+      parts.push("No task is ready, so the cook is idle this tick.");
+    }
+    s.woke.forEach((i) => parts.push("The I/O for " + names[i] + " completes, and wake() puts " + names[i] + " at the back of the ready queue."));
+    if (s.tasks.every((k) => k.state === "done")) parts.push("All tasks are done.");
+    else parts.push(s.queue.length ? "Ready queue: " + esJoin(s.queue.map((i) => names[i])) + "." : "Ready queue is empty.");
+    return parts.join(" ");
+  }
+  /* ES-CORE-END */
+
+  var NAMES = ["A", "B", "C"];
+  var C = ["c"];
+  var SCRIPTS = [
+    [C, ["io", 3], C, ["io", 2], C],
+    [C, ["io", 1], C, ["io", 4], C],
+    [C, ["io", 2], C, ["io", 1], C]
+  ];
+
+  function stepLabel(step) { return step[0] === "c" ? "compute" : "wait " + step[1]; }
+
+  function init() {
+    var root = document.getElementById("execsim");
+    if (!root) return;
+    var runs = { async: esRun(SCRIPTS, false), threads: esRun(SCRIPTS, true) };
+    var maxT = Math.max(runs.async.length - 1, runs.threads.length - 1);
+    var st = { t: 0, threads: false, awarded: false };
+    var el = {
+      tick: document.getElementById("es-tick"),
+      run: document.getElementById("es-run"),
+      reset: document.getElementById("es-reset"),
+      mode: document.getElementById("es-mode"),
+      now: document.getElementById("es-now"),
+      total: document.getElementById("es-total"),
+      done: document.getElementById("es-done"),
+      threads: document.getElementById("es-threads"),
+      extraLabel: document.getElementById("es-extra-label"),
+      extra: document.getElementById("es-extra"),
+      board: document.getElementById("es-board"),
+      log: document.getElementById("es-log"),
+      queue: document.getElementById("es-queue"),
+      cards: document.getElementById("es-cards")
+    };
+
+    function run() { return runs[st.threads ? "threads" : "async"]; }
+
+    function renderBoard(r) {
+      var t = st.t, cols = maxT;
+      root.style.setProperty("--cols", String(cols));
+      var html = '<div class="es-lab"></div>';
+      for (var c = 1; c <= cols; c++) {
+        html += '<div class="es-tick-h' + (c === t ? " is-now" : "") + '">' + c + "</div>";
+      }
+      var rows = [];
+      if (!st.threads) rows.push({ label: "Cook", kind: "cook" });
+      NAMES.forEach(function (n, i) {
+        rows.push({ label: (st.threads ? "Thread " : "Task ") + n, kind: "task", i: i });
+      });
+      rows.forEach(function (row) {
+        html += '<div class="es-lab">' + row.label + "</div>";
+        for (var c2 = 1; c2 <= cols; c2++) {
+          var cls = "es-c-empty", txt = "";
+          if (c2 <= t && c2 <= r.length - 1) {
+            var s = r[c2];
+            if (row.kind === "cook") {
+              if (s.polled.length) { cls = "es-c-run"; txt = NAMES[s.polled[0]]; }
+              else if (s.idle) { cls = "es-c-idle"; txt = "idle"; }
+            } else {
+              var v = s.cells[row.i];
+              if (v === "run") { cls = "es-c-run"; txt = "run"; }
+              else if (v === "wait") { cls = "es-c-wait"; txt = "io"; }
+              else if (v === "ready") { cls = "es-c-ready"; txt = "q"; }
+              else if (v === "done") { cls = "es-c-done"; }
+            }
+          }
+          if (c2 === t) cls += " is-now";
+          html += '<div class="' + cls + '">' + txt + "</div>";
+        }
+      });
+      el.board.innerHTML = html;
+    }
+
+    function renderCards(r) {
+      var t = st.t, s = r[Math.min(t, r.length - 1)];
+      var html = "";
+      NAMES.forEach(function (n, i) {
+        var k = s.tasks[i];
+        var steps = SCRIPTS[i];
+        var polled = t > 0 && s.polled.indexOf(i) !== -1 && t <= r.length - 1;
+        var state, cls;
+        if (t === 0) { state = "Ready"; cls = "is-ready"; }
+        else if (polled) { state = "Running"; cls = "is-run"; }
+        else if (k.state === "pending") {
+          state = (st.threads ? "Blocked on I/O" : "Pending, waiting on I/O") + " · " + esTicks(k.left) + " left";
+          cls = "is-wait";
+        }
+        else if (k.state === "ready") { state = "Ready"; cls = "is-ready"; }
+        else { state = "Done"; cls = "is-done"; }
+        var cur, allPast = false;
+        if (polled) cur = k.state === "pending" ? k.step - 2 : steps.length - 1;
+        else if (k.state === "done") { allPast = true; cur = steps.length; }
+        else if (k.state === "pending") cur = k.step - 1;
+        else cur = k.step;
+        var chips = steps.map(function (step, j) {
+          var c = "es-step";
+          if (j === cur && !allPast) c += " is-now";
+          else if (allPast || j < cur) c += " is-past";
+          return '<span class="' + c + '">' + stepLabel(step) + "</span>";
+        }).join("");
+        var bell = (t > 0 && t <= r.length - 1 && s.woke.indexOf(i) !== -1)
+          ? '<svg class="es-bell is-ring" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3a6 6 0 0 0-6 6v4l-2 3h16l-2-3V9a6 6 0 0 0-6-6zM10 19a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>'
+          : "";
+        html += '<div class="es-card"><div class="es-card-head"><span class="es-name">' + n +
+          '</span><span class="es-state ' + cls + '">' + state + bell + "</span></div>" +
+          '<div class="es-steps">' + chips + "</div></div>";
+      });
+      el.cards.innerHTML = html;
+    }
+
+    function render() {
+      var r = run(), t = st.t, total = r.length - 1;
+      var shown = Math.min(t, total);
+      var s = r[shown];
+      var counts = esCounts(r, shown);
+      el.now.textContent = String(t);
+      el.total.textContent = String(total);
+      el.done.textContent = s.tasks.filter(function (k) { return k.state === "done"; }).length + " of 3";
+      el.threads.textContent = st.threads ? "3" : "1";
+      if (st.threads) {
+        el.extraLabel.textContent = "Blocked thread-ticks so far";
+        el.extra.textContent = String(counts.blocked);
+      } else {
+        el.extraLabel.textContent = "Executor idle ticks so far";
+        el.extra.textContent = String(counts.idle);
+      }
+      el.mode.setAttribute("aria-pressed", st.threads ? "true" : "false");
+      el.tick.disabled = t >= maxT;
+      el.run.disabled = t >= maxT;
+      renderBoard(r);
+      renderCards(r);
+      if (t > total) {
+        el.log.textContent = "Tick " + t + ". Every task finished by tick " + total + ". Nothing else happens.";
+      } else {
+        el.log.textContent = esNarrate(r, t, NAMES, st.threads);
+      }
+      if (st.threads) {
+        el.queue.textContent = "No queue: each task has its own thread, so nothing waits to be polled.";
+      } else {
+        var q = s.queue.map(function (i) { return NAMES[i]; });
+        el.queue.textContent = q.length
+          ? "Ready queue: " + q.join(", ") + " (the front task is polled next)."
+          : "Ready queue is empty.";
+      }
+      if (t >= maxT && !st.awarded) {
+        st.awarded = true;
+        try { if (window.Ox && window.Ox.award) window.Ox.award(5, "ran the executor simulator", "execsim:finished"); } catch (e) {}
+      }
+    }
+
+    el.tick.addEventListener("click", function () { st.t = Math.min(st.t + 1, maxT); render(); });
+    el.run.addEventListener("click", function () { st.t = maxT; render(); });
+    el.reset.addEventListener("click", function () { st.t = 0; render(); });
+    el.mode.addEventListener("click", function () { st.threads = !st.threads; render(); });
+    render();
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
+</script>
+</body>
+</html>

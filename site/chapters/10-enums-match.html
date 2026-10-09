@@ -42,10 +42,14 @@
 <p>An <code>enum</code> says that a value is exactly one of a fixed list of variants. Each variant can carry its own data, and the shape of that data can differ from one variant to the next:</p>
 
 <pre class="rs">enum Message {
-    Quit,                    // unit variant: carries no data
-    Move { x: i32, y: i32 }, // struct-like variant: named fields
-    Write(String),           // tuple-like variant: one unnamed field
-    Color(u8, u8, u8),       // tuple-like variant: three unnamed fields
+    // no data
+    Quit,
+    // named fields
+    Move { x: i32, y: i32 },
+    // one unnamed field
+    Write(String),
+    // three unnamed fields
+    Color(u8, u8, u8),
 }</pre>
 
 <p>There are three shapes of variant. <code>Quit</code> carries nothing. <code>Move</code> has named fields, which read well when there are several. <code>Write</code> and <code>Color</code> list their types by position, which is fine for one or two.</p>
@@ -62,12 +66,16 @@
     ) {}
 }</pre>
   <pre class="rs">enum Message {
-    Quit,                    // unit variant: carries no data
-    Move { x: i32, y: i32 }, // struct-like variant: named fields
-    Write(String),           // tuple-like variant: one unnamed field
-    Color(u8, u8, u8),       // tuple-like variant: three unnamed fields
+    // no data
+    Quit,
+    // named fields
+    Move { x: i32, y: i32 },
+    // one unnamed field
+    Write(String),
+    // three unnamed fields
+    Color(u8, u8, u8),
 }</pre>
-  <div class="ox-bridge-note"><p>PHP 8.1 has enums too, but a backed case such as <code>case Hearts = 'H';</code> holds one fixed value and nothing else. Without per-case data, the PHP habit is one class with nullable fields and a kind column that says which ones matter. A Rust enum does both jobs: one type, and each variant has only the fields it needs.</p></div>
+  <div class="ox-bridge-note"><p>PHP 8.1 has enums too, but a backed case such as <code>case Hearts = 'H';</code> holds one fixed value and nothing else. Without per-case data, the PHP habit is one class with nullable fields and a kind column that says which ones matter, or a class hierarchy with one subclass per case. A Rust enum does both jobs: one type, and each variant has only the fields it needs.</p></div>
 </div>
 
 <p>The compiler is strict about the shape you build a value with. Try this one:</p>
@@ -129,7 +137,7 @@ fn main() {
     println!("{text}");
 }</pre>
 
-<p>Read an arm as <em>pattern</em> <code>=&gt;</code> <em>result</em>. <code>x</code> and <code>y</code> in <code>Message::Move { x, y }</code> are bindings: they take the numbers out of the variant and give them names for the result. Each arm ends with a comma. All the arms produce one type, because the whole <code>match</code> has one type.</p>
+<p>Read an arm as <em>pattern</em> <code>=&gt;</code> <em>result</em>. <code>x</code> and <code>y</code> in <code>Message::Move { x, y }</code> are bindings: they take the numbers out of the variant and give them names for the result. Arms are separated by commas. All the arms produce one type, because the whole <code>match</code> has one type.</p>
 
 <div class="ox-quiz" data-id="10:arm-type" data-xp="10" data-label="Check yourself">
   <p class="ox-q">Does this compile?</p>
@@ -209,7 +217,7 @@ For more information about this error, try `rustc --explain E0308`.</pre>
   </style>
   <div class="mm-top">
     <span class="ox-label">Match Machine</span>
-    <p>Pick a value. Run the match. Then remove an arm and see what rustc says.</p>
+    <p>Pick a value and run the match. Then remove one arm at a time and see what rustc says.</p>
   </div>
   <div class="mm-grid">
     <div class="mm-panel">
@@ -293,9 +301,14 @@ For more information about this error, try `rustc --explain E0004`.</pre>
 
 <p>A pattern can be a literal, a range, a set of alternatives, a wildcard, a binding, or a destructuring of a struct or a tuple. One program with several matches shows them all:</p>
 
-<pre class="rs" data-run data-stdout="negative\nzero\ndigit 7\nround\neven 12\nodd\norigin\nleft of the axis\non the x axis\n1 true z">struct Point {
+<pre class="rs" data-run data-stdout="negative\nzero\ndigit 7\nround\neven 12\nodd\norigin\nleft of the axis\non the x axis\nstarts at the origin\nends on the x axis\n1 true z">struct Point {
     x: i32,
     y: i32,
+}
+
+struct Line {
+    start: Point,
+    end: Point,
 }
 
 fn classify(n: i32) -&gt; String {
@@ -318,6 +331,14 @@ fn corner(p: &amp;Point) -&gt; &amp;'static str {
     }
 }
 
+fn describe_line(line: &amp;Line) -&gt; &amp;'static str {
+    match line {
+        Line { start: Point { x: 0, y: 0 }, .. } =&gt; "starts at the origin",
+        Line { end: Point { y: 0, .. }, .. } =&gt; "ends on the x axis",
+        _ =&gt; "somewhere",
+    }
+}
+
 fn main() {
     for n in [-4, 0, 7, 20, 12, 15] {
         println!("{}", classify(n));
@@ -326,9 +347,16 @@ fn main() {
     println!("{}", corner(&amp;Point { x: -2, y: 5 }));
     println!("{}", corner(&amp;Point { x: 4, y: 0 }));
 
+    let line = Line { start: Point { x: 0, y: 0 }, end: Point { x: 5, y: 5 } };
+    println!("{}", describe_line(&amp;line));
+    let line = Line { start: Point { x: 1, y: 1 }, end: Point { x: 4, y: 0 } };
+    println!("{}", describe_line(&amp;line));
+
     let ((a, b), c) = ((1, true), 'z');
     println!("{a} {b} {c}");
 }</pre>
+
+<p>Patterns nest. <code>Line { start: Point { x: 0, y: 0 }, .. }</code> reaches inside a struct that sits inside another struct, and <code>((a, b), c)</code> does the same for tuples. The <code>..</code> skips every field you don't name.</p>
 
 <div class="ox-table-wrap">
 <table class="ox-table">
@@ -431,13 +459,13 @@ For more information about this error, try `rustc --explain E0004`.</pre>
 
 <p>In PHP, any reference can be <code>null</code>, and a function declared to return a <code>User</code> may return <code>null</code> anyway. You find out at runtime, when <code>Call to a member function name() on null</code> stops the request. Rust's ordinary types can't be null. When a value might be missing, its type is <code>Option&lt;T&gt;</code>, and the type says so.</p>
 
-<pre class="rs" data-check="ok">// Simplified. The standard library's real definition also derives traits.
+<pre class="rs" data-check="ok">// Simplified from the standard library.
 enum Option&lt;T&gt; {
     None,
     Some(T),
 }</pre>
 
-<p>The standard library defines <code>Option</code> much like this. It is built in, so you never import it: <code>Some</code> and <code>None</code> are always in scope. Think of <code>None</code> as an empty box. The value inside a <code>Some</code> stays out of reach until you open the box, and the compiler won't let you use it as if the box were already open:</p>
+<p>The standard library defines <code>Option</code> much like this (the real one also derives some traits). It is built in, so you never import it: <code>Some</code> and <code>None</code> are always in scope. Think of <code>None</code> as an empty box. The value inside a <code>Some</code> stays out of reach until you open the box, and the compiler won't let you use it as if the box were already open:</p>
 
 <pre class="rs" data-check="E0369">fn main() {
     let n: Option&lt;i32&gt; = Some(5);
@@ -811,7 +839,7 @@ fn main() {
   <h3>Enums hold one shape, and match covers every shape</h3>
   <ul>
     <li>An enum is exactly one of its variants. A variant can carry nothing (<code>Quit</code>), named fields (<code>Move { x, y }</code>), or positional fields (<code>Write(String)</code>).</li>
-    <li><code>match</code> is an expression. It tests arms from the top and takes the first one that fits. Every variant needs an arm, or the compiler reports E0004.</li>
+    <li><code>match</code> is an expression. It tests arms from the top and takes the first one that fits. Every case needs an arm, or the compiler reports E0004.</li>
     <li>Patterns can be literals, ranges, <code>|</code> alternatives, <code>..</code> to skip fields, <code>@</code> bindings and guards. A guard doesn't count toward exhaustiveness.</li>
     <li><code>Option&lt;T&gt;</code> is <code>Some(value)</code> or <code>None</code>. Reach for <code>map</code>, <code>unwrap_or</code> and <code>and_then</code> first. Use <code>unwrap()</code> only when you can say why it can't panic.</li>
     <li><code>if let</code>, <code>while let</code> and <code>let ... else</code> handle one case. The <code>else</code> of <code>let ... else</code> must diverge.</li>
@@ -1010,19 +1038,19 @@ fn main() {
     function run() {
       if (busy || isError()) return;
       clearTimers();
-      var steps = trace(), gap = reduce ? 0 : 420;
+      var steps = trace(), gap = reduce ? 0 : 340;
       busy = true;
       runBtn.disabled = true;
       paintArms(null);
       steps.forEach(function (s, i) {
         if (!reduce) timers.push(setTimeout(function () { setArm(s.arm, "is-try", "testing"); }, i * gap));
-        timers.push(setTimeout(function () { setArm(s.arm, s.cls, s.note); }, i * gap + (reduce ? 0 : 300)));
+        timers.push(setTimeout(function () { setArm(s.arm, s.cls, s.note); }, i * gap + (reduce ? 0 : 240)));
       });
       timers.push(setTimeout(function () {
         busy = false;
         paintStatus();
         resultView(steps);
-      }, steps.length * gap + (reduce ? 0 : 200)));
+      }, steps.length * gap + (reduce ? 0 : 150)));
     }
 
     runBtn.addEventListener("click", run);

@@ -1,0 +1,1053 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Smart Pointers · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/quests-data.js" defer></script>
+<script src="../assets/cards/ch17.js" defer></script>
+<script src="../assets/scenarios/ch17.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+<script src="../assets/xray.js" defer></script>
+</head>
+<body data-chapter="17">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<div class="ox-page">
+<aside class="ox-rail" aria-label="Chapter contents"></aside>
+<main class="ox-main" id="main">
+
+<header class="ox-hero" data-auto>
+  <ul>
+    <li>Use Box for heap allocation, recursive types and trait objects.</li>
+    <li>Share ownership with Rc and explain its reference count.</li>
+    <li>Mutate through a shared reference with RefCell, and know when it panics.</li>
+    <li>Break reference cycles with Weak.</li>
+  </ul>
+</header>
+
+<section>
+<h2 id="smart">What makes a pointer smart</h2>
+
+<p>Chapter 06 gave every value one owner, and the owner frees the value at its closing brace. A smart pointer is a value that owns something, usually on the heap, and adds behavior on top of that ownership. Two traits do most of the work:</p>
+
+<div class="ox-rules">
+  <div class="ox-rule"><div><p><strong>Deref</strong> lets you use the pointer like the value it points to.</p><p><code>*b</code> reads through it, and a <code>&amp;String</code> turns into a <code>&amp;str</code> wherever a function asks for one.</p></div></div>
+  <div class="ox-rule"><div><p><strong>Drop</strong> runs cleanup when the owner goes away.</p><p>For a <code>String</code> that means freeing its bytes. For a file handle it means closing the file.</p></div></div>
+</div>
+
+<p>You have been using smart pointers since the early chapters. <code>String</code> and <code>Vec&lt;T&gt;</code> each own heap memory, dereference to a view of their contents, and free that memory when they are dropped. The types in this chapter differ in one question: who owns the value, and who may change it?</p>
+
+<aside class="ox-callout" data-kind="insight">
+  <p>Keep the parcel picture from Chapter 06. <strong>Box</strong> is a parcel stored on the heap, with one name on its label. <strong>Rc</strong> is a shared parcel with an owner counter printed on the label. <strong>RefCell</strong> is a borrow desk that checks the rules every time someone asks for the parcel, and panics when the rules are broken.</p>
+</aside>
+
+<details class="ox-think">
+  <summary>String has no * and no &amp; in its name. Is it a smart pointer?</summary>
+  <div class="ox-think-body">
+    <p>Yes. A <code>String</code> holds a pointer, a length and a capacity. It owns the heap bytes, it dereferences to <code>&amp;str</code>, and its Drop frees the buffer. The test is what a type does, not what its name looks like.</p>
+  </div>
+</details>
+
+<p>Here is Deref at work. The function asks for a <code>&amp;str</code>, and we pass a <code>&amp;String</code>. Nothing converts it by hand.</p>
+
+<pre class="rs" data-run data-stdout="5">
+fn count_words(text: &amp;str) -&gt; usize {
+    text.split_whitespace().count()
+}
+
+fn main() {
+    let owned = String::from("smart pointers own their data");
+    println!("{}", count_words(&amp;owned));
+}</pre>
+
+<p><code>String</code> implements <code>Deref&lt;Target = str&gt;</code>, so the compiler turns the <code>&amp;String</code> into a <code>&amp;str</code> at the call. This is called deref coercion. You will meet it in most functions that take text.</p>
+</section>
+
+<section>
+<h2 id="box" data-toc="Box">Box&lt;T&gt;: one owner, on the heap</h2>
+
+<p><code>Box&lt;T&gt;</code> is the simplest smart pointer. It puts one value on the heap and owns it. The value on the stack is only a pointer. Make a box with <code>Box::new</code> and read through it with <code>*</code>.</p>
+
+<pre class="rs" data-run data-stdout="6">
+fn main() {
+    let b = Box::new(5);
+    println!("{}", *b + 1);
+}</pre>
+
+<div class="ox-xray ox-wide" data-scenario="box-own"></div>
+
+<p>Watch the two lanes. <code>b</code> is a pointer, eight bytes on a 64-bit machine. The 5 sits in the heap lane. When <code>b</code> ends, the box frees it. A box has exactly one owner, so it moves like a <code>String</code>: after <code>let c = b;</code>, the name <code>b</code> is unusable.</p>
+
+<p>There are three common reasons to reach for a box:</p>
+<ul>
+  <li>To move a large value cheaply. Moving a box copies one pointer, and the value stays where it is on the heap.</li>
+  <li>For a recursive type, where the compiler needs a finite size. That is the next topic.</li>
+  <li>For a trait object, <code>Box&lt;dyn Trait&gt;</code>, when the concrete type is chosen at runtime. <a href="14-traits-generics.html">Chapter 14</a> covers it.</li>
+</ul>
+
+<h3>A recursive type needs a box</h3>
+
+<p>Now a type that contains itself. A list is a number followed by the rest of the list, and the rest is another list. Try to write it with no pointer in the middle:</p>
+
+<pre class="rs" data-check="E0072">
+enum List {
+    Cons(i32, List),
+    Nil,
+}
+
+fn main() {
+    let list = List::Nil;
+}</pre>
+
+<pre class="rustc">
+error[E0072]: recursive type `List` has infinite size
+ --&gt; src/main.rs:1:1
+  |
+1 | enum List {
+  | ^^^^^^^^^
+2 |     Cons(i32, List),
+  |               ---- recursive without indirection
+  |
+help: insert some indirection (e.g., a `Box`, `Rc`, or `&amp;`) to break the cycle
+  |
+2 |     Cons(i32, Box&lt;List&gt;),
+  |               ++++    +
+
+For more information about this error, try `rustc --explain E0072`.</pre>
+
+<details class="ox-think">
+  <summary>Which field in the enum is the cycle? Name it before you read on.</summary>
+  <div class="ox-think-body">
+    <p>The <code>List</code> inside <code>Cons</code>. The <code>i32</code> already has a fixed size, so it needs no help. Only the field that refers back to the enum has to go behind a pointer.</p>
+  </div>
+</details>
+
+<p>Read the error the way Chapter 06 taught. The code and summary come first. The arrows say what is wrong: the field marked <em>recursive without indirection</em> is the one that makes the type contain itself. The help line shows the fix.</p>
+
+<p>Why does the compiler care? To place a <code>List</code> on the stack, it has to know the size at compile time. A <code>List</code> holds an <code>i32</code> and a <code>List</code>, which holds an <code>i32</code> and another <code>List</code>, with no end. No size fits that. A <code>Box&lt;List&gt;</code> is one pointer, so the size is fixed, whatever the length of the list.</p>
+
+<pre class="rs" data-run data-stdout="6">
+enum List {
+    Cons(i32, Box&lt;List&gt;),
+    Nil,
+}
+
+use List::{Cons, Nil};
+
+fn sum(list: &amp;List) -&gt; i32 {
+    match list {
+        Cons(value, rest) =&gt; value + sum(rest),
+        Nil =&gt; 0,
+    }
+}
+
+fn main() {
+    let list = Cons(1, Box::new(Cons(2, Box::new(Cons(3, Box::new(Nil))))));
+    println!("{}", sum(&amp;list));
+}</pre>
+
+<p><code>match</code> looks at the list through a reference, so <code>value</code> and <code>rest</code> borrow from it. The recursion stops at <code>Nil</code>. Each <code>Cons</code> cell is its own heap box, and the whole chain is freed when the outermost list goes out of scope.</p>
+
+<aside class="ox-callout" data-kind="php">
+  <p>In PHP a linked list is objects holding other objects. Each object is a handle, so the question of size never comes up. Rust needs the size of every value, so it asks you to say where the indirection lives. The <code>Box</code> is that answer.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="rc">Rc&lt;T&gt;: shared ownership</h2>
+
+<p>Sometimes one owner is not enough. Two parts of a program need the same configuration, and neither is the natural owner. <code>Rc&lt;T&gt;</code>, short for reference counted, gives one value several owners in one thread. Each owner holds an <code>Rc</code> handle, and the value keeps a count of how many handles exist. When the count reaches zero, the value is freed.</p>
+
+<aside class="ox-callout" data-kind="php">
+  <p>PHP already works this way for objects. <code>$b = $a</code> gives a second handle to the same object, and PHP keeps a count of the handles. <code>Rc</code> is the same idea with the counting written out. <code>Rc::strong_count</code> shows the number, and the value is freed as soon as the number reaches zero.</p>
+</aside>
+
+<div class="ox-quiz" data-id="17:rc-freed" data-xp="10" data-label="Predict, then check">
+  <p class="ox-q">Look at this program. Right after which statement does the line <code>freed shared</code> print?</p>
+  <pre class="rs" data-run data-stdout="count = 1\ncount = 2\ncount = 3\ncount = 2\ncount = 1\nfreed shared\nend of main">
+use std::rc::Rc;
+
+struct Noisy(&amp;'static str);
+
+impl Drop for Noisy {
+    fn drop(&amp;mut self) {
+        println!("freed {}", self.0);
+    }
+}
+
+fn main() {
+    let a = Rc::new(Noisy("shared"));
+    println!("count = {}", Rc::strong_count(&amp;a));
+
+    let b = Rc::clone(&amp;a);
+    println!("count = {}", Rc::strong_count(&amp;a));
+
+    {
+        let c = Rc::clone(&amp;a);
+        println!("count = {}", Rc::strong_count(&amp;c));
+    }
+    println!("count = {}", Rc::strong_count(&amp;a));
+
+    drop(a);
+    println!("count = {}", Rc::strong_count(&amp;b));
+    drop(b);
+    println!("end of main");
+}</pre>
+  <ol class="ox-choices">
+    <li>Right after <code>drop(a)</code>, because <code>a</code> was the first owner.</li>
+    <li>Right after the inner block closes, because <code>c</code> was the last clone.</li>
+    <li data-correct>Right after <code>drop(b)</code>, because that was the last handle.</li>
+    <li>At the very end, when <code>main</code> returns.</li>
+  </ol>
+  <div class="ox-why">
+    <p>The count is 2 while <code>a</code> and <code>b</code> exist, 3 inside the block, and back to 2 when <code>c</code> ends. <code>drop(a)</code> makes it 1, which is the line <code>count = 1</code>. <code>drop(b)</code> makes it 0, and the <code>Noisy</code> inside is dropped at that moment.</p>
+    <p>Whichever handle is dropped last frees the value. Every earlier drop only lowers the count.</p>
+  </div>
+</div>
+
+<p>Cloning an <code>Rc</code> is the cheap part. <code>Rc::clone(&amp;a)</code> copies a pointer and adds one to the counter. The value is never copied, however large it is. Write <code>Rc::clone(&amp;a)</code> rather than <code>a.clone()</code>. Both mean the same thing for an <code>Rc</code>, but the long form makes it obvious that you are cloning the handle and not the data.</p>
+
+<div class="ox-xray ox-wide" data-scenario="rc-count"></div>
+
+<p>Each clone adds one, each drop subtracts one, and only a drop that finds the count at 1 frees the value. That is the whole rule. The X-Ray keeps the counter on the box, so you can watch it move.</p>
+
+<h3>Rc gives read-only access</h3>
+
+<p>An <code>Rc</code> hands out shared references and nothing else. If several owners could change the same <code>Vec</code>, one of them could hold a reference into it while another pushed and reallocated it. Rust forbids that, so an <code>Rc</code> is read-only:</p>
+
+<pre class="rs" data-check="E0596">
+use std::rc::Rc;
+
+fn main() {
+    let shared = Rc::new(vec![1, 2, 3]);
+    shared.push(4);
+    println!("{shared:?}");
+}</pre>
+
+<pre class="rustc">
+error[E0596]: cannot borrow data in an `Rc` as mutable
+ --&gt; src/main.rs:5:5
+  |
+5 |     shared.push(4);
+  |     ^^^^^^ cannot borrow as mutable
+  |
+  = help: trait `DerefMut` is required to modify through a dereference, but it is not implemented for `Rc&lt;Vec&lt;i32&gt;&gt;`
+
+For more information about this error, try `rustc --explain E0596`.</pre>
+
+<p>There are two ways out. <code>Rc::get_mut</code> returns a <code>&amp;mut T</code>, but only when there are no other handles, strong or weak. That means the value is no longer shared. The other way is a <code>RefCell</code>, the next section, which allows mutation through a shared handle.</p>
+
+<p>One more limit: <code>Rc</code> is for one thread. Sending an <code>Rc</code> into another thread is compile error E0277, <code>Rc&lt;String&gt;</code> cannot be sent between threads safely. Chapter 18 introduces <code>Arc</code>, the same idea with an atomic counter that is safe to share across threads.</p>
+</section>
+
+<section>
+<h2 id="refcell">RefCell&lt;T&gt;: borrow rules at runtime</h2>
+
+<p>Chapter 07 gave you the borrow rules: any number of shared borrows, or one exclusive borrow, never both. The compiler checks them before the program runs. Some programs only know who is borrowing once they run. <code>RefCell&lt;T&gt;</code> moves the same rules into the running program. It hands out a guard for each borrow, and it panics if you break a rule.</p>
+
+<p>The useful trick is that a <code>RefCell</code> can change its contents through a plain <code>&amp;</code>. This is called interior mutability. The cell itself is shared, and each change goes through a short borrow that the cell checks.</p>
+
+<details class="ox-think">
+  <summary><code>first</code> is still alive on the next line. What should <code>log.borrow_mut()</code> do?</summary>
+  <div class="ox-think-body">
+    <p>Refuse. A shared borrow is still alive, and an exclusive borrow must be the only one. A <code>RefCell</code> cannot know, when the code is written, which borrows will overlap. So it checks each call as the program makes it, and panics if the rule is broken.</p>
+  </div>
+</details>
+
+<pre class="rs" data-check="panic" data-stdout="0 entries" data-run>
+use std::cell::RefCell;
+
+fn main() {
+    let log = RefCell::new(Vec::&lt;String&gt;::new());
+    let first = log.borrow();
+    println!("{} entries", first.len());
+    log.borrow_mut().push(String::from("oops"));
+    println!("never printed");
+}</pre>
+
+<pre class="text">0 entries
+
+thread 'main' (8040) panicked at src/main.rs:7:9:
+RefCell already borrowed
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace</pre>
+
+<p>Line 7 is the call that broke the rule. The message names the problem: a <code>RefCell</code> was already borrowed. The <code>0 entries</code> line printed first, because the panic comes after it. A panic like this is a bug in your program, the same kind as an index past the end of a <code>Vec</code>. The fix is to end the first borrow before you ask for the second.</p>
+
+<p>When a conflict is a real possibility, ask first. <code>try_borrow_mut</code> returns a <code>Result</code> instead of panicking:</p>
+
+<pre class="rs" data-run data-stdout="busy: RefCell already borrowed\nreader sees: draft">
+use std::cell::RefCell;
+
+fn main() {
+    let notes = RefCell::new(String::from("draft"));
+    let reader = notes.borrow();
+    match notes.try_borrow_mut() {
+        Ok(mut text) =&gt; text.push_str(" + edit"),
+        Err(e) =&gt; println!("busy: {e}"),
+    }
+    println!("reader sees: {reader}");
+}</pre>
+
+<aside class="ox-callout" data-kind="trap">
+  <p>A guard lives until the end of the statement that made it, or until its variable goes out of scope. In the line below, the <code>borrow_mut()</code> guard is alive while Rust evaluates the argument. The argument calls <code>borrow()</code> on the same cell, so it panics before <code>push</code> runs. The message this time is <code>RefCell already mutably borrowed</code>.</p>
+</aside>
+
+<pre class="rs" data-check="panic">
+use std::cell::RefCell;
+
+fn main() {
+    let v = RefCell::new(vec![1, 2]);
+    v.borrow_mut().push(v.borrow().len() as i32);
+    println!("{:?}", v.borrow());
+}</pre>
+
+<p>The fix is to split the work into two statements: compute the length first, then borrow mutably to push.</p>
+
+<p>For a <code>Copy</code> value, <code>Cell&lt;T&gt;</code> is simpler. It never hands out a guard. You copy the value in with <code>set</code> and out with <code>get</code>, so there is nothing to conflict:</p>
+
+<pre class="rs" data-run data-stdout="2">
+use std::cell::Cell;
+
+struct Counter {
+    hits: Cell&lt;u32&gt;,
+}
+
+impl Counter {
+    fn hit(&amp;self) {
+        self.hits.set(self.hits.get() + 1);
+    }
+}
+
+fn main() {
+    let c = Counter { hits: Cell::new(0) };
+    c.hit();
+    c.hit();
+    println!("{}", c.hits.get());
+}</pre>
+
+<h3>A test double that records calls</h3>
+
+<p>Interior mutability earns its keep in a common job: a fake that records what the code under test asked for. A trait method takes <code>&amp;self</code>, so the fake cannot push to a field without <code>&amp;mut self</code>. It stores its records in a <code>RefCell</code> and writes through the shared reference. In Laravel you would call <code>Mail::fake()</code> and assert afterwards what was sent. Here is the same job in Rust:</p>
+
+<pre class="rs" data-run data-stdout="ana@example.com: Welcome!\nbo@example.com: Welcome!">
+use std::cell::RefCell;
+
+trait Mailer {
+    fn send(&amp;self, to: &amp;str, subject: &amp;str);
+}
+
+struct MockMailer {
+    sent: RefCell&lt;Vec&lt;String&gt;&gt;,
+}
+
+impl Mailer for MockMailer {
+    fn send(&amp;self, to: &amp;str, subject: &amp;str) {
+        self.sent.borrow_mut().push(format!("{to}: {subject}"));
+    }
+}
+
+fn welcome_user(mailer: &amp;dyn Mailer, email: &amp;str) {
+    mailer.send(email, "Welcome!");
+}
+
+fn main() {
+    let mailer = MockMailer { sent: RefCell::new(Vec::new()) };
+    welcome_user(&amp;mailer, "ana@example.com");
+    welcome_user(&amp;mailer, "bo@example.com");
+    for line in mailer.sent.borrow().iter() {
+        println!("{line}");
+    }
+}</pre>
+
+<p>The function receives a <code>&amp;dyn Mailer</code>, so production code and the fake look the same to it. Afterwards, <code>mailer.sent.borrow()</code> reads the record. Nothing in the program needed <code>mut</code>.</p>
+</section>
+
+<section>
+<h2 id="rc-refcell">Rc&lt;RefCell&lt;T&gt;&gt;: shared and mutable</h2>
+
+<p>Put the two together and you get the shape of a PHP object: several owners, and any of them may change the value. <code>Rc</code> supplies the owners. <code>RefCell</code> supplies mutation through a handle that is shared.</p>
+
+<pre class="rs" data-run data-stdout="sidebar sees 1550 cents\ncheckout sees 1550 cents\nowners: 3">
+use std::cell::RefCell;
+use std::rc::Rc;
+
+struct Cart {
+    items: Vec&lt;u32&gt;,
+}
+
+impl Cart {
+    fn total(&amp;self) -&gt; u32 {
+        self.items.iter().sum()
+    }
+}
+
+struct CartView {
+    name: &amp;'static str,
+    cart: Rc&lt;RefCell&lt;Cart&gt;&gt;,
+}
+
+impl CartView {
+    fn add(&amp;self, cents: u32) {
+        self.cart.borrow_mut().items.push(cents);
+    }
+}
+
+fn main() {
+    let cart = Rc::new(RefCell::new(Cart { items: Vec::new() }));
+    let sidebar = CartView { name: "sidebar", cart: Rc::clone(&amp;cart) };
+    let checkout = CartView { name: "checkout", cart: Rc::clone(&amp;cart) };
+
+    sidebar.add(1200);
+    checkout.add(350);
+    println!("{} sees {} cents", sidebar.name, sidebar.cart.borrow().total());
+    println!("{} sees {} cents", checkout.name, checkout.cart.borrow().total());
+    println!("owners: {}", Rc::strong_count(&amp;cart));
+}</pre>
+
+<p>Each view holds its own <code>Rc</code> handle to the same cart. <code>add</code> takes <code>&amp;self</code>, so both views can call it. It borrows the <code>RefCell</code> mutably only for the push. Both views read the same items, because there is only one cart. The last line counts three handles: <code>cart</code>, and one inside each view.</p>
+
+<aside class="ox-callout" data-kind="php">
+  <p>Every PHP object handle behaves like <code>Rc&lt;RefCell&lt;T&gt;&gt;</code>. Several variables can hold one object, any of them can change it, and PHP counts the handles and runs a cycle collector for the loops. Rust makes you spell out each part. Most Rust code never needs the combination, and when it does, the first question is whether the data really has many owners. Section 8 comes back to that question.</p>
+</aside>
+
+<div class="ox-quiz" data-id="17:shared-mut" data-xp="10">
+  <p class="ox-q">Which type gives you shared ownership <em>and</em> mutation, all on one thread?</p>
+  <ol class="ox-choices">
+    <li><code>Rc&lt;T&gt;</code> on its own</li>
+    <li data-correct><code>Rc&lt;RefCell&lt;T&gt;&gt;</code></li>
+    <li><code>Box&lt;T&gt;</code></li>
+    <li><code>&amp;mut T</code></li>
+  </ol>
+  <div class="ox-why"><p><code>Rc</code> on its own shares but never mutates. <code>RefCell</code> on its own mutates through <code>&amp;</code> but has one owner. Together they give several owners, and each of them can borrow the value mutably, with the rules checked at runtime. <code>&amp;mut T</code> is exclusive: only one holder can exist at a time.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="widgets">See it work</h2>
+
+<p>Two instruments, one for each half of this chapter. The left one is an owner counter. Handles come and go, and the value is freed when the last strong handle is dropped. The right one is a borrow desk, a <code>RefCell</code> that enforces its rules while you press buttons.</p>
+
+<style>
+#ptrlab .pl-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 720px) { #ptrlab .pl-grid { grid-template-columns: minmax(0, 1fr); } }
+#ptrlab .pl-panel { background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--radius-lg); padding: 14px; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+#ptrlab .pl-title { font: 800 1.35rem/1.1 var(--font-display); text-transform: uppercase; letter-spacing: 0.02em; margin: 0; color: var(--ink); }
+#ptrlab .pl-sub { margin: 0; font-size: 0.9rem; color: var(--muted); }
+#ptrlab .pl-sub code { font-size: 0.85em; }
+#ptrlab .pl-stage { position: relative; min-height: 236px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 16px; }
+#ptrlab .pl-handles { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; min-height: 40px; }
+#ptrlab .pl-strings { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; overflow: visible; }
+#ptrlab .pl-string { fill: none; stroke-width: 1.6; }
+#ptrlab .pl-string.is-strong { stroke: var(--oxide); }
+#ptrlab .pl-string.is-weak { stroke: var(--ghost); stroke-dasharray: 4 4; }
+#ptrlab .pl-balloon { position: relative; z-index: 1; width: min(260px, 90%); padding: 16px 12px 14px; text-align: center; background: var(--heap-soft); border: 1.5px solid var(--heap); border-radius: 46% 46% 42% 42% / 52% 52% 40% 40%; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+#ptrlab .pl-balloon.is-freed { background: var(--surface); border-style: dashed; border-color: var(--ghost); color: var(--muted); }
+#ptrlab .pl-val { font: 700 1rem/1.2 var(--font-mono); color: var(--ink); }
+#ptrlab .pl-state { font: 600 0.76rem/1.2 var(--font-mono); color: var(--muted); letter-spacing: 0.04em; }
+#ptrlab .pl-chip { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 3px 4px 3px 10px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--surface); font: 600 0.8rem/1.4 var(--font-mono); color: var(--ink-2); }
+#ptrlab .pl-chip.is-strong { border-color: var(--oxide); background: var(--oxide-soft); color: var(--oxide-ink); }
+#ptrlab .pl-chip.is-weak { border-style: dashed; border-color: var(--ghost); }
+#ptrlab .pl-chip.is-ref { border-color: var(--borrow); background: var(--borrow-soft); color: var(--borrow); }
+#ptrlab .pl-chip.is-mut { border-color: var(--mut); background: var(--mut-soft); color: var(--mut); }
+#ptrlab .pl-chip-tag { font: 600 0.68rem/1 var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.75; }
+#ptrlab .pl-mini { min-height: 28px; padding: 2px 8px; font-size: 0.76rem; border-radius: 999px; }
+#ptrlab .pl-x { min-height: 24px; min-width: 24px; padding: 0 6px; font-size: 0.9rem; border-radius: 999px; }
+#ptrlab .pl-counts { display: flex; flex-wrap: wrap; gap: 6px 16px; font: 0.82rem/1.4 var(--font-mono); color: var(--ink-2); }
+#ptrlab .pl-counts b { color: var(--ink); }
+#ptrlab .pl-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+#ptrlab .pl-msg { margin: 0; font-size: 0.92rem; min-height: 3.4em; color: var(--ink-2); }
+#ptrlab .pl-cell { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px 10px; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: var(--radius); background: var(--surface); font: 600 0.84rem/1.4 var(--font-mono); color: var(--ink); }
+#ptrlab .pl-cell.is-shared { border-color: var(--borrow); background: var(--borrow-soft); }
+#ptrlab .pl-cell.is-excl { border-color: var(--mut); background: var(--mut-soft); }
+#ptrlab .pl-cell b { color: var(--ink); }
+#ptrlab .pl-guards { display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; min-height: 40px; }
+#ptrlab .pl-panic { border: 1.5px solid var(--bad); background: var(--bad-soft); color: var(--bad); border-radius: var(--radius); padding: 8px 10px; font-size: 0.88rem; }
+#ptrlab .pl-panic code { display: block; font-weight: 700; background: none; color: var(--bad); margin-bottom: 4px; }
+#ptrlab .pl-panic p { margin: 0; color: var(--ink-2); }
+#ptrlab .pl-legend { margin: 0; font-size: 0.8rem; color: var(--muted); }
+#ptrlab .pl-empty { font: 0.82rem/1.4 var(--font-mono); color: var(--muted); align-self: center; }
+@media (prefers-reduced-motion: reduce) { #ptrlab * { transition: none !important; animation: none !important; } }
+</style>
+
+<div class="ox-figure ox-wide" id="ptrlab">
+  <div class="pl-grid">
+
+    <section class="pl-panel" aria-labelledby="pl-owner-title">
+      <h3 class="pl-title" id="pl-owner-title">Owner Counter</h3>
+      <p class="pl-sub">One value on the heap, and every handle that points at it. Solid chips own. Dashed chips are <code>Weak</code>, and they do not count.</p>
+      <div class="pl-stage" id="pl-stage">
+        <div class="pl-handles" id="pl-handles"></div>
+        <div class="pl-balloon" id="pl-balloon">
+          <span class="pl-val">"shared"</span>
+          <span class="pl-state" id="pl-state">alive, 1 owner</span>
+        </div>
+        <svg class="pl-strings" id="pl-strings" aria-hidden="true" focusable="false"></svg>
+      </div>
+      <div class="pl-counts" aria-live="polite">
+        <span>Rc::strong_count(&amp;a) = <b id="pl-strong">1</b></span>
+        <span>Rc::weak_count(&amp;a) = <b id="pl-weak">0</b></span>
+      </div>
+      <div class="pl-actions">
+        <button class="ox-btn is-small" type="button" id="pl-clone">Rc::clone(&amp;a)</button>
+        <button class="ox-btn is-small" type="button" id="pl-down">Rc::downgrade(&amp;a)</button>
+        <button class="ox-btn is-small" type="button" id="pl-reset">reset</button>
+      </div>
+      <p class="pl-msg" id="pl-msg" role="status">One owner, strong count 1. Clone it, downgrade it, or drop a handle and watch the counts.</p>
+    </section>
+
+    <section class="pl-panel" aria-labelledby="pd-title">
+      <h3 class="pl-title" id="pd-title">Runtime Borrow Desk</h3>
+      <p class="pl-sub">A <code>RefCell&lt;Cart&gt;</code> checks the rules as you press. Any number of readers, or one writer, never both.</p>
+      <div class="pl-cell" id="pd-cell">
+        <span>RefCell&lt;Cart&gt;</span>
+        <span>readers <b id="pd-r">0</b> · writer <b id="pd-w">no</b></span>
+      </div>
+      <div class="pl-guards" id="pd-guards"></div>
+      <div class="pl-actions">
+        <button class="ox-btn is-small" type="button" id="pd-borrow">borrow()</button>
+        <button class="ox-btn is-small" type="button" id="pd-borrowmut">borrow_mut()</button>
+      </div>
+      <div class="pl-panic" id="pd-panic" role="alert" hidden>
+        <code id="pd-panic-text"></code>
+        <p id="pd-panic-why"></p>
+      </div>
+      <p class="pl-msg" id="pd-msg" role="status">The desk is empty. Take a read guard, or the one write guard.</p>
+    </section>
+
+  </div>
+  <p class="pl-legend">Same rules as Chapter 07, where the compiler checked them before the program ran. Here the desk checks them as you go.</p>
+</div>
+
+<p>Try these in order. Clone once, downgrade once, then drop the strong handles and call <code>upgrade()</code> on the weak one. On the desk, take a read guard, then try a write. Each rule is one you have already seen in this chapter.</p>
+
+<div class="ox-quiz" data-id="17:weak-upgrade" data-xp="10" data-label="Predict, then check">
+  <p class="ox-q">You have one <code>Rc</code>, <code>a</code>, and a <code>Weak</code> made from it, <code>w</code>. Then you run <code>drop(a)</code>. What does <code>w.upgrade()</code> return?</p>
+  <ol class="ox-choices">
+    <li>Some, because the <code>Weak</code> still points at the value.</li>
+    <li data-correct>None. The last strong handle is gone, so the value was freed.</li>
+    <li>It doesn't compile, because <code>upgrade</code> needs a mutable handle.</li>
+  </ol>
+  <div class="ox-why"><p>A <code>Weak</code> does not count as an owner. Dropping the last <code>Rc</code> frees the value, and <code>upgrade()</code> then returns <code>None</code>. The balloon shows exactly that.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="cycles">Cycles leak; Weak breaks them</h2>
+
+<p><code>Rc</code> frees a value when its count reaches zero. A cycle stops the count from ever reaching zero. Two nodes that point at each other keep each other alive, even after nothing outside refers to them:</p>
+
+<pre class="rs" data-run data-stdout="a: 2, b: 2\nend of main">
+use std::cell::RefCell;
+use std::rc::Rc;
+
+struct Node {
+    name: &amp;'static str,
+    next: RefCell&lt;Option&lt;Rc&lt;Node&gt;&gt;&gt;,
+}
+
+impl Drop for Node {
+    fn drop(&amp;mut self) {
+        println!("drop {}", self.name);
+    }
+}
+
+fn main() {
+    let a = Rc::new(Node { name: "a", next: RefCell::new(None) });
+    let b = Rc::new(Node { name: "b", next: RefCell::new(None) });
+    *a.next.borrow_mut() = Some(Rc::clone(&amp;b));
+    *b.next.borrow_mut() = Some(Rc::clone(&amp;a));
+    println!("a: {}, b: {}", Rc::strong_count(&amp;a), Rc::strong_count(&amp;b));
+    println!("end of main");
+}</pre>
+
+<p>Each node is owned by its variable and by the other node. When <code>main</code> ends, both variables let go, and each count drops from 2 to 1. Neither reaches zero, so neither <code>drop</code> line ever prints. The memory is never freed.</p>
+
+<aside class="ox-callout" data-kind="trap">
+  <p>Rust's safety guarantees cover use after free and double free. They do not promise that every value is freed. Leaking memory is considered safe, so the compiler accepts a cycle without a word. The leak is still your bug, and no compiler message will point at it.</p>
+</aside>
+
+<p>The fix is to make one direction of the link a <code>Weak</code>. A <code>Weak&lt;T&gt;</code> points at a value without owning it. It does not add to the strong count, so it cannot keep the value alive. You create one with <code>Rc::downgrade(&amp;rc)</code>, and you read it with <code>upgrade()</code>, which returns <code>Option&lt;Rc&lt;T&gt;&gt;</code>. <code>Some</code> means the value is still alive. <code>None</code> means it was freed.</p>
+
+<p>The classic use is a tree. A parent owns its children with strong handles, and each child points back at its parent with a weak one:</p>
+
+<pre class="rs" data-run data-stdout="leaf parent = None\nleaf strong = 1, weak = 0\nbranch strong = 1, weak = 1\nbranch children = 1\nleaf strong = 2, weak = 0\nleaf parent = Some(5)\nleaf parent = None\nleaf strong = 1, weak = 0">
+use std::cell::RefCell;
+use std::rc::{Rc, Weak};
+
+struct Node {
+    value: i32,
+    parent: RefCell&lt;Weak&lt;Node&gt;&gt;,
+    children: RefCell&lt;Vec&lt;Rc&lt;Node&gt;&gt;&gt;,
+}
+
+fn main() {
+    let leaf = Rc::new(Node {
+        value: 3,
+        parent: RefCell::new(Weak::new()),
+        children: RefCell::new(vec![]),
+    });
+    println!("leaf parent = {:?}", leaf.parent.borrow().upgrade().map(|p| p.value));
+    println!("leaf strong = {}, weak = {}", Rc::strong_count(&amp;leaf), Rc::weak_count(&amp;leaf));
+
+    {
+        let branch = Rc::new(Node {
+            value: 5,
+            parent: RefCell::new(Weak::new()),
+            children: RefCell::new(vec![Rc::clone(&amp;leaf)]),
+        });
+        *leaf.parent.borrow_mut() = Rc::downgrade(&amp;branch);
+        println!("branch strong = {}, weak = {}", Rc::strong_count(&amp;branch), Rc::weak_count(&amp;branch));
+        println!("branch children = {}", branch.children.borrow().len());
+        println!("leaf strong = {}, weak = {}", Rc::strong_count(&amp;leaf), Rc::weak_count(&amp;leaf));
+        println!("leaf parent = {:?}", leaf.parent.borrow().upgrade().map(|p| p.value));
+    }
+
+    println!("leaf parent = {:?}", leaf.parent.borrow().upgrade().map(|p| p.value));
+    println!("leaf strong = {}, weak = {}", Rc::strong_count(&amp;leaf), Rc::weak_count(&amp;leaf));
+}</pre>
+
+<p>Read the counts as the program runs. <code>branch strong = 1, weak = 1</code>: the branch has one owner, the variable, and the leaf's parent link is weak. <code>leaf strong = 2</code>: the variable and the branch's <code>children</code> vector each own the leaf. When the inner block closes, the branch's count reaches zero. The branch is freed, its children vector goes with it, and the leaf falls back to one owner. The weak link now upgrades to <code>None</code>.</p>
+
+<details class="ox-callout" data-kind="deep">
+  <summary>What a Weak keeps alive</summary>
+  <p>An <code>Rc</code> allocates one box that holds the strong count, the weak count and the value. When the strong count reaches zero, the value is dropped. The box itself is freed only when the weak count also reaches zero. That is why <code>upgrade()</code> can safely return <code>None</code>: the box still exists, and it knows no strong owners are left.</p>
+</details>
+
+<details class="ox-think">
+  <summary>Suppose the child's link to its parent were a strong Rc instead. What would the counts look like after the block ends?</summary>
+  <div class="ox-think-body">
+    <p>The parent would still hold the child, and the child would still hold the parent. Neither count would reach zero, so both would leak. There would be no drop message and no way for the program to free them.</p>
+  </div>
+</details>
+
+<details class="ox-callout" data-kind="deep">
+  <summary>Cow&lt;str&gt;: borrow until you must change it</summary>
+  <p><code>Cow</code> stands for clone on write. It holds either a borrowed <code>&amp;str</code> or an owned <code>String</code>. It stays borrowed, and allocates nothing, until a change forces it to own a copy:</p>
+  <pre class="rs" data-run data-stdout="plain has_space">
+use std::borrow::Cow;
+
+fn clean(input: &amp;str) -&gt; Cow&lt;'_, str&gt; {
+    if input.contains(' ') {
+        Cow::Owned(input.replace(' ', "_"))
+    } else {
+        Cow::Borrowed(input)
+    }
+}
+
+fn main() {
+    let a = clean("plain");
+    let b = clean("has space");
+    println!("{a} {b}");
+}</pre>
+  <p>The <code>'_</code> tells the reader that the result borrows from the input. Chapter 15 explains that notation.</p>
+</details>
+</section>
+
+<section>
+<h2 id="when">Which one when?</h2>
+
+<p>Start from the question the type answers: who owns this value, and who may change it? Then pick the smallest tool that answers it.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>The situation</th><th>Reach for</th></tr></thead>
+  <tbody>
+    <tr><td>One owner, value on the heap, or a recursive type</td><td><code>Box&lt;T&gt;</code></td></tr>
+    <tr><td>Many owners in one thread, read-only</td><td><code>Rc&lt;T&gt;</code> (across threads: <code>Arc&lt;T&gt;</code>)</td></tr>
+    <tr><td>Many owners in one thread, and they mutate</td><td><code>Rc&lt;RefCell&lt;T&gt;&gt;</code> (across threads: <code>Arc&lt;Mutex&lt;T&gt;&gt;</code>)</td></tr>
+    <tr><td>One owner, but mutation through a shared <code>&amp;</code></td><td><code>RefCell&lt;T&gt;</code>, or <code>Cell&lt;T&gt;</code> for a <code>Copy</code> value</td></tr>
+    <tr><td>A link that must not keep its target alive, such as a parent pointer</td><td><code>Weak&lt;T&gt;</code>, paired with an <code>Rc</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Coding agents reach for <code>Rc&lt;RefCell&lt;...&gt;&gt;</code> and <code>Arc&lt;Mutex&lt;...&gt;&gt;</code> the moment the borrow checker complains. The error goes away and the code runs, so the change looks like a success. Often it is the wrong fix. The better change is usually structural: pass <code>&amp;mut</code> down the call chain, return the new value instead of mutating a shared one, or split a struct so that each borrow touches a different field.</p>
+  <p>When you review generated Rust, ask <em>who should own this?</em> before you accept a smart pointer. If the honest answer is one owner, the wrapper hides a design problem, and every access now pays for a runtime check.</p>
+</aside>
+
+<details class="ox-think">
+  <summary>A sidebar and a checkout both show the same cart, one at a time, during a single request. Who should own the cart?</summary>
+  <div class="ox-think-body">
+    <p>Probably the request or the page state, as a single owner. Pass a <code>&amp;Cart</code> to the sidebar and a <code>&amp;mut Cart</code> to the checkout, one after the other. Reach for <code>Rc&lt;RefCell&lt;Cart&gt;&gt;</code> only when two views must keep the cart alive for longer than one call.</p>
+  </div>
+</details>
+</section>
+
+<section>
+<h2 id="practice">Practice</h2>
+<p>Six checks across the chapter's ideas: recursive types, the cost of cloning, counting owners, borrow panics, filling in a box, and choosing a pointer. Answer each one before you open its explanation.</p>
+
+<div class="ox-quiz" data-id="17:quiz-e0072" data-xp="10" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0072">
+struct Node {
+    value: i32,
+    next: Option&lt;Node&gt;,
+}
+
+fn main() {
+    let node = Node { value: 1, next: None };
+    println!("{}", node.value);
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. <code>Option</code> makes the next node optional, so the size is fixed.</li>
+    <li data-correct>No. <code>Option&lt;Node&gt;</code> stores a whole <code>Node</code> inline when it is <code>Some</code>, so <code>Node</code> contains itself. E0072.</li>
+    <li>No, because a struct can never refer to its own type.</li>
+  </ol>
+  <div class="ox-why"><p><code>Option</code> does not break the cycle. Its <code>Some</code> variant holds the value directly. Put the inner node in a box, as <code>Option&lt;Box&lt;Node&gt;&gt;</code>, and the size is finite again.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="17:quiz-rcclone" data-xp="10" data-label="Check yourself">
+  <p class="ox-q">You hold an <code>Rc&lt;String&gt;</code> whose text is very large. What does <code>Rc::clone(&amp;a)</code> cost?</p>
+  <ol class="ox-choices">
+    <li>About as much as the text, because the bytes are copied.</li>
+    <li data-correct>A pointer copy and a counter increment. The text is not copied, so the cost does not depend on its size.</li>
+    <li>A new heap allocation for the handle, but no copy of the text.</li>
+  </ol>
+  <div class="ox-why"><p>The counter lives in the shared box, and bumping it is one add. The text is never touched. That is why cloning an <code>Rc</code> inside a loop is fine, while cloning a <code>String</code> there may not be.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="17:quiz-strong" data-xp="10" data-label="Predict the output">
+  <p class="ox-q">What does this print? It prints two lines.</p>
+  <pre class="rs" data-check="ok" data-stdout="3\n1">
+use std::rc::Rc;
+
+fn main() {
+    let a = Rc::new(5);
+    let b = Rc::clone(&amp;a);
+    {
+        let _c = a.clone();
+        println!("{}", Rc::strong_count(&amp;a));
+    }
+    drop(b);
+    println!("{}", Rc::strong_count(&amp;a));
+}</pre>
+  <ol class="ox-choices">
+    <li>2, then 2</li>
+    <li>3, then 2</li>
+    <li data-correct>3, then 1</li>
+    <li>2, then 1</li>
+  </ol>
+  <div class="ox-why"><p>Inside the block, <code>a</code>, <code>b</code> and <code>_c</code> all exist, so the first line is 3. The block then closes and <code>_c</code> is dropped, leaving 2. <code>drop(b)</code> leaves 1, and the second line prints that.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="17:quiz-refcell" data-xp="10" data-label="Check yourself">
+  <p class="ox-q">Does this compile, and what happens when it runs?</p>
+  <pre class="rs" data-check="panic">
+use std::cell::RefCell;
+
+fn main() {
+    let total = RefCell::new(10);
+    let seen = total.borrow();
+    *total.borrow_mut() += 5;
+    println!("seen {seen}");
+}</pre>
+  <ol class="ox-choices">
+    <li>It doesn't compile. <code>borrow_mut</code> needs a <code>mut</code> binding.</li>
+    <li>It compiles, prints <code>seen 15</code>, and exits cleanly.</li>
+    <li data-correct>It compiles, then panics at the <code>borrow_mut</code> line with <code>RefCell already borrowed</code>.</li>
+  </ol>
+  <div class="ox-why"><p>It compiles. <code>borrow_mut</code> takes <code>&amp;self</code>, so <code>total</code> does not need <code>mut</code>. The rules are checked when the call runs. <code>seen</code> is still alive on the last line, so the exclusive borrow fails and the program panics. Dropping <code>seen</code> before the <code>borrow_mut</code> call would fix it.</p></div>
+</div>
+
+<div class="ox-fill" data-id="17:fill-box">
+  <p class="ox-q">Fill the blank so the list compiles. Each cell must own the rest of the list through a pointer.</p>
+  <pre class="rs">
+enum List {
+    Cons(i32, [[Box&lt;List&gt;|std::boxed::Box&lt;List&gt;]]),
+    Nil,
+}
+
+use List::{Cons, Nil};
+
+fn sum(list: &amp;List) -&gt; i32 {
+    match list {
+        Cons(value, rest) =&gt; value + sum(rest),
+        Nil =&gt; 0,
+    }
+}
+
+fn main() {
+    let list = Cons(4, Box::new(Cons(5, Box::new(Nil))));
+    println!("{}", sum(&amp;list));
+}</pre>
+  <div class="ox-why"><p>The field must be a <code>Box&lt;List&gt;</code>, not a bare <code>List</code>, because a <code>List</code> cannot hold a <code>List</code> by value. With a bare <code>List</code> here you get E0072 again. The program prints 9.</p></div>
+</div>
+
+<div class="ox-match" data-id="17:match" data-left-label="Need" data-right-label="Type">
+  <ul>
+    <li data-left="One owner, with the value on the heap">Box&lt;T&gt;</li>
+    <li data-left="Many read-only owners in one thread">Rc&lt;T&gt;</li>
+    <li data-left="Many read-only owners across threads">Arc&lt;T&gt;</li>
+    <li data-left="Mutation through a shared handle, checked at runtime">RefCell&lt;T&gt;</li>
+    <li data-left="Mutation through a shared handle, for a Copy value">Cell&lt;T&gt;</li>
+    <li data-left="A link that must not keep its target alive">Weak&lt;T&gt;</li>
+  </ul>
+</div>
+</section>
+
+<section>
+<h2 id="act4">Act IV wrap-up</h2>
+
+<p>Act IV was about abstraction without a runtime tax. Five tools carry forward:</p>
+
+<ul>
+  <li><strong>Traits</strong> (Chapter 14): a contract a type can satisfy, including types you did not write. <code>dyn Trait</code> lets the concrete type be chosen at runtime.</li>
+  <li><strong>Generics</strong> (Chapter 14): the compiler stamps out a version for each type you use, so generic code costs nothing extra at runtime.</li>
+  <li><strong>Lifetimes</strong> (Chapter 15): labels that say which input a borrow came from and how long it must stay valid. They never make a value live longer.</li>
+  <li><strong>Modules, crates and tests</strong> (Chapter 16): how a project is organized, and the checks that keep it honest. <code>cargo test</code> runs them.</li>
+  <li><strong>Smart pointers</strong> (this chapter): <code>Box</code> for one owner on the heap, <code>Rc</code> and <code>RefCell</code> for shared and mutable data, and <code>Weak</code> to break cycles.</li>
+</ul>
+
+<p>The Act IV boss, Mini Blade, asks you to build a tiny template engine that uses traits and lifetimes together. It is in the quest list below, marked as a boss.</p>
+
+<details class="ox-think">
+  <summary>A template engine keeps the pieces it parses as slices of the template text. Which Act IV tool keeps those slices valid, and what does the struct need?</summary>
+  <div class="ox-think-body">
+    <p>Lifetimes. A struct such as <code>Template&lt;'a&gt;</code> holds <code>&amp;'a str</code> slices of the source, and its signature says the pieces cannot outlive the input they point into.</p>
+  </div>
+</details>
+</section>
+
+<section>
+<h2 id="quests">Forge quests</h2>
+<p>Reading builds recognition. Writing code builds the skill. Start with <code>box1</code> and <code>rc1</code>, then <code>refcell1</code> and <code>rc_refcell1</code>. Finish with the boss, <code>boss4_template</code>.</p>
+<div class="ox-quests" data-chapter="17"></div>
+</section>
+
+<section>
+<h2 id="recap">Recap</h2>
+
+<div class="ox-recap">
+  <h3>Who owns what, and who may change it</h3>
+  <ul>
+    <li>A <strong>smart pointer</strong> owns what it points to and adds behavior: <strong>Deref</strong> to use the value like a reference, and <strong>Drop</strong> to clean up.</li>
+    <li><code>Box&lt;T&gt;</code>: one owner, the value on the heap, and a fixed-size pointer on the stack. Use it for recursive types and trait objects.</li>
+    <li><code>Rc&lt;T&gt;</code>: many owners in one thread, read-only. <code>Rc::clone</code> adds one to the count. The value is dropped when the count reaches zero.</li>
+    <li><code>RefCell&lt;T&gt;</code>: the borrow rules, checked at runtime. Many <code>borrow()</code> guards, or one <code>borrow_mut()</code>. A conflict panics, and <code>try_borrow_mut</code> returns an error instead. <code>Cell&lt;T&gt;</code> does the same job for <code>Copy</code> values.</li>
+    <li><code>Rc&lt;RefCell&lt;T&gt;&gt;</code>: shared and mutable in one thread. This is the PHP object model, written out.</li>
+    <li><code>Weak&lt;T&gt;</code>: a handle that does not own. Use it to break cycles. <code>upgrade()</code> returns <code>Option&lt;Rc&lt;T&gt;&gt;</code>.</li>
+  </ul>
+</div>
+
+<div class="ox-deck" data-chapter="17"></div>
+
+<details class="ox-think">
+  <summary>Explain it back: why is a PHP object like an <code>Rc&lt;RefCell&lt;T&gt;&gt;</code>, and why doesn't Rust do that by default?</summary>
+  <div class="ox-think-body">
+    <p>One good answer: "A PHP object is a handle. Several variables can point at one object, any of them can change it, and PHP counts the handles to free it. That is shared ownership with mutation, which is what <code>Rc&lt;RefCell&lt;T&gt;&gt;</code> expresses. Rust does not make it the default, because the combination costs a count and a runtime borrow check on every use, and it hides who really owns the data. Most Rust code has one clear owner, so Rust asks you to say when you need several."</p>
+    <p>If your answer mentioned <em>several owners</em>, <em>mutation through a handle</em>, and <em>the cost and the hidden ownership</em>, you have it.</p>
+  </div>
+</details>
+
+<div class="ox-complete-host"></div>
+</section>
+
+</main>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var el = function (tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  };
+  var button = function (label, onClick, extra, aria) {
+    var b = el("button", "ox-btn is-small pl-mini" + (extra ? " " + extra : ""), label);
+    b.type = "button";
+    if (aria) b.setAttribute("aria-label", aria);
+    b.addEventListener("click", onClick);
+    return b;
+  };
+
+  /* ---------- Owner Counter ---------- */
+  var stage = $("pl-stage");
+  if (!stage) return;
+  var handlesEl = $("pl-handles"), balloon = $("pl-balloon"), strings = $("pl-strings");
+  var strongOut = $("pl-strong"), weakOut = $("pl-weak"), stateOut = $("pl-state");
+  var cloneBtn = $("pl-clone"), downBtn = $("pl-down"), resetBtn = $("pl-reset"), ownerMsg = $("pl-msg");
+  var LETTERS = "abcdefghijklmnopqrstuvwxyz";
+  var owner;
+
+  function freshOwner() {
+    owner = { alive: true, handles: [{ id: "a", kind: "strong" }], nextStrong: 1, nextWeak: 1 };
+  }
+  function count(kind) {
+    return owner.handles.filter(function (h) { return h.kind === kind; }).length;
+  }
+  function nextStrongId() {
+    var n = owner.nextStrong++;
+    return n < LETTERS.length ? LETTERS[n] : "h" + n;
+  }
+  function say(text) { ownerMsg.textContent = text; }
+
+  function drawStrings() {
+    var sr = stage.getBoundingClientRect();
+    strings.setAttribute("viewBox", "0 0 " + sr.width + " " + sr.height);
+    if (!owner.alive || !sr.width) { strings.innerHTML = ""; return; }
+    var br = balloon.getBoundingClientRect();
+    var chips = handlesEl.children, n = chips.length, out = "";
+    var x2base = br.left - sr.left, y2 = br.top - sr.top + 2;
+    for (var i = 0; i < n; i++) {
+      var cr = chips[i].getBoundingClientRect();
+      var x1 = cr.left - sr.left + cr.width / 2, y1 = cr.bottom - sr.top;
+      var x2 = x2base + br.width * (0.2 + 0.6 * (i + 0.5) / n);
+      var mid = (y2 - y1) / 2;
+      var kind = owner.handles[i].kind;
+      out += '<path class="pl-string is-' + kind + '" d="M' + x1 + ' ' + y1 + ' C' + x1 + ' ' + (y1 + mid) +
+        ' ' + x2 + ' ' + (y2 - mid) + ' ' + x2 + ' ' + y2 + '"/>';
+    }
+    strings.innerHTML = out;
+  }
+
+  function render() {
+    handlesEl.innerHTML = "";
+    owner.handles.forEach(function (h) {
+      var chip = el("div", "pl-chip " + (h.kind === "strong" ? "is-strong" : "is-weak"));
+      chip.appendChild(el("span", "pl-chip-name", h.id));
+      chip.appendChild(el("small", "pl-chip-tag", h.kind === "strong" ? "Rc" : "Weak"));
+      if (h.kind === "weak") {
+        chip.appendChild(button("upgrade()", function () { upgrade(h.id); }, "", h.id + ".upgrade()"));
+      }
+      chip.appendChild(button("drop(" + h.id + ")", function () { dropHandle(h.id); }, "", "drop " + h.id));
+      handlesEl.appendChild(chip);
+    });
+    var s = owner.alive ? count("strong") : 0;
+    strongOut.textContent = s;
+    weakOut.textContent = count("weak");
+    balloon.classList.toggle("is-freed", !owner.alive);
+    stateOut.textContent = owner.alive ? "alive, " + s + (s === 1 ? " owner" : " owners") : "freed";
+    cloneBtn.disabled = !owner.alive;
+    downBtn.disabled = !owner.alive;
+    drawStrings();
+  }
+
+  function cloneHandle() {
+    if (!owner.alive) return;
+    owner.handles.push({ id: nextStrongId(), kind: "strong" });
+    render();
+    say("Rc::clone copies a pointer and adds one to the count. The value is not copied. The strong count is now " + count("strong") + ".");
+  }
+  function downgradeHandle() {
+    if (!owner.alive) return;
+    owner.handles.push({ id: "w" + owner.nextWeak++, kind: "weak" });
+    render();
+    say("Rc::downgrade makes a Weak handle. It points at the value but is not an owner. The weak count is now " + count("weak") +
+      ", and the strong count is still " + count("strong") + ".");
+  }
+  function dropHandle(id) {
+    var i = owner.handles.findIndex(function (h) { return h.id === id; });
+    if (i < 0) return;
+    var gone = owner.handles.splice(i, 1)[0];
+    if (gone.kind === "weak") {
+      say("drop(" + id + ") removes a Weak handle. The weak count is now " + count("weak") + ". Nothing is freed, because a Weak owns nothing.");
+    } else if (count("strong") > 0) {
+      say("drop(" + id + ") takes the strong count from " + (count("strong") + 1) + " to " + count("strong") + ". The value stays alive.");
+    } else {
+      owner.alive = false;
+      say("drop(" + id + ") took the strong count to 0. The value is freed and the balloon pops. A Weak handle left now returns None from upgrade().");
+    }
+    render();
+  }
+  function upgrade(id) {
+    if (owner.alive) {
+      say(id + ".upgrade() = Some(..). The value is alive. That Some would hold a new strong handle for as long as you kept it. This demo lets it go at once.");
+    } else {
+      say(id + ".upgrade() = None. The value was freed, so there is nothing left to point to.");
+    }
+  }
+
+  cloneBtn.addEventListener("click", cloneHandle);
+  downBtn.addEventListener("click", downgradeHandle);
+  resetBtn.addEventListener("click", function () { freshOwner(); render(); say("Reset. One owner, strong count 1."); });
+  window.addEventListener("resize", drawStrings);
+  if ("ResizeObserver" in window) new ResizeObserver(drawStrings).observe(stage);
+  freshOwner();
+  render();
+
+  /* ---------- Runtime Borrow Desk ---------- */
+  var guardsEl = $("pd-guards"), readersOut = $("pd-r"), writerOut = $("pd-w"), cellEl = $("pd-cell");
+  var panelEl = $("pd-panic"), panicText = $("pd-panic-text"), panicWhy = $("pd-panic-why");
+  var deskMsg = $("pd-msg"), borrowBtn = $("pd-borrow"), borrowMutBtn = $("pd-borrowmut");
+  var guards = [], nextGuard = 1;
+
+  function deskRender() {
+    guardsEl.innerHTML = "";
+    guards.forEach(function (g) {
+      var chip = el("div", "pl-chip " + (g.kind === "r" ? "is-ref" : "is-mut"));
+      chip.appendChild(el("span", "pl-chip-name", g.label));
+      chip.appendChild(button("×", function () { releaseGuard(g.id); }, "pl-x", "release " + g.label));
+      guardsEl.appendChild(chip);
+    });
+    if (!guards.length) guardsEl.appendChild(el("span", "pl-empty", "no guards: the cell is free"));
+    var readers = guards.filter(function (g) { return g.kind === "r"; }).length;
+    var writer = guards.some(function (g) { return g.kind === "w"; });
+    readersOut.textContent = readers;
+    writerOut.textContent = writer ? "yes" : "no";
+    cellEl.className = "pl-cell" + (writer ? " is-excl" : readers ? " is-shared" : "");
+  }
+  function clearPanic() {
+    panelEl.hidden = true;
+    panicText.textContent = "";
+    panicWhy.textContent = "";
+  }
+  function deskPanic(text, why) {
+    panelEl.hidden = false;
+    panicText.textContent = "panicked: " + text;
+    panicWhy.textContent = why;
+    deskMsg.textContent = "The program would stop here. The desk did not change.";
+  }
+  function borrowRead() {
+    if (guards.some(function (g) { return g.kind === "w"; })) {
+      return deskPanic("RefCell already mutably borrowed",
+        "borrow() needs a read guard, but the RefMut is still alive. try_borrow() would return an Err here instead.");
+    }
+    var id = nextGuard++;
+    guards.push({ id: id, kind: "r", label: "Ref " + id });
+    clearPanic();
+    deskRender();
+    deskMsg.textContent = "Ref " + id + " is alive. More readers can join it. A borrow_mut() right now would panic.";
+  }
+  function borrowWrite() {
+    if (guards.length) {
+      return deskPanic("RefCell already borrowed",
+        "borrow_mut() needs the only guard, but another guard is still alive. try_borrow_mut() would return an Err here instead.");
+    }
+    var id = nextGuard++;
+    guards.push({ id: id, kind: "w", label: "RefMut " + id });
+    clearPanic();
+    deskRender();
+    deskMsg.textContent = "RefMut " + id + " is alive and it is the only guard. Every borrow now panics until you release it.";
+  }
+  function releaseGuard(id) {
+    var i = guards.findIndex(function (g) { return g.id === id; });
+    if (i < 0) return;
+    var gone = guards.splice(i, 1)[0];
+    clearPanic();
+    deskRender();
+    deskMsg.textContent = "Released " + gone.label + ". " +
+      (guards.length ? guards.length + " guard(s) still alive." : "The cell is free again.");
+  }
+
+  borrowBtn.addEventListener("click", borrowRead);
+  borrowMutBtn.addEventListener("click", borrowWrite);
+  deskRender();
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,875 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lifetimes · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/quests-data.js" defer></script>
+<script src="../assets/cards/ch15.js" defer></script>
+<script src="../assets/scenarios/ch15.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+<script src="../assets/xray.js" defer></script>
+</head>
+<body data-chapter="15">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<div class="ox-page">
+<aside class="ox-rail" aria-label="Chapter contents"></aside>
+<main class="ox-main" id="main">
+
+<header class="ox-hero" data-auto>
+  <ul>
+    <li>Say what a lifetime is, and what an annotation like <code>'a</code> does and does not do.</li>
+    <li>Read and write signatures such as <code>fn longest&lt;'a&gt;(x: &amp;'a str, y: &amp;'a str) -&gt; &amp;'a str</code>.</li>
+    <li>Apply the three elision rules, and predict when the compiler needs an annotation.</li>
+    <li>Fix E0106, E0597, E0515 and E0716 by finding the relationship the compiler is asking about.</li>
+  </ul>
+</header>
+
+<style>
+/* Timeline and solver code rows are flex boxes in oxidize.css, which drops the
+   lone space between "fn" and "main" in "fn main()". Lay these rows out as blocks
+   on this page only; the rows keep their 30px height. */
+.ox-timeline .tl-code, #solver .tl-code { display: block; line-height: 30px; }
+</style>
+
+<section>
+<h2 id="already">You've been using lifetimes all along</h2>
+
+<p>Every reference in Rust has a <em>lifetime</em>: the span of code where that reference must stay valid. The borrow bars from Chapter 07 were lifetimes. Each one ran from a borrow to the last place that borrow was used.</p>
+
+<p>The compiler works out nearly all of them for you, inside function bodies. That is why most Rust code never writes one down. You do write them in signatures, where the compiler needs a relationship spelled out. The next two sections show why.</p>
+
+<p>Here is a program that breaks the rule. Step through it and watch which bar outlives its owner.</p>
+
+<div class="ox-timeline ox-wide" data-scenario="inner-scope"></div>
+
+<p>This is the compiler's report for that program. Read it from the top. The first label marks where <code>x</code> is declared. The caret marks the borrow. The closing brace is where <code>x</code> is dropped, and the last label marks the use that still needed it.</p>
+
+<pre class="rustc">
+error[E0597]: `x` does not live long enough
+ --> src/main.rs:5:13
+  |
+4 |         let x = 5;
+  |             - binding `x` declared here
+5 |         r = &amp;x;
+  |             ^^ borrowed value does not live long enough
+6 |     }
+  |     - `x` dropped here while still borrowed
+7 |     println!("{r}");
+  |                - borrow later used here
+
+For more information about this error, try `rustc --explain E0597`.</pre>
+
+<details class="ox-think">
+  <summary>Think first: what would make this program compile?</summary>
+  <div class="ox-think-body">
+    <p>Two fixes work. Move <code>let x = 5;</code> out of the inner block, so <code>x</code> lives until the end of <code>main</code>, past the <code>println!</code>. Or stop using <code>r</code> after the block. Neither fix changes a type. Both change where a span ends, and the borrow has to fit inside the owner's span.</p>
+  </div>
+</details>
+</section>
+
+<section>
+<h2 id="why-annotate">Why functions need annotations</h2>
+
+<p>Inside one function, the compiler sees every line. It can follow each borrow from start to finish and place the bars itself.</p>
+
+<p>A function signature is different. Callers are checked against the signature, and the compiler does not re-read the body of a function that is being called. So the signature has to carry the relationship that the body depends on. Here is a function that returns the longer of two strings. It looks reasonable.</p>
+
+<pre class="rs" data-check="E0106">
+fn longest(x: &amp;str, y: &amp;str) -&gt; &amp;str {
+    if x.len() &gt; y.len() { x } else { y }
+}
+
+fn main() {
+    println!("{}", longest("abc", "de"));
+}</pre>
+
+<p>It does not compile. Here is the real output:</p>
+
+<pre class="rustc">
+error[E0106]: missing lifetime specifier
+ --> src/main.rs:1:33
+  |
+1 | fn longest(x: &amp;str, y: &amp;str) -&gt; &amp;str {
+  |               ----     ----     ^ expected named lifetime parameter
+  |
+  = help: this function's return type contains a borrowed value, but the signature does not say whether it is borrowed from `x` or `y`
+help: consider introducing a named lifetime parameter
+  |
+1 | fn longest&lt;'a&gt;(x: &amp;'a str, y: &amp;'a str) -&gt; &amp;'a str {
+  |           ++++     ++          ++          ++
+
+For more information about this error, try `rustc --explain E0106`.</pre>
+
+<p>Read the main message first. The signature does not say whether the result is borrowed from <code>x</code> or from <code>y</code>. A caller needs that answer. If the result came from <code>x</code>, the caller must keep <code>x</code> alive for as long as it keeps the result. If it came from <code>y</code>, the caller must keep <code>y</code> alive instead. The compiler refuses to guess.</p>
+
+<p>The help line is the compiler's suggestion, and it is correct. It adds <code>&lt;'a&gt;</code> and gives the same name to both inputs and the output. That shared name says the output is tied to both inputs, which is the relationship the compiler was missing.</p>
+
+<p class="ox-pull">An annotation doesn't make anything live longer. It describes which borrow the output came from.</p>
+
+<details class="ox-think">
+  <summary>Why not let the compiler read the body and work the answer out?</summary>
+  <div class="ox-think-body">
+    <p>A caller is checked against the signature alone. If the compiler looked inside bodies, a change to one function could break a check in code far away, and a reader of the signature could not tell what the function promises. Rust keeps the promise in the signature, so every call can be checked by reading only the signature.</p>
+  </div>
+</details>
+</section>
+
+<section>
+<h2 id="reading">Reading 'a</h2>
+
+<p>Here is the signature the compiler accepts:</p>
+
+<pre class="rs" data-check="ok">
+fn longest&lt;'a&gt;(x: &amp;'a str, y: &amp;'a str) -&gt; &amp;'a str {
+    if x.len() &gt; y.len() { x } else { y }
+}</pre>
+
+<p>Read it in three parts. <code>&lt;'a&gt;</code> declares a lifetime, a name for a span of code. <code>x: &amp;'a str</code> and <code>y: &amp;'a str</code> say that both arguments must be valid for that span. <code>-&gt; &amp;'a str</code> says the result is valid for that span too.</p>
+
+<p>In words: the result is valid for at most as long as both <code>x</code> and <code>y</code> are valid. The name <code>'a</code> stands for the overlap of the two spans, so a caller can keep the result only while both inputs are still alive.</p>
+
+<p>The name does not measure time. It links references together. Every reference that carries <code>'a</code> has to be valid for <code>'a</code>, and the compiler picks the span that makes all of them true.</p>
+
+<p>A parameter that doesn't carry the name is not tied to the result. In this version only <code>x</code> is linked:</p>
+
+<pre class="rs" data-check="ok">
+fn first&lt;'a&gt;(x: &amp;'a str, y: &amp;str) -&gt; &amp;'a str {
+    x
+}</pre>
+
+<p><code>y</code> has no name, so the output has no relationship to it. A caller can drop <code>y</code> as soon as the call returns.</p>
+
+<div class="ox-quiz" data-id="15:read-first" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="ok">
+fn first&lt;'a&gt;(x: &amp;'a str, y: &amp;str) -&gt; &amp;'a str {
+    x
+}
+
+fn main() {
+    let x = String::from("long string");
+    let result;
+    {
+        let y = String::from("xyz");
+        result = first(&amp;x, &amp;y);
+    }
+    println!("{result}");
+}</pre>
+  <ol class="ox-choices">
+    <li data-correct>Yes. The result borrows only from <code>x</code>, so <code>y</code> can be dropped at the inner brace.</li>
+    <li data-feedback="Look at which parameter carries 'a.">No. The result might borrow from <code>y</code>, and <code>y</code> is dropped first.</li>
+  </ol>
+  <div class="ox-why"><p>Only the parameters that carry <code>'a</code> are tied to the result. Here that is <code>x</code> and nothing else. <code>y</code> is a plain borrow for the length of the call, and the result has no use for it afterwards.</p></div>
+</div>
+
+<p>The timelines apply the same idea to <code>longest</code>. Each owner's bar has to cover every bar of the references that borrow from it. First, the version that compiles:</p>
+
+<div class="ox-timeline ox-wide" data-scenario="longest-ok"></div>
+
+<p>Now move <code>y</code> into an inner block, and use the result after that block closes:</p>
+
+<div class="ox-timeline ox-wide" data-scenario="longest-bad"></div>
+
+<p>Here is the real output for that program:</p>
+
+<pre class="rustc">
+error[E0597]: `y` does not live long enough
+  --> src/main.rs:10:38
+   |
+ 9 |         let y = String::from("xyz");
+   |             - binding `y` declared here
+10 |         result = longest(x.as_str(), y.as_str());
+   |                                      ^ borrowed value does not live long enough
+11 |     }
+   |     - `y` dropped here while still borrowed
+12 |     println!("The longest string is {result}");
+   |                                      ------ borrow later used here
+
+For more information about this error, try `rustc --explain E0597`.</pre>
+
+<p>The bar for <code>result</code> runs past the bar for <code>y</code>. The compiler reports that as a borrow that outlives its owner. You can fix it by ending the use before the block closes, or by making <code>y</code> live as long as the result needs it.</p>
+
+<p>The solver below has three choices, which makes eight programs. Declare <code>y</code> in an inner block or not, print the result inside the block or after it, and call <code>longest</code> or <code>first</code>. Each combination was compiled ahead of time. The verdict and the bars come from that build, and the code you see is the code that was compiled.</p>
+
+<style>
+#solver { padding: 0; overflow: hidden; }
+#solver .sv-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; padding: 14px 16px 0; }
+#solver .sv-sub { color: var(--muted); font-size: 0.88rem; }
+#solver .sv-controls { display: grid; gap: 10px; padding: 12px 16px 14px; border-bottom: 1px solid var(--line); }
+#solver .sv-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+#solver .sv-q { min-width: 18ch; font-weight: 700; font-size: 0.92rem; }
+#solver .sv-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+#solver .sv-verdict { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-start; padding: 12px 16px 14px; border-top: 1px solid var(--line); }
+#solver .sv-badge { font: 700 0.8rem/1 var(--font-mono); padding: 6px 9px; border-radius: 4px; border: 1px solid currentColor; }
+#solver .sv-badge.is-ok { color: var(--ok); background: var(--ok-soft); }
+#solver .sv-badge.is-bad { color: var(--bad); background: var(--bad-soft); }
+#solver .sv-text { flex: 1 1 24ch; min-width: 0; }
+#solver .sv-msg { margin: 0; font: 700 0.92rem/1.4 var(--font-mono); overflow-wrap: anywhere; }
+#solver .sv-msg.is-ok { color: var(--ok); }
+#solver .sv-msg.is-bad { color: var(--bad); }
+#solver .sv-reason { margin: 6px 0 0; font-size: 0.95rem; color: var(--ink-2); }
+#solver .sv-hint { display: none; margin: 0; padding: 8px 16px 0; font-size: 0.85rem; color: var(--muted); }
+@media (max-width: 640px) { #solver .sv-hint { display: block; } }
+</style>
+<div class="ox-figure ox-wide" id="solver" aria-label="Lifetime Solver: three choices, eight compiled programs">
+  <div class="sv-head">
+    <span class="ox-label">Lifetime Solver</span>
+    <span class="sv-sub">Eight programs, each compiled with rustc 1.97.</span>
+  </div>
+  <div class="sv-controls">
+    <div class="sv-row" role="group" aria-labelledby="sv-q1">
+      <span class="sv-q" id="sv-q1">Declare <code>y</code> in an inner block?</span>
+      <div class="sv-opts">
+        <button type="button" class="ox-btn is-small is-primary" data-k="inner" data-v="yes" aria-pressed="true">Yes</button>
+        <button type="button" class="ox-btn is-small" data-k="inner" data-v="no" aria-pressed="false">No</button>
+      </div>
+    </div>
+    <div class="sv-row" role="group" aria-labelledby="sv-q2">
+      <span class="sv-q" id="sv-q2">Print <code>result</code></span>
+      <div class="sv-opts">
+        <button type="button" class="ox-btn is-small is-primary" data-k="print" data-v="inside" aria-pressed="true">Inside the block</button>
+        <button type="button" class="ox-btn is-small" data-k="print" data-v="after" aria-pressed="false">After the block</button>
+      </div>
+    </div>
+    <div class="sv-row" role="group" aria-labelledby="sv-q3">
+      <span class="sv-q" id="sv-q3">Call</span>
+      <div class="sv-opts">
+        <button type="button" class="ox-btn is-small is-primary" data-k="fn" data-v="longest" aria-pressed="true"><code>longest</code></button>
+        <button type="button" class="ox-btn is-small" data-k="fn" data-v="first" aria-pressed="false"><code>first</code></button>
+      </div>
+    </div>
+  </div>
+  <p class="sv-hint">On a narrow screen the code scrolls sideways. The bars sit to its right.</p>
+  <div class="tl-scroll"><div class="tl-grid" id="sv-grid"></div></div>
+  <div class="sv-verdict" aria-live="polite">
+    <span class="sv-badge is-ok" id="sv-badge">compiles</span>
+    <div class="sv-text">
+      <p class="sv-msg is-ok" id="sv-msg">Compiles. The compiler accepts this program.</p>
+      <p class="sv-reason" id="sv-reason"></p>
+    </div>
+  </div>
+</div>
+
+<p>Only one of the eight is rejected. It needs all three choices together: <code>y</code> in the inner block, the print after it, and <code>longest</code>. Change any one of them and the program compiles. That is the point of lifetimes as relationships. The error is a fact about how three spans line up, not a fact about any single line.</p>
+</section>
+
+<section>
+<h2 id="elision">When you don't need to write them: elision</h2>
+
+<p>Most signatures need no lifetimes at all. The compiler fills in the common cases with three rules, called elision. If the rules give every output reference a lifetime, the signature compiles. If they can't, you get E0106 and write the lifetimes yourself.</p>
+
+<div class="ox-rules">
+  <div class="ox-rule"><div><p>Each reference parameter gets its own lifetime.</p><p><code>fn f(a: &amp;str, b: &amp;str)</code> is read as <code>fn f&lt;'a, 'b&gt;(a: &amp;'a str, b: &amp;'b str)</code>.</p></div></div>
+  <div class="ox-rule"><div><p>If there is exactly one input lifetime, it goes to every output.</p><p><code>fn first_word(s: &amp;str) -&gt; &amp;str</code> is read as <code>fn first_word&lt;'a&gt;(s: &amp;'a str) -&gt; &amp;'a str</code>.</p></div></div>
+  <div class="ox-rule"><div><p>If one parameter is <code>&amp;self</code> or <code>&amp;mut self</code>, the output gets self's lifetime.</p><p>This holds whatever the other parameters are.</p></div></div>
+</div>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>As written</th><th>As the compiler sees it</th></tr></thead>
+  <tbody>
+    <tr><td><code>fn first_word(s: &amp;str) -&gt; &amp;str</code></td><td><code>fn first_word&lt;'a&gt;(s: &amp;'a str) -&gt; &amp;'a str</code>, by rule 2</td></tr>
+    <tr><td><code>fn name(&amp;self, _locale: &amp;str) -&gt; &amp;str</code></td><td><code>fn name&lt;'a, 'b&gt;(&amp;'a self, _locale: &amp;'b str) -&gt; &amp;'a str</code>, by rules 1 and 3</td></tr>
+    <tr><td><code>fn longer(a: &amp;str, b: &amp;str) -&gt; &amp;str</code></td><td class="c-bad">Rejected with E0106. Rule 1 gives two input lifetimes, and rule 2 needs exactly one. There is no self for rule 3.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Read the table as a check. Apply the rules to each signature, and see whether every output gets a lifetime. The first two rows pass. The third row is the case where you have to write the lifetimes yourself.</p>
+
+<aside class="ox-callout" data-kind="trap">
+  <p>Rule 3 is the one people get wrong. It ties the output to <code>self</code> even when the function returns an argument. The compiler then checks the body against that claim, and it can reject the function. The practice section has an example.</p>
+</aside>
+
+<div class="ox-quiz" data-id="15:elide" data-label="Check yourself">
+  <p class="ox-q">Which of these three functions does not compile as written?</p>
+  <pre class="rs" data-check="E0106">
+struct Doc {
+    name: String,
+}
+
+impl Doc {
+    fn name(&amp;self, _locale: &amp;str) -&gt; &amp;str {
+        &amp;self.name
+    }
+}
+
+fn first_word(s: &amp;str) -&gt; &amp;str {
+    s.split(' ').next().unwrap_or("")
+}
+
+fn longer(a: &amp;str, b: &amp;str) -&gt; &amp;str {
+    if a.len() &gt;= b.len() { a } else { b }
+}
+
+fn main() {
+    let d = Doc { name: String::from("Ana") };
+    println!("{} {}", d.name("en"), first_word("hi there"));
+    println!("{}", longer("ab", "c"));
+}</pre>
+  <ol class="ox-choices">
+    <li><code>first_word(s: &amp;str) -&gt; &amp;str</code></li>
+    <li><code>name(&amp;self, _locale: &amp;str) -&gt; &amp;str</code></li>
+    <li data-correct><code>longer(a: &amp;str, b: &amp;str) -&gt; &amp;str</code></li>
+  </ol>
+  <div class="ox-why"><p><code>longer</code> has two reference inputs, so rule 1 gives them two lifetimes. Rule 2 needs exactly one input lifetime, and rule 3 needs a self. Nothing decides the output's lifetime, so the compiler asks you to name it. The other two follow the rules.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="structs">Structs that borrow</h2>
+
+<p>A struct can hold a reference too. It then needs a lifetime parameter, because a value of that struct is valid only while the reference inside it is valid.</p>
+
+<p>Here is a small parser. It returns words from its input without copying any of them. Each word is a slice of the text it was given.</p>
+
+<pre class="rs" data-check="ok" data-stdout="let | there" data-run>
+struct Parser&lt;'a&gt; {
+    input: &amp;'a str,
+    pos: usize,
+}
+
+impl&lt;'a&gt; Parser&lt;'a&gt; {
+    fn new(input: &amp;'a str) -&gt; Self {
+        Parser { input, pos: 0 }
+    }
+
+    // The word is tied to the input ('a), not to the &amp;mut borrow of the parser.
+    fn next_word(&amp;mut self) -&gt; Option&lt;&amp;'a str&gt; {
+        let rest = &amp;self.input[self.pos..];
+        let trimmed = rest.trim_start();
+        if trimmed.is_empty() {
+            return None;
+        }
+        let start = self.input.len() - trimmed.len();
+        let end = trimmed.find(' ').map_or(self.input.len(), |i| start + i);
+        self.pos = end;
+        Some(&amp;self.input[start..end])
+    }
+}
+
+fn main() {
+    let text = String::from("let there be light");
+    let mut parser = Parser::new(&amp;text);
+    let first = parser.next_word().unwrap();
+    let second = parser.next_word().unwrap();
+    println!("{first} | {second}");
+}</pre>
+
+<p>Read the return type of <code>next_word</code>. <code>Option&lt;&amp;'a str&gt;</code> says the word comes from the input, not from the parser. Each word stays valid after the next call, so <code>main</code> can keep both of them.</p>
+
+<p>Now try the change most people make first. Write the return type with an elided lifetime, <code>Option&lt;&amp;str&gt;</code>, and compile again. Here is what rustc says:</p>
+
+<pre class="rustc">
+error[E0499]: cannot borrow `parser` as mutable more than once at a time
+  --> src/main.rs:29:18
+   |
+28 |     let first = parser.next_word().unwrap();
+   |                 ------ first mutable borrow occurs here
+29 |     let second = parser.next_word().unwrap();
+   |                  ^^^^^^ second mutable borrow occurs here
+30 |     println!("{first} | {second}");
+   |                ----- first borrow later used here
+
+For more information about this error, try `rustc --explain E0499`.</pre>
+
+<p>Without <code>'a</code>, rule 3 gives each word the lifetime of the <code>&amp;mut self</code> borrow. The first word then still borrows the parser when the second call asks for a mutable borrow, and Rust allows only one of those at a time. The name <code>'a</code> is what makes the two calls legal.</p>
+
+<p>A struct also can't outlive the text it borrows. Its method returns <code>&amp;'a str</code>, not <code>&amp;str</code>, so the slice stays tied to the text and not to the borrow of the struct. The bar for a struct that holds a slice of a String sits inside the bar for the String:</p>
+
+<div class="ox-timeline ox-wide" data-scenario="excerpt-ok"></div>
+
+<p>Now move the String into an inner block, and the struct is left holding a reference to something that is gone:</p>
+
+<div class="ox-quiz" data-id="15:excerpt" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0597">
+struct Excerpt&lt;'a&gt; {
+    part: &amp;'a str,
+}
+
+impl&lt;'a&gt; Excerpt&lt;'a&gt; {
+    fn text(&amp;self) -&gt; &amp;'a str {
+        self.part
+    }
+}
+
+fn main() {
+    let excerpt;
+    {
+        let text = String::from("call me Ishmael. Some years ago");
+        excerpt = Excerpt { part: &amp;text[..15] };
+    }
+    println!("{}", excerpt.text());
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. A slice stored in a struct is copied, so it can outlive <code>text</code>.</li>
+    <li data-correct>No. <code>text</code> is dropped at the inner brace, but <code>excerpt</code> still points into it.</li>
+    <li>No. A struct can't hold a reference at all.</li>
+  </ol>
+  <div class="ox-why"><p>The slice is not copied. The struct holds a reference into <code>text</code>, and that reference has to stay valid wherever <code>excerpt</code> is used. The error is E0597, on <code>text</code>.</p></div>
+</div>
+
+<p>Borrowing is the right choice for a short-lived view over text that someone else owns. A parser, or a report built from one request body, is a good fit. Owned fields are the better choice when the struct is long-lived, when it goes into a collection that outlives its input, or when it moves to another thread. A <code>String</code> field costs an allocation, and it removes the lifetime from every caller's signature.</p>
+
+<aside class="ox-callout" data-kind="php">
+  <p>PHP's <code>explode()</code> returns new strings, and the array owns them. Rust's <code>split()</code> returns views into the original string, with no copies. You save the copies, and you pay with a lifetime: each view is valid only while the string it points into is valid.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="static">'static, and what T: 'static really means</h2>
+
+<p>The lifetime <code>'static</code> lasts for the whole run of the program. String literals have that type. Their bytes are stored in the program itself, so the reference is valid from start to finish.</p>
+
+<pre class="rs" data-check="ok" data-stdout="hello" data-run>
+let greeting: &amp;'static str = "hello";
+println!("{greeting}");</pre>
+
+<p>You will meet the word in bounds too, such as <code>T: 'static</code>. Read it as "T holds no borrows shorter than the whole program." It does not mean "T lives forever". A value can be dropped at the end of a function and still satisfy the bound, as long as it doesn't borrow anything shorter-lived.</p>
+
+<p>An owned <code>String</code> is the standard example. It contains no borrows, so it satisfies <code>T: 'static</code>, even though it is dropped early. A <code>&amp;String</code> points at a local, so it doesn't satisfy the bound. Here is a function with that bound, and two calls to it:</p>
+
+<pre class="rs" data-check="E0597">
+fn spawn_it&lt;T: Send + 'static&gt;(t: T) {
+    drop(t);
+}
+
+fn main() {
+    let owned = String::from("owned");
+    spawn_it(owned);
+    let s = String::from("borrowed");
+    spawn_it(&amp;s);
+}</pre>
+
+<details class="ox-think">
+  <summary>One of the two calls is rejected. Which one, and why?</summary>
+  <div class="ox-think-body">
+    <p>The second. <code>spawn_it(&amp;s)</code> passes a borrow of <code>s</code>. The bound says T holds no borrows shorter than the program, and a borrow of a local is shorter. The first call moves a <code>String</code> in, and a <code>String</code> holds no borrows.</p>
+  </div>
+</details>
+
+<p>Here is what rustc says about the second call:</p>
+
+<pre class="rustc">
+error[E0597]: `s` does not live long enough
+  --> src/main.rs:9:14
+   |
+ 8 |     let s = String::from("borrowed");
+   |         - binding `s` declared here
+ 9 |     spawn_it(&amp;s);
+   |     ---------^^-
+   |     |        |
+   |     |        borrowed value does not live long enough
+   |     argument requires that `s` is borrowed for `'static`
+10 | }
+   | - `s` dropped here while still borrowed
+   |
+note: requirement that the value outlives `'static` introduced here
+  --> src/main.rs:1:23
+   |
+ 1 | fn spawn_it<T: Send + 'static>(t: T) {
+   |                       ^^^^^^^
+
+For more information about this error, try `rustc --explain E0597`.</pre>
+
+<p>This is why <code>thread::spawn</code> asks for <code>'static</code>. A spawned thread can keep running after the function that started it has returned, so the closure it runs can't borrow the caller's locals. Chapter 18 builds on that rule. For now, remember the test: does the value carry a borrow of something local?</p>
+</section>
+
+<section>
+<h2 id="errors">The lifetime errors, decoded</h2>
+
+<p>Most lifetime trouble shows up as one of five errors. They all say the same thing in different words: a borrow is valid for one span, and the code needs it valid for a different span.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Error</th><th>What it means</th><th>Usual fix</th></tr></thead>
+  <tbody>
+    <tr><td><strong>E0106</strong> missing lifetime specifier</td><td>An output reference can't be tied to any input.</td><td>Name the relationship with a lifetime on the inputs and the output, or return an owned value.</td></tr>
+    <tr><td><strong>E0597</strong> does not live long enough</td><td>A borrow is still used after its owner was dropped.</td><td>Make the owner live longer, by moving it out of the block, or use the borrow earlier.</td></tr>
+    <tr><td><strong>E0515</strong> cannot return reference to local</td><td>The function returns a borrow of a value it owns. That value is dropped when the function returns.</td><td>Return the owned value, such as a <code>String</code>, and let the caller own it.</td></tr>
+    <tr><td><strong>E0716</strong> temporary value dropped while borrowed</td><td>A temporary, like the <code>String</code> from <code>String::from</code>, is freed at the end of its statement, but a borrow of it is still in use.</td><td>Bind the temporary to a name with <code>let</code>, so it lives on.</td></tr>
+    <tr><td><strong>lifetime may not live long enough</strong> (no code)</td><td>A function returns a reference with one lifetime where its signature promises another.</td><td>Decide where the data really comes from, and make the signature say so.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>E0106 and E0597 you have already seen. Here are the other three, each with a real program and the real output.</p>
+
+<p><strong>E0515</strong> returns a reference to a value the function owns. The <code>text</code> String is created inside <code>greeting</code>, so it is dropped when <code>greeting</code> returns. <code>&amp;text</code> would point at a value that no longer exists:</p>
+
+<pre class="rs" data-check="E0515">
+fn greeting(name: &amp;str) -&gt; &amp;str {
+    let text = format!("hello, {name}");
+    &amp;text
+}
+
+fn main() {
+    println!("{}", greeting("Ana"));
+}</pre>
+
+<pre class="rustc">
+error[E0515]: cannot return reference to local variable `text`
+ --> src/main.rs:3:5
+  |
+3 |     &amp;text
+  |     ^^^^^ returns a reference to data owned by the current function
+
+For more information about this error, try `rustc --explain E0515`.</pre>
+
+<p>The fix is to give the owned value to the caller. Return the <code>String</code>, and the caller owns it from then on:</p>
+
+<pre class="rs" data-check="ok" data-stdout="hello, Ana" data-run>
+fn greeting(name: &amp;str) -&gt; String {
+    format!("hello, {name}")
+}
+
+fn main() {
+    println!("{}", greeting("Ana"));
+}</pre>
+
+<p><strong>E0716</strong> is about temporaries. <code>String::from("temporary")</code> creates a value with no name. It is freed at the end of the statement, but the reference that <code>as_str</code> returns is used on a later line:</p>
+
+<pre class="rs" data-check="E0716">
+fn main() {
+    let s: &amp;str = String::from("temporary").as_str();
+    println!("{s}");
+}</pre>
+
+<pre class="rustc">
+error[E0716]: temporary value dropped while borrowed
+ --> src/main.rs:2:19
+  |
+2 |     let s: &amp;str = String::from("temporary").as_str();
+  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^         - temporary value is freed at the end of this statement
+  |                   |
+  |                   creates a temporary value which is freed while still in use
+3 |     println!("{s}");
+  |                - borrow later used here
+  |
+help: consider using a `let` binding to create a longer lived value
+  |
+2 ~     let binding = String::from("temporary");
+3 ~     let s: &amp;str = binding.as_str();
+  |
+
+For more information about this error, try `rustc --explain E0716`.</pre>
+
+<p>Bind the temporary to a name first, so it lives until the end of <code>main</code>:</p>
+
+<pre class="rs" data-check="ok" data-stdout="temporary" data-run>
+fn main() {
+    let text = String::from("temporary");
+    let s: &amp;str = text.as_str();
+    println!("{s}");
+}</pre>
+
+<aside class="ox-callout" data-kind="trap">
+  <p>Rust does extend some temporaries. This compiles, because a plain <code>&amp;</code> on the right of a <code>let</code> keeps the temporary alive until the end of the enclosing block:</p>
+  <pre class="rs" data-check="ok">let r: &amp;String = &amp;String::from("kept");</pre>
+  <p>The extension covers a plain <code>&amp;</code>. It does not cover a method call such as <code>as_str()</code>, which is why the first example fails.</p>
+</aside>
+
+<p>The last error has no code. It appears when a function returns a reference with one lifetime, where its signature promises another. <code>pick</code> promises a reference valid for <code>'a</code>, the lifetime of the struct's field. It returns <code>other</code>, which has its own, unrelated lifetime <code>'b</code>:</p>
+
+<pre class="rs" data-check="error">
+struct Holder&lt;'a&gt; {
+    name: &amp;'a str,
+}
+
+impl&lt;'a&gt; Holder&lt;'a&gt; {
+    fn pick&lt;'b&gt;(&amp;self, other: &amp;'b str) -&gt; &amp;'a str {
+        other
+    }
+}
+
+fn main() {
+    let h = Holder { name: "a" };
+    println!("{}", h.pick("b"));
+}</pre>
+
+<pre class="rustc">
+error: lifetime may not live long enough
+ --> src/main.rs:7:9
+  |
+5 | impl&lt;'a&gt; Holder&lt;'a&gt; {
+  |      -- lifetime `'a` defined here
+6 |     fn pick&lt;'b&gt;(&amp;self, other: &amp;'b str) -&gt; &amp;'a str {
+  |             -- lifetime `'b` defined here
+7 |         other
+  |         ^^^^^ method was supposed to return data with lifetime `'a` but it is returning data with lifetime `'b`
+  |
+  = help: consider adding the following bound: `'b: 'a`</pre>
+
+<p>The compiler's help suggests the bound <code>'b: 'a</code>. That bound is a promise every caller would have to accept, and it is usually the wrong fix. Ask where the data really comes from. If it comes from the struct, return <code>self.name</code>. If it comes from the argument, the signature should say <code>&amp;'b str</code>.</p>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Agents, and people under deadline, fix lifetime errors in two bad ways. They add <code>'static</code> to signatures until the error goes away, or they clone into a <code>String</code> at every call site. Both can make the message disappear while hiding the real design.</p>
+  <p>When you review agent-written Rust, ask the same question as before. Which value owns the data, and how long does it need to live? If owned data is the right answer, say so and make the owner live long enough. If a borrow is right, keep the borrow.</p>
+</aside>
+
+<details class="ox-think">
+  <summary>An agent says it fixed E0597 by changing a parameter from <code>&amp;str</code> to <code>&amp;'static str</code>. What should you check?</summary>
+  <div class="ox-think-body">
+    <p>Whether the values really are <code>'static</code>. A string literal is. A <code>String</code> built at runtime is not, so the callers that pass one will fail again, or they will have to leak it to satisfy the bound. The change moves the error to the call sites instead of removing it. Ask what owns the data, and make that owner live long enough, or return an owned value.</p>
+  </div>
+</details>
+</section>
+
+<section>
+<h2 id="practice">Practice</h2>
+
+<p>Answer each check before you open its explanation. Some of the programs are meant to fail. The compiler's verdict is the answer that counts.</p>
+
+<div class="ox-quiz" data-id="15:meaning" data-label="Check yourself">
+  <p class="ox-q">What does the <code>'a</code> in this signature promise?</p>
+  <pre class="rs" data-check="ok">
+fn longest&lt;'a&gt;(x: &amp;'a str, y: &amp;'a str) -&gt; &amp;'a str {
+    if x.len() &gt; y.len() { x } else { y }
+}</pre>
+  <ol class="ox-choices">
+    <li>The strings live for <code>'a</code> seconds, so they can't be dropped early.</li>
+    <li data-correct>The result is valid only while both <code>x</code> and <code>y</code> are valid. It can't outlive either one.</li>
+    <li data-feedback="Annotations describe lifetimes. They never extend them.">The function makes <code>x</code> and <code>y</code> live as long as the result, by copying them.</li>
+    <li>Nothing. The annotation is documentation, and the compiler ignores it.</li>
+  </ol>
+  <div class="ox-why"><p><code>'a</code> is a label for a span of code, not a duration. The result's span is the overlap of the two input spans. The function can't make <code>x</code> or <code>y</code> live longer. It can only state how they relate.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="15:elide-trap" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="error">
+struct Config {
+    name: String,
+}
+
+impl Config {
+    fn name_or(&amp;self, fallback: &amp;str) -&gt; &amp;str {
+        if self.name.is_empty() { fallback } else { &amp;self.name }
+    }
+}
+
+fn main() {
+    let c = Config { name: String::new() };
+    println!("{}", c.name_or("guest"));
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. The output is tied to <code>self</code>, and <code>self</code> lives long enough.</li>
+    <li data-correct>No. Rule 3 ties the output to <code>self</code>, but <code>fallback</code> may not live as long as <code>self</code>. Returning it promises too much.</li>
+    <li>No. A method can never return a reference.</li>
+  </ol>
+  <div class="ox-why"><p>Rule 3 fixes the output to <code>self</code>'s lifetime. The body then returns <code>fallback</code>, which has no relationship to <code>self</code>, so the body breaks the promise the signature made. Name the relationship and the program compiles: <code>fn name_or&lt;'a&gt;(&amp;'a self, fallback: &amp;'a str) -&gt; &amp;'a str</code>. The output is now valid only while both inputs are.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="15:dangle" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0597">
+fn main() {
+    let words: Vec&lt;&amp;str&gt;;
+    {
+        let text = String::from("one two");
+        words = text.split(' ').collect();
+    }
+    println!("{words:?}");
+}</pre>
+  <ol class="ox-choices">
+    <li data-feedback="collect into a Vec<&str> keeps the references. It does not copy the text.">Yes. <code>split</code> and <code>collect</code> copy the text into the <code>Vec</code>.</li>
+    <li data-correct>No. <code>words</code> holds references into <code>text</code>, and <code>text</code> is dropped at the inner brace while <code>words</code> is still used.</li>
+    <li>No. A <code>Vec</code> can never hold <code>&amp;str</code> values.</li>
+  </ol>
+  <div class="ox-why"><p><code>split</code> yields slices of <code>text</code>, and collecting them keeps those slices. So <code>words</code> borrows from <code>text</code>. The inner brace drops <code>text</code>, and then <code>println!</code> reads <code>words</code>. Collecting into a <code>Vec&lt;String&gt;</code> copies each piece into an owned <code>String</code>, and then the program compiles.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="15:e0515" data-label="Check yourself">
+  <p class="ox-q">Does this compile? The function is meant to return a label for an id.</p>
+  <pre class="rs" data-check="E0515">
+fn label(id: u32) -&gt; &amp;'static str {
+    let text = format!("item-{id}");
+    text.as_str()
+}
+
+fn main() {
+    println!("{}", label(7));
+}</pre>
+  <ol class="ox-choices">
+    <li data-feedback="'static is a promise about the value, not a way to make a local live forever.">Yes. Returning <code>&amp;'static str</code> makes any reference valid.</li>
+    <li data-correct>No. <code>text</code> is dropped when <code>label</code> returns, but <code>as_str</code> returns a borrow of it.</li>
+    <li>No. <code>format!</code> can't be used in a function that returns a reference.</li>
+  </ol>
+  <div class="ox-why"><p>The return type <code>&amp;'static str</code> promises a reference that lives for the whole program. <code>text</code> is a local <code>String</code>, dropped when <code>label</code> returns, so the returned reference would point at freed memory. Return the owned value instead: <code>fn label(id: u32) -&gt; String</code>.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="15:static-owned" data-label="Check yourself">
+  <p class="ox-q">Here <code>spawn_it</code> is called with an owned <code>String</code>. Does the bound <code>T: 'static</code> accept it?</p>
+  <pre class="rs" data-check="ok">
+fn spawn_it&lt;T: Send + 'static&gt;(t: T) {
+    drop(t);
+}
+
+fn main() {
+    spawn_it(String::from("owned"));
+}</pre>
+  <ol class="ox-choices">
+    <li>No. Only string literals satisfy <code>'static</code>.</li>
+    <li data-correct>Yes. An owned <code>String</code> contains no borrows, so no part of it is shorter than the program.</li>
+    <li>Only if the <code>String</code> is stored in a <code>static</code> variable first.</li>
+  </ol>
+  <div class="ox-why"><p><code>'static</code> limits what a type borrows, not how long its value lives. A <code>String</code> owns its bytes and holds no references. A string literal is one example that passes the bound, but it is not the only one.</p></div>
+</div>
+
+<div class="ox-fill" data-id="15:fill-longest">
+  <p class="ox-q">Fill in the blanks so the output is valid for at most as long as both inputs. The lifetime has to be declared on the function, and it has to be put on <code>x</code>.</p>
+  <pre class="rs">fn longest&lt;[['a]]&gt;(x: &amp;[['a]] str, y: &amp;'a str) -&gt; &amp;'a str {
+    if x.len() &gt; y.len() { x } else { y }
+}</pre>
+  <div class="ox-why"><p>Declare <code>'a</code> in the angle brackets, then put it on <code>x</code>. <code>y</code> and the result already use <code>'a</code>. Now all three share one name, so the output is valid only while both inputs are.</p></div>
+</div>
+
+<div class="ox-order" data-id="15:order" data-label="Put the compiler's reasoning in order">
+  <ol>
+    <li><code>y</code> is declared inside the inner block, so it will be dropped at that block's closing brace.</li>
+    <li><code>longest</code> ties its output to both <code>x</code> and <code>y</code>, so <code>result</code> may borrow from <code>y</code>.</li>
+    <li><code>println!</code> reads <code>result</code> after the block, so the borrow has to be valid on that line.</li>
+    <li>At the closing brace, <code>y</code> is dropped while <code>result</code> still borrows from it.</li>
+    <li>A borrow that outlives its owner is an error, so rustc reports E0597 on <code>y</code>.</li>
+  </ol>
+  <div class="ox-why"><p>A simple model of what happens: first, work out how long each borrow must be valid. Here that runs from the call on line 10 to the print on line 12. Then compare that span with the span where each owner lives. The borrow's span runs past the end of <code>y</code>, so the program is rejected.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="quests">Forge quests</h2>
+<p>Reading builds recognition. Writing signatures builds the skill. These quests run locally against the real compiler, the same way as in Chapter 06.</p>
+<div class="ox-quests" data-chapter="15"></div>
+</section>
+
+<section>
+<h2 id="recap">Recap</h2>
+
+<div class="ox-recap">
+  <h3>Lifetimes are relationships</h3>
+  <ul>
+    <li>A lifetime is the span where a reference must stay valid. The compiler infers most of them inside function bodies.</li>
+    <li>An annotation like <code>'a</code> never makes anything live longer. It says which borrow an output came from.</li>
+    <li><code>fn longest&lt;'a&gt;(x: &amp;'a str, y: &amp;'a str) -&gt; &amp;'a str</code> returns a result valid for at most as long as both inputs.</li>
+    <li>Elision fills in the common cases. One input lifetime goes to every output, and <code>&amp;self</code> lends its lifetime to the output.</li>
+    <li>A struct that holds a reference gets a lifetime parameter, and it can't outlive the value it borrows.</li>
+    <li><code>'static</code> means no borrow shorter than the program. Owned data satisfies <code>T: 'static</code>.</li>
+    <li>E0106, E0597, E0515 and E0716 each say that a borrow and its owner don't line up. Fix the relationship, or change who owns the data.</li>
+  </ul>
+</div>
+
+<div class="ox-deck" data-chapter="15"></div>
+
+<details class="ox-think">
+  <summary>Explain it back: What does <code>-&gt; &amp;'a str</code> promise the caller?</summary>
+  <div class="ox-think-body">
+    <p>One good answer: "It promises that the reference stays valid for the span <code>'a</code>. Because <code>'a</code> is the overlap of the input spans, the caller can keep the result only while both inputs are alive. The caller relies on that promise without reading the body, and the body has to keep it whichever input it returns."</p>
+    <p>If your version mentioned <em>the overlap of the inputs</em> and <em>the caller doesn't read the body</em>, you have the idea.</p>
+  </div>
+</details>
+
+<div class="ox-complete-host"></div>
+</section>
+
+</main>
+</div>
+<script>
+(function () {
+  function start() {
+    var root = document.getElementById("solver");
+    if (!root) return;
+    var data = window.OX_CH15_SOLVER || [];
+    var grid = document.getElementById("sv-grid");
+    var badge = document.getElementById("sv-badge");
+    var msg = document.getElementById("sv-msg");
+    var reason = document.getElementById("sv-reason");
+    var choice = { inner: "yes", print: "inside", fn: "longest" };
+    var cache = {};
+    var awarded = false;
+
+    function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+    function linesOf(entry) {
+      if (cache[entry.id]) return cache[entry.id];
+      var hasOx = window.Ox && Ox.highlight && Ox.splitLines;
+      var html = hasOx ? Ox.highlight(entry.rust, "rust") : esc(entry.rust);
+      cache[entry.id] = hasOx ? Ox.splitLines(html) : html.split("\n");
+      return cache[entry.id];
+    }
+
+    function render() {
+      root.querySelectorAll("[data-k]").forEach(function (b) {
+        var on = choice[b.dataset.k] === b.dataset.v;
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+        b.classList.toggle("is-primary", on);
+      });
+      var key = (choice.inner === "yes" ? "inner" : "outer") + "-" + choice.print + "-" + choice.fn;
+      var entry = data.find(function (d) { return d.id === key; });
+      if (!entry) {
+        grid.innerHTML = "";
+        badge.textContent = "missing";
+        msg.textContent = "This combination is missing from the solver data.";
+        reason.textContent = "";
+        return;
+      }
+      var lines = linesOf(entry);
+      var err = entry.check !== "ok";
+      var errLine = err ? entry.bars.result[1] : 0;
+      var vars = [
+        { name: "x", kind: "own", from: entry.bars.x[0], to: entry.bars.x[1], label: "owner", bad: [] },
+        { name: "y", kind: "own", from: entry.bars.y[0], to: entry.bars.y[1], label: "owner", bad: [] },
+        { name: "result", kind: "ref", from: entry.bars.result[0], to: entry.bars.result[1], label: "from " + entry.borrows, bad: err ? [errLine] : [] }
+      ];
+      grid.style.gridTemplateColumns = "minmax(max-content, 1fr) repeat(" + vars.length + ", minmax(76px, 100px))";
+      grid.style.gridTemplateRows = "auto repeat(" + lines.length + ", 30px)";
+      var h = '<div class="tl-head" style="text-align:left;background:var(--code-bg);color:var(--code-dim);border-bottom-color:var(--code-line)">code</div>';
+      vars.forEach(function (v) { h += '<div class="tl-head is-' + v.kind + '">' + v.name + '<small>' + esc(v.label) + '</small></div>'; });
+      lines.forEach(function (l, k) {
+        var n = k + 1;
+        h += '<div class="tl-code' + (n === errLine ? ' is-err' : '') + '" data-line="' + n + '"><span class="lnno">' + n + '</span>' + (l || " ") + '</div>';
+        vars.forEach(function (v) {
+          var inner = "";
+          if (n >= v.from && n <= v.to) {
+            var cls = ["tl-bar", "is-" + v.kind, n === v.from && "is-start", n === v.to && "is-end", v.bad.indexOf(n) >= 0 && "is-bad"].filter(Boolean).join(" ");
+            inner = '<span class="' + cls + '"></span>';
+          }
+          h += '<div class="tl-cell">' + inner + '</div>';
+        });
+      });
+      grid.innerHTML = h;
+      badge.textContent = err ? entry.check : "compiles";
+      badge.className = "sv-badge " + (err ? "is-bad" : "is-ok");
+      msg.className = "sv-msg " + (err ? "is-bad" : "is-ok");
+      msg.textContent = err ? entry.message : "Compiles. The compiler accepts this program.";
+      reason.textContent = entry.reason;
+      if (err && !awarded && window.Ox && Ox.award) {
+        awarded = true;
+        Ox.award(5, "lifetime solver: found the dangling borrow", "ch15:solver-error");
+      }
+    }
+
+    root.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-k]");
+      if (!b || !root.contains(b)) return;
+      choice[b.dataset.k] = b.dataset.v;
+      render();
+    });
+    render();
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+  else start();
+})();
+</script>
+</body>
+</html>
