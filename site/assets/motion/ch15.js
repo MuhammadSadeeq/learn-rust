@@ -127,7 +127,7 @@ fn main() {
         q: "<code>result</code> may be <code>y</code>. Can line 12 still read it after the brace?",
         choices: ["Yes, result is only tied to x", "No, y is dropped at the } while result may still point at it"],
         answer: 1,
-        explain: "longest ties result to y as well, so result must end where y ends.",
+        explain: "longest ties result to y as well, so result can't outlive y.",
       },
       do: [
         ["art", "inner", { cast: "tick", opts: { level: 0 } }, 0],

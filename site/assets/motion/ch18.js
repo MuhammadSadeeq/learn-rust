@@ -143,7 +143,7 @@
     { id: "t1", cast: "crab", x: 70, y: 66, size: 58, label: "thread 1" },
     { id: "rep", cast: "crab", x: 70, y: 166, size: 58, label: "report", hidden: true },
     { id: "str", cast: "fluffy", x: 178, y: 166, size: 70, label: "String", hidden: true },
-    { id: "t2", cast: "crab", x: 70, y: 262, size: 58, label: "thread 2" },
+    { id: "t2", cast: "crab", x: 70, y: 236, size: 58, label: "thread 2" },
     { id: "rx", cast: "crab", x: 560, y: 150, size: 70, label: "rx" },
     { id: "insp", cast: "inspector", x: 440, y: 46, size: 70, label: "Inspector", hidden: true },
   ],

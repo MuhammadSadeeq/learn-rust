@@ -25,7 +25,7 @@
   beats: [
     {
       line: 2,
-      say: "<p>Both builds run the same two lines. <code>x</code> is a <code>u8</code> holding 255, the largest value a u8 can hold.</p>",
+      say: "<p>Both builds run the same program. <code>x</code> is a <code>u8</code> holding 255, the largest value a u8 can hold.</p>",
     },
     {
       line: 3,

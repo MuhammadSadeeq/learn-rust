@@ -37,7 +37,7 @@
       do: [["pop", "n", 0], ["pose", "clo", "think", 1200]],
     },
     {
-      say: "<p><code>|x| x + n</code> only reads <code>n</code>. Clo packs glasses for it, which is a look. <code>n</code> stays where it is.</p>",
+      say: "<p><code>|x| x + n</code> only reads <code>n</code>, so Clo packs glasses for it: a look. <code>n</code> stays where it is.</p>",
       line: 3,
       do: [["link", "look", "clo", "n", "ref", 300], ["pose", "clo", "talk", 1200, 400]],
     },
