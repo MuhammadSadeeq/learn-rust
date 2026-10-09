@@ -310,6 +310,7 @@ fn main() {
    and goes away by a class: .is-shown fades it in, and without it the plot is clear. */
 .ox-motion[data-scene="ch05-grow"] .mo-box.is-plot { opacity: 0; background: var(--surface); border-color: var(--heap); transition: opacity 0.35s ease; }
 .ox-motion[data-scene="ch05-grow"] .mo-box.is-plot.is-shown { opacity: 1; }
+.ox-motion[data-scene="ch05-grow"] .mo-box.is-plot > .mo-tag { left: auto; right: 6px; transform: none; }
 @media (prefers-reduced-motion: reduce) { .ox-motion[data-scene="ch05-grow"] .mo-box.is-plot { transition: none; } }
 </style>
 <div class="ox-motion" data-scene="ch05-grow"></div>

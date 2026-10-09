@@ -85,7 +85,6 @@ fn main() {
     { id: "s", cast: "crab", x: 110, y: 120, size: 84, label: "s", hidden: true },
     { id: "p", cast: "crab", x: 110, y: 120, size: 80, label: "s", hidden: true },
     { id: "f", cast: "fluffy", x: 530, y: 150, size: 90, label: "String", hidden: true },
-    { id: "gl", prop: "borrows", x: 110, y: 58, size: 72, hidden: true },
   ],
   beats: [
     {
@@ -135,7 +134,7 @@ fn main() {
         ["kind", "s", "ref", 0],
         ["pop", "f", 0],
         ["link", "lk2", "s", "f", "ref", 400],
-        ["pop", "gl", 300],
+        ["art", "s", { cast: "crab", opts: { gear: ["glasses"] } }, 300],
       ],
     },
   ],

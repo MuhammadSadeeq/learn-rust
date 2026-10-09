@@ -555,7 +555,7 @@ fn main() {
 #passleash .pl-art.is-pending { opacity: 0.32; }
 #passleash .pl-fn { display: grid; place-items: center; width: 74px; height: 50px; border: 1.5px dashed var(--ink-2); border-radius: 10px; font: 600 0.78rem/1 var(--font-mono); color: var(--ink); }
 #passleash .pl-fn.is-pending { opacity: 0.32; }
-#passleash .pl-none { display: grid; place-items: center; height: 62px; color: var(--muted); }
+#passleash .pl-none { display: block; width: 50px; height: 50px; border: 1.5px dashed var(--ink-2); border-radius: 50%; }
 #passleash .pl-rope { position: absolute; left: 50%; bottom: 4px; width: 70px; transform: translateX(-50%); pointer-events: none; }
 #passleash .pl-rope .ca { display: block; width: 100%; }
 #passleash .pl-rope .ca-svg { display: block; width: 100%; height: auto; }
@@ -658,7 +658,7 @@ fn main() {
     return "<span class='pl-art" + (state === "pending" ? " is-pending" : "") + "'>" + OxCast.el("crab", kind) + "</span>";
   }
   function artFor(key, st) {
-    if (key === "none") return '<span class="pl-none">nobody</span>';
+    if (key === "none") return '<span class="pl-none" aria-hidden="true"></span>';
     if (key === "fn") return '<span class="pl-fn' + (st.fn === "ok" ? "" : " is-pending") + '">consume()</span>';
     return crabArt(st[key]);
   }
@@ -676,7 +676,7 @@ fn main() {
     renderCode(step.line);
     q.innerHTML = "After line " + step.line + ", who holds the leash to the first String?";
     row.innerHTML = CHOICES.map(function (c) {
-      var rope = answered && c.key === step.holder ? '<span class="pl-rope">' + OxCast.prop("leash") + "</span>" : "";
+      var rope = answered && c.key === step.holder && c.key !== "none" ? '<span class="pl-rope">' + OxCast.prop("leash") + "</span>" : "";
       return '<button type="button" class="pl-choice' + (answered && c.key === step.holder ? " is-holder" : "") + '" data-key="' + c.key + '"' +
         (answered ? " disabled" : "") + ">" + artFor(c.key, step.st) + "<span>" + c.name + "</span>" + rope + "</button>";
     }).join("");

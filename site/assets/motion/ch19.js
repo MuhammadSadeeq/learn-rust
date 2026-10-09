@@ -9,8 +9,8 @@
   h: 300,
   actors: [
     { id: "waiter", cast: "waiter", x: 110, y: 170, size: 110, label: "Waiter" },
-    { id: "hRack", text: "in the rack", x: 330, y: 22 },
-    { id: "hPark", text: "parked on .await", x: 500, y: 22 },
+    { id: "hRack", text: "rack", x: 330, y: 22 },
+    { id: "hPark", text: "parked", x: 500, y: 22 },
     { id: "tA", prop: "ticket", opts: { label: "A" }, x: 330, y: 70, size: 96, hidden: true },
     { id: "tB", prop: "ticket", opts: { label: "B" }, x: 330, y: 150, size: 96, hidden: true },
     { id: "tC", prop: "ticket", opts: { label: "C" }, x: 330, y: 230, size: 96, hidden: true },
