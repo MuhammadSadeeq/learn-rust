@@ -15,17 +15,20 @@ fn remove_negatives(v: &mut Vec<i32>) {
 }
 
 fn top_three(v: &[i32]) -> Vec<i32> {
-    // We can't sort a borrowed slice, so copy it into a Vec we own first.
+    // Copy the numbers into a Vec we own. The input must not change.
+    let mut sorted = Vec::new();
+    for x in v {
+        sorted.push(*x);
+    }
     // Reverse flips the sort order, which puts the biggest number first.
-    let mut sorted = v.to_vec();
-    sorted.sort_by_key(|&x| Reverse(x));
+    sorted.sort_by_key(|x| Reverse(*x));
     sorted.truncate(3);
     sorted
 }
 
 fn safe_get(v: &[i32], i: usize) -> Option<i32> {
-    // Unlike v[i], get never panics on a bad index.
-    v.get(i).copied()
+    // Check the length before indexing, so a bad index never panics.
+    if i < v.len() { Some(v[i]) } else { None }
 }
 
 fn main() {

@@ -41,6 +41,13 @@
 .st-zone.is-heap { background: radial-gradient(circle at 20% 30%, color-mix(in srgb, var(--heap) 9%, transparent) 0 2px, transparent 3px) 0 0 / 22px 22px, var(--st-sand); }
 /* Alloc keeps the bottom-right corner of the heap, so no fluffy sits under it. */
 .st-zone.is-heap.has-alloc { padding-bottom: 66px; }
+/* The binary zone: read-only bytes, one full row under the stack and heap. */
+.st-zone[hidden] { display: none; }
+.st-zone.is-data { grid-column: 1 / -1; min-height: 0; padding-bottom: 14px; background: repeating-linear-gradient(90deg, transparent 0 18px, color-mix(in srgb, var(--muted) 9%, transparent) 18px 19px), var(--surface-2); border: 1px dashed var(--line); }
+.st-zone.is-data .st-zone-title { color: var(--muted); }
+.st-databank { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; align-content: flex-start; }
+.st-fluffy.is-static .st-fluffy-art { opacity: 0.8; }
+.st-fluffy.is-static .st-tag { border-style: dashed; }
 .st-zone-title { position: absolute; top: 8px; left: 12px; right: 12px; font: 600 0.7rem/1.3 var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--stack); }
 .st-zone.is-heap .st-zone-title { color: var(--heap); }
 .st-zone-title small { font-weight: 400; letter-spacing: 0.02em; text-transform: none; opacity: 0.8; margin-left: 6px; }
@@ -71,6 +78,11 @@
 .st-anchor { position: absolute; left: 86%; top: 33%; width: 1px; height: 1px; }
 .st-crab .ca.is-ghost .ca-body { fill-opacity: 0.35; stroke: var(--ghost); stroke-width: 1.5; stroke-dasharray: 4 3; }
 .st-crab .ca.is-ended .ca-svg { opacity: 0.6; }
+
+/* A shadowed name: the old box is still there, greyed and set back. */
+.st-crab.is-shadowed { opacity: 0.5; z-index: 0; }
+.st-crab.is-shadowed .st-crab-art { filter: grayscale(0.85); }
+.st-crab.is-shadowed .st-tag { border-style: dotted; }
 
 .st-crab.is-entering .st-crab-art { animation: st-drop 0.55s cubic-bezier(.3, 1.5, .5, 1) both; }
 .st-crab.is-leaving { pointer-events: none; animation: st-sink 0.5s ease-in forwards; }
@@ -114,7 +126,8 @@
 .st-fluffy.is-leaving { pointer-events: none; animation: st-fade 0.45s ease-in forwards; }
 .st-cells { display: block; font-weight: 400; white-space: nowrap; }
 .st-cells i { font-style: normal; opacity: 0.35; }
-.st-rc { position: absolute; top: -4px; right: 6px; min-width: 28px; padding: 1px 6px; border-radius: 999px; background: var(--oxide); color: #fff; font: 700 0.7rem/1.4 var(--font-mono); text-align: center; box-shadow: 0 0 0 2px var(--surface); }
+/* The count sits above the leashes, so ropes never cover the number. */
+.st-rc { position: absolute; top: -4px; right: 6px; z-index: 3; min-width: 28px; padding: 1px 6px; border-radius: 999px; background: var(--oxide); color: #fff; font: 700 0.7rem/1.4 var(--font-mono); text-align: center; box-shadow: 0 0 0 2px var(--surface); }
 .st-rc.is-flash { animation: st-jelly 0.6s ease-out; }
 
 @keyframes st-breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.03, 0.97); } }

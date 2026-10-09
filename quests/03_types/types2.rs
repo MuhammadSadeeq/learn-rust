@@ -6,15 +6,29 @@
 //  position: (i32, i32) is two i32 values, in that order.
 //
 //  `min_max` returns (lowest, highest) for a slice with at least one value.
-//  `swap` takes a pair and returns it reversed. Both bodies are todo!() for
-//  now. Don't edit the tests.
+//  `swap` takes a pair and returns it reversed. Your part is the starting
+//  values in `min_max` and the tuple work in `swap`. Don't edit the tests.
 //
 //  cargo forge          check your work (re-runs every time you save)
 //  cargo forge hint     a nudge in the right direction
 // ============================================================================
 
 fn min_max(v: &[i32]) -> (i32, i32) {
-    todo!()
+    // Your part: start both from the first value, v[0].
+    let mut low = todo!();
+    let mut high = todo!();
+
+    // `&x` copies each number out of the slice; Chapter 7 explains the &.
+    // Chapter 4 explains `for` and `if`.
+    for &x in v {
+        if x < low {
+            low = x;
+        }
+        if x > high {
+            high = x;
+        }
+    }
+    (low, high)
 }
 
 fn swap(p: (i32, char)) -> (char, i32) {

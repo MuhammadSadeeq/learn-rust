@@ -1,7 +1,7 @@
 /* Demo motion scenes: the authoring example and the test bed for motion.js.
-   Two scenes: demo-compile (what cargo build does) and demo-move (a move hands
-   the owner over). Both compile: the rust field is checked by
-   tools/check-snippets.mjs. */
+   Three scenes: demo-compile (what cargo build does), demo-move (a move hands
+   the owner over) and demo-beat-code (a beat changes the code panel). Each
+   rust field is checked by tools/check-snippets.mjs, beat rust included. */
 (window.OX_MOTION = window.OX_MOTION || []).push({
   id: "demo-compile",
   title: "What cargo build does",
@@ -120,6 +120,39 @@
         ["say", "a", "moved: can't be used", 2000],
         ["pulse", "b", 0],
       ],
+    },
+  ],
+});
+
+/* A beat can change the code panel: the failing program first, then the fix. */
+(window.OX_MOTION = window.OX_MOTION || []).push({
+  id: "demo-beat-code",
+  title: "A beat can change the code",
+  w: 640,
+  h: 300,
+  rust: 'fn main() {\n    let x = 5;\n    x = 6;\n    println!("{x}");\n}',
+  check: "E0384",
+  actors: [
+    { id: "oxi", cast: "oxi", x: 70, y: 226, size: 90 },
+    { id: "note", text: "the same name, changed", x: 330, y: 60 },
+  ],
+  beats: [
+    {
+      say: "<p>The panel shows the program as it was first written. It does not compile, because <code>x</code> is assigned twice.</p>",
+      line: 3,
+      do: [["pose", "oxi", "talk", 1200]],
+    },
+    {
+      say: "<p>Add <code>mut</code> to the <code>let</code>. The panel now shows the fixed program, and its badge says it compiles.</p>",
+      line: 2,
+      rust: 'fn main() {\n    let mut x = 5;\n    x = 6;\n    println!("{x}");\n}',
+      check: "ok",
+      do: [["pose", "oxi", "happy", 1200]],
+    },
+    {
+      say: "<p>The code stays on the fixed program until a later beat sets another. Back, the dots and Restart rebuild whichever code belongs to the beat you land on.</p>",
+      line: 4,
+      do: [],
     },
   ],
 });

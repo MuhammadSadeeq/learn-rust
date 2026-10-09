@@ -8,20 +8,24 @@
 // ============================================================================
 
 fn needed_capacity(fields: &[&str]) -> usize {
-    let text: usize = fields.iter().map(|f| f.len()).sum();
+    let mut text = 0;
+    for field in fields {
+        text += field.len();
+    }
     // n fields have n - 1 commas between them. saturating_sub keeps an empty
     // list at 0 instead of underflowing.
-    let commas = fields.len().saturating_sub(1);
-    text + commas
+    text + fields.len().saturating_sub(1)
 }
 
 fn build_csv(fields: &[&str]) -> String {
     // Size the buffer once. The pushes below then fill room we already have.
     let mut out = String::with_capacity(needed_capacity(fields));
-    for (i, field) in fields.iter().enumerate() {
-        if i > 0 {
+    let mut first = true;
+    for field in fields {
+        if !first {
             out.push(',');
         }
+        first = false;
         out.push_str(field);
     }
     out
@@ -65,7 +69,8 @@ mod tests {
         assert_eq!(needed_capacity(&["a", "bb", "c"]), 6);
         assert_eq!(needed_capacity(&[]), 0);
         let csv = build_csv(&["a", "bb", "c"]);
-        assert!(csv.capacity() >= csv.len());
+        // The room was reserved up front, so the 6 bytes fit without growing.
+        assert_eq!(csv.capacity(), 6);
     }
 
     #[test]

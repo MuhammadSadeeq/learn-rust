@@ -130,7 +130,7 @@ fn main() {
 
 <h3>Reading one element: index or get</h3>
 
-<p>Indexing with <code>v[i]</code> gives you the element itself, and it panics if <code>i</code> is out of range. <code>get(i)</code> returns an <code>Option</code>, either <code>Some(&amp;element)</code> or <code>None</code>. The caller then has to decide what a missing index means.</p>
+<p>Indexing with <code>v[i]</code> gives you the element itself, and it panics if <code>i</code> is out of range. <code>get(i)</code> returns an <code>Option</code>, either <code>Some(&amp;element)</code> or <code>None</code>. The caller then has to decide what a missing index means. The value inside the <code>Some</code> is a reference, so <code>v.get(1).copied()</code> turns an <code>Option&lt;&amp;i32&gt;</code> into an <code>Option&lt;i32&gt;</code>. That works for types that are <code>Copy</code>; for others, use <code>cloned()</code>.</p>
 
 <pre class="rs" data-run data-stdout="None
 Some(2)">
@@ -149,7 +149,7 @@ fn main() {
 }</pre>
 
 <pre class="text">
-thread 'main' (process id) panicked at src/main.rs:3:21:
+thread 'main' (thread id) panicked at src/main.rs:3:21:
 index out of bounds: the len is 3 but the index is 10
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace</pre>
 
@@ -229,11 +229,11 @@ fn main() {
     println!("{words:?}");
 }</pre>
 
-<p><code>retain</code> keeps the elements that match a closure. <code>drain(..2)</code> removes a range and gives you the removed elements as an iterator, so you collect them if you want to keep them. <code>sort_by_key</code> sorts by a value you compute from each element.</p>
+<p><code>retain</code> keeps the elements that match a closure, which is a small function written inline. Chapter 13 explains closures. <code>drain(..2)</code> removes a range and gives you the removed elements as an iterator, so you collect them if you want to keep them. <code>sort_by_key</code> sorts by a value you compute from each element. The section <a href="#sorting">Sorting and ordering</a> below covers the comparison rules behind it.</p>
 
 <h3>Asking the list a question</h3>
 
-<p>PHP 8.4 added <code>array_find()</code>, <code>array_any()</code> and <code>array_all()</code>. PHP 8.5 added <code>array_first()</code> and <code>array_last()</code>. Rust asks the same questions with iterator methods and <code>Vec</code> methods. The answers differ in one way: PHP returns a value or <code>null</code>, and Rust returns an <code>Option</code>.</p>
+<p>PHP 8.4 added <code>array_find()</code>, <code>array_any()</code> and <code>array_all()</code>. PHP 8.5 added <code>array_first()</code> and <code>array_last()</code>. Rust asks the same questions with iterator methods and <code>Vec</code> methods. The first three take a closure, a small function written inline, and Chapter 13 explains closures and iterators. The answers differ in one way: PHP returns a value or <code>null</code>, and Rust returns an <code>Option</code>.</p>
 
 <div class="ox-bridge">
   <pre class="php">
@@ -496,7 +496,7 @@ fn main() {
     println!("plum {}", stock["plum"]);
 }</pre>
 
-<p>Three more methods cover the other cases. <code>and_modify</code> runs only when the key exists. <code>or_insert_with</code> takes a closure that runs only when the key is missing, which matters when the default is expensive to build. <code>or_default</code> uses the value type's <code>Default</code>, which is 0 for numbers and an empty list for a <code>Vec</code>.</p>
+<p>Three more methods cover the other cases. <code>and_modify</code> runs only when the key exists. <code>or_insert_with</code> takes a closure that runs only when the key is missing, which matters when the default is expensive to build. Chapter 13 explains closures and the <code>collect</code> calls in this section. <code>or_default</code> uses the value type's <code>Default</code>, which is 0 for numbers and an empty list for a <code>Vec</code>.</p>
 </section>
 
 <section>
@@ -506,7 +506,7 @@ fn main() {
 
 <h3>HashSet: membership without values</h3>
 
-<p>A <code>HashSet</code> is a <code>HashMap</code> without values. Each value is stored once. <code>insert</code> returns whether the value was new. The set operations, <code>intersection</code>, <code>union</code> and <code>difference</code>, return iterators, so you collect them, and sort them when you want a stable print.</p>
+<p>A <code>HashSet</code> is a <code>HashMap</code> without values. Each value is stored once. <code>insert</code> returns whether the value was new. The set operations, <code>intersection</code>, <code>union</code> and <code>difference</code>, return iterators, so you collect them, and sort them when you want a stable print. <code>copied()</code> and <code>collect()</code> are iterator methods, which Chapter 13 explains.</p>
 
 <div class="ox-meet" data-cast="bouncer" data-say="One visit per name. Come back a second time, and you're turned away."></div>
 
@@ -684,8 +684,9 @@ fn main() {
 
   form.addEventListener("submit", function (e) {
     e.preventDefault();
-    var name = nameIn.value.trim();
-    if (!name) { say("Type a name first, then press Let in."); return; }
+    // Not trimmed: a HashSet treats " ana" and "ana" as two different values.
+    var name = nameIn.value;
+    if (!name.trim()) { say("Type a name first, then press Let in."); return; }
     if (names.indexOf(name) === -1) {
       names.push(name);
       lastNew = name;
@@ -707,8 +708,8 @@ fn main() {
 
   check.addEventListener("submit", function (e) {
     e.preventDefault();
-    var name = probe.value.trim();
-    if (!name) { result.textContent = "Type a name to check."; return; }
+    var name = probe.value;
+    if (!name.trim()) { result.textContent = "Type a name to check."; return; }
     result.textContent = 'contains("' + name + '") returns ' + (names.indexOf(name) !== -1) + ".";
     seen.check = true;
     maybeReward();
@@ -768,6 +769,161 @@ fn main() {
         println!("run {job}");
     }
 }</pre>
+</section>
+
+<section>
+<h2 id="sorting">Sorting and ordering</h2>
+
+<p>Sorting puts a list in order. Numbers and text already know their order, so <code>sort()</code> is enough for them. For anything else, you say how two items compare. This section covers the sort methods, the <code>Ordering</code> value a comparison gives back, and the tie-breaks that keep a sorted list predictable.</p>
+
+<pre class="rs" data-run data-stdout="[1, 1, 4, 5]
+[&quot;Ana&quot;, &quot;Cy&quot;, &quot;bo&quot;]">
+fn main() {
+    let mut nums = vec![5, 1, 4, 1];
+    nums.sort();
+    println!("{nums:?}");
+
+    let mut names = vec!["Cy", "Ana", "bo"];
+    names.sort();
+    println!("{names:?}");
+}</pre>
+
+<p><code>sort</code> changes the list in place, so the variable must be <code>mut</code>. Text sorts by character code, so capital letters come before lowercase ones: <code>"Ana"</code> and <code>"Cy"</code> come before <code>"bo"</code>.</p>
+
+<p><code>sort</code> is <strong>stable</strong>. Items that compare equal keep the order they had. <code>sort_unstable</code> may reorder equal items. It is usually faster, and it does not allocate a buffer for the sort. Use it when the order of equal items does not matter. The <code>_by</code> and <code>_by_key</code> forms below have unstable versions too, such as <code>sort_unstable_by_key</code>, and they follow the same comparison rules.</p>
+
+<h3>Sort by a key</h3>
+
+<p><code>sort_by_key</code> takes a function that computes a key for each item, and sorts the items by their keys. The closure gets a reference to each item and returns a value you own or can copy.</p>
+
+<pre class="rs" data-run data-stdout="[&quot;fig&quot;, &quot;pear&quot;, &quot;kiwi&quot;, &quot;banana&quot;]">
+fn main() {
+    let mut words = vec!["pear", "fig", "banana", "kiwi"];
+    words.sort_by_key(|w| w.len());
+    println!("{words:?}");
+}</pre>
+
+<p><code>pear</code> still comes before <code>kiwi</code>, because both have four letters and the sort is stable. A key can't borrow from the item. <code>sort_by_key(|p| p.name)</code> fails with E0507 when <code>name</code> is a <code>String</code>, because the closure would have to move the name out from behind its reference. Return a copy with <code>p.name.clone()</code>, or use <code>sort_by</code>, which compares the fields directly.</p>
+
+<h3>Flip the order with Reverse</h3>
+
+<p>To sort the largest first, wrap the key in <code>std::cmp::Reverse</code>. It is a tuple struct that flips the comparison, and <code>.0</code> gives the value back. The <code>&amp;s</code> in the closure copies each number out of its reference. Chapter 7 explains that pattern.</p>
+
+<pre class="rs" data-run data-stdout="[95, 82, 70]">
+use std::cmp::Reverse;
+
+fn main() {
+    let mut scores = vec![70, 95, 82];
+    scores.sort_by_key(|&amp;s| Reverse(s));
+    println!("{scores:?}");
+}</pre>
+
+<div class="ox-quiz" data-id="12:sort-reverse-ties" data-label="What does this print?">
+  <pre class="rs" data-stdout="[1, 3, 4, 2]">
+use std::cmp::Reverse;
+
+fn main() {
+    let mut v = vec![4, 1, 3, 2];
+    v.sort_by_key(|&amp;x| Reverse(x % 2));
+    println!("{v:?}");
+}</pre>
+  <ol class="ox-choices">
+    <li data-feedback="That is the order without Reverse. Even remainders would come first.">[4, 2, 1, 3]</li>
+    <li data-correct>[1, 3, 4, 2]</li>
+    <li data-feedback="Reverse flips the comparison, not the items. Nothing inside the Vec is reversed.">[2, 4, 3, 1]</li>
+  </ol>
+  <div class="ox-why"><p>The key is <code>Reverse(x % 2)</code>, so odd numbers (remainder 1) compare as smaller and come first. Within each group, <code>sort_by_key</code> keeps the original order, so <code>1</code> stays ahead of <code>3</code>, and <code>4</code> ahead of <code>2</code>.</p></div>
+</div>
+
+<h3>Compare with cmp and Ordering</h3>
+
+<p><code>sort_by</code> takes a closure that gets two items, <code>a</code> and <code>b</code>, and returns an <code>Ordering</code>. The value comes from <code>a.cmp(b)</code>. <code>Ordering</code> is an enum with three variants: <code>Less</code>, <code>Equal</code> and <code>Greater</code>. Swap the two operands to reverse the order.</p>
+
+<pre class="rs" data-run data-stdout="[9, 4, 3]
+Less Equal Greater">
+fn main() {
+    let mut nums = vec![3, 9, 4];
+    nums.sort_by(|a, b| b.cmp(a));
+    println!("{nums:?}");
+    println!("{:?} {:?} {:?}", 1.cmp(&amp;2), 2.cmp(&amp;2), 3.cmp(&amp;2));
+}</pre>
+
+<h3>Break ties with then_with</h3>
+
+<p>A second rule matters only when the first one says <code>Equal</code>. Chain it with <code>then_with</code>, which takes a closure and runs it only on a tie. This example sorts players by score, highest first, and by name when two scores are equal.</p>
+
+<pre class="rs" data-run data-stdout="Ana 30
+Cy 30
+Bo 12">
+struct Player {
+    name: &amp;'static str,
+    score: u32,
+}
+
+fn main() {
+    let mut players = vec![
+        Player { name: "Cy", score: 30 },
+        Player { name: "Ana", score: 30 },
+        Player { name: "Bo", score: 12 },
+    ];
+    players.sort_by(|a, b| b.score.cmp(&amp;a.score).then_with(|| a.name.cmp(b.name)));
+    for p in &amp;players {
+        println!("{} {}", p.name, p.score);
+    }
+}</pre>
+
+<p><code>then</code> does the same job with an <code>Ordering</code> that is already computed, so it always does the work. Use <code>then_with</code> when the second comparison is costly, because it runs only when the scores tie.</p>
+
+<aside class="ox-callout" data-kind="php">
+  <p>PHP's <code>usort</code> takes a callback that returns a negative number, zero or a positive number. The spaceship operator <code>&lt;=&gt;</code> makes that number, and <code>?:</code> moves on to the next rule when the first one gives zero. Rust does the same job with <code>Ordering</code> and <code>then_with</code>. The answer is a named value, and each rule is a separate closure, so a tie-break is easy to see.</p>
+</aside>
+
+<h3>Largest and smallest</h3>
+
+<p><code>max_by_key</code> and <code>min_by_key</code> find the item with the largest or smallest key, without sorting the list. On a tie they differ. <code>max_by_key</code> returns the <strong>last</strong> item with the largest key, and <code>min_by_key</code> returns the <strong>first</strong> item with the smallest key. <code>max_by</code> and <code>min_by</code> take a comparison closure, the same kind that <code>sort_by</code> takes.</p>
+
+<pre class="rs" data-run data-stdout="Some((&quot;bo&quot;, 9))
+Some((&quot;cy&quot;, 4))
+Some((&quot;ana&quot;, 9))">
+fn main() {
+    let scores = [("ana", 9), ("bo", 9), ("cy", 4)];
+    println!("{:?}", scores.iter().max_by_key(|p| p.1));
+    println!("{:?}", scores.iter().min_by_key(|p| p.1));
+
+    // On a tie, make the alphabetically first name count as the larger one.
+    let best = scores.iter().max_by(|a, b| a.1.cmp(&amp;b.1).then_with(|| b.0.cmp(a.0)));
+    println!("{best:?}");
+}</pre>
+
+<p>The <code>b.0.cmp(a.0)</code> is reversed on purpose. <code>max_by</code> keeps the larger item, so comparing the names backward makes the alphabetically first name win a tie. The word-counter quest, <code>hashmap1</code>, needs exactly this rule.</p>
+
+<h3>Floats have no full order</h3>
+
+<p><code>f64</code> and <code>f32</code> have <code>partial_cmp</code>, which returns an <code>Option&lt;Ordering&gt;</code>. They don't have <code>Ord</code>, so they have no <code>cmp</code> that sorts them. The reason is <code>NaN</code>: it is not equal to anything, not even itself, so no rule can place it in a single order. That is why <code>sort()</code> refuses a list of floats.</p>
+
+<p>The fix is <code>total_cmp</code>, which has been in the standard library since Rust 1.62. It puts every <code>f64</code> in one order: <code>-0.0</code> sorts just below <code>0.0</code>, and a <code>NaN</code> from <code>f64::NAN</code> sorts last. You will also see <code>a.partial_cmp(b).unwrap()</code> in older code. It works until a <code>NaN</code> arrives, and then the <code>unwrap</code> panics.</p>
+
+<pre class="rs" data-run data-stdout="[-1.0, 0.0, 2.5, NaN]">
+fn main() {
+    let mut readings = vec![2.5, -1.0, f64::NAN, 0.0];
+    readings.sort_by(|a, b| a.total_cmp(b));
+    println!("{readings:?}");
+}</pre>
+
+<div class="ox-quiz" data-id="12:sort-floats" data-label="Does this compile?">
+  <pre class="rs" data-check="E0277">
+fn main() {
+    let mut prices: Vec&lt;f64&gt; = vec![2.5, 1.0];
+    prices.sort();
+    println!("{prices:?}");
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. It prints <code>[1.0, 2.5]</code>.</li>
+    <li data-correct>No. <code>sort</code> needs <code>Ord</code>, and <code>f64</code> does not implement it, so the compiler reports E0277.</li>
+    <li>No, because a <code>Vec</code> of floats can't be printed with <code>{:?}</code>.</li>
+  </ol>
+  <div class="ox-why"><p>Floats are <code>PartialOrd</code>, not <code>Ord</code>. For a sort, use <code>sort_by</code> with <code>total_cmp</code>. Use <code>partial_cmp</code> only when you know the list has no <code>NaN</code>.</p></div>
+</div>
 </section>
 
 <section>

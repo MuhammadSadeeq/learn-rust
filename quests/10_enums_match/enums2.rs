@@ -4,8 +4,8 @@
 //  An order moves Pending -> Paid -> Shipped -> Delivered. It can be cancelled
 //  until it ships. Write two functions:
 //    next(s)    the following status, or None when there is no next step
-//    cancel(s)  Ok(Cancelled) for Pending, Paid and Cancelled. For Shipped or
-//               Delivered, Err("already shipped") or Err("already delivered").
+//    cancel(s)  Some(Cancelled) for Pending, Paid and Cancelled. None for
+//               Shipped and Delivered, because those orders can't be cancelled.
 //
 //  Write a match that lists every variant. Don't use a `_` arm. When a status
 //  is added later, the compiler should point at each match that needs an arm.
@@ -29,7 +29,7 @@ fn next(s: OrderStatus) -> Option<OrderStatus> {
     todo!()
 }
 
-fn cancel(s: OrderStatus) -> Result<OrderStatus, String> {
+fn cancel(s: OrderStatus) -> Option<OrderStatus> {
     todo!()
 }
 
@@ -41,8 +41,8 @@ fn main() {
     }
     println!("{status:?} has no next step");
     match cancel(OrderStatus::Shipped) {
-        Ok(s) => println!("cancelled: {s:?}"),
-        Err(reason) => println!("cannot cancel: {reason}"),
+        Some(s) => println!("cancelled: {s:?}"),
+        None => println!("cannot cancel: already shipped"),
     }
 }
 
@@ -65,21 +65,15 @@ mod tests {
 
     #[test]
     fn cancel_works_before_shipping() {
-        assert_eq!(cancel(OrderStatus::Pending), Ok(OrderStatus::Cancelled));
-        assert_eq!(cancel(OrderStatus::Paid), Ok(OrderStatus::Cancelled));
+        assert_eq!(cancel(OrderStatus::Pending), Some(OrderStatus::Cancelled));
+        assert_eq!(cancel(OrderStatus::Paid), Some(OrderStatus::Cancelled));
         // Edge case: cancelling a cancelled order is not an error.
-        assert_eq!(cancel(OrderStatus::Cancelled), Ok(OrderStatus::Cancelled));
+        assert_eq!(cancel(OrderStatus::Cancelled), Some(OrderStatus::Cancelled));
     }
 
     #[test]
     fn cancel_is_refused_after_shipping() {
-        assert_eq!(
-            cancel(OrderStatus::Shipped),
-            Err(String::from("already shipped"))
-        );
-        assert_eq!(
-            cancel(OrderStatus::Delivered),
-            Err(String::from("already delivered"))
-        );
+        assert_eq!(cancel(OrderStatus::Shipped), None);
+        assert_eq!(cancel(OrderStatus::Delivered), None);
     }
 }

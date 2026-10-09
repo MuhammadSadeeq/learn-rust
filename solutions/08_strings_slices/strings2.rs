@@ -9,16 +9,20 @@
 fn first_word(s: &str) -> &str {
     // Trim spaces at both ends first, so " hi" gives "hi".
     let s = s.trim_matches(' ');
-    let end = s.find(' ').unwrap_or(s.len());
-    &s[..end]
+    match s.find(' ') {
+        Some(end) => &s[..end],
+        None => s,
+    }
 }
 
 fn last_word(s: &str) -> &str {
     let s = s.trim_matches(' ');
     // The last word starts one byte after the last space. A space is one
     // byte, so that position is always a character boundary.
-    let start = s.rfind(' ').map_or(0, |i| i + 1);
-    &s[start..]
+    match s.rfind(' ') {
+        Some(space) => &s[space + 1..],
+        None => s,
+    }
 }
 
 fn main() {

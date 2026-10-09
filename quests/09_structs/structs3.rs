@@ -6,6 +6,10 @@
 //  app wants 14. Write the Default impl by hand with these values:
 //    theme "light", font_size 14, autosave true
 //
+//  `impl Default for Settings` is the hand-written version of what
+//  #[derive(Default)] would write. It has the form `impl Trait for Type`,
+//  and Chapter 14 explains traits. For now, copy the shape and fill in the body.
+//
 //  Then write with_theme(base, theme). It returns a copy of base with only the
 //  theme changed. Use struct update syntax (..) so that only the theme is
 //  written out in the literal.

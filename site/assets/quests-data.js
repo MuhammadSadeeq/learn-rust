@@ -140,7 +140,7 @@ window.OX_QUESTS = [
   "chapter": 5,
   "path": "05_memory/memory2.rs",
   "title": "Length vs capacity",
-  "summary": "Watch a String's heap buffer grow.",
+  "summary": "Watch a Vec's capacity grow and size a String once.",
   "boss": false,
   "tests": 3
  },
@@ -248,7 +248,7 @@ window.OX_QUESTS = [
   "chapter": 8,
   "path": "08_strings_slices/strings4.rs",
   "title": "Building strings",
-  "summary": "push_str, format! and title case.",
+  "summary": "Title-case words and build a URL slug.",
   "boss": false,
   "tests": 4
  },
@@ -302,7 +302,7 @@ window.OX_QUESTS = [
   "chapter": 10,
   "path": "10_enums_match/enums2.rs",
   "title": "Exhaustive match",
-  "summary": "A traffic light state machine.",
+  "summary": "An order status state machine.",
   "boss": false,
   "tests": 4
  },
@@ -365,7 +365,7 @@ window.OX_QUESTS = [
   "chapter": 12,
   "path": "12_collections/vecs1.rs",
   "title": "Vec basics",
-  "summary": "push, get, iterate, remove.",
+  "summary": "retain, sort a copy, and get without panicking.",
   "boss": false,
   "tests": 4
  },
@@ -418,7 +418,7 @@ window.OX_QUESTS = [
   "name": "iter2",
   "chapter": 13,
   "path": "13_iterators_closures/iter2.rs",
-  "title": "fold, zip and sum",
+  "title": "zip, scan and windows",
   "summary": "Combine iterators to compute results.",
   "boss": false,
   "tests": 3

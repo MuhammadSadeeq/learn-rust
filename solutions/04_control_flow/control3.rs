@@ -28,7 +28,10 @@ fn fizzbuzz_upto(n: u32) -> Vec<String> {
 }
 
 fn main() {
-    println!("{}", fizzbuzz_upto(15).join(" "));
+    // Print one line per number. `for line in list` takes each String in turn.
+    for line in fizzbuzz_upto(15) {
+        println!("{line}");
+    }
 }
 
 #[cfg(test)]

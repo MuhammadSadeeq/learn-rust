@@ -6,12 +6,13 @@
 // ============================================================================
 
 fn find_user(users: &[(u32, String)], id: u32) -> Option<&str> {
-    // find returns the first match as an Option. map opens it and borrows the
-    // name as a &str. The result borrows from `users`, not from a copy.
-    users
-        .iter()
-        .find(|(user_id, _)| *user_id == id)
-        .map(|(_, name)| name.as_str())
+    // The first match returns early. The name is borrowed from `users`, not copied.
+    for (user_id, name) in users {
+        if *user_id == id {
+            return Some(name.as_str());
+        }
+    }
+    None
 }
 
 fn safe_divide(a: i32, b: i32) -> Option<i32> {
@@ -21,8 +22,14 @@ fn safe_divide(a: i32, b: i32) -> Option<i32> {
 }
 
 fn first_even(v: &[i32]) -> Option<i32> {
-    // find stops at the first match and never looks at the rest.
-    v.iter().copied().find(|n| n % 2 == 0)
+    // Each x is a reference, so `x % 2` works and `*x` is the number itself.
+    // The loop returns at the first even value and never looks further.
+    for x in v {
+        if x % 2 == 0 {
+            return Some(*x);
+        }
+    }
+    None
 }
 
 fn main() {

@@ -21,12 +21,36 @@ async fn main() -> std::io::Result<()> {
 
     axum::serve(listener, app(AppState::default()))
         .with_graceful_shutdown(shutdown_signal())
-        .await
+        .await?;
+    tracing::info!("server stopped");
+    Ok(())
 }
 
-/// Finish in-flight requests on Ctrl+C instead of cutting them off.
+/// Finish in-flight requests on Ctrl+C (SIGINT) or SIGTERM, the signal that
+/// Docker and Kubernetes send when they stop a container.
 async fn shutdown_signal() {
-    if let Err(err) = tokio::signal::ctrl_c().await {
-        tracing::error!(%err, "could not listen for Ctrl+C");
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("could not listen for Ctrl+C");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("could not listen for SIGTERM")
+            .recv()
+            .await;
+    };
+
+    // Windows has no SIGTERM. This future never finishes, so Ctrl+C is the only trigger there.
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    // Whichever signal comes first wins. The other future is dropped.
+    tokio::select! {
+        _ = ctrl_c => {}
+        _ = terminate => {}
     }
+    tracing::info!("shutdown signal received, finishing in-flight requests");
 }

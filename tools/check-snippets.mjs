@@ -16,6 +16,8 @@
 //   * every other window.OX_* array in site/assets/**.js whose items have a
 //     `rust` field (lab data). Optional `fix`, `idiomatic`, `rust2` and
 //     `fixes[]` code on the same item must compile.
+//   * motion scenes (OX_MOTION): the scene's `rust` and `check`, and every
+//     beat's own `rust` with the beat's `check` (default "ok").
 //
 // data-check values:
 //   (absent) / "ok"   must compile
@@ -127,6 +129,11 @@ for (const file of dataFiles) {
       if (!s || typeof s !== "object") return;
       const tag = `${path.relative(ROOT, file)} ${key}[${s.id || k}]`;
       if (typeof s.rust === "string") snippets.push({ where: tag, code: dedent(s.rust), check: s.check || "ok", stdout: s.stdout || null });
+      // Motion scenes: a beat may carry its own rust (the code from that beat on),
+      // checked with its own check, default "ok", just like the scene's rust.
+      if (Array.isArray(s.beats)) s.beats.forEach((b, j) => {
+        if (b && typeof b.rust === "string") snippets.push({ where: `${tag}.beats[${j}]`, code: dedent(b.rust), check: b.check || "ok", stdout: null });
+      });
       for (const extra of ["fix", "idiomatic", "rust2"]) {
         if (typeof s[extra] === "string") snippets.push({ where: `${tag}.${extra}`, code: dedent(s[extra]), check: s[extra + "Check"] || "ok", stdout: null });
       }

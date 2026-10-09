@@ -138,7 +138,7 @@ fn main() {
           explain: `The 5 lives on the heap. The frame only needs room for the address of those bytes.`
         },
         say: `<p><code>Box::new(5)</code> asks the allocator for four bytes and stores the <code>i32</code> 5 there, lowest byte first: 5, 0, 0, 0. The variable <code>b</code> holds only the address of those bytes, which is a pointer. It takes 8 bytes on a 64-bit machine.</p>`,
-        ops: [["alloc", "h1", [5, 0, 0, 0], 4, { label: "Box target: i32" }], ["let", "b", "Box<i32>", { ptr: "h1" }]]
+        ops: [["alloc", "h1", [5, 0, 0, 0], 4, { label: "Box target: i32", show: "5" }], ["let", "b", "Box<i32>", { ptr: "h1" }]]
       },
       { line: 3, say: `<p><code>println!</code> follows the pointer and prints <code>5</code>. Printing a <code>Box</code> looks just like printing the value inside it.</p>`, ops: [["out", "5"]] },
       {

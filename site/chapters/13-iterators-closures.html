@@ -412,10 +412,12 @@ For more information about this error, try `rustc --explain E0373`.</pre>
       var truth = truthOf(closure);
       var head = right
         ? "<p><strong>Right.</strong> Clo packs <code>" + v + "</code> as " + LABEL[entry.mode] + ".</p>"
-        : "<p><strong>Not this time.</strong> Clo packs <code>" + v + "</code> as " + LABEL[truth.mode] + ". Here is what " + LABEL[entry.mode] + " would mean:</p>";
+        : "<p><strong>Not this time.</strong> Clo packs <code>" + v + "</code> as " + LABEL[truth.mode] + ". Here is a different version of this closure, one that uses <code>" + v + "</code> as " + LABEL[entry.mode] + ":</p>";
       var result = entry.check === "ok"
         ? '<p class="pk-result is-ok">rustc: compiles. It prints:</p><pre class="pk-prog">' + esc(entry.stdout) + "</pre>"
-        : '<p class="pk-result is-err">rustc: error ' + esc(entry.check) + ". The program does not compile.</p>";
+        : right
+          ? '<p class="pk-result">The price of this choice. rustc: error ' + esc(entry.check) + ", so this program does not compile.</p>"
+          : '<p class="pk-result is-err">rustc: error ' + esc(entry.check) + ". The program does not compile.</p>";
       verdict.innerHTML = head + "<p>" + esc(entry.say) + '</p><pre class="pk-prog">' + code(entry.rust) + "</pre>" + result;
     }
 
@@ -439,8 +441,14 @@ For more information about this error, try `rustc --explain E0373`.</pre>
       var n = Object.keys(picks).length;
       status.textContent = n + " of " + TOTAL + " packed.";
       if (n === TOTAL) {
-        status.textContent = "All four packed. Every program behind these answers was compiled with rustc.";
-        if (!awarded) {
+        var rightCount = cards.filter(function (c) {
+          var cl = c.getAttribute("data-closure");
+          return picks[cl] === truthOf(cl).mode;
+        }).length;
+        status.textContent = rightCount === TOTAL
+          ? "All four packed. Every program behind these answers was compiled with rustc."
+          : "All four packed, but " + (TOTAL - rightCount) + " not right yet. Change a pick to earn the XP.";
+        if (rightCount === TOTAL && !awarded) {
           awarded = true;
           if (window.Ox && typeof window.Ox.award === "function") window.Ox.award(10, "packed Clo's backpack", "ch13:backpack");
         }
@@ -461,7 +469,7 @@ For more information about this error, try `rustc --explain E0373`.</pre>
 
 <h3>Passing closures to functions</h3>
 
-<p>A function that takes a closure names the trait it needs. Ask for the weakest one you can. <code>FnOnce</code> accepts every closure, <code>FnMut</code> accepts the ones that change state, and <code>Fn</code> accepts only the ones that just read. Two common forms:</p>
+<p>A function that takes a closure names the trait it needs. Ask for the weakest one you can. <code>FnOnce</code> accepts every closure, <code>FnMut</code> accepts every closure that can be called more than once, whether it reads or changes state, and <code>Fn</code> accepts only the ones that just read. Two common forms:</p>
 
 <pre class="rs" data-run data-stdout="42\nhits = 3">
 fn apply(f: impl Fn(i32) -> i32, x: i32) -> i32 {
@@ -483,7 +491,7 @@ fn main() {
     println!("hits = {hits}");
 }</pre>
 
-<p><code>apply</code> takes <code>impl Fn(i32) -&gt; i32</code>, so a caller may pass any closure that only reads what it captured. <code>repeat</code> takes <code>F: FnMut()</code>, because it calls the closure over and over and the closure may change state on every call. Its parameter is written <code>mut f</code>, because calling an <code>FnMut</code> needs a mutable borrow of it.</p>
+<p><code>apply</code> takes <code>impl Fn(i32) -&gt; i32</code>, so a caller may pass any closure that only reads what it captured. <code>repeat</code> takes <code>F: FnMut()</code>, because it calls the closure over and over and the closure may change state on every call. Its parameter is written <code>mut f</code>, because calling an <code>FnMut</code> needs a mutable borrow of it. The <code>impl Fn(i32) -&gt; i32</code> and <code>F: FnMut()</code> forms use the same syntax as Chapter 14's <code>impl Trait</code> and trait bounds.</p>
 
 <h3>Named functions as values</h3>
 
@@ -526,7 +534,7 @@ fn main() {
 <section>
 <h2 id="iterator">The Iterator trait in one method</h2>
 
-<p>An iterator is any type that implements the <code>Iterator</code> trait. The trait is small. It has one associated type, <code>Item</code>, and one method you must write:</p>
+<p>An iterator is any type that implements the <code>Iterator</code> trait. A trait is a named set of methods a type promises to provide, and Chapter 14 explains traits, including associated types. This one is small. It has one associated type, <code>Item</code>, and one method you must write:</p>
 
 <pre class="rs">
 trait Iterator {
@@ -891,11 +899,11 @@ error[E0283]: type annotations needed
    2 |     let doubled = (1..4).map(|x| x * 2).collect();
      |         ^^^^^^^                         ------- type must be known at this point
      |
-     = note: the type must implement `FromIterator<i32>`
+     = note: the type must implement `FromIterator&lt;i32&gt;`
 note: required by a bound in `collect`
     --> …/library/core/src/iter/traits/iterator.rs:2077:19
      |
-2077 |     fn collect<B: FromIterator<Self::Item>>(self) -> B
+2077 |     fn collect&lt;B: FromIterator&lt;Self::Item&gt;&gt;(self) -&gt; B
      |                   ^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Iterator::collect`
 help: consider giving `doubled` an explicit type
      |

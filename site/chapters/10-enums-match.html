@@ -512,6 +512,7 @@ fn main() {
     <tr><td><code>Point { x, .. }</code></td><td>a struct, binding <code>x</code> and ignoring the other fields</td></tr>
     <tr><td><code>x if x &lt; 0</code></td><td>a pattern plus a guard: the arm runs only when the guard is true</td></tr>
     <tr><td><code>_</code></td><td>anything, and binds nothing</td></tr>
+    <tr><td><code>&amp;x</code></td><td>a reference: copies a <code>Copy</code> value out of it, as in <code>for &amp;n in &amp;v</code> or <code>|&amp;x| x &gt; 2</code>. Chapter 7 explains it.</td></tr>
   </tbody>
 </table>
 </div>
@@ -608,7 +609,7 @@ enum Option&lt;T&gt; {
     Some(T),
 }</pre>
 
-<p>The standard library defines <code>Option</code> much like this (the real one also derives some traits). It is built in, so you never import it: <code>Some</code> and <code>None</code> are always in scope. Think of <code>None</code> as an empty box. The value inside a <code>Some</code> stays out of reach until you open the box, and the compiler won't let you use it as if the box were already open:</p>
+<p>The standard library defines <code>Option</code> much like this (the real one also derives some traits). It is built in, so you never import it: <code>Some</code> and <code>None</code> are always in scope. Think of <code>None</code> as an empty box, and <code>Some</code> as a box with a value in it. (<code>Box&lt;T&gt;</code>, from Chapter 5, is a different thing: a pointer to heap memory.) The value inside a <code>Some</code> stays out of reach until you open the box, and the compiler won't let you use it as if the box were already open:</p>
 
 <pre class="rs" data-check="E0369">fn main() {
     let n: Option&lt;i32&gt; = Some(5);
@@ -633,6 +634,38 @@ For more information about this error, try `rustc --explain E0369`.</pre>
 <p>The compiler knows <code>n</code> might be <code>None</code>, so it refuses to add to it. The fix is to decide what should happen when the box is empty. The methods in the next part do exactly that.</p>
 
 <div class="ox-motion" data-scene="ch10-option"></div>
+
+<h3 id="closure-preview">Closures and iterator chains in one minute</h3>
+
+<p>A closure is a small function written inline, <code>|x| x * 2</code>: parameters between the bars, then the body. You pass closures to methods that need a bit of behavior, like <code>.map</code>, <code>.filter</code> or <code>.unwrap_or_else</code>.</p>
+
+<pre class="rs" data-stdout="[240, 160, 600] 1">
+fn main() {
+    let prices = vec![120, 80, 300];
+    let doubled: Vec&lt;i32&gt; = prices.iter().map(|p| p * 2).collect();
+    let cheap = prices.iter().filter(|p| **p &lt; 100).count();
+    println!("{doubled:?} {cheap}");
+}
+</pre>
+
+<p><code>.iter()</code> walks a collection, <code>.map</code> and <code>.filter</code> transform the walk, and <code>.collect()</code> or <code>.count()</code> finish it. That is enough to read the next chapters. Chapter 13 explains iterators and what a closure captures.</p>
+
+<div class="ox-quiz" data-id="10:closure-count" data-label="Check yourself">
+  <p class="ox-q">What does this print?</p>
+  <pre class="rs" data-stdout="1">
+fn main() {
+    let prices = vec![120, 80, 300];
+    let cheap = prices.iter().filter(|p| **p &lt; 100).count();
+    println!("{cheap}");
+}
+</pre>
+  <ol class="ox-choices">
+    <li>0</li>
+    <li data-correct>1</li>
+    <li>2</li>
+  </ol>
+  <div class="ox-why"><p>Only 80 is under 100. <code>filter</code> keeps the items where the closure returns <code>true</code>, and <code>count</code> counts what is left. In <code>|p| **p &lt; 100</code>, <code>p</code> is a reference to a reference, so the two stars reach the number.</p></div>
+</div>
 
 <div class="ox-bridge">
   <pre class="php">final class UserRepository
@@ -832,7 +865,7 @@ fn main() {
 <section>
 <h2 id="memory">How big is an enum?</h2>
 
-<p>An enum needs room for its largest variant, plus a tag that says which variant is live. Padding adds bytes so each field starts at an aligned address, and the total is the size. Measure rather than guess:</p>
+<p>An enum needs room for its largest variant, plus a tag that says which variant is live. Padding adds bytes so each field starts at an aligned address, and the total is the size. The <code>#[allow(dead_code)]</code> line below tells the compiler not to warn about variants this program never builds. Measure rather than guess:</p>
 
 <pre class="rs" data-run data-stdout="Option&lt;u8&gt;       2\nOption&lt;u32&gt;      8\nOption&lt;bool&gt;     1\nOption&lt;char&gt;     4\nOption&lt;&amp;i32&gt;     8\nOption&lt;Box&lt;i32&gt;&gt; 8\nString           24\nMessage          24">use std::mem::size_of;
 
@@ -892,7 +925,7 @@ fn main() {
     <li data-correct>8: <code>None</code> is the all-zero address, so no tag is needed</li>
     <li>4: the size of an <code>i32</code></li>
   </ol>
-  <div class="ox-why"><p>A reference is never null in safe Rust, so the compiler uses the zero address for <code>None</code>. <code>Option&lt;&amp;i32&gt;</code> then costs the same as <code>&amp;i32</code>. Rust doesn't promise this layout, so use <code>size_of</code> when it matters.</p></div>
+  <div class="ox-why"><p>A reference is never null in safe Rust, so the compiler uses the zero address for <code>None</code>. <code>Option&lt;&amp;i32&gt;</code> then costs the same as <code>&amp;i32</code>. Rust guarantees this one. <code>Option&lt;&amp;T&gt;</code>, <code>Option&lt;&amp;mut T&gt;</code> and <code>Option&lt;Box&lt;T&gt;&gt;</code> are the same size as the pointer, for a sized <code>T</code>, and the standard library documents that guarantee in the <code>Option</code> docs under Representation. It does not promise the same for every enum, such as <code>Option&lt;bool&gt;</code> or <code>Message</code>, so use <code>size_of</code> when it matters.</p></div>
 </div>
 </section>
 
@@ -1032,6 +1065,24 @@ final class Order
     var data = window.OX_CH10_MACHINE || [];
     if (!box || !data.length) return;
 
+    // Rust's {:?} for a string: quotes and backslashes are escaped, and so are
+    // control, invisible, unassigned and separator characters, as \u{..}.
+    var RUST_ESCAPED = /^(?:\p{Grapheme_Extend}|\p{Cc}|\p{Cf}|\p{Cs}|\p{Co}|\p{Cn}|\p{Zl}|\p{Zp}|\p{Zs})$/u;
+    function rustStr(s) {
+      var out = "";
+      for (var ch of s) {
+        if (ch === "\"") out += "\\\"";
+        else if (ch === "\\") out += "\\\\";
+        else if (ch === "\n") out += "\\n";
+        else if (ch === "\r") out += "\\r";
+        else if (ch === "\t") out += "\\t";
+        else if (ch === "\0") out += "\\0";
+        else if (ch !== " " && RUST_ESCAPED.test(ch)) out += "\\u{" + ch.codePointAt(0).toString(16) + "}";
+        else out += ch;
+      }
+      return "\"" + out + "\"";
+    }
+
     var esc = function (s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); };
     var hl = function (src, lang) { return window.Ox && Ox.highlight ? Ox.highlight(src, lang) : esc(src); };
     var reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -1081,8 +1132,8 @@ final class Order
       function (v) { var p = v.kind === "move" && v.y === 0; return { pat: p, guard: true, bind: p ? "x = " + v.x : "", out: "slide " + v.x + " along x" }; },
       function (v) { var p = v.kind === "move"; return { pat: p, guard: v.x === v.y, bind: p ? "x = " + v.x + ", y = " + v.y : "", out: "diagonal " + v.x }; },
       function (v) { var p = v.kind === "move"; return { pat: p, guard: true, bind: p ? "x = " + v.x + ", y = " + v.y : "", out: "go to (" + v.x + ", " + v.y + ")" }; },
-      function (v) { var p = v.kind === "write"; return { pat: p, guard: v.text === "", bind: p ? "text = " + JSON.stringify(v.text) : "", out: "silence" }; },
-      function (v) { var p = v.kind === "write"; return { pat: p, guard: true, bind: p ? "text = " + JSON.stringify(v.text) : "", out: "say " + JSON.stringify(v.text) }; },
+      function (v) { var p = v.kind === "write"; return { pat: p, guard: v.text === "", bind: p ? "text = " + rustStr(v.text) : "", out: "silence" }; },
+      function (v) { var p = v.kind === "write"; return { pat: p, guard: true, bind: p ? "text = " + rustStr(v.text) : "", out: "say " + rustStr(v.text) }; },
       function (v) { var p = v.kind === "color" && v.r >= 200 && v.r <= 255; return { pat: p, guard: true, bind: p ? "r = " + v.r : "", out: "reddish (" + v.r + ")" }; },
       function (v) { return { pat: v.kind === "color", guard: true, bind: "", out: "some color" }; }
     ];
@@ -1130,7 +1181,7 @@ final class Order
     function valueText() {
       if (val.kind === "quit") return "Message::Quit";
       if (val.kind === "move") return "Message::Move { x: " + val.x + ", y: " + val.y + " }";
-      if (val.kind === "write") return "Message::Write(" + JSON.stringify(val.text) + ")";
+      if (val.kind === "write") return "Message::Write(" + rustStr(val.text) + ")";
       return "Message::Color(" + val.r + ", " + val.g + ", " + val.b + ")";
     }
     function present() {
@@ -1200,7 +1251,7 @@ final class Order
       var hit = null, guard = null, list = present();
       steps.forEach(function (s) { if (s.cls === "is-hit") hit = s; if (s.cls === "is-guard" && !guard) guard = s; });
       if (!hit) { out.innerHTML = "<p>No arm matched.</p>"; return; }
-      var html = "<p>Arm " + (hit.arm + 1) + " matched" + (hit.bind ? " with " + esc(hit.bind) : "") + ", so <code>describe</code> returns <code>" + esc(JSON.stringify(hit.out)) + "</code>.</p>";
+      var html = "<p>Arm " + (hit.arm + 1) + " matched" + (hit.bind ? " with " + esc(hit.bind) : "") + ", so <code>describe</code> returns <code>" + esc(rustStr(hit.out)) + "</code>.</p>";
       if (guard) html += "<p>Arm " + (guard.arm + 1) + " fits the pattern, but its guard is false, so testing goes on.</p>";
       if (list.some(function (k) { return k > hit.arm; })) html += "<p>The arms after arm " + (hit.arm + 1) + " are never tested.</p>";
       out.innerHTML = html;

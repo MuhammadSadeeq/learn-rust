@@ -385,7 +385,7 @@ fn main() {
 <section>
 <h2 id="shared">Shared state: Arc&lt;Mutex&lt;T&gt;&gt;</h2>
 
-<p>Sometimes threads really do need the same value: a counter, a cache, a list of results. Rust splits that job in two. <code>Arc&lt;T&gt;</code> lets several owners hold one value. It works like <code>Rc</code> from Chapter 17, except its count is updated atomically, so it is safe across threads. <code>Mutex&lt;T&gt;</code> wraps the data and hands out access one thread at a time. It is the single key to the room.</p>
+<p>Sometimes threads really do need the same value: a counter, a cache, a list of results. Rust splits that job in two. <code>Arc&lt;T&gt;</code> lets several owners hold one value. It works like <code>Rc</code> from Chapter 17, except its count is updated atomically, so it is safe across threads. <code>Mutex&lt;T&gt;</code> wraps the data and hands out access one thread at a time. It is the single key to the room. Unlike <code>&amp;mut</code>, which the compiler checks before the program runs, with no lock at all, a <code>Mutex</code> is a real lock. A thread that asks for it waits its turn.</p>
 
 <div class="ox-meet" data-cast="keeper" data-say="One key, one room. Whoever holds me goes in, and everyone else waits at the door."></div>
 
@@ -449,16 +449,17 @@ fn main() {
 
 <p>A <code>RwLock</code> is the borrow rule at runtime. Any number of threads can hold a read guard at once, like many <code>&amp;T</code>. A writer needs the write guard, which waits until every reader has let go, like <code>&amp;mut T</code>. Use it when reads far outnumber writes. For short critical sections, a plain <code>Mutex</code> is simpler and is often the better choice.</p>
 
-<pre class="rs" data-run data-stdout="v1 v1\nv2">
+<pre class="rs" data-run data-stdout="v1\nv1\nv2">
 use std::sync::RwLock;
+use std::thread;
 
 fn main() {
     let config = RwLock::new(String::from("v1"));
-    {
-        let a = config.read().unwrap();
-        let b = config.read().unwrap(); // many readers at once
-        println!("{} {}", *a, *b);
-    }
+    thread::scope(|s| {
+        // Readers on separate threads can hold their read guards at the same time.
+        s.spawn(|| println!("{}", *config.read().unwrap()));
+        s.spawn(|| println!("{}", *config.read().unwrap()));
+    });
     *config.write().unwrap() = String::from("v2");
     println!("{}", config.read().unwrap());
 }
@@ -812,6 +813,7 @@ fn main() {
 <pre class="rs" data-check="ok">
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Duration;
 
 fn main() {
     let accounts = Arc::new(Mutex::new(0));
@@ -820,12 +822,14 @@ fn main() {
     let (a1, o1) = (Arc::clone(&amp;accounts), Arc::clone(&amp;orders));
     let t1 = thread::spawn(move || {
         let _a = a1.lock().unwrap();
+        thread::sleep(Duration::from_millis(100)); // give thread 2 time to take orders
         let _o = o1.lock().unwrap(); // waits for thread 2 to release orders
     });
 
     let (a2, o2) = (Arc::clone(&amp;accounts), Arc::clone(&amp;orders));
     let t2 = thread::spawn(move || {
         let _o = o2.lock().unwrap();
+        thread::sleep(Duration::from_millis(100)); // give thread 1 time to take accounts
         let _a = a2.lock().unwrap(); // waits for thread 1 to release accounts
     });
 
@@ -834,7 +838,7 @@ fn main() {
 }
 </pre>
 
-<p>The usual cure is a rule: every thread takes the locks in the same order. Don't run this one. It will hang.</p>
+<p>The two sleeps make the bad timing certain. Each thread takes its first lock, then waits long enough for the other thread to take its own. Without the sleeps, the first thread usually takes both locks before the second one starts, so the program finishes. That is why this kind of bug survives testing. The usual cure is a rule: every thread takes the locks in the same order. Don't run this one. It will hang.</p>
 
 <h3>Check, then act, across two locks</h3>
 

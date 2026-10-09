@@ -17,9 +17,9 @@ fn display_name(nick: Option<&str>, full: &str) -> String {
 }
 
 fn parse_port(s: &str) -> u16 {
-    // parse returns a Result. .ok() turns it into an Option, and unwrap_or
-    // supplies the default when the text is not a valid u16.
-    s.parse::<u16>().ok().unwrap_or(DEFAULT_PORT)
+    // parse returns a Result, and Result has unwrap_or too. The default is
+    // used when the text is not a valid u16.
+    s.parse::<u16>().unwrap_or(DEFAULT_PORT)
 }
 
 fn initials(name: Option<&str>) -> String {
@@ -28,6 +28,7 @@ fn initials(name: Option<&str>) -> String {
     let Some(name) = name else {
         return String::new();
     };
+    // The chain reads each word's first letter. Chapter 13 explains it.
     name.split_whitespace()
         .filter_map(|word| word.chars().next())
         .map(|c| c.to_ascii_uppercase())

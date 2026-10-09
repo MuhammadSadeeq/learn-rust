@@ -272,7 +272,7 @@ pub async fn show(
       bad: {
         verb: "POST",
         title: "POST /api/notes, no title",
-        summary: "The body has no title. Both stacks answer 422 without running the handler. A body that is not JSON at all gets a 400 at the same stage in axum.",
+        summary: "The body has no title, and the request sends Accept: application/json. Both stacks answer 422 without running the handler. Laravel answers with JSON because of that header. Without it, a failed validation redirects back with the errors. A body that is not JSON at all gets a 400 at the same stage in axum.",
         laravel: {
           result: ["422 Unprocessable Entity", "bad"],
           steps: [
@@ -283,7 +283,7 @@ pub async fn show(
             ["router", "The router matches POST api/notes to NoteController@store."],
             ["route", "Route middleware runs. Nothing here inspects the body."],
             ["controller", "Before store() runs, StoreNoteRequest checks its rules. There is no title, so it throws a ValidationException. store() never runs.", "stop"],
-            ["response", "The exception handler turns the exception into a JSON 422 with an errors object."],
+            ["response", "Because the request asks for JSON, the exception handler turns the exception into a JSON 422 with an errors object."],
             ["terminate", "terminate() runs after the response has been sent."]
           ]
         },
@@ -306,7 +306,7 @@ pub async fn show(
       miss: {
         verb: "GET",
         title: "GET /nope",
-        summary: "No route matches /nope. Both stacks answer with a JSON 404. Neither runs a controller, because the URL matches no route.",
+        summary: "No route matches /nope. Both stacks answer with a JSON 404, because this request sends Accept: application/json. Neither runs a controller, because the URL matches no route.",
         laravel: {
           result: ["404 Not Found", "bad"],
           steps: [
@@ -317,7 +317,7 @@ pub async fn show(
             ["router", "No route matches /nope, so the router throws NotFoundHttpException.", "stop"],
             ["route", "Route middleware is skipped, because there is no route.", "skip"],
             ["controller", "No controller runs.", "skip"],
-            ["response", "The exception handler renders a JSON 404."],
+            ["response", "With Accept: application/json, the exception handler renders a JSON 404. Without that header, Laravel renders its HTML 404 page."],
             ["terminate", "terminate() runs after the response has been sent."]
           ]
         },
@@ -583,7 +583,7 @@ curl http://127.0.0.1:3000/hello/Ana</pre>
 <section>
 <h2 id="notes-api">Build a notes API</h2>
 
-<p>The companion project lives in <code>projects/notes-api/</code>. Its <a href="../../projects/notes-api/README.md">README</a> (<code>projects/notes-api/README.md</code>) has the run instructions, the curl examples, and a table that maps each file to its Laravel counterpart. This section walks through the code in dependency order: the data, the shared state, the handlers, the errors, the routes, and the startup.</p>
+<p>The companion project lives in <code>projects/notes-api/</code>. Its README, <code>projects/notes-api/README.md</code> in your clone, has the run instructions, the curl examples, and a table that maps each file to its Laravel counterpart. This section walks through the code in dependency order: the data, the shared state, the handlers, the errors, the routes, and the startup.</p>
 
 <pre class="text" data-title="projects/notes-api">notes-api/
   Cargo.toml, Cargo.lock
@@ -604,8 +604,9 @@ curl http://127.0.0.1:3000/hello/Ana</pre>
 
 <p>The models come first, because everything else passes them around.</p>
 
-<pre class="rs" data-check="skip" data-title="src/models.rs">//! The data shapes. Laravel counterpart: the Eloquent model plus the
-//! request payloads a Form Request would accept.
+<pre class="rs" data-check="skip" data-title="src/models.rs">//! The data shapes. Laravel counterpart: the Eloquent model, the request
+//! payloads a Form Request would accept, and the API resource. `Note`
+//! serializes every field, so it also serves as the resource.
 
 use serde::{Deserialize, Serialize};
 
@@ -1038,17 +1039,41 @@ async fn main() -&gt; std::io::Result&lt;()&gt; {
 
     axum::serve(listener, app(AppState::default()))
         .with_graceful_shutdown(shutdown_signal())
-        .await
+        .await?;
+    tracing::info!("server stopped");
+    Ok(())
 }
 
-/// Finish in-flight requests on Ctrl+C instead of cutting them off.
+/// Finish in-flight requests on Ctrl+C (SIGINT) or SIGTERM, the signal that
+/// Docker and Kubernetes send when they stop a container.
 async fn shutdown_signal() {
-    if let Err(err) = tokio::signal::ctrl_c().await {
-        tracing::error!(%err, "could not listen for Ctrl+C");
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("could not listen for Ctrl+C");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("could not listen for SIGTERM")
+            .recv()
+            .await;
+    };
+
+    // Windows has no SIGTERM. This future never finishes, so Ctrl+C is the only trigger there.
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::&lt;()&gt;();
+
+    // Whichever signal comes first wins. The other future is dropped.
+    tokio::select! {
+        _ = ctrl_c =&gt; {}
+        _ = terminate =&gt; {}
     }
+    tracing::info!("shutdown signal received, finishing in-flight requests");
 }</pre>
 
-<p><code>main</code> runs once. It sets up logging, reads the address from <code>APP_ADDR</code>, and hands <code>app(AppState::default())</code> to <code>axum::serve</code>. <code>with_graceful_shutdown</code> lets in-flight requests finish when you press Ctrl+C. Laravel's <code>public/index.php</code> repeats this work for every request. Here it happens once, and the same router serves every request after that.</p>
+<p><code>main</code> runs once. It sets up logging, reads the address from <code>APP_ADDR</code>, and hands <code>app(AppState::default())</code> to <code>axum::serve</code>. <code>with_graceful_shutdown</code> lets in-flight requests finish when the server is asked to stop. <code>shutdown_signal</code> waits for whichever comes first, Ctrl+C or SIGTERM. Ctrl+C is SIGINT. Docker and Kubernetes send SIGTERM when they stop a container, so a server that listened only for Ctrl+C would cut off in-flight requests on every deploy. Laravel's <code>public/index.php</code> repeats this work for every request. Here it happens once, and the same router serves every request after that.</p>
 
 <h3>Try it</h3>
 
@@ -1287,7 +1312,15 @@ $this->postJson('/api/notes', ['title' => 'Learn axum'])
 <section>
 <h2 id="database">Where Eloquent would go</h2>
 
-<p>The project keeps notes in a <code>BTreeMap</code>, so a restart clears them. A real API stores its data in a database. The usual choices in Rust are sqlx, which lets you write the SQL yourself, and the ORMs SeaORM and Diesel. The code below is a teaser for sqlx. It is separate from the project, and it uses a SQLite file.</p>
+<p>The project keeps notes in a <code>BTreeMap</code>, so a restart clears them. A real API stores its data in a database. The usual choices in Rust are sqlx, which lets you write the SQL yourself, and the ORMs SeaORM and Diesel. The code below is a teaser for sqlx. It is separate from the project, and it uses a SQLite file. It needs these dependencies:</p>
+
+<pre class="toml" data-title="Cargo.toml">[dependencies]
+sqlx = { version = "0.9", features = ["runtime-tokio", "sqlite"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }</pre>
+
+<p>Cargo features are switches. <code>runtime-tokio</code> picks the async runtime, and <code>sqlite</code> turns on the SQLite driver. Without <code>sqlite</code>, the import <code>sqlx::sqlite</code> does not compile. Without a runtime feature, the program compiles and then panics at startup. sqlx 0.9 declares <code>rust-version = "1.94.0"</code>, so it needs Rust 1.94 or newer. That is later than the 1.88 this course asks for, so run <code>rustup update</code> first.</p>
 
 <pre class="rs" data-check="skip" data-title="src/main.rs">use serde::Serialize;
 use sqlx::FromRow;
@@ -1363,9 +1396,51 @@ null</pre>
 </div>
 
 <aside class="ox-callout" data-kind="ai">
-  <p>Agents write axum code from whichever version they saw most often. You will meet <code>axum::Server::bind</code>, which is gone in 0.8. You will meet <code>/:id</code> routes, which panic in 0.8. You will meet <code>#[async_trait]</code> on every trait, which native async functions in traits made mostly unnecessary. And you will meet blocking database drivers called from async handlers.</p>
+  <p>Agents write axum code from whichever version they saw most often. You will meet <code>axum::Server::bind</code>, which was removed in 0.7. You will meet <code>/:id</code> routes, which panic in 0.8. You will meet <code>#[async_trait]</code> on every trait. Native <code>async fn</code> in traits made it unnecessary for generic code. It is still needed for a <code>dyn</code> trait object, because a trait with an <code>async fn</code> is not dyn compatible. You will also meet blocking database drivers called from async handlers.</p>
   <p>Pin the versions in <code>Cargo.toml</code>, and paste them into your prompt. Then let the compiler and the tests decide whether the code is right. A test that sends a real request fails at once on stale route syntax, because the router panics when it is built.</p>
 </aside>
+
+<p>Here is the trait-object case with std only. A registry of tools wants a <code>Vec&lt;Box&lt;dyn Tool&gt;&gt;</code>, and rustc refuses the trait:</p>
+
+<pre class="rs" data-check="E0038" data-badge="error" data-title="src/main.rs">trait Tool {
+    async fn run(&amp;self, input: &amp;str) -&gt; String;
+}
+
+struct Echo;
+
+impl Tool for Echo {
+    async fn run(&amp;self, input: &amp;str) -&gt; String {
+        input.to_string()
+    }
+}
+
+fn main() {
+    let tools: Vec&lt;Box&lt;dyn Tool&gt;&gt; = vec![Box::new(Echo)];
+    println!("{}", tools.len());
+}</pre>
+
+<pre class="rustc">error[E0038]: the trait `Tool` is not dyn compatible
+  --&gt; src/main.rs:14:28
+   |
+14 |     let tools: Vec&lt;Box&lt;dyn Tool&gt;&gt; = vec![Box::new(Echo)];
+   |                            ^^^^ `Tool` is not dyn compatible
+   |
+note: for a trait to be dyn compatible it needs to allow building a vtable
+      for more information, visit &lt;https://doc.rust-lang.org/reference/items/traits.html#dyn-compatibility&gt;
+  --&gt; src/main.rs:2:14
+   |
+ 1 | trait Tool {
+   |       ---- this trait is not dyn compatible...
+ 2 |     async fn run(&amp;self, input: &amp;str) -&gt; String;
+   |              ^^^ ...because method `run` is `async`
+   = help: consider moving `run` to another trait
+   = help: only type `Echo` implements `Tool`; consider using it directly instead.
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0038`.</pre>
+
+<p>There are two ways out. Keep the trait generic, and take <code>T: Tool</code> where you use it. Or return a boxed future, <code>Pin&lt;Box&lt;dyn Future&lt;Output = String&gt; + Send + '_&gt;&gt;</code>, which is the kind of rewrite the <code>async-trait</code> crate does for you.</p>
 </section>
 
 <section>

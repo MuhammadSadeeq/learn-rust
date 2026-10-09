@@ -5,23 +5,22 @@
 //  instead of &mut Vec<u32> says that the length is not changed. The
 //  multiplication runs in u64 because a 1-billion-cent price times 110 is
 //  larger than u32::MAX.
+//
+//  wrap_in_stars changes the String through the &mut borrow. insert and push
+//  add characters at the front and the back, and the caller sees both.
 // ============================================================================
 
 fn add_tax(prices: &mut [u32], rate_pct: u32) {
-    for price in prices {
+    for i in 0..prices.len() {
         // Integer division rounds the tax down to a whole cent.
-        let with_tax = u64::from(*price) * (100 + u64::from(rate_pct)) / 100;
-        *price = u32::try_from(with_tax).expect("price with tax fits in u32");
+        let with_tax = u64::from(prices[i]) * (100 + u64::from(rate_pct)) / 100;
+        prices[i] = with_tax as u32;
     }
 }
 
-fn capitalize_first(s: &mut String) {
-    if let Some(first) = s.chars().next() {
-        // The first character can take several bytes, so replace exactly the
-        // bytes it occupies. The uppercase form may be longer than one char.
-        let upper: String = first.to_uppercase().collect();
-        s.replace_range(..first.len_utf8(), &upper);
-    }
+fn wrap_in_stars(s: &mut String) {
+    s.insert(0, '*');
+    s.push('*');
 }
 
 fn main() {
@@ -29,9 +28,9 @@ fn main() {
     add_tax(&mut prices, 20);
     println!("{prices:?}");
 
-    let mut name = String::from("ferris");
-    capitalize_first(&mut name);
-    println!("{name}");
+    let mut word = String::from("rust");
+    wrap_in_stars(&mut word);
+    println!("{word}");
 }
 
 #[cfg(test)]
@@ -61,17 +60,13 @@ mod tests {
     }
 
     #[test]
-    fn capitalizes_the_first_letter_only() {
-        let mut word = String::from("rust is fun");
-        capitalize_first(&mut word);
-        assert_eq!(word, "Rust is fun");
+    fn wraps_the_text_in_stars() {
+        let mut word = String::from("rust");
+        wrap_in_stars(&mut word);
+        assert_eq!(word, "*rust*");
 
         let mut empty = String::new();
-        capitalize_first(&mut empty);
-        assert_eq!(empty, "");
-
-        let mut accented = String::from("élan");
-        capitalize_first(&mut accented);
-        assert_eq!(accented, "Élan");
+        wrap_in_stars(&mut empty);
+        assert_eq!(empty, "**");
     }
 }

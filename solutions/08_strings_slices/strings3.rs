@@ -8,20 +8,33 @@
 // ============================================================================
 
 fn char_count(s: &str) -> usize {
-    s.chars().count()
+    let mut count = 0;
+    for _ in s.chars() {
+        count += 1;
+    }
+    count
 }
 
 fn reverse_chars(s: &str) -> String {
-    s.chars().rev().collect()
+    let mut reversed = String::new();
+    for c in s.chars() {
+        // Each new character goes in front of the ones already collected.
+        reversed.insert(0, c);
+    }
+    reversed
 }
 
 fn truncate_chars(s: &str, max: usize) -> &str {
-    match s.char_indices().nth(max) {
-        // The (max + 1)th character starts at `byte_index`: cut just before it.
-        Some((byte_index, _)) => &s[..byte_index],
-        // Fewer than max + 1 characters: the whole string already fits.
-        None => s,
+    let mut count = 0;
+    for (byte_index, _) in s.char_indices() {
+        if count == max {
+            // This is the first character we drop. Cut just before it.
+            return &s[..byte_index];
+        }
+        count += 1;
     }
+    // Fewer than max + 1 characters: the whole string already fits.
+    s
 }
 
 fn main() {

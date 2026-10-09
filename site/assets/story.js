@@ -16,7 +16,9 @@
   const reduce = () => window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
   const wait = (ms) => new Promise((r) => setTimeout(r, reduce() ? 0 : ms));
   // Borrow-checker errors belong to the Inspector; every other compile error is the Forge's.
-  const BORROW = new Set(["E0382", "E0499", "E0502", "E0505", "E0506", "E0507", "E0373", "E0597", "E0716", "E0503", "E0713"]);
+  // Each code is reported by rustc's MIR borrow checker (probed with rustc 1.97).
+  // E0004 (match coverage) and E0106 (lifetime syntax) are not borrow-checker errors.
+  const BORROW = new Set(["E0381", "E0382", "E0384", "E0499", "E0502", "E0503", "E0505", "E0506", "E0507", "E0515", "E0594", "E0596", "E0597", "E0373", "E0713", "E0716"]);
 
   /* ------------------------------------------------------------ art (OxCast) */
   // A variable crab: gear for glasses (& borrows) and a pebble (plain values).
@@ -33,8 +35,11 @@
   const targetOf = (val) => (val.ptr !== undefined ? val.ptr : val.mut !== undefined ? val.mut : val.ref);
   // Whether a block reads as a list is fixed when it first appears, so a
   // freed Vec buffer (relabeled "freed") still shows as a list.
+  // The scenario's `show` text wins: it is the value as the program reads it.
+  // Several digit bytes (an i32's four bytes) are a list, never one number.
   function contentOf(b, listyBlocks) {
-    if (!listyBlocks.has(b.id)) listyBlocks.set(b.id, /vec|buffer|array|\[/i.test(b.label || "") || b.cells.some((c) => c.length > 1));
+    if (b.show !== undefined) return esc(b.show);
+    if (!listyBlocks.has(b.id)) listyBlocks.set(b.id, /vec|buffer|array|\[/i.test(b.label || "") || b.cells.some((c) => c.length > 1) || (b.cells.length > 1 && b.cells.every((c) => /^[0-9]$/.test(c))));
     const listy = listyBlocks.get(b.id);
     const spare = Math.max(0, (b.cap || 0) - b.cells.length);
     const pad = spare ? `<i>${listy ? ", " : ""}${"·".repeat(Math.min(spare, 6))}</i>` : "";
@@ -70,8 +75,9 @@
         <div class="st-body">
           <div class="xr-code st-code"><pre></pre></div>
           <div class="st-stage">
-            <div class="st-zone is-stack"><span class="st-zone-title">Stack<small>one tide pool per call</small></span><div class="st-pools"></div></div>
-            <div class="st-zone is-heap"><span class="st-zone-title">Heap<small>owned data</small></span><div class="st-bank"></div><div class="st-alloc" hidden></div></div>
+            <div class="st-zone is-stack"><span class="st-zone-title">Stack<small>one frame per call</small></span><div class="st-pools"></div></div>
+            <div class="st-zone is-heap"><span class="st-zone-title">Heap<small>allocated at runtime</small></span><div class="st-bank"></div><div class="st-alloc" hidden></div></div>
+            <div class="st-zone is-data" hidden><span class="st-zone-title">Binary<small>(read-only data)</small></span><div class="st-databank"></div></div>
             <pre class="st-term" hidden></pre>
             <div class="st-inspector" hidden><div class="st-bubble"></div><div class="st-guard"></div></div>
             <svg class="st-leashes" aria-hidden="true"></svg>
@@ -93,12 +99,14 @@
       </div>`;
 
     const root = $(".st-root", el), stage = $(".st-stage", el), pools = $(".st-pools", el), bank = $(".st-bank", el);
+    const dataZone = $(".is-data", el), dataBank = $(".st-databank", el);
     const heapZone = $(".is-heap", el), alloc = $(".st-alloc", el), svg = $(".st-leashes", el), term = $(".st-term", el);
     const inspector = $(".st-inspector", el), guard = $(".st-guard", el), say = $(".st-say", el), oxi = $(".st-oxi", el);
     const live = $(".st-sr", el), codePre = $(".st-code pre", el), progEl = $(".xr-progress i", el), countEl = $(".xr-count", el);
     const nextBtn = $('[data-act="next"]', el), prevBtn = $('[data-act="prev"]', el), autoBtn = $('[data-act="auto"]', el);
     const crabEls = new Map(), fluffEls = new Map(), poolEls = new Map(), leashEls = new Map(), listyBlocks = new Map();
-    let scen, states, i = 0, asked = {}, autoTimer = null, prevState = null;
+    // pending: the step whose prediction is on screen (-1 for none); answering: an answer is on its way.
+    let scen, states, i = 0, asked = {}, autoTimer = null, prevState = null, pending = -1, answering = false;
     alloc.innerHTML = OxCast.el("alloc");
 
     /* ---------- Oxi and the cast's poses */
@@ -120,17 +128,21 @@
     }
 
     /* ---------- load a scenario at a step */
-    function load(s, step = 0) {
+    // start.answered: the view that handed over had already answered step `step`.
+    function load(s, step = 0, start = {}) {
       scen = s;
       states = OxXray.build(s);
       i = Math.max(0, Math.min(states.length - 1, step));
-      // Steps already passed were answered (or skipped) before the switch.
+      // Steps before this one were passed, so their questions are answered.
       asked = {};
-      for (let j = 0; j <= i; j++) asked[j] = true;
+      for (let j = 0; j < i; j++) asked[j] = true;
+      asked[i] = !!start.answered || !s.steps[i].ask;
+      pending = -1; answering = false;
       prevState = null;
       [crabEls, fluffEls, poolEls, listyBlocks].forEach((m) => m.clear());
       leashEls.clear();
-      pools.innerHTML = ""; bank.innerHTML = ""; svg.innerHTML = "";
+      pools.innerHTML = ""; bank.innerHTML = ""; dataBank.innerHTML = ""; svg.innerHTML = "";
+      dataZone.hidden = !states.some((st) => (st.data || []).length);
       inspector.hidden = true; delete inspector.dataset.who;
       $(".xr-title", el).textContent = s.title || "";
       const hl = window.Ox && Ox.highlight ? Ox.highlight(s.code.replace(/^\n/, ""), "rust") : esc(s.code);
@@ -149,7 +161,7 @@
       const before = prevState;
       const fresh = (set, id) => !instant && !set.has(id);
       const prevVars = new Set(), prevBlocks = new Map();
-      if (before) { before.frames.forEach((f) => f.vars.forEach((v) => prevVars.add(v.id))); before.heap.forEach((b) => prevBlocks.set(b.id, b)); }
+      if (before) { before.frames.forEach((f) => f.vars.forEach((v) => prevVars.add(v.id))); before.heap.concat(before.data || []).forEach((b) => prevBlocks.set(b.id, b)); }
 
       // tide pools (frames) and crabs (variables)
       const liveFrames = new Set();
@@ -194,17 +206,18 @@
       if (!st.frames.length && !$(".st-empty", pools)) pools.innerHTML = `<span class="st-empty">No calls yet.</span>`;
       if (st.frames.length) { const e = $(".st-empty", pools); if (e) e.remove(); }
 
-      // fluffies (heap values)
-      const liveBlocks = new Set(st.heap.map((b) => b.id));
+      // fluffies (heap values, and read-only bytes in the binary zone)
+      const allBlocks = st.heap.concat(st.data || []);
+      const liveBlocks = new Set(allBlocks.map((b) => b.id));
       fluffEls.forEach((fe, id) => { if (!liveBlocks.has(id)) poof(fe, instant); });
-      st.heap.forEach((b) => {
+      allBlocks.forEach((b) => {
         let fe = fluffEls.get(b.id);
         if (!fe) {
           fe = document.createElement("div");
           fe.dataset.id = b.id;
           fe.style.setProperty("--phase", (-Math.random() * 3).toFixed(2) + "s");
           fe.innerHTML = `<div class="st-fluffy-art">${OxCast.el("fluffy")}</div><div class="st-tag"></div>`;
-          bank.appendChild(fe);
+          (b.static ? dataBank : bank).appendChild(fe);
           fluffEls.set(b.id, fe);
           if (!instant && !prevBlocks.has(b.id)) {
             fe.classList.add("is-entering");
@@ -217,8 +230,8 @@
             }
           }
         }
-        fe.className = ["st-fluffy", b.status === "freed" && "is-freed", b.flash && prevBlocks.has(b.id) && !instant && "is-flash", fe.classList.contains("is-entering") && "is-entering"].filter(Boolean).join(" ");
-        $(".st-tag", fe).innerHTML = `<b class="st-cells">${contentOf(b, listyBlocks)}</b><small>${esc(b.status === "freed" ? "freed memory" : b.label || "heap value")}</small>`;
+        fe.className = ["st-fluffy", b.static && "is-static", b.status === "freed" && "is-freed", b.flash && prevBlocks.has(b.id) && !instant && "is-flash", fe.classList.contains("is-entering") && "is-entering"].filter(Boolean).join(" ");
+        $(".st-tag", fe).innerHTML = `<b class="st-cells">${contentOf(b, listyBlocks)}</b><small>${esc(b.status === "freed" ? "freed memory" : b.label || (b.static ? "read-only data" : "heap value"))}</small>`;
         let rc = $(".st-rc", fe);
         if (b.rc !== undefined) {
           if (!rc) { rc = document.createElement("span"); rc.className = "st-rc"; fe.appendChild(rc); }
@@ -258,20 +271,23 @@
     function paintCrab(ce, v) {
       const s = v.status || "";
       const kind = kindOf(v.val);
-      const ghost = s.includes("moved"), ended = s.includes("ended");
-      const holding = !ghost && !ended && (kind === "owner" || kind === "plain");
+      const ghost = s.includes("moved"), ended = s.includes("ended"), shadowed = s.includes("shadowed");
+      const holding = !ghost && !ended && !shadowed && (kind === "owner" || kind === "plain");
       const rejected = s.includes("err"), code = errCode(), forge = !!code && !BORROW.has(code);
       const art = caOf(ce);
       art.classList.toggle("is-ref", kind === "ref");
       art.classList.toggle("is-mutref", kind === "mutref");
       art.classList.toggle("is-ghost", ghost);
       art.classList.toggle("is-ended", ended);
+      art.classList.toggle("is-shadowed", shadowed);
       art.classList.toggle("has-pebble", kind === "plain" && !ghost);
       OxCast.pose(art, rejected ? "wow" : null);
       $(".ca-claw-r", art).setAttribute("d", OxCast.claw(103, 28, 11, -55, !holding));
       ce.classList.toggle("is-err", rejected);
+      ce.classList.toggle("is-shadowed", shadowed);
       ce.classList.toggle("is-flash", !!v.flash);
-      const state = ghost ? "moved: can't be used" : ended ? "done borrowing" : kind === "plain" ? `= ${esc(v.val.v)}` : "";
+      // A shadowed name is not a borrow: it reads "shadowed", never "done borrowing".
+      const state = ghost ? "moved: can't be used" : shadowed ? "shadowed" : ended ? "done borrowing" : kind === "plain" ? `= ${esc(v.val.v)}` : "";
       $(".st-tag", ce).innerHTML = `${v.mut ? '<span style="font-weight:400;color:var(--muted)">mut </span>' : ""}${esc(v.name)}<small>${esc(v.type || "")}</small>${state ? `<em>${state}</em>` : ""}`;
       // A borrow error is stamped on the crab (the Inspector's mark); any
       // other compile error is an error scroll from the Forge in the same spot.
@@ -370,8 +386,8 @@
       st.frames.forEach((f) => f.vars.forEach((v) => {
         const s = v.status || "";
         const t = targetOf(v.val);
-        if (t === undefined || s.includes("moved") || s.includes("ended")) return;
-        const block = st.heap.find((b) => b.id === t);
+        if (t === undefined || s.includes("moved") || s.includes("ended") || s.includes("shadowed")) return;
+        const block = st.heap.concat(st.data || []).find((b) => b.id === t);
         const kind = block && block.status === "freed" ? "bad" : v.val.ptr !== undefined ? "own" : v.val.mut !== undefined ? "mut" : "ref";
         out.push({ key: `${v.id}>${t}>${kind}`, v, t, kind });
       }));
@@ -452,9 +468,11 @@
     function describe(st, step) {
       const parts = [];
       st.frames.forEach((f) => f.vars.forEach((v) => {
-        const s = v.status || "", t = targetOf(v.val), b = st.heap.find((x) => x.id === t);
-        const what = b ? `${b.cells.join(b.cells.some((c) => c.length > 1) ? ", " : "")} on the heap` : t !== undefined ? t : "";
+        const s = v.status || "", t = targetOf(v.val), b = st.heap.concat(st.data || []).find((x) => x.id === t);
+        // Cells are always joined with ", " so digit bytes are never read as one number.
+        const what = b ? `${b.cells.join(", ")} ${b.static ? "in the binary" : "on the heap"}` : t !== undefined ? t : "";
         if (s.includes("moved")) parts.push(`${v.name} is moved and can't be used`);
+        else if (s.includes("shadowed")) parts.push(`${v.name} is shadowed, so no line can name it`);
         else if (s.includes("ended")) parts.push(`${v.name} is done borrowing`);
         else if (v.val.ptr !== undefined) parts.push(`${v.name} owns ${what}`);
         else if (v.val.mut !== undefined) parts.push(`${v.name} borrows ${what} mutably`);
@@ -470,13 +488,26 @@
       say.classList.toggle("is-error", !!step.error);
       say.innerHTML = step.say || "";
     }
+    // Shows step k. A step with an unanswered prediction shows the question
+    // instead of its narration, so the answer never appears before a call is made.
     function show(k, opts = {}) {
       i = Math.max(0, Math.min(states.length - 1, k));
       const step = scen.steps[i];
+      if (step.ask && !asked[i]) { askAt(i); return; }
+      pending = -1;
       render(states[i], step, opts);
       narrate(step);
       if (!opts.keepMood) mood(step.error ? "wow" : opts.instant ? null : "talk", step.error ? 0 : 900);
       controls();
+    }
+    // The stage keeps the state before the question, with the question's line marked.
+    function askAt(k) {
+      const step = scen.steps[k];
+      i = k;
+      pending = k;
+      const before = k > 0 ? states[k - 1] : { frames: [], heap: [], data: [], out: [] };
+      render(Object.assign({}, before, { line: step.line }), step, { instant: true });
+      ask(step);
     }
     function ask(step) {
       stopAuto();
@@ -491,43 +522,62 @@
         b.className = "ox-choice";
         b.innerHTML = `<span class="ox-key">${"ABCDEF"[k]}</span><span>${c}</span>`;
         b.addEventListener("click", async () => {
-          asked[i] = true;
+          if (answering || asked[i]) return;
+          const at = i;
+          asked[at] = true;
+          answering = true;
           const right = k === a.answer;
           $$("button", box).forEach((x, j) => { x.disabled = true; x.classList.add(j === a.answer ? "is-correct" : j === k ? "is-wrong" : "is-faded"); });
           mood(right ? "happy" : "oops", 1600);
-          if (right) { confetti(); if (window.Ox && Ox.award) Ox.award(5, "prediction", `xray:${scen.id}:${i}`); }
+          if (right) { confetti(); if (window.Ox && Ox.award) Ox.award(5, "prediction", `xray:${scen.id}:${at}`); }
+          controls();
           await wait(700);
-          show(i, { keepMood: true });
+          answering = false;
+          if (i !== at) return;
+          show(at, { keepMood: true });
           say.insertAdjacentHTML("afterbegin", `<p><strong style="color:var(${right ? "--ok" : "--bad"})">${right ? "You called it." : "Not this time."}</strong> ${a.explain || ""}</p>`);
         });
         box.appendChild(b);
       });
-      nextBtn.disabled = true;
       controls();
     }
+    // Step is off while a question is open or an answer is being shown. Back stays on.
     function controls() {
       progEl.style.width = ((i + 1) / states.length) * 100 + "%";
       countEl.textContent = `${i + 1} / ${states.length}`;
-      nextBtn.disabled = i >= states.length - 1;
-      prevBtn.disabled = i <= 0;
-      if (i >= states.length - 1) { stopAuto(); if (window.Ox && Ox.award) Ox.award(5, "x-ray complete", "xray-done:" + scen.id); }
+      const blocked = pending >= 0 || answering;
+      nextBtn.disabled = blocked || i >= states.length - 1;
+      prevBtn.disabled = answering || i <= 0;
+      if (i >= states.length - 1 && !blocked) { stopAuto(); if (window.Ox && Ox.award) Ox.award(5, "x-ray complete", "xray-done:" + scen.id); }
     }
     function stopAuto() { clearInterval(autoTimer); autoTimer = null; autoBtn.textContent = "Autoplay"; }
     function next() {
-      if (i >= states.length - 1) return;
-      const step = scen.steps[i + 1];
-      if (step.ask && !asked[i + 1]) { i += 1; ask(step); return; }
+      if (pending >= 0 || answering || i >= states.length - 1) return;
       show(i + 1);
+    }
+    // Back is allowed during a question. The question stays unanswered, so it
+    // comes back when the reader steps forward again.
+    function back() {
+      if (answering || i <= 0) return;
+      stopAuto();
+      pending = -1;
+      show(i - 1, { instant: true });
     }
 
     nextBtn.addEventListener("click", next);
-    prevBtn.addEventListener("click", () => { stopAuto(); show(i - 1, { instant: true }); });
+    prevBtn.addEventListener("click", back);
     $('[data-act="restart"]', el).addEventListener("click", () => { stopAuto(); load(scen, 0); });
+    // Autoplay stops at a question and at the end, and never passes a question.
+    const autoStep = () => {
+      if (pending >= 0 || answering || i >= states.length - 1) return stopAuto();
+      next();
+      if (pending >= 0) stopAuto();
+    };
     autoBtn.addEventListener("click", () => {
       if (autoTimer) return stopAuto();
       autoBtn.textContent = "Pause";
-      next();
-      autoTimer = setInterval(() => { const ask = i < states.length - 1 && scen.steps[i + 1].ask && !asked[i + 1]; next(); if (ask || i >= states.length - 1) stopAuto(); }, 2800);
+      autoTimer = setInterval(autoStep, 2800);
+      autoStep();
     });
     const picker = $(".xr-picker", el);
     if (picker) scens.forEach((s) => {
@@ -543,12 +593,13 @@
     el._oxKey = (e) => {
       if (e.target.closest("button") && (e.key === " " || e.key === "Enter")) return;
       if (e.key === "ArrowRight") { e.preventDefault(); next(); }
-      if (e.key === "ArrowLeft") { e.preventDefault(); stopAuto(); show(i - 1, { instant: true }); }
+      if (e.key === "ArrowLeft") { e.preventDefault(); back(); }
     };
-    el._oxStart = () => ({ id: scen.id, step: i });
+    // A switch to the other view resumes here; an open question stays open.
+    el._oxStart = () => ({ id: scen.id, step: i, answered: !!asked[i] || !scen.steps[i].ask });
     el._oxStop = () => stopAuto();
     if ("ResizeObserver" in window) { el._oxRO = new ResizeObserver(() => redraw()); el._oxRO.observe(stage); }
-    load(scens.find((s) => s.id === start.id) || scens[0], start.step || 0);
+    load(scens.find((s) => s.id === start.id) || scens[0], start.step || 0, start);
   }
 
   function mountAll() {

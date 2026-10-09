@@ -14,7 +14,8 @@
      id       "ch01-compile"                unique; the data-scene value
      title    "What cargo build does"
      w, h     640, 300                      stage units; the stage keeps this aspect ratio
-     rust     "fn main() {}"                optional code panel (beside the stage when wide)
+     rust     "fn main() {}"                optional code panel (beside the stage when wide);
+                                            the code shown before any beat sets its own
      check    "ok"                          optional with rust: "ok" or an error code
                                             (checked by tools/check-snippets.mjs)
      actors   [ ... ]                       draw order: later is in front, unless z says otherwise
@@ -33,6 +34,12 @@
      { say: "<p>...</p>", line: 1, do: [[op, id, ...args]], ask: {...}, hold: 0 }
      say     caption; it changes when the beat starts (after the answer, for an ask)
      line    code line to mark; sticky until a later beat sets another
+     rust    optional: the code the panel shows from this beat on, until a later beat
+             sets another rust. The panel's badge follows it too. It is the way to show
+             a failing edit and then its fix. Back, the dots and Restart rebuild the
+             code of the beat they land on.
+     check   with rust: "ok" (the default), an error code such as "E0384", "panic" or
+             "skip". The snippet checker compiles every beat's rust with its own check.
      hold    extra ms to stay on the beat in autoplay
      ask     { q, choices, answer, explain }: a prediction. It is shown before the
              beat's ops run, and autoplay waits for it. A right answer earns
@@ -108,7 +115,7 @@
     const timers = new Set();
     const anims = new Set();
     let rafId = 0, shown = -1, asking = -1, playing = false, resumeAfterAsk = false;
-    let stage, linksSvg, sayBody, oxiNode, codePre = null, dots = [];
+    let stage, linksSvg, sayBody, oxiNode, codePre = null, shownCode = null, dots = [];
     const ctl = {};
 
     /* ------------------------------------------------------ timers, animations */
@@ -153,7 +160,9 @@
         model.set(d.id, {
           id: d.id, type, def: d, size: d.size || 80,
           x: d.x, y: d.y,
-          scale: d.scale ?? 1, rotate: d.rotate ?? 0, opacity: d.opacity ?? 1,
+          scale: d.scale ?? 1, rotate: d.rotate ?? 0,
+          // null: the scene never set an opacity, so the page's CSS (classes) decides it.
+          opacity: d.opacity ?? null,
           hidden: !!d.hidden, base: d.pose || "", pose: d.pose || "", poseTok: 0,
           kind: d.kind || "", label: d.label || "",
           art: type === "char" ? { cast: d.cast, opts: d.opts || {} } : type === "prop" ? { prop: d.prop, opts: d.opts || {} } : null,
@@ -203,13 +212,13 @@
         el.style.width = (d.w / W) * 100 + "%";
         el.style.height = (d.h / H) * 100 + "%";
         el.style.transform = "translate(-50%,-50%)";
-        el.style.opacity = m.opacity;
+        el.style.opacity = m.opacity ?? "";
         if (!m.poofing) el.style.visibility = m.hidden ? "hidden" : "";
       } else {
         el.style.zIndex = d.z ?? 3;
         if (m.type !== "text") el.style.width = (m.size / W) * 100 + "%";
         el.style.transform = tf(m.scale, m.rotate);
-        el.style.opacity = m.opacity;
+        el.style.opacity = m.opacity ?? "";
         el.style.setProperty("--mo-s", m.scale);
         if (!m.poofing) el.style.visibility = m.hidden ? "hidden" : "";
       }
@@ -267,7 +276,7 @@
         case "fade": {
           const to = a[0] ?? 1, dur = a[1] ?? DUR.fade, delay = a[2] ?? 0;
           when(delay, () => {
-            const from = m.opacity;
+            const from = m.opacity ?? 1;
             m.opacity = to;
             paint(m);
             if (tween && dur) anim(els.get(m.id), [{ opacity: from }, { opacity: to }], { duration: dur, easing: "ease-in-out" });
@@ -301,7 +310,7 @@
             paint(m);
             if (!tween) { m.poofing = false; paint(m); return; }
             const fade = anim(els.get(m.id), [
-              { transform: tf(m.scale, m.rotate), opacity: m.opacity },
+              { transform: tf(m.scale, m.rotate), opacity: m.opacity ?? 1 },
               { transform: tf(m.scale * 0.6, m.rotate), opacity: 0 },
             ], { duration: DUR.poof, easing: "ease-in" });
             if (fade) fade.addEventListener("finish", () => { m.poofing = false; paint(m); });
@@ -563,12 +572,38 @@
     function setOxi(pose, hold) {
       if (oxiNode) OxCast.pose(oxiNode, pose, hold);
     }
+    // The code in force at beat k: the scene's rust, or the last beat's rust up to k.
+    function codeAt(k) {
+      let src = { rust: scene.rust, check: scene.check };
+      for (let j = 0; j <= k && j < N; j++) {
+        if (beats[j].rust !== undefined) src = { rust: beats[j].rust, check: beats[j].check };
+      }
+      return src;
+    }
+    // Writes the code panel's text and its badge for the code in force.
     function renderCode() {
       if (!codePre) return;
       const cur = asking >= 0 ? asking : shown;
+      const src = codeAt(cur);
+      if (src.rust !== shownCode) {
+        shownCode = src.rust;
+        const text = String(src.rust || "").replace(/^\n/, "");
+        const hl = window.Ox && Ox.highlight ? Ox.highlight(text, "rust") : esc(text);
+        const lines = window.Ox && Ox.splitLines ? Ox.splitLines(hl) : hl.split("\n");
+        codePre.innerHTML = lines.map((l, k) => `<span class="mo-ln" data-line="${k + 1}"><span class="mo-lno">${k + 1}</span>${l || " "}</span>`).join("");
+      }
+      paintCheck(src.check);
       let line = 0;
       for (let i = 0; i <= cur && i < N; i++) if (beats[i].line) line = beats[i].line;
       $$(".mo-ln", codePre).forEach((ln) => ln.classList.toggle("is-now", +ln.dataset.line === line));
+    }
+    // The badge: "compiles", "does not compile", "error E0384", "compiles, panics at runtime" or "needs crates".
+    function paintCheck(check) {
+      if (!ctl.check) return;
+      const needsCrates = check === "skip", panics = check === "panic";
+      const broken = !!check && check !== "ok" && !needsCrates && !panics;
+      ctl.check.textContent = needsCrates ? "needs crates" : panics ? "compiles, panics at runtime" : broken ? (check === "error" ? "does not compile" : "error " + check) : "compiles";
+      ctl.check.className = "mo-check " + (broken ? "is-err" : needsCrates ? "is-skip" : panics ? "is-panic" : "is-ok");
     }
     function updateControls() {
       const cur = asking >= 0 ? asking : shown;
@@ -715,10 +750,8 @@
 
     /* ------------------------------------------------------ the widget */
     function build() {
-      // "skip" marks code that needs crates (tokio, axum, serde): neutral, not an error.
-      const needsCrates = scene.check === "skip", panics = scene.check === "panic";
-      const broken = !!scene.check && scene.check !== "ok" && !needsCrates && !panics;
-      const check = needsCrates ? "needs crates" : panics ? "compiles, panics at runtime" : broken ? (scene.check === "error" ? "does not compile" : "error " + scene.check) : "compiles";
+      // A panel shows when the scene or any of its beats has rust.
+      const hasCode = scene.rust !== undefined || beats.some((b) => b.rust !== undefined);
       root.tabIndex = 0;
       root.setAttribute("role", "group");
       root.setAttribute("aria-label", "Motion explainer: " + (scene.title || scene.id));
@@ -727,8 +760,8 @@
           <span class="ox-label">Motion</span>
           <span class="mo-title"></span>
         </div>
-        <div class="mo-main${scene.rust ? " has-code" : ""}">
-          ${scene.rust ? `<div class="mo-code"><div class="mo-code-head"><span>Rust</span><span class="mo-check ${broken ? "is-err" : needsCrates ? "is-skip" : panics ? "is-panic" : "is-ok"}">${esc(check)}</span></div><pre></pre></div>` : ""}
+        <div class="mo-main${hasCode ? " has-code" : ""}">
+          ${hasCode ? `<div class="mo-code"><div class="mo-code-head"><span>Rust</span><span class="mo-check"></span></div><pre></pre></div>` : ""}
           <div class="mo-stage" aria-hidden="true" style="aspect-ratio:${W} / ${H};--mo-w:${W};--mo-h:${H}"></div>
         </div>
         <div class="mo-foot">
@@ -751,12 +784,9 @@
       ctl.back = $('[data-act="back"]', root);
       ctl.next = $('[data-act="next"]', root);
       ctl.play = $('[data-act="play"]', root);
-      if (scene.rust) {
-        const src = String(scene.rust).replace(/^\n/, "");
-        const hl = window.Ox && Ox.highlight ? Ox.highlight(src, "rust") : esc(src);
-        const lines = window.Ox && Ox.splitLines ? Ox.splitLines(hl) : hl.split("\n");
+      if (hasCode) {
         codePre = $(".mo-code pre", root);
-        codePre.innerHTML = lines.map((l, k) => `<span class="mo-ln" data-line="${k + 1}"><span class="mo-lno">${k + 1}</span>${l || " "}</span>`).join("");
+        ctl.check = $(".mo-check", root);
       }
       const host = $(".mo-dots", root);
       dots = beats.map((b, k) => {

@@ -40,7 +40,7 @@ fn root_admin() -> Admin {
 
 fn main() {
     let ana = deactivate(new_user("Ana", "ana@example.test"));
-    println!("{} active: {}", ana.name, ana.active);
+    println!("{} <{}> active: {}", ana.name, ana.email, ana.active);
     println!("distance: {}", manhattan(Point(3, -4)));
     let _admin = root_admin();
 }

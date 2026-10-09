@@ -1,9 +1,10 @@
 // ============================================================================
 //  QUEST traits3 · Trait objects            Chapter 14 · Traits & Generics
 // ----------------------------------------------------------------------------
-//  A Vec<Shape> won't compile: a trait has no size, and elements need one.
-//  A trait object, Box<dyn Shape>, points at any type that implements Shape,
-//  so one Vec can hold circles, squares and triangles together.
+//  A Vec<dyn Shape> won't compile: a trait object has no size, and elements
+//  need one. A trait object, Box<dyn Shape>, points at any type that
+//  implements Shape, so one Vec can hold circles, squares and triangles
+//  together.
 //
 //  Replace the todo!() bodies. Don't edit the tests.
 //

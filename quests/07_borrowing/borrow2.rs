@@ -8,8 +8,8 @@
 //  the tax is integer math, rounded down. The tests include a very large
 //  price, so think about overflow.
 //
-//  capitalize_first uppercases the first character of a String and leaves
-//  the rest alone. An empty String stays empty.
+//  wrap_in_stars puts a '*' in front of the text and another one after it.
+//  An empty String becomes "**".
 //
 //  Don't edit the tests.
 //
@@ -21,7 +21,7 @@ fn add_tax(prices: &mut [u32], rate_pct: u32) {
     todo!()
 }
 
-fn capitalize_first(s: &mut String) {
+fn wrap_in_stars(s: &mut String) {
     todo!()
 }
 
@@ -30,9 +30,9 @@ fn main() {
     add_tax(&mut prices, 20);
     println!("{prices:?}");
 
-    let mut name = String::from("ferris");
-    capitalize_first(&mut name);
-    println!("{name}");
+    let mut word = String::from("rust");
+    wrap_in_stars(&mut word);
+    println!("{word}");
 }
 
 #[cfg(test)]
@@ -62,17 +62,13 @@ mod tests {
     }
 
     #[test]
-    fn capitalizes_the_first_letter_only() {
-        let mut word = String::from("rust is fun");
-        capitalize_first(&mut word);
-        assert_eq!(word, "Rust is fun");
+    fn wraps_the_text_in_stars() {
+        let mut word = String::from("rust");
+        wrap_in_stars(&mut word);
+        assert_eq!(word, "*rust*");
 
         let mut empty = String::new();
-        capitalize_first(&mut empty);
-        assert_eq!(empty, "");
-
-        let mut accented = String::from("élan");
-        capitalize_first(&mut accented);
-        assert_eq!(accented, "Élan");
+        wrap_in_stars(&mut empty);
+        assert_eq!(empty, "**");
     }
 }

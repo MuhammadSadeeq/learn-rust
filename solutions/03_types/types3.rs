@@ -4,12 +4,13 @@
 //  `for day in days` visits all seven values. The length is fixed by the
 //  type, so nothing can run past the end of the array.
 //
-//  The best day and its hours start at day 0. Only a strictly larger value
-//  replaces them, so on a tie the earlier day stays.
+//  The best day starts at day 0, with that day's hours taken from days[0].
+//  Only a strictly larger value replaces them, so on a tie the earlier day
+//  stays.
 // ============================================================================
 
 fn sum_week(days: [u32; 7]) -> u32 {
-    let mut total = 0;
+    let mut total: u32 = 0;
     for day in days {
         total += day;
     }
@@ -17,14 +18,17 @@ fn sum_week(days: [u32; 7]) -> u32 {
 }
 
 fn busiest_day(days: [u32; 7]) -> usize {
-    let mut best_day = 0;
-    let mut best_hours = days[0];
-    for (day, &hours) in days.iter().enumerate() {
+    let mut best_day: usize = 0;
+    let mut best_hours: u32 = days[0];
+
+    let mut day = 0;
+    for hours in days {
         // Strictly greater: a tie keeps the earlier day.
         if hours > best_hours {
             best_day = day;
             best_hours = hours;
         }
+        day += 1;
     }
     best_day
 }

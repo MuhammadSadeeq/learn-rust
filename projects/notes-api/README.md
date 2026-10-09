@@ -69,7 +69,7 @@ bare 405 with no body.
 | File | What it does | Laravel counterpart |
 |---|---|---|
 | `Cargo.toml`, `Cargo.lock` | Dependencies, with exact versions locked | `composer.json`, `composer.lock` |
-| `src/main.rs` | Boots the server once and waits for Ctrl+C | `public/index.php` and `bootstrap/app.php`, which run on every request in Laravel |
+| `src/main.rs` | Boots the server once, then stops it cleanly on Ctrl+C or SIGTERM, finishing requests in flight | `public/index.php` and `bootstrap/app.php`, which run on every request in Laravel |
 | `src/lib.rs` | Exposes `app()` so `main` and the tests build the same router | The application factory that tests call |
 | `src/routes.rs` | Routes, the fallback, and the layers (middleware) | `routes/api.php` (created by `php artisan install:api`) and the middleware in `bootstrap/app.php` |
 | `src/handlers.rs` | One async function per endpoint | A resource controller, such as `NoteController`, wired up by `Route::apiResource` |

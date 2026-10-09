@@ -38,6 +38,7 @@ fn main() {
 
     let scores = vec![90, 85, 77];
     let graded = scores;
+    // Chapter 13 explains iter() and sum(). Read it as: add up the scores.
     let total: i32 = scores.iter().sum();
     println!("total {total} from {} scores", graded.len());
 }

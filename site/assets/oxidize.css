@@ -496,6 +496,7 @@ kbd {
 }
 .ox-code-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   padding: 6px 8px 6px 14px;
@@ -511,13 +512,15 @@ kbd {
   display: flex;
   align-items: center;
   gap: 8px;
+  white-space: nowrap;
 }
 .ox-code-lang::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c-kw); }
 .ox-code[data-lang="php"] .ox-code-lang::before { background: #8f93ff; }
 .ox-code[data-lang="sh"] .ox-code-lang::before { background: #a8d99a; }
 .ox-code[data-lang="toml"] .ox-code-lang::before { background: #f0c674; }
 .ox-code[data-lang="rustc"] .ox-code-lang::before { background: #ff6b6b; }
-.ox-code-title { color: var(--code-ink); font: 500 0.78rem/1 var(--font-mono); opacity: 0.85; margin-left: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* The title wraps rather than cutting the file name short. */
+.ox-code-title { color: var(--code-ink); font: 500 0.78rem/1.35 var(--font-mono); opacity: 0.85; margin-left: 4px; white-space: normal; overflow-wrap: anywhere; min-width: 0; flex: 1 1 auto; }
 .ox-code-tools { margin-left: auto; display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
 .ox-code-tools button, .ox-code-tools a {
   font: 600 0.72rem/1 var(--font-mono);
@@ -964,17 +967,16 @@ details.ox-think > .ox-think-body > :last-child { margin-bottom: 0; }
   font: inherit;
   color: inherit;
 }
+/* Both faces share one grid cell, so the card is as tall as its taller face.
+   Nothing is clipped: a long answer makes the card taller, never cut off. */
 .ox-flash-inner {
-  position: relative;
-  height: 100%;
-  min-height: 160px;
+  display: grid;
   transform-style: preserve-3d;
   transition: transform 0.55s cubic-bezier(.2,.8,.2,1);
 }
 .ox-flash.is-flipped .ox-flash-inner { transform: rotateY(180deg); }
 .ox-flash-face {
-  position: absolute;
-  inset: 0;
+  grid-area: 1 / 1;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   border-radius: var(--radius-lg);
@@ -985,7 +987,8 @@ details.ox-think > .ox-think-body > :last-child { margin-bottom: 0; }
   display: flex;
   flex-direction: column;
   gap: 8px;
-  overflow: auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 0.95rem;
 }
 .ox-flash-face .ox-label { color: var(--oxide-ink); }
@@ -1197,6 +1200,17 @@ details.ox-think > .ox-think-body > :last-child { margin-bottom: 0; }
 .xr-var.is-leaving, .xr-block.is-leaving { animation: ox-vanish 0.45s ease both; }
 .xr-var.is-err { border-color: var(--bad); box-shadow: 0 0 0 3px var(--bad-soft); }
 .xr-heap { display: flex; flex-wrap: wrap; gap: 10px; align-content: flex-start; min-height: 60px; }
+/* The binary zone: read-only bytes, one full row under the stack and heap. */
+.xr-lane[hidden] { display: none; }
+.xr-lane.is-data { grid-column: 1 / -1; }
+.xr-lane.is-data .xr-lane-title { color: var(--muted); }
+.xr-data { display: flex; flex-wrap: wrap; gap: 10px; align-content: flex-start; }
+.xr-block.is-static { border-style: dashed; border-color: var(--muted); background: var(--surface-2); }
+.xr-block.is-static .xr-block-label { color: var(--muted); }
+.xr-show { font-weight: 700; color: var(--ink); }
+.xr-var.is-shadowed { border-style: dotted; opacity: 0.55; }
+.xr-var.is-shadowed .xr-var-name b { color: var(--ghost); }
+.xr-var.is-shadowed .xr-var-val { color: var(--ghost); font-style: italic; }
 .xr-block {
   display: grid;
   gap: 4px;

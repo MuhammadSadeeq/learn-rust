@@ -11,7 +11,7 @@ fn main() {
     println!("{n}");
 }`,
     steps: [
-      { line: 1, say: "<p>Calling <code>main</code> pushes a <strong>stack frame</strong> for its local variables.</p>", ops: [["frame", "main"]] },
+      { line: 1, say: "<p>Calling <code>main</code> pushes a <strong>stack frame</strong> for its local variables. Chapter 5 explains the stack.</p>", ops: [["frame", "main"]] },
       { line: 2, say: "<p><code>let mut n = 1;</code> makes one box named <code>n</code> in the frame. It holds an <code>i32</code>. The <code>mut</code> means this box may be refilled later.</p>", ops: [["let", "n", "i32", "1", { mut: true }]] },
       {
         line: 3,
@@ -30,7 +30,7 @@ fn main() {
       },
       { line: 4, say: "<p><code>n * 10</code> reads the current 2 and produces 20. The box is refilled with 20. Its type stays <code>i32</code> throughout.</p>", ops: [["set", "n", "20"]] },
       { line: 5, say: "<p><code>println!</code> reads the box and prints 20.</p>", ops: [["out", "20"]] },
-      { line: 6, say: "<p>The closing brace ends <code>main</code>. Its frame is popped, and <code>n</code> goes with it. An <code>i32</code> owns no heap bytes, so there is nothing to free.</p>", ops: [["drop", "n"], ["pop"]] }
+      { line: 6, say: "<p>The closing brace ends <code>main</code>. Its frame is popped, and <code>n</code> goes with it. An <code>i32</code> owns no heap bytes (Chapter 5 covers the heap), so there is nothing to free.</p>", ops: [["drop", "n"], ["pop"]] }
     ]
   },
   {
@@ -45,7 +45,7 @@ fn main() {
 }`,
     steps: [
       { line: 1, say: "<p>Calling <code>main</code> pushes its frame.</p>", ops: [["frame", "main"]] },
-      { line: 2, say: "<p>The first <code>n</code> holds the text <code>\"5\"</code>, a <code>&amp;str</code>. That text is stored inside the program itself, so no heap bytes are involved.</p>", ops: [["let", "n", "&str", "\"5\"", { id: "n1" }]] },
+      { line: 2, say: "<p>The first <code>n</code> holds the text <code>\"5\"</code>, a <code>&amp;str</code>. That text is stored inside the program itself, so no heap bytes are involved (Chapter 5 covers the heap).</p>", ops: [["let", "n", "&str", "\"5\"", { id: "n1" }]] },
       {
         line: 3,
         ask: {
@@ -59,9 +59,9 @@ fn main() {
           explain: "Shadowing never deletes anything. It creates a new variable and hides the old name."
         },
         say: "<p><code>n.parse()</code> reads the text and produces a number. The second <code>let</code> makes a new box, also named <code>n</code>, holding an <code>i32</code> with the value 5. The first box still exists until <code>main</code> ends, but no line of code can name it now.</p>",
-        ops: [["let", "n", "i32", "5", { id: "n2" }], ["end", "n1"]]
+        ops: [["let", "n", "i32", "5", { id: "n2" }], ["shadow", "n1"]]
       },
-      { line: 4, say: "<p><code>n * 2</code> reads the newest <code>n</code>, which is 5, and produces 10. That result goes into a third box, also named <code>n</code>. The middle box is still there, and nothing can name it.</p>", ops: [["let", "n", "i32", "10", { id: "n3" }], ["end", "n2"]] },
+      { line: 4, say: "<p><code>n * 2</code> reads the newest <code>n</code>, which is 5, and produces 10. That result goes into a third box, also named <code>n</code>. The middle box is still there, and nothing can name it.</p>", ops: [["let", "n", "i32", "10", { id: "n3" }], ["shadow", "n2"]] },
       { line: 5, say: "<p><code>println!</code> names <code>n</code>. The name points at the newest box, so it prints 10.</p>", ops: [["out", "10"]] },
       { line: 6, say: "<p>The closing brace ends <code>main</code>. The three boxes are dropped in reverse order of creation. None of them owns heap bytes, so nothing is freed.</p>", ops: [["drop", "n3"], ["drop", "n2"], ["drop", "n1"], ["pop"]] }
     ]

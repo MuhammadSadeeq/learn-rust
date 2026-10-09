@@ -30,14 +30,14 @@ pub const TIMEOUT_TAUNT: &str = "The boss waits you out. Something never finishe
 pub const OXI_LINES: [&str; 10] = [
     "Snip snap. On to the next one.",
     "Clean build. That's the nicest thing rustc ever says.",
-    "If it compiles, it usually works. This one does.",
+    "Clean build and green tests. A good sign, not a proof.",
     "No errors, no panics, no worries.",
     "Another one forged. The metal's getting stronger.",
-    "The Inspector stamps it: approved.",
+    "The Forge stamps it: approved.",
     "That's what it feels like when Rust clicks.",
     "Sideways victory dance, engaged.",
     "Every test green. Stretch those claws.",
-    "Tidy. Nothing leaked, nothing dangled.",
+    "Tidy. Tests are green; leaks are still yours to check.",
 ];
 
 /// Oxi at rest on the ground. Each frame is six lines; "" is a blank row.

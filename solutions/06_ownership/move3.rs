@@ -31,6 +31,7 @@ fn main() {
     println!("{archived}");
 
     // Read the Vec first (iter only borrows it), then move it.
+    // Chapter 13 explains iter() and sum(). Read it as: add up the scores.
     let scores = vec![90, 85, 77];
     let total: i32 = scores.iter().sum();
     let graded = scores;

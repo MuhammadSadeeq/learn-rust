@@ -6,19 +6,40 @@
 //  u32 values.
 //
 //  `sum_week` adds up the hours in the week. `busiest_day` returns the index
-//  of the largest value. On a tie, the earlier day wins. Both bodies are
-//  todo!() for now. Don't edit the tests.
+//  of the largest value. On a tie, the earlier day wins. Your part is the
+//  starting values and their types. The loops are written for you. Don't edit
+//  the tests.
 //
 //  cargo forge          check your work (re-runs every time you save)
 //  cargo forge hint     a nudge in the right direction
 // ============================================================================
 
 fn sum_week(days: [u32; 7]) -> u32 {
-    todo!()
+    // Your part: start the total at zero, typed as the return value.
+    let mut total: u32 = todo!();
+    // `for day in days` visits all seven values. Chapter 4 explains `for`.
+    for day in days {
+        total += day;
+    }
+    total
 }
 
 fn busiest_day(days: [u32; 7]) -> usize {
-    todo!()
+    // Your part: start with day 0 and its hours. Index the array with days[0].
+    let mut best_day: usize = todo!();
+    let mut best_hours: u32 = todo!();
+
+    // `day` counts the positions and `hours` is the value. Chapter 4 explains `if`.
+    let mut day = 0;
+    for hours in days {
+        // Strictly greater: a tie keeps the earlier day.
+        if hours > best_hours {
+            best_day = day;
+            best_hours = hours;
+        }
+        day += 1;
+    }
+    best_day
 }
 
 fn main() {

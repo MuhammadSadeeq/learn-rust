@@ -22,7 +22,9 @@
   const reduceMotion = () => window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   /* ------------------------------------------------------------ state model */
-  function emptyState() { return { frames: [], heap: [], out: [] }; }
+  // data: read-only blocks in the binary (string literals, statics). They are
+  // never freed and never Alloc'd, and they have their own zone.
+  function emptyState() { return { frames: [], heap: [], data: [], out: [] }; }
   function findVar(st, id) {
     for (const f of st.frames) for (const v of f.vars) if (v.id === id) return v;
     return null;
@@ -127,6 +129,12 @@
         if (v) v.status = "ended";
         break;
       }
+      // A name reused by a newer `let`: the old variable still exists, nothing can name it.
+      case "shadow": {
+        const v = findVar(st, a[0]);
+        if (v) v.status = "shadowed";
+        break;
+      }
       case "ghost": {
         const v = findVar(st, a[0]);
         if (v) v.status = "moved";
@@ -171,6 +179,13 @@
       case "free": st.heap = st.heap.filter((x) => x.id !== a[0]); break;
       case "rc": { const b = findBlock(st, a[0]); if (b) { b.rc = a[1]; b.flash = true; } break; }
       case "label": { const b = findBlock(st, a[0]); if (b) b.label = a[1]; break; }
+      // ["static", id, content, len, {label, show}]: bytes in read-only data.
+      case "static": {
+        const [id, content, len, opts = {}] = a;
+        const cells = Array.isArray(content) ? content.map(String) : Array.from(String(content));
+        st.data.push({ id, cells, cap: len || cells.length, label: opts.label || "", show: opts.show, status: "", static: true });
+        break;
+      }
       case "out": st.out.push(String(a[0])); break;
       default: fail("unknown op");
     }
@@ -183,6 +198,7 @@
       st = clone(st);
       for (const f of st.frames) for (const v of f.vars) delete v.flash;
       for (const b of st.heap) delete b.flash;
+      for (const b of st.data) delete b.flash;
       st.heap = st.heap.filter((b) => b.status !== "freed" || st.frames.some((f) => f.vars.some((v) => v.val.ref === b.id || v.val.mut === b.id)));
       (step.ops || []).forEach((op) => apply(st, op, scen));
       st.line = step.line || 0;
@@ -227,6 +243,7 @@
         <div class="xr-stage">
           <div class="xr-lane is-stack"><div class="xr-lane-title">Stack <small>fixed size, per call</small></div><div class="xr-frames"></div></div>
           <div class="xr-lane is-heap"><div class="xr-lane-title">Heap <small>growable, via pointer</small></div><div class="xr-heap"></div></div>
+          <div class="xr-lane is-data" hidden><div class="xr-lane-title">Binary <small>(read-only data)</small></div><div class="xr-data"></div></div>
           <div class="xr-out" hidden></div>
           <svg class="xr-arrows" aria-hidden="true"></svg>
         </div>
@@ -248,6 +265,8 @@
     const codePre = $(".xr-code pre", el);
     const framesEl = $(".xr-frames", el);
     const heapEl = $(".xr-heap", el);
+    const dataLane = $(".xr-lane.is-data", el);
+    const dataEl = $(".xr-data", el);
     const outEl = $(".xr-out", el);
     const svg = $(".xr-arrows", el);
     const stage = $(".xr-stage", el);
@@ -259,24 +278,31 @@
     const nextBtn = $('[data-act="next"]', el);
     const autoBtn = $('[data-act="auto"]', el);
 
-    let scen, states, i, asked, autoTimer = null;
+    // pending: the step whose prediction is on screen (-1 for none). A pending
+    // question blocks Step, ArrowRight and autoplay until it is answered.
+    // answering: an answer is being shown, so nothing may move yet.
+    let scen, states, i, asked, autoTimer = null, pending = -1, answering = false;
     const varEls = new Map(), blockEls = new Map(), frameEls = new Map();
 
-    function load(s, step = 0) {
+    // start.answered: the view that handed over had already answered step `step`.
+    function load(s, step = 0, start = {}) {
       scen = s;
       states = buildStates(s);
       i = Math.max(0, Math.min(states.length - 1, step));
-      // Steps already passed were answered (or skipped) before the switch.
+      // Steps before this one were passed, so their questions are answered.
       asked = {};
-      for (let j = 0; j <= i; j++) asked[j] = true;
+      for (let j = 0; j < i; j++) asked[j] = true;
+      asked[i] = !!start.answered || !s.steps[i].ask;
+      pending = -1; answering = false;
       varEls.clear(); blockEls.clear(); frameEls.clear();
-      framesEl.innerHTML = ""; heapEl.innerHTML = ""; svg.innerHTML = "";
+      framesEl.innerHTML = ""; heapEl.innerHTML = ""; dataEl.innerHTML = ""; svg.innerHTML = "";
+      dataLane.hidden = !states.some((st) => st.data.length);
       titleEl.textContent = s.title || "";
       const hl = window.Ox && Ox.highlight ? Ox.highlight(s.code.replace(/^\n/, ""), "rust") : esc(s.code);
       const lines = window.Ox && Ox.splitLines ? Ox.splitLines(hl) : hl.split("\n");
       codePre.innerHTML = lines.map((l, k) => `<span class="ln" data-line="${k + 1}"><span class="lnno">${k + 1}</span>${l || " "}</span>`).join("");
       if (picker) $$("button", picker).forEach((b) => b.classList.toggle("is-primary", b.dataset.id === s.id));
-      show(i, false);
+      show(i);
     }
 
     function renderState(st, step) {
@@ -311,8 +337,10 @@
           }
           const kind = kindOf(v.val);
           const st2 = v.status || "";
-          ve.className = ["xr-var", "is-" + kind, st2.includes("moved") && "is-moved", st2.includes("err") && "is-err", st2.includes("ended") && "is-moved", v.flash && "is-flash"].filter(Boolean).join(" ");
-          ve.innerHTML = `<div class="xr-var-name"><b>${v.mut ? '<span style="font-weight:500;color:var(--muted)">mut </span>' : ""}${esc(v.name)}</b><small>${esc(v.type || "")}</small></div><div class="xr-var-val">${st2.includes("ended") ? "<span>last use passed</span>" : valHtml(v)}</div>`;
+          const shadowed = st2.includes("shadowed");
+          ve.className = ["xr-var", "is-" + kind, st2.includes("moved") && "is-moved", st2.includes("err") && "is-err", st2.includes("ended") && "is-moved", shadowed && "is-shadowed", v.flash && "is-flash"].filter(Boolean).join(" ");
+          const shown = shadowed ? "<span>shadowed (name reused)</span>" : st2.includes("ended") ? "<span>last use passed</span>" : valHtml(v);
+          ve.innerHTML = `<div class="xr-var-name"><b>${v.mut ? '<span style="font-weight:500;color:var(--muted)">mut </span>' : ""}${esc(v.name)}</b><small>${esc(v.type || "")}</small></div><div class="xr-var-val">${shown}</div>`;
         });
         let empty = $(":scope > .xr-frame-empty", fe);
         if (!f.vars.length && !empty) fe.appendChild(Object.assign(document.createElement("div"), { className: "xr-frame-empty", textContent: "no variables yet" }));
@@ -326,8 +354,9 @@
           setTimeout(() => fe.remove(), reduceMotion() ? 0 : 430);
         }
       });
-      // heap
-      const liveBlocks = new Set(st.heap.map((b) => b.id));
+      // heap and binary data (read-only, never freed)
+      const allBlocks = st.heap.concat(st.data || []);
+      const liveBlocks = new Set(allBlocks.map((b) => b.id));
       blockEls.forEach((be, id) => {
         if (!liveBlocks.has(id)) {
           blockEls.delete(id);
@@ -335,12 +364,14 @@
           setTimeout(() => be.remove(), reduceMotion() ? 0 : 430);
         }
       });
-      st.heap.forEach((b) => {
+      allBlocks.forEach((b) => {
         let be = blockEls.get(b.id);
-        if (!be) { be = document.createElement("div"); be.dataset.id = b.id; heapEl.appendChild(be); blockEls.set(b.id, be); }
-        be.className = "xr-block" + (b.flash ? " is-flash" : "") + (b.rc !== undefined ? " is-shared" : "") + (b.status === "freed" ? " is-freed" : "");
-        const spare = Math.max(0, (b.cap || 0) - b.cells.length);
-        be.innerHTML = `<div class="xr-block-label"><span>${esc(b.label || "heap " + b.id)}</span>${b.rc !== undefined ? `<span class="xr-rc">count ${b.rc}</span>` : `<span>${b.cells.length}/${b.cap}</span>`}</div>
+        if (!be) { be = document.createElement("div"); be.dataset.id = b.id; (b.static ? dataEl : heapEl).appendChild(be); blockEls.set(b.id, be); }
+        be.className = "xr-block" + (b.static ? " is-static" : "") + (b.flash ? " is-flash" : "") + (b.rc !== undefined ? " is-shared" : "") + (b.status === "freed" ? " is-freed" : "");
+        const spare = b.static ? 0 : Math.max(0, (b.cap || 0) - b.cells.length);
+        // `show` is the value as the program reads it (an i32 read as 5); it replaces the byte count.
+        const right = b.rc !== undefined ? `<span class="xr-rc">count ${b.rc}</span>` : b.show !== undefined ? `<span class="xr-show">${esc(b.show)}</span>` : `<span>${b.cells.length}/${b.cap}</span>`;
+        be.innerHTML = `<div class="xr-block-label"><span>${esc(b.label || "heap " + b.id)}</span>${right}</div>
           <div class="xr-bytes">${b.cells.map((c, k) => `<span class="xr-byte" data-i="${k}">${esc(c === " " ? "␠" : c)}</span>`).join("")}${"<span class=\"xr-byte is-spare\">·</span>".repeat(spare)}</div>`;
       });
       if (!st.heap.length && !$(".xr-heap-empty", heapEl)) heapEl.insertAdjacentHTML("beforeend", `<span class="xr-frame-empty xr-heap-empty">empty</span>`);
@@ -387,17 +418,19 @@
           let tEl = be;
           if (v.val.at !== undefined) tEl = $(`.xr-byte[data-i="${v.val.at}"]`, be) || be;
           const T = center(tEl.getBoundingClientRect(), base);
-          const sx = cell ? S.r : S.r, sy = S.y;
+          // Leave from the bottom edge of the ptr cell and dip below the row, so
+          // the line never runs across the len and cap cells beside it.
+          const sx = cell ? S.x : S.r, sy = cell ? S.b : S.y;
           if (T.l > S.r + 8) {
             ex = T.l - 2; ey = v.val.at !== undefined ? T.t - 1 : T.y;
             if (v.val.at !== undefined) { ex = T.x; ey = T.t - 2; }
             const dx = Math.max(30, (ex - sx) * 0.5);
-            d = v.val.at !== undefined ? `M${sx},${sy} C${sx + dx},${sy} ${ex},${ey - 40} ${ex},${ey}` : `M${sx},${sy} C${sx + dx},${sy} ${ex - dx},${ey} ${ex},${ey}`;
+            d = v.val.at !== undefined ? `M${sx},${sy} C${sx + dx * 0.4},${sy + 24} ${ex},${ey - 40} ${ex},${ey}` : `M${sx},${sy} C${sx},${sy + 24} ${ex - dx},${ey} ${ex},${ey}`;
             ang = v.val.at !== undefined ? Math.PI / 2 : 0;
           } else {
             // heap is below (narrow layout)
             ex = T.x; ey = T.t - 2;
-            d = `M${S.r},${sy} C${S.r + 60},${sy} ${ex},${ey - 60} ${ex},${ey}`;
+            d = `M${sx},${sy} C${sx},${sy + 30} ${ex},${ey - 60} ${ex},${ey}`;
             ang = Math.PI / 2;
           }
         } else if (tv) {
@@ -434,13 +467,14 @@
       narrText.innerHTML = step.say || "";
     }
 
-    function show(k, user) {
+    // Shows step k. A step with an unanswered prediction shows the question
+    // instead of its narration, so the answer never appears before the reader
+    // has made a call.
+    function show(k) {
       i = Math.max(0, Math.min(states.length - 1, k));
       const step = scen.steps[i];
-      if (step.ask && !asked[i] && user) {
-        askQuestion(step);
-        return;
-      }
+      if (step.ask && !asked[i]) { askQuestion(step); return; }
+      pending = -1;
       renderState(states[i], step);
       narrate(step);
       updateControls();
@@ -448,6 +482,7 @@
 
     function askQuestion(step) {
       stopAuto();
+      pending = i;
       const prevState = states[Math.max(0, i - 1)];
       renderState(Object.assign(clone(prevState), { line: states[i].line }), {});
       narr.classList.remove("is-error");
@@ -460,12 +495,19 @@
         b.className = "ox-choice";
         b.innerHTML = `<span class="ox-key">${"ABCDEF"[k]}</span><span>${c}</span>`;
         b.addEventListener("click", () => {
-          asked[i] = true;
+          if (answering || asked[i]) return;
+          const at = i;
+          asked[at] = true;
+          answering = true;
           const right = k === a.answer;
           $$("button", box).forEach((x, j) => { x.disabled = true; x.classList.add(j === a.answer ? "is-correct" : j === k ? "is-wrong" : "is-faded"); });
-          if (right && window.Ox && Ox.award) Ox.award(5, "prediction", `xray:${scen.id}:${i}`);
+          if (right && window.Ox && Ox.award) Ox.award(5, "prediction", `xray:${scen.id}:${at}`);
+          updateControls();
           setTimeout(() => {
-            renderState(states[i], step);
+            answering = false;
+            if (i !== at) return;
+            pending = -1;
+            renderState(states[at], step);
             narrText.innerHTML = `<p><strong style="color:var(${right ? "--ok" : "--bad"})">${right ? "You called it." : "Not this time."}</strong> ${a.explain || ""}</p>${step.say || ""}`;
             narr.classList.toggle("is-error", !!step.error);
             updateControls();
@@ -473,43 +515,54 @@
         });
         box.appendChild(b);
       });
-      nextBtn.disabled = true;
-      updateCount();
+      updateControls();
     }
 
     function updateCount() {
       prog.style.width = ((i + 1) / states.length) * 100 + "%";
       count.textContent = `${i + 1} / ${states.length}`;
     }
+    // Step is off while a question is open or an answer is being shown.
     function updateControls() {
       updateCount();
-      nextBtn.disabled = i >= states.length - 1;
-      $('[data-act="prev"]', el).disabled = i <= 0;
-      if (i >= states.length - 1) {
+      const blocked = pending >= 0 || answering;
+      nextBtn.disabled = blocked || i >= states.length - 1;
+      $('[data-act="prev"]', el).disabled = answering || i <= 0;
+      if (i >= states.length - 1 && !blocked) {
         stopAuto();
         if (window.Ox && Ox.award) Ox.award(5, "x-ray complete", "xray-done:" + scen.id);
       }
     }
     function stopAuto() { clearInterval(autoTimer); autoTimer = null; autoBtn.textContent = "Autoplay"; }
     function goNext() {
-      if (i >= states.length - 1) return;
-      const step = scen.steps[i + 1];
-      if (step.ask && !asked[i + 1]) { i = i + 1; askQuestion(step); return; }
-      show(i + 1, true);
+      if (pending >= 0 || answering || i >= states.length - 1) return;
+      show(i + 1);
+    }
+    // Back is allowed during a question. The question stays unanswered, so it
+    // comes back when the reader steps forward again.
+    function goBack() {
+      if (answering || i <= 0) return;
+      stopAuto();
+      pending = -1;
+      show(i - 1);
     }
 
     $('[data-act="next"]', el).addEventListener("click", goNext);
-    $('[data-act="prev"]', el).addEventListener("click", () => { stopAuto(); asked[i] = asked[i] || false; show(i - 1, false); });
+    $('[data-act="prev"]', el).addEventListener("click", goBack);
     $('[data-act="restart"]', el).addEventListener("click", () => { stopAuto(); load(scen, 0); });
     autoBtn.addEventListener("click", () => {
       if (autoTimer) return stopAuto();
       autoBtn.textContent = "Pause";
-      autoTimer = setInterval(() => { if (i >= states.length - 1 || scen.steps[i + 1].ask && !asked[i + 1]) { goNext(); stopAuto(); } else goNext(); }, 2600);
+      autoTimer = setInterval(() => {
+        if (pending >= 0 || answering || i >= states.length - 1) return stopAuto();
+        goNext();
+        if (pending >= 0) stopAuto();
+      }, 2600);
     });
     el._oxKey = (e) => {
       if (e.target.closest("button") && (e.key === " " || e.key === "Enter")) return;
       if (e.key === "ArrowRight") { e.preventDefault(); goNext(); }
-      if (e.key === "ArrowLeft") { e.preventDefault(); show(i - 1, false); }
+      if (e.key === "ArrowLeft") { e.preventDefault(); goBack(); }
     };
     let picker = $(".xr-picker", el);
     if (picker) {
@@ -525,9 +578,10 @@
     }
     if ("ResizeObserver" in window) { el._oxRO = new ResizeObserver(() => states && drawArrows(states[i], false)); el._oxRO.observe(stage); }
     el.oxLoad = (id) => { const s = lib.find((x) => x.id === id); if (s) { stopAuto(); load(s, 0); } };
-    el._oxStart = () => ({ id: scen.id, step: i });
+    // A switch to the other view resumes here; an open question stays open.
+    el._oxStart = () => ({ id: scen.id, step: i, answered: !!asked[i] || !scen.steps[i].ask });
     el._oxStop = () => { stopAuto(); cancelAnimationFrame(raf); };
-    load(scens.find((s) => s.id === start.id) || scens[0], start.step || 0);
+    load(scens.find((s) => s.id === start.id) || scens[0], start.step || 0, start);
   }
 
   /* ============================================================ views

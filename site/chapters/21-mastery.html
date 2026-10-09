@@ -57,7 +57,7 @@
 <div class="ox-motion" data-scene="ch21-macro"></div>
 
 <aside class="ox-callout" data-kind="php">
-  <p>Laravel's <code>Macroable</code> trait adds methods at runtime, as in <code>Collection::macro('avg', ...)</code>. The program is different while it runs. A Rust macro changes the source before the binary exists, and the result is fixed at build time. The nearest PHP idea is a code generator that writes <code>.php</code> files before you deploy.</p>
+  <p>Laravel's <code>Macroable</code> trait adds methods at runtime, as in <code>Collection::macro('toUpper', ...)</code>. The program is different while it runs. A Rust macro changes the source before the binary exists, and the result is fixed at build time. The nearest PHP idea is a code generator that writes <code>.php</code> files before you deploy.</p>
 </aside>
 
 <div class="ox-quiz" data-id="21:square" data-label="Predict first">
@@ -786,7 +786,7 @@ fn main() {
 
 <h3>Let the compiler find every place to change</h3>
 
-<p>Two attributes and one habit do the same job. <code>#[must_use]</code> asks for a warning when a value is ignored. <code>#[non_exhaustive]</code> lets a library add an enum variant later without breaking its callers, because callers must keep a <code>_</code> arm. Inside the crate that defines the enum, that attribute has no effect. The habit is to leave <code>match</code> arms unwritten as a wildcard, so the compiler lists the places that need the new case.</p>
+<p>Two attributes and one habit do the same job. <code>#[must_use]</code> asks for a warning when a value is ignored. <code>#[non_exhaustive]</code> lets a library add an enum variant later without breaking its callers, because callers must keep a <code>_</code> arm. Inside the crate that defines the enum, that attribute has no effect. The habit is to avoid a wildcard arm in your own <code>match</code>es, so that the compiler lists every place that needs the new case.</p>
 
 <div class="ox-quiz" data-id="21:must-use" data-label="Does rustc object?">
   <p class="ox-q">Does this compile, and does rustc say anything about it?</p>
@@ -1075,9 +1075,9 @@ fn main() {
 </section>
 
 <section>
-<h2 id="forge-source">Read the Forge</h2>
+<h2 id="forge-source">Read the Forge CLI</h2>
 
-<p>The course has its own trainer. The Forge is the program behind <code>cargo forge</code>. It watches your quest files, compiles each one with <code>rustc</code>, runs its tests, and moves you on when they pass. It is about 1,200 lines of standard-library Rust with no dependencies, so every technique in it comes from this course.</p>
+<p>The course has its own trainer, the Forge CLI, which you run as <code>cargo forge</code>. It watches your quest files, compiles each one with <code>rustc</code>, runs its tests, and moves you on when they pass. It is about 1,200 lines of standard-library Rust with no dependencies, so every technique in it comes from this course.</p>
 
 <div class="ox-table-wrap">
 <table class="ox-table">
@@ -1112,7 +1112,7 @@ enum Input {
 fn main() {
     let (tx, rx) = mpsc::channel::&lt;Input&gt;();
 
-    // The Forge reads io::stdin() on this thread. This demo sends fixed
+    // The real `cargo forge` reads io::stdin() on this thread. This demo sends fixed
     // lines so the example finishes without waiting for a keyboard.
     thread::spawn(move || {
         for line in ["check", "hint", "quit"] {
@@ -1133,7 +1133,7 @@ fn main() {
                 }
             }
             Ok(Input::Closed) =&gt; break,
-            // Nothing typed for 300 ms. The Forge checks file timestamps here.
+            // Nothing typed for 300 ms. `cargo forge` checks file timestamps here.
             Err(RecvTimeoutError::Timeout) =&gt; {}
             Err(RecvTimeoutError::Disconnected) =&gt; break,
         }
@@ -1156,9 +1156,9 @@ fn main() {
 
 <h3>The timeout</h3>
 
-<p>A quest with an endless loop must not hang the Forge. <code>runner.rs</code> starts the test binary, then checks it in a loop. <code>try_wait</code> returns straight away, with nothing, while the child is still running. After 20 seconds the loop kills the child. <code>wait</code> would block until the child exited, so it could never give up.</p>
+<p>A quest with an endless loop must not hang <code>cargo forge</code>. <code>runner.rs</code> starts the test binary, then checks it in a loop. <code>try_wait</code> returns straight away, with nothing, while the child is still running. After 20 seconds the loop kills the child. <code>wait</code> would block until the child exited, so it could never give up.</p>
 
-<pre class="rs" data-check="skip" data-title="forge/src/runner.rs, lines 97 to 108">
+<pre class="rs" data-check="skip" data-title="forge/src/runner.rs, lines 101 to 112">
     let started = Instant::now();
     let status = loop {
         if let Some(status) = child.try_wait()? {
@@ -1172,11 +1172,38 @@ fn main() {
         thread::sleep(Duration::from_millis(20));
     };</pre>
 
-<p>The same file reads the child's stdout and stderr on helper threads. A pipe holds only a small buffer. A test that prints a lot, with nobody reading, blocks on its next write and never exits, and the Forge then waits out the whole timeout. Reading on separate threads keeps the buffer empty.</p>
+<p>The same file reads the child's stdout and stderr on helper threads. A pipe holds only a small buffer. A test that prints a lot, with nobody reading, blocks on its next write and never exits, and the Forge CLI then waits out the whole timeout. Reading on separate threads keeps the buffer empty.</p>
 
-<p>The file's header comment explains one more choice. The Forge calls <code>rustc</code> directly instead of Cargo, because each quest is a single file, and one broken quest can never stop another from building. Read <code>runner.rs</code> from the top to see the other half of that decision.</p>
+<p>The file's header comment explains one more choice. The Forge CLI calls <code>rustc</code> directly instead of Cargo, because each quest is a single file, and one broken quest can never stop another from building. Read <code>runner.rs</code> from the top to see the other half of that decision.</p>
 
-<p>Look for the newer syntax as well. The Forge uses <code>let ... else</code>, <code>matches!</code>, and let chains such as <code>if let Some(minor) = minor &amp;&amp; minor &lt; 85</code>. Let chains are the newest of these, so they are worth looking up in the Rust reference.</p>
+<p>Look for the newer syntax as well. The Forge CLI uses <code>let ... else</code> in <code>quests.rs</code>, and <code>matches!</code> in <code>main.rs</code>. It avoids let chains on purpose in <code>check_toolchain</code>, so that check still compiles on the old toolchains it warns about. Read that comment. A real let chain looks like this:</p>
+
+<pre class="rs" data-run data-stdout="x is 42">
+fn main() {
+    let input = "x=42";
+    if let Some((key, value)) = input.split_once('=')
+        &amp;&amp; let Ok(n) = value.parse::&lt;i32&gt;()
+        &amp;&amp; n &gt; 40
+    {
+        println!("{key} is {n}");
+    }
+}</pre>
+
+<p>Let chains are stable since Rust 1.88, and only in edition 2024. The same code on edition 2021 is refused, and rustc says why:</p>
+
+<pre class="rustc">error: let chains are only allowed in Rust 2024 or later
+ --&gt; src/main.rs:3:8
+  |
+3 |     if let Some((key, value)) = input.split_once('=')
+  |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: let chains are only allowed in Rust 2024 or later
+ --&gt; src/main.rs:4:12
+  |
+4 |         &amp;&amp; let Ok(n) = value.parse::&lt;i32&gt;()
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: aborting due to 2 previous errors</pre>
 </section>
 
 <section>
@@ -1187,7 +1214,7 @@ fn main() {
 <ol>
   <li><a href="https://doc.rust-lang.org/book/">The Rust Book</a>, the official guide. Read the chapters you skipped.</li>
   <li><a href="https://doc.rust-lang.org/rust-by-example/">Rust by Example</a>, short runnable programs for each feature.</li>
-  <li><a href="https://github.com/rust-lang/rustlings">Rustlings</a>, small exercises you run in your terminal, like the Forge.</li>
+  <li><a href="https://github.com/rust-lang/rustlings">Rustlings</a>, small exercises you run in your terminal, like <code>cargo forge</code>.</li>
   <li><a href="https://doc.rust-lang.org/nomicon/">The Rustonomicon</a>, the rules of <code>unsafe</code> in depth. Read it before you write <code>unsafe</code> for a real project.</li>
   <li><a href="https://rust-lang.github.io/async-book/">The Async Book</a>, then the <a href="https://tokio.rs/tokio/tutorial">tokio tutorial</a>.</li>
   <li><em>Rust for Rustaceans</em> by Jon Gjengset, for traits, unsafe code, async and API design at the next level.</li>
@@ -1399,7 +1426,7 @@ fn main() {
 
 <div class="ox-motion" data-scene="ch21-parade"></div>
 
-<p>The last quest is the job queue, <code>boss5_job_queue</code>. It is a worker pool built from threads and channels, the same kind of machine a Laravel queue worker runs, and it combines most of the course. Pass it in the Forge. Then keep the two labs you will return to: the <a href="../labs/ai-dojo.html">Agent Code Review Dojo</a> for review practice, and the Recall Deck for the cards in this chapter.</p>
+<p>The last quest is the job queue, <code>boss5_job_queue</code>. It is a worker pool built from threads and channels, the same kind of machine a Laravel queue worker runs, and it combines most of the course. Pass it with <code>cargo forge</code>. Then keep the two labs you will return to: the <a href="../labs/ai-dojo.html">Agent Code Review Dojo</a> for review practice, and the Recall Deck for the cards in this chapter.</p>
 
 <details class="ox-think">
   <summary>Before you close this page: which check do you run first on an agent's diff?</summary>

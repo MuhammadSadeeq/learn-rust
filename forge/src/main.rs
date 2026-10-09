@@ -14,7 +14,7 @@ mod runner;
 mod ui;
 
 use std::fs;
-use std::io::{self, BufRead};
+use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 use std::sync::mpsc::{self, RecvTimeoutError};
@@ -68,8 +68,7 @@ fn main() -> ExitCode {
 fn run(args: &[String], style: Style) -> Result<ExitCode, Box<dyn std::error::Error>> {
     let command = args.first().map(String::as_str).unwrap_or("watch");
     if matches!(command, "help" | "-h" | "--help") {
-        print!("{HELP}");
-        return Ok(ExitCode::SUCCESS);
+        return finish_output(io::stdout().lock().write_all(HELP.as_bytes()));
     }
 
     let root = find_root().ok_or(
@@ -91,10 +90,7 @@ fn run(args: &[String], style: Style) -> Result<ExitCode, Box<dyn std::error::Er
         "watch" => watch(&mut ctx)
             .map(|_| ExitCode::SUCCESS)
             .map_err(Into::into),
-        "list" => {
-            list(&ctx);
-            Ok(ExitCode::SUCCESS)
-        }
+        "list" => finish_output(list(&ctx)),
         "hint" => {
             let q = pick(&ctx, target)?;
             print_hint(&ctx, q);
@@ -180,21 +176,25 @@ fn check(ctx: &mut Ctx, i: usize) -> io::Result<Outcome> {
     Ok(outcome)
 }
 
-fn list(ctx: &Ctx) {
+/// Prints the quest list. It writes through a locked stdout, so a closed pipe
+/// (`cargo forge list | head`) comes back as an error that `finish_output` ignores.
+fn list(ctx: &Ctx) -> io::Result<()> {
     let s = ctx.style;
+    let mut out = io::stdout().lock();
     let current = quests::current(&ctx.quests, &ctx.progress);
     let mut last_chapter = 0;
     for (i, q) in ctx.quests.iter().enumerate() {
         if q.chapter != last_chapter {
             last_chapter = q.chapter;
-            println!(
+            writeln!(
+                out,
                 "\n{}",
                 s.bold(&format!(
                     "Chapter {:02} · {}",
                     q.chapter,
                     ctx.chapters.title(q.chapter)
                 ))
-            );
+            )?;
         }
         let (mark, name) = if ctx.progress.is_solved(q) {
             (s.green("✓"), s.dim(&format!("{:<18}", q.name)))
@@ -213,15 +213,26 @@ fn list(ctx: &Ctx) {
         } else {
             String::new()
         };
-        println!("  {mark} {name} {}{boss}{here}", q.title);
+        writeln!(out, "  {mark} {name} {}{boss}{here}", q.title)?;
     }
     let done = ctx.progress.solved.len().min(ctx.quests.len());
-    println!(
+    writeln!(
+        out,
         "\n{} {}/{} quests passed\n",
         ui::progress_bar(done, ctx.quests.len(), 30),
         done,
         ctx.quests.len()
-    );
+    )
+}
+
+/// `cargo forge list | head` closes the pipe early. That is the reader's
+/// choice, not a failure, so the command ends quietly.
+fn finish_output(result: io::Result<()>) -> Result<ExitCode, Box<dyn std::error::Error>> {
+    match result {
+        Ok(()) => Ok(ExitCode::SUCCESS),
+        Err(e) if e.kind() == io::ErrorKind::BrokenPipe => Ok(ExitCode::SUCCESS),
+        Err(e) => Err(e.into()),
+    }
 }
 
 fn print_hint(ctx: &Ctx, q: &Quest) {
@@ -392,7 +403,7 @@ fn watch(ctx: &mut Ctx) -> io::Result<()> {
                         footer(ctx, passed);
                     }
                     "l" | "list" => {
-                        list(ctx);
+                        list(ctx)?;
                         footer(ctx, passed);
                     }
                     "s" | "skip" => {

@@ -13,12 +13,9 @@
 
 /// Pushes `x` onto `v`, then reports the first value and the new length.
 fn push_and_report(v: &mut Vec<i32>, x: i32) -> String {
-    let first = v.first();
+    let first = &v[0];
     v.push(x);
-    match first {
-        Some(f) => format!("first {f}, len {}", v.len()),
-        None => format!("empty, len {}", v.len()),
-    }
+    format!("first {first}, len {}", v.len())
 }
 
 /// Swaps the first two values in place. Shorter slices are left alone.
@@ -28,7 +25,9 @@ fn swap_first_two(v: &mut [i32]) {
     }
     let a = &mut v[0];
     let b = &mut v[1];
-    std::mem::swap(a, b);
+    let tmp = *a;
+    *a = *b;
+    *b = tmp;
 }
 
 fn main() {

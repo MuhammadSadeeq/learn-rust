@@ -15,6 +15,7 @@ enum ConfigError {
 }
 
 impl fmt::Display for ConfigError {
+    // Chapter 15 explains '_, the lifetime the compiler fills in here.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ConfigError::Missing(key) => write!(f, "missing key: {key}"),
@@ -29,15 +30,20 @@ impl fmt::Display for ConfigError {
 impl Error for ConfigError {}
 
 fn get_port(pairs: &[(&str, &str)]) -> Result<u16, ConfigError> {
-    // Find the "port" pair. Without it, the config is missing a key.
-    let Some((_, raw)) = pairs.iter().find(|(key, _)| *key == "port") else {
-        return Err(ConfigError::Missing(String::from("port")));
-    };
-    // The key exists, but its value must parse as a u16.
-    raw.parse::<u16>().map_err(|_| ConfigError::Invalid {
-        key: String::from("port"),
-        value: raw.to_string(),
-    })
+    // Walk the pairs until the "port" key. The key's value must parse as a u16.
+    for (key, raw) in pairs {
+        if *key == "port" {
+            return match raw.parse::<u16>() {
+                Ok(port) => Ok(port),
+                Err(_) => Err(ConfigError::Invalid {
+                    key: String::from("port"),
+                    value: raw.to_string(),
+                }),
+            };
+        }
+    }
+    // No "port" pair at all: the config is missing a key.
+    Err(ConfigError::Missing(String::from("port")))
 }
 
 fn main() {

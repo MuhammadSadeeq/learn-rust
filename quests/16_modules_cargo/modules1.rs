@@ -3,8 +3,9 @@
 // ----------------------------------------------------------------------------
 //  Items are private to their module unless marked pub. Here main builds an
 //  Account with struct syntax and calls a helper in `bank`. rustc stops at the
-//  private function first (E0603). Once that is fixed, the private fields are
-//  rejected too (E0451).
+//  private function first (E0603). Next, the tests report that Account::new
+//  does not exist yet (E0599). Once `new` exists, main's struct literal is
+//  rejected too, because the fields are private (E0451).
 //
 //  Give bank a public way to create an account, and make the function main
 //  needs public. Keep the fields private. Only a constructor can guarantee

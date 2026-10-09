@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION iter2 · fold, zip and sum        Chapter 13 · Iterators & Closures
+//  SOLUTION iter2 · zip, scan and windows    Chapter 13 · Iterators & Closures
 // ----------------------------------------------------------------------------
 //  zip walks two iterators side by side, so map and sum finish the dot product.
 //  scan carries state from one item to the next. Here the state is the biggest

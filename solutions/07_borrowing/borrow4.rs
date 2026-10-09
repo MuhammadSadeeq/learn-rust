@@ -14,6 +14,7 @@ fn make_greeting(name: &str) -> String {
 
 /// The longest whitespace-separated word. On a tie, the first one wins.
 fn longest_word(text: &str) -> &str {
+    // Chapter 13 explains fold and closures. Read it as: keep the longer word.
     text.split_whitespace()
         .fold("", |best, w| if w.len() > best.len() { w } else { best })
 }

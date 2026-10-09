@@ -50,7 +50,7 @@
 
 <p>A <code>String</code> is owned text that can grow. The variable holds a pointer, a length and a capacity, and the bytes live on the heap. A <code>&amp;str</code> is a <em>view</em>: a pointer and a length, 16 bytes on the stack, pointing at bytes that somebody else owns. A view owns nothing, so it can't free anything, and it must not outlive the bytes it points at. Chapter 15 covers how the compiler checks that.</p>
 
-<p>String literals are the third case. <code>"hi"</code> has type <code>&amp;'static str</code>: a view of bytes that are compiled into the program itself.</p>
+<p>String literals are the third case. <code>"hi"</code> has type <code>&amp;'static str</code>: a view of bytes that are compiled into the program itself. The <code>'static</code> part is a lifetime, which Chapter 15 explains.</p>
 
 <div class="ox-xray ox-wide" data-scenario="str-literal-vs-string"></div>
 
@@ -127,6 +127,8 @@ fn main() {
 <h2 id="first-word" data-toc="Slice, not index">Why returning a slice beats returning an index</h2>
 
 <p>Here is a common first attempt at a function that finds the first word of a sentence. It returns a position, which is a plain number.</p>
+
+<p>The loop below uses two things you will meet properly later. <code>&amp;item</code> copies each byte out of its reference, which Chapter 7 explains. <code>.enumerate()</code> pairs each item with its position, which Chapter 13 explains.</p>
 
 <div class="ox-quiz" data-id="08:quiz-first-word" data-label="Predict">
   <p class="ox-q">This compiles. What does it print, and why?</p>
@@ -251,11 +253,13 @@ error[E0277]: the type `str` cannot be indexed by `{integer}`
 
 For more information about this error, try `rustc --explain E0277`.</pre>
 
+<p>The real report goes on past these lines. It adds a help block that quotes two lines of the standard library source, and a last note: <code>required for String to implement Index&lt;{integer}&gt;</code>. Those lines depend on the Rust source installed on your machine, so they are trimmed here.</p>
+
 <p>The compiler won't guess. "The first character" could mean the first byte, the first <code>char</code>, or the first visible letter, and finding the nth <code>char</code> means walking the bytes from the start. Say which one you mean:</p>
 
 <ul>
   <li><code>s.as_bytes()[0]</code> gives the first byte, as a <code>u8</code>.</li>
-  <li><code>s.chars().nth(0)</code> gives the first character, as an <code>Option&lt;char&gt;</code>.</li>
+  <li><code>s.chars().nth(0)</code> gives the first character, as an <code>Option&lt;char&gt;</code>. An <code>Option</code> is a value that is either <code>Some(c)</code> or <code>None</code>. Chapter 10 covers it; for now, read <code>None</code> as "nothing came back".</li>
   <li><code>&amp;s[0..1]</code> gives the first byte as a <code>&amp;str</code>. That is a whole character only when the first character is one byte long. Otherwise it panics.</li>
 </ul>
 
@@ -284,7 +288,7 @@ fn main() {
 
 <h3>Bytes, chars and graphemes</h3>
 
-<p>Three methods show three levels. <code>.bytes()</code> gives the raw bytes, <code>.chars()</code> gives Unicode scalar values, and <code>.char_indices()</code> gives each character together with the byte position where it starts.</p>
+<p>Three methods show three levels. <code>.bytes()</code> gives the raw bytes, <code>.chars()</code> gives Unicode scalar values, and <code>.char_indices()</code> gives each character together with the byte position where it starts. <code>.collect()</code> gathers the items of an iterator into a collection, and Chapter 13 explains iterators in full.</p>
 
 <pre class="rs" data-run data-stdout="[h][é][l][l][o]\n[104, 195, 169, 108, 108, 111]\n0: h\n1: é\n3: l\n4: l\n5: o">
 fn main() {
@@ -641,7 +645,7 @@ fn main() {
     println!("{report}");
 }</pre>
 
-<p>PHP has the same operations under other names, and the Unicode-aware versions carry an <code>mb_</code> prefix. This bridge runs the same checks on both sides:</p>
+<p>PHP has the same operations under other names, and the Unicode-aware versions carry an <code>mb_</code> prefix. This bridge runs the same checks on both sides. The <code>ucfirst</code> function below uses <code>chain</code> to join two iterators and <code>collect</code> to build the String. <code>Some</code> and <code>None</code> are the two cases of an <code>Option</code>, which Chapter 10 covers.</p>
 
 <div class="ox-bridge">
   <pre class="php">
@@ -800,7 +804,7 @@ fn main() {
   </ul>
 </div>
 
-<p><code>split</code> returns a lazy iterator, not an array. When you need the array that <code>explode</code> gives you, add <code>.collect::&lt;Vec&lt;_&gt;&gt;()</code>. Nothing is split until something pulls on the iterator.</p>
+<p><code>split</code> returns a lazy iterator, not an array. When you need the array that <code>explode</code> gives you, add <code>.collect::&lt;Vec&lt;_&gt;&gt;()</code>, which names the collection to build. Nothing is split until something pulls on the iterator.</p>
 
 <p>The uppercase row is the one to watch. <code>strtoupper()</code> changes only ASCII letters, so <code>strtoupper("é")</code> returns <code>é</code> unchanged. Use <code>mb_strtoupper()</code> for text with accents, and it matches <code>to_uppercase()</code>.</p>
 </section>

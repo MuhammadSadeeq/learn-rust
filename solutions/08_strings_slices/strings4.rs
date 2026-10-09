@@ -1,25 +1,33 @@
 // ============================================================================
 //  SOLUTION strings4 · Building strings        Chapter 08 · Strings & Slices
 // ----------------------------------------------------------------------------
-//  Each word is handled on its own, then the pieces are joined with one space.
+//  title_case walks the words and pushes each one into a String, with one
+//  space between words.
 //  slugify builds the output by pushing characters, and it adds a dash only
 //  when the last character pushed was not already one. That is how a run of
 //  separators becomes one dash.
 // ============================================================================
 
+/// Uppercases the first character of each word and keeps the rest.
 fn title_case(s: &str) -> String {
-    let words: Vec<String> = s.split_whitespace().map(capitalize).collect();
-    words.join(" ")
-}
-
-/// Uppercases the first character of `word` and keeps the rest.
-fn capitalize(word: &str) -> String {
-    let mut chars = word.chars();
-    match chars.next() {
-        // One char can uppercase to several chars, so to_uppercase is an iterator.
-        Some(first) => first.to_uppercase().chain(chars).collect(),
-        None => String::new(),
+    let mut out = String::new();
+    for word in s.split_whitespace() {
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        for (i, c) in word.char_indices() {
+            if i == 0 {
+                // One char can uppercase to several chars (ß becomes SS), so
+                // to_uppercase gives a sequence. Push each char of it.
+                for upper in c.to_uppercase() {
+                    out.push(upper);
+                }
+            } else {
+                out.push(c);
+            }
+        }
     }
+    out
 }
 
 fn slugify(s: &str) -> String {

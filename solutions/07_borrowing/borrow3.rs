@@ -2,27 +2,30 @@
 //  SOLUTION borrow3 · Readers or a writer      Chapter 07 · Borrowing
 // ----------------------------------------------------------------------------
 //  A push can reallocate the Vec's buffer, so no reference into the Vec may
-//  survive it. Copying the first value out ends the borrow before the push.
-//  Swapping the whole slice needs only one &mut borrow, which the swap method
-//  provides, so no two element borrows are ever alive together.
+//  survive it. Copying the first value out ends any borrow before the push.
+//  Swapping goes through indexing, one place at a time, so no two mutable
+//  borrows of the slice are ever alive together.
 // ============================================================================
 
 /// Pushes `x` onto `v`, then reports the first value and the new length.
 fn push_and_report(v: &mut Vec<i32>, x: i32) -> String {
-    // Copy the first value out (i32 is Copy). Once it's an Option<i32>, nothing
-    // borrows v any more, so the push is allowed.
-    let first = v.first().copied();
-    v.push(x);
-    match first {
-        Some(f) => format!("first {f}, len {}", v.len()),
-        None => format!("empty, len {}", v.len()),
+    // An empty Vec has no first value. Push, then report that.
+    if v.is_empty() {
+        v.push(x);
+        return format!("empty, len {}", v.len());
     }
+    // i32 is Copy, so v[0] gives a copy and no borrow of v is left alive.
+    let first = v[0];
+    v.push(x);
+    format!("first {first}, len {}", v.len())
 }
 
 /// Swaps the first two values in place. Shorter slices are left alone.
 fn swap_first_two(v: &mut [i32]) {
     if v.len() >= 2 {
-        v.swap(0, 1);
+        let tmp = v[0];
+        v[0] = v[1];
+        v[1] = tmp;
     }
 }
 

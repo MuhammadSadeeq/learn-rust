@@ -14,7 +14,7 @@ fn main() {
         line: 2,
         ask: { q: "<code>Box::new(5)</code> makes a box. Where does the 5 live?", choices: ["On the stack, inside <code>b</code>.", "On the heap, and <code>b</code> holds a pointer to it.", "In a separate stack frame that belongs to the box."], answer: 1, explain: "A Box is an owning pointer. The value sits on the heap, and the stack holds only the pointer." },
         say: "<p><code>Box::new</code> asks the allocator for space for one <code>i32</code> and writes the 5 into it. <code>b</code> is a pointer to that space: eight bytes on a 64-bit machine. The 5 itself never lives in the frame.</p>",
-        ops: [["alloc", "h1", "5", 1, { label: "5 in a Box" }], ["let", "b", "Box<i32>", { ptr: "h1" }]]
+        ops: [["alloc", "h1", "5", 1, { label: "5 in a Box", show: "5" }], ["let", "b", "Box<i32>", { ptr: "h1" }]]
       },
       { line: 3, say: "<p><code>*b</code> follows the pointer to the heap and reads the 5. Adding 1 gives 6. The <code>*</code> is the dereference operator.</p>", ops: [["out", "6"]] },
       { line: 4, say: "<p>End of <code>main</code>. <code>b</code> is the only owner of the box, so dropping it frees the heap space. Then the frame is popped.</p>", ops: [["drop", "b"], ["pop"]] }

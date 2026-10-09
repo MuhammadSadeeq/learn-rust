@@ -25,6 +25,8 @@ fn parse_port(s: &str) -> u16 {
 }
 
 fn initials(name: Option<&str>) -> String {
+    // The chain after the check reads each word's first letter. Chapter 13
+    // explains iterator chains like this one.
     name.unwrap()
         .split_whitespace()
         .filter_map(|word| word.chars().next())

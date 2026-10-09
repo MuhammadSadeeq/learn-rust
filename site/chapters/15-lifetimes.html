@@ -372,6 +372,31 @@ fn main() {
   </ol>
   <div class="ox-why"><p><code>longer</code> has two reference inputs, so rule 1 gives them two lifetimes. Rule 2 needs exactly one input lifetime, and rule 3 needs a self. Nothing decides the output's lifetime, so the compiler asks you to name it. The other two follow the rules.</p></div>
 </div>
+
+<h3 id="anon-lifetime">The anonymous lifetime, '_</h3>
+
+<p>Write <code>'_</code> when a type has a lifetime parameter and you don't want to name it. It means "a lifetime here, which the compiler works out". <code>Formatter&lt;'_&gt;</code> is the formatter that the <code>Display</code> impl in Chapter 11 receives. Its lifetime ties it to the output it writes into, and the signature doesn't need a name for that. You can also write plain <code>fmt::Formatter</code>, which the compiler reads the same way.</p>
+
+<p>The same mark appears in return types, as in <code>impl Iterator&lt;Item = String&gt; + '_</code>. It says that the returned iterator borrows from whatever <code>&amp;self</code> points to. Since edition 2024 the compiler adds that link for you, so the <code>+ '_</code> is optional. Edition 2021 needs it, and without it the compiler stops with E0700.</p>
+
+<pre class="rs" data-run data-stdout="Ana
+Bo">
+struct Team {
+    members: Vec&lt;String&gt;,
+}
+
+impl Team {
+    fn names(&amp;self) -&gt; impl Iterator&lt;Item = String&gt; + '_ {
+        self.members.iter().cloned()
+    }
+}
+
+fn main() {
+    let t = Team { members: vec!["Ana".to_string(), "Bo".to_string()] };
+    for n in t.names() {
+        println!("{n}");
+    }
+}</pre>
 </section>
 
 <section>
@@ -486,7 +511,7 @@ println!("{greeting}");</pre>
 
 <p>You will meet the word in bounds too, such as <code>T: 'static</code>. Read it as "T holds no borrows shorter than the whole program." It does not mean "T lives forever". A value can be dropped at the end of a function and still satisfy the bound, as long as it doesn't borrow anything shorter-lived.</p>
 
-<p>An owned <code>String</code> is the standard example. It contains no borrows, so it satisfies <code>T: 'static</code>, even though it is dropped early. A <code>&amp;String</code> points at a local, so it doesn't satisfy the bound. Here is a function with that bound, and two calls to it:</p>
+<p>An owned <code>String</code> is the standard example. It contains no borrows, so it satisfies <code>T: 'static</code>, even though it is dropped early. A <code>&amp;String</code> points at a local, so it doesn't satisfy the bound. Here is a function with that bound, and two calls to it. The other bound, <code>Send</code>, means the value is safe to move to another thread. Chapter 18 explains it.</p>
 
 <pre class="rs" data-check="E0597">
 fn spawn_it&lt;T: Send + 'static&gt;(t: T) {
@@ -526,7 +551,7 @@ error[E0597]: `s` does not live long enough
 note: requirement that the value outlives `'static` introduced here
   --> src/main.rs:1:23
    |
- 1 | fn spawn_it<T: Send + 'static>(t: T) {
+ 1 | fn spawn_it&lt;T: Send + 'static&gt;(t: T) {
    |                       ^^^^^^^
 
 For more information about this error, try `rustc --explain E0597`.</pre>
@@ -735,7 +760,7 @@ fn main() {
     <li data-correct>No. <code>words</code> holds references into <code>text</code>, and <code>text</code> is dropped at the inner brace while <code>words</code> is still used.</li>
     <li>No. A <code>Vec</code> can never hold <code>&amp;str</code> values.</li>
   </ol>
-  <div class="ox-why"><p><code>split</code> yields slices of <code>text</code>, and collecting them keeps those slices. So <code>words</code> borrows from <code>text</code>. The inner brace drops <code>text</code>, and then <code>println!</code> reads <code>words</code>. Collecting into a <code>Vec&lt;String&gt;</code> copies each piece into an owned <code>String</code>, and then the program compiles.</p></div>
+  <div class="ox-why"><p><code>split</code> yields slices of <code>text</code>, and collecting them keeps those slices. So <code>words</code> borrows from <code>text</code>. The inner brace drops <code>text</code>, and then <code>println!</code> reads <code>words</code>. Mapping each piece to an owned <code>String</code> first copies the text. With <code>words</code> declared as <code>Vec&lt;String&gt;</code>, the line <code>words = text.split(' ').map(String::from).collect();</code> compiles, because the <code>Vec</code> owns its words.</p></div>
 </div>
 
 <div class="ox-quiz" data-id="15:e0515" data-label="Check yourself">

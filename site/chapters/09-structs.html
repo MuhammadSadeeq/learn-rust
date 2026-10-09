@@ -267,7 +267,7 @@ For more information about this error, try `rustc --explain E0382`.
   <p>After <code>..u1</code>, <code>u1</code> is partly moved. Its <code>name</code> is gone, but <code>email</code>, <code>active</code> and <code>logins</code> are still usable, because the update never took them. Check which fields the update actually took before you reuse the original.</p>
 </aside>
 
-<p>The motion below uses the same idea with one change. The literal writes <code>name</code>, so the update takes <code>email</code> from <code>ana</code> and copies <code>age</code>. Watch which leash moves.</p>
+<p>The motion below uses the same idea with one change. The literal writes <code>name</code>, so the update takes <code>email</code> from <code>ana</code> and copies <code>age</code>. Watch which owner ends up holding the moved <code>email</code>.</p>
 
 <div class="ox-motion" data-scene="ch09-update"></div>
 
@@ -862,6 +862,34 @@ fn main() {
   </ol>
   <div class="ox-why"><p>A <code>String</code> owns heap memory, and duplicating its bits would give two owners of one buffer. Only the types that are <code>Copy</code> can be copied that way, and Chapter 6 listed them. For this struct, derive <code>Clone</code> alone and call <code>.clone()</code> when you need a second value.</p></div>
 </div>
+<h3 id="default-by-hand">Writing <code>Default</code> by hand</h3>
+
+<p><code>derive(Default)</code> fills each field with its default value. Sometimes the values you want are not zero or empty, such as a retry count of 3. Then you write the method yourself. This is the manual version of what <code>derive</code> writes.</p>
+
+<pre class="rs" data-run data-stdout="Settings { name: &quot;api&quot;, retries: 3, verbose: false }">
+#[derive(Debug)]
+struct Settings {
+    name: String,
+    retries: u32,
+    verbose: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Settings {
+            name: String::from("api"),
+            retries: 3,
+            verbose: false,
+        }
+    }
+}
+
+fn main() {
+    println!("{:?}", Settings::default());
+}
+</pre>
+
+<p>The block <code>impl Default for Settings</code> says that <code>Settings</code> has a <code>default</code> function, and <code>Self</code> means <code>Settings</code>. Chapter 14 explains the <code>impl Trait for Type</code> form in full. For now, read it as a promise: this type knows its own default, and here is the code for it.</p>
 </section>
 
 <section>
@@ -941,7 +969,7 @@ fn main() {
 
 <details class="ox-callout" data-kind="deep">
   <summary>Why the default layout is not the C layout</summary>
-  <p>With <code>#[repr(C)]</code> on the same struct, the fields keep their declaration order. <code>a</code> sits at byte 0, three bytes of padding follow, <code>b</code> starts at byte 4, <code>c</code> sits at byte 8, and three more padding bytes round the total up to 12. The default layout is not specified, so rustc may choose a different order, and that can change between versions. Don't write code that depends on field offsets. <code>#[repr(C)]</code> exists for talking to C libraries, and you will meet it again in the unsafe chapter, Chapter 21.</p>
+  <p>With <code>#[repr(C)]</code> on the same struct, the fields keep their declaration order. <code>a</code> sits at byte 0, three bytes of padding follow, <code>b</code> starts at byte 4, <code>c</code> sits at byte 8, and three more padding bytes round the total up to 12. The default layout is not specified, so rustc may choose a different order, and that can change between versions. Don't write code that depends on field offsets. <code>#[repr(C)]</code> asks for the C layout: fields in the order you wrote them, with the padding a C compiler would add. You need it only when a C library reads the struct's memory directly.</p>
 </details>
 
 <p>The same rules explain a <code>User</code>. Two <code>String</code>s take 24 bytes each, the <code>u64</code> takes 8 and the <code>bool</code> takes 1. That totals 57. The compiler rounds up to 64, so that every <code>User</code> in an array starts on an aligned address.</p>
@@ -1031,7 +1059,7 @@ class Post extends Model
   <pre class="rs" data-stdout="Hello Some(1700000000)">
 struct Post {
     title: String,
-    published_at: Option&lt;u64&gt;,
+    published_at: Option&lt;u64&gt;, // Some(a number) or None. Chapter 10 covers Option.
 }
 
 impl Post {

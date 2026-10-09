@@ -253,7 +253,7 @@ error[E0596]: cannot borrow data in an `Rc` as mutable
 
 For more information about this error, try `rustc --explain E0596`.</pre>
 
-<p>There are two ways out. <code>Rc::get_mut</code> returns a <code>&amp;mut T</code>, but only when there are no other handles, strong or weak. That means the value is no longer shared. The other way is a <code>RefCell</code>, the next section, which allows mutation through a shared handle.</p>
+<p>There are two ways out. <code>Rc::get_mut</code> returns <code>Some(&amp;mut T)</code> only when there are no other handles, strong or weak, which means the value is no longer shared. Otherwise it returns <code>None</code>. The other way is a <code>RefCell</code>, the next section, which allows mutation through a shared handle.</p>
 
 <p>One more limit: <code>Rc</code> is for one thread. Sending an <code>Rc</code> into another thread is compile error E0277, <code>Rc&lt;String&gt;</code> cannot be sent between threads safely. Chapter 18 introduces <code>Arc</code>, the same idea with an atomic counter that is safe to share across threads.</p>
 </section>
@@ -261,7 +261,7 @@ For more information about this error, try `rustc --explain E0596`.</pre>
 <section>
 <h2 id="refcell">RefCell&lt;T&gt;: borrow rules at runtime</h2>
 
-<p>Chapter 07 gave you the borrow rules: any number of shared borrows, or one exclusive borrow, never both. The compiler checks them before the program runs. Some programs only know who is borrowing once they run. <code>RefCell&lt;T&gt;</code> moves the same rules into the running program. It hands out a guard for each borrow, and it panics if you break a rule.</p>
+<p>Chapter 07 gave you the borrow rules: any number of shared borrows, or one exclusive borrow, never both. The compiler checks them before the program runs. Some programs only know who is borrowing once they run. <code>RefCell&lt;T&gt;</code> moves the same rules into the running program. It hands out a guard for each borrow, and it panics if you break a rule. Unlike a <code>Mutex</code>, which you will meet in Chapter 18, a <code>RefCell</code> never waits. A broken rule panics on the spot.</p>
 
 <div class="ox-meet" data-cast="guard" data-say="I check every borrow while the program runs. Break a rule and the alarm sounds."></div>
 
@@ -754,7 +754,7 @@ fn main() {
     let b = clean("has space");
     println!("{a} {b}");
 }</pre>
-  <p>The <code>'_</code> tells the reader that the result borrows from the input. Chapter 15 explains that notation.</p>
+  <p>The <code>'_</code> tells the reader that the result borrows from the input. <a href="15-lifetimes.html#anon-lifetime">Chapter 15</a> explains that notation.</p>
 </details>
 </section>
 
@@ -940,7 +940,7 @@ fn main() {
     <li>A <strong>smart pointer</strong> owns what it points to and adds behavior: <strong>Deref</strong> to use the value like a reference, and <strong>Drop</strong> to clean up.</li>
     <li><code>Box&lt;T&gt;</code>: one owner, the value on the heap, and a fixed-size pointer on the stack. Use it for recursive types and trait objects.</li>
     <li><code>Rc&lt;T&gt;</code>: many owners in one thread, read-only. <code>Rc::clone</code> adds one to the count. The value is dropped when the count reaches zero.</li>
-    <li><code>RefCell&lt;T&gt;</code>: the borrow rules, checked at runtime. Many <code>borrow()</code> guards, or one <code>borrow_mut()</code>. A conflict panics, and <code>try_borrow_mut</code> returns an error instead. <code>Cell&lt;T&gt;</code> does the same job for <code>Copy</code> values.</li>
+    <li><code>RefCell&lt;T&gt;</code>: the borrow rules, checked at runtime. A change through a shared <code>&amp;</code> is called interior mutability. Many <code>borrow()</code> guards, or one <code>borrow_mut()</code>. A conflict panics, and <code>try_borrow_mut</code> returns an error instead. <code>Cell&lt;T&gt;</code> does the same job for <code>Copy</code> values.</li>
     <li><code>Rc&lt;RefCell&lt;T&gt;&gt;</code>: shared and mutable in one thread. This is the PHP object model, written out.</li>
     <li><code>Weak&lt;T&gt;</code>: a handle that does not own. Use it to break cycles. <code>upgrade()</code> returns <code>Option&lt;Rc&lt;T&gt;&gt;</code>.</li>
   </ul>

@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION boss1_receipt · Print a receipt          Chapter 04 · Control Flow
+//  SOLUTION boss1_receipt · Print a receipt         Chapter 04 · Control Flow
 // ----------------------------------------------------------------------------
 //  Each function is one step of the invoice, and the later steps build on the
 //  earlier ones.
@@ -9,13 +9,12 @@
 //  overflow. Adding half of the divisor before dividing rounds half up, so an
 //  exact .5 goes up.
 //
-//  `format_money` takes the dollars with / and the cents with %. It counts
-//  the dollar digits from the right and puts a comma before each group of
-//  three.
+//  `for (name, qty, unit_cents) in items` works on a borrowed slice. Each
+//  field is a reference, so the numbers are read with `*`.
 //
 //  `render` pads each piece to its column width. Item rows use widths 16, 3
 //  and 10. The summary labels use 19 (16 plus 3), so their prices end in the
-//  same column.
+//  same column. Each row ends with a newline.
 // ============================================================================
 
 fn line_total(qty: u32, unit_cents: u32) -> u32 {
@@ -24,8 +23,8 @@ fn line_total(qty: u32, unit_cents: u32) -> u32 {
 
 fn subtotal(items: &[(&str, u32, u32)]) -> u32 {
     let mut sum = 0;
-    for &(_, qty, unit_cents) in items {
-        sum += line_total(qty, unit_cents);
+    for (_, qty, unit_cents) in items {
+        sum += line_total(*qty, *unit_cents);
     }
     sum
 }
@@ -44,7 +43,7 @@ fn format_money(cents: u32) -> String {
     for (i, ch) in dollars.char_indices() {
         // Count from the right: a comma goes before every third digit,
         // except at the very start.
-        if i > 0 && (digits - i).is_multiple_of(3) {
+        if i > 0 && (digits - i) % 3 == 0 {
             grouped.push(',');
         }
         grouped.push(ch);
@@ -54,20 +53,19 @@ fn format_money(cents: u32) -> String {
 }
 
 fn render(items: &[(&str, u32, u32)], rate_bp: u32) -> String {
-    let mut lines: Vec<String> = Vec::new();
-    for &(name, qty, unit_cents) in items {
-        let price = format_money(line_total(qty, unit_cents));
-        lines.push(format!("{name:<16}{qty:>3}{price:>10}"));
+    let mut text = String::new();
+    for (name, qty, unit_cents) in items {
+        let price = format_money(line_total(*qty, *unit_cents));
+        text.push_str(&format!("{name:<16}{qty:>3}{price:>10}\n"));
     }
 
     let sub = subtotal(items);
     let tax_cents = tax(sub, rate_bp);
-    lines.push(format!("{:<19}{:>10}", "Subtotal", format_money(sub)));
-    lines.push(format!("{:<19}{:>10}", "Tax", format_money(tax_cents)));
     let total = sub + tax_cents;
-    lines.push(format!("{:<19}{:>10}", "Total", format_money(total)));
-
-    lines.join("\n")
+    text.push_str(&format!("{:<19}{:>10}\n", "Subtotal", format_money(sub)));
+    text.push_str(&format!("{:<19}{:>10}\n", "Tax", format_money(tax_cents)));
+    text.push_str(&format!("{:<19}{:>10}\n", "Total", format_money(total)));
+    text
 }
 
 fn main() {
@@ -114,25 +112,23 @@ mod tests {
     #[test]
     fn renders_a_two_item_receipt() {
         let items = [("Coffee", 2, 350), ("Bagel", 1, 1250)];
-        let expected = [
-            "Coffee            2     $7.00",
-            "Bagel             1    $12.50",
-            "Subtotal               $19.50",
-            "Tax                     $1.61",
-            "Total                  $21.11",
-        ]
-        .join("\n");
+        let expected = concat!(
+            "Coffee            2     $7.00\n",
+            "Bagel             1    $12.50\n",
+            "Subtotal               $19.50\n",
+            "Tax                     $1.61\n",
+            "Total                  $21.11\n",
+        );
         assert_eq!(render(&items, 825), expected);
     }
 
     #[test]
     fn renders_an_empty_receipt() {
-        let expected = [
-            "Subtotal                $0.00",
-            "Tax                     $0.00",
-            "Total                   $0.00",
-        ]
-        .join("\n");
+        let expected = concat!(
+            "Subtotal                $0.00\n",
+            "Tax                     $0.00\n",
+            "Total                   $0.00\n",
+        );
         assert_eq!(render(&[], 825), expected);
     }
 }

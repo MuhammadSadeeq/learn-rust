@@ -122,8 +122,9 @@ fn main() {
         say: "<p><code>r.into_square()</code> is the same call as <code>Rect::into_square(r)</code>. The receiver is passed by value, so the call moves <code>r</code>.</p>",
         ops: []
       },
-      { line: 8, say: "<p>Inside the method, <code>self</code> is the new owner. The label on <code>r</code> has been rewritten, so <code>r</code> turns grey. Any later use of <code>r</code> is a compile error.</p>", ops: [["frame", "Rect::into_square"], ["move", "r", "self", { type: "Rect" }]] },
-      { line: 9, say: "<p><code>side</code> is <code>max(2, 3)</code>, which is 3. It is a plain number on the stack.</p>", ops: [["let", "side", "u32", "3"]] },
+      { line: 7, say: "<p>Inside the method, <code>self</code> is the new owner. The label on <code>r</code> has been rewritten, so <code>r</code> turns grey. Any later use of <code>r</code> is a compile error.</p>", ops: [["frame", "Rect::into_square"], ["move", "r", "self", { type: "Rect" }]] },
+      { line: 8, say: "<p><code>side</code> is <code>max(2, 3)</code>, which is 3. It is a plain number on the stack.</p>", ops: [["let", "side", "u32", "3"]] },
+      { line: 9, say: "<p>The struct literal <code>Rect { w: side, h: side }</code> builds the result from <code>side</code>. Both fields are 3.</p>", ops: [] },
       { line: 10, say: "<p>The method returns, and <code>self</code> is dropped. It owned only plain numbers, so nothing is freed.</p>", ops: [["pop"]] },
       { line: 15, say: "<p>The returned <code>Rect { w: 3, h: 3 }</code> is a new value, and it becomes <code>sq</code>. The old <code>r</code> stays moved.</p>", ops: [["let", "sq", "Rect", { v: "Rect { w: 3, h: 3 }" }]] },
       { line: 16, error: true, say: "<p><strong>error[E0382]: borrow of moved value: <code>r</code></strong></p><p><code>r</code> gave its value to <code>into_square</code>. Reading <code>r.w</code> now uses a value that no longer belongs to <code>main</code>. The compiler refuses to build the program, so this bug never reaches a running process.</p>", ops: [["err", "r"]] }

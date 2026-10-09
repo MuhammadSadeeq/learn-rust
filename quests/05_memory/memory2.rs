@@ -7,6 +7,10 @@
 //
 //  Implement the three functions. Don't edit the tests.
 //
+//  The capacity check is exact on purpose: with_capacity gives you the room
+//  you ask for, so the test can see whether you reserved it. The docs only
+//  promise at least that much, so don't build real code on the exact number.
+//
 //  cargo forge          check your work (re-runs every time you save)
 //  cargo forge hint     a nudge in the right direction
 // ============================================================================
@@ -52,7 +56,8 @@ mod tests {
         assert_eq!(needed_capacity(&["a", "bb", "c"]), 6);
         assert_eq!(needed_capacity(&[]), 0);
         let csv = build_csv(&["a", "bb", "c"]);
-        assert!(csv.capacity() >= csv.len());
+        // The room was reserved up front, so the 6 bytes fit without growing.
+        assert_eq!(csv.capacity(), 6);
     }
 
     #[test]

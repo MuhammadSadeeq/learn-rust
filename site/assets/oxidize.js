@@ -45,7 +45,13 @@
   Ox.esc = esc;
   Ox.h = h;
   Ox.rel = rel;
-  Ox.reset = () => { state = blank(); save(); location.reload(); };
+  // Reset erases progress only. The theme and the view choices are preferences, so they stay.
+  Ox.reset = () => {
+    const keep = { theme: state.theme, view: state.view, homeView: state.homeView };
+    state = Object.assign(blank(), keep);
+    save();
+    location.reload();
+  };
 
   /* ---------------------------------------------------------------- levels & xp */
   function levelFor(xp) {
@@ -474,7 +480,7 @@
         else if (j === i) b.classList.add("is-wrong");
         else b.classList.add("is-faded");
         const fb = items[j].dataset.feedback;
-        if (j === i && fb && why) why.insertAdjacentHTML("afterbegin", `<p><em>${fb}</em></p>`);
+        if (j === i && fb && why) why.insertAdjacentHTML("afterbegin", `<p class="ox-fb"><em>${fb}</em></p>`);
       });
       const v = why && $(".ox-verdict", why);
       if (v) {
@@ -482,18 +488,25 @@
         v.textContent = right ? "Correct." : "Not quite. The highlighted answer is right.";
       }
       if (fresh) {
-        state.quiz[id] = { pick: i, right };
+        // Right on the first try pays the full XP. A wrong pick pays 2 ("for
+        // trying"), and a right pick after that pays half. Each award has its
+        // own key, so nothing is ever paid twice.
+        const wasWrong = !!(state.quiz[id] && state.quiz[id].wrong);
+        state.quiz[id] = { pick: i, right, wrong: wasWrong || !right };
         save();
         el.dispatchEvent(new CustomEvent("ox:answer", { bubbles: true, detail: { right, kind: "quiz" } }));
-        if (right) { award(xp, "quiz", "quiz:" + id); $(".ox-quiz-xp", head).classList.add("is-earned"); }
-        else { award(2, "for trying", "try:" + id); }
+        if (right) {
+          award(wasWrong ? Math.round(xp / 2) : xp, wasWrong ? "quiz, after a retry" : "quiz", "quiz:" + id);
+          $(".ox-quiz-xp", head).classList.add("is-earned");
+        } else { award(2, "for trying", "try:" + id); }
       }
       if (right) $(".ox-quiz-xp", head).classList.add("is-earned");
       const retry = h("button", { type: "button", class: "ox-btn is-small", style: "margin-top:10px" }, "Try again");
       retry.addEventListener("click", () => {
         el.classList.remove("is-answered");
         buttons.forEach((b) => { b.disabled = false; b.classList.remove("is-correct", "is-wrong", "is-faded"); });
-        $$("p > em", why || el).forEach((e) => e.parentElement.remove());
+        // Remove only the per-choice feedback this widget added, never the author's paragraphs.
+        $$("p.ox-fb", why || el).forEach((p) => p.remove());
         retry.remove();
       });
       (why || el).appendChild(retry);
@@ -531,6 +544,7 @@
     actions.append(check, show, msg);
     fig.after(actions);
     const why = $(".ox-why", el);
+    const revealed = () => !!(state.quiz[id] && state.quiz[id].revealed);
     const grade = (fresh) => {
       let all = true;
       inputs.forEach((inp) => {
@@ -541,8 +555,10 @@
       });
       if (fresh) el.dispatchEvent(new CustomEvent("ox:answer", { bubbles: true, detail: { right: all, kind: "fill" } }));
       if (all) {
-        msg.textContent = "All correct.";
         el.classList.add("is-answered");
+        // After "Show answer", a Check still marks the blanks but pays nothing.
+        if (fresh && revealed()) { msg.textContent = "Answer shown: no XP this time."; return; }
+        msg.textContent = "All correct.";
         if (fresh) { state.quiz[id] = { done: true }; save(); award(xp, "fill-in", "fill:" + id); }
       } else msg.textContent = "Some blanks aren't right yet. Red ones need another look.";
     };
@@ -552,6 +568,7 @@
       inputs.forEach((inp) => { inp.value = answers[inp.dataset.n][0]; inp.classList.remove("is-wrong"); });
       msg.textContent = "Answers filled in. Read them once, then move on.";
       el.classList.add("is-answered");
+      if (!revealed() && !(state.quiz[id] && state.quiz[id].done)) { state.quiz[id] = Object.assign({}, state.quiz[id], { revealed: true }); save(); }
     });
     if (state.quiz[id] && state.quiz[id].done) {
       inputs.forEach((inp) => { inp.value = answers[inp.dataset.n][0]; inp.classList.add("is-correct"); });
@@ -638,7 +655,9 @@
     const msg = h("span", { class: "ox-fill-msg" });
     actions.append(check, msg);
     el.insertBefore(actions, why || null);
-    const draw = (mark) => {
+    // Every move rebuilds the list. `focus` puts the keyboard back on the moved
+    // item's button, so Space or Enter can be pressed again without a Tab.
+    const draw = (mark, focus) => {
       ol.innerHTML = "";
       cur.forEach((it, k) => {
         const li = h("li", {}, `<span>${it.html}</span>`);
@@ -648,12 +667,21 @@
         const dn = h("button", { type: "button", "aria-label": "Move down" }, "↓");
         up.disabled = k === 0;
         dn.disabled = k === cur.length - 1;
-        up.addEventListener("click", () => { [cur[k - 1], cur[k]] = [cur[k], cur[k - 1]]; draw(); });
-        dn.addEventListener("click", () => { [cur[k + 1], cur[k]] = [cur[k], cur[k + 1]]; draw(); });
+        up.addEventListener("click", () => { [cur[k - 1], cur[k]] = [cur[k], cur[k - 1]]; draw(false, { row: k - 1, dir: "up" }); });
+        dn.addEventListener("click", () => { [cur[k + 1], cur[k]] = [cur[k], cur[k + 1]]; draw(false, { row: k + 1, dir: "down" }); });
         btns.append(up, dn);
         li.appendChild(btns);
         ol.appendChild(li);
       });
+      if (focus) {
+        const row = ol.children[focus.row];
+        if (row) {
+          const want = row.querySelector(focus.dir === "up" ? '[aria-label="Move up"]' : '[aria-label="Move down"]');
+          const other = row.querySelector(focus.dir === "up" ? '[aria-label="Move down"]' : '[aria-label="Move up"]');
+          const target = want && !want.disabled ? want : other && !other.disabled ? other : null;
+          if (target) target.focus();
+        }
+      }
     };
     draw();
     check.addEventListener("click", () => {

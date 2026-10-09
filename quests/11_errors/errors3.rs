@@ -30,6 +30,7 @@ enum ConfigError {
 }
 
 impl fmt::Display for ConfigError {
+    // Chapter 15 explains '_, the lifetime the compiler fills in here.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         todo!()
     }

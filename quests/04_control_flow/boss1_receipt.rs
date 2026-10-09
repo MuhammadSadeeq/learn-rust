@@ -8,12 +8,13 @@
 //    line_total    quantity times unit price
 //    subtotal      the sum of the line totals
 //    tax           a rate in basis points, rounded half up (825 is 8.25%)
-//    format_money  123456 becomes "$1,234.56"
+//    format_money  123456 becomes "$1,234.56" (written for you)
 //    render        aligned rows for every item, then Subtotal, Tax and Total
 //
-//  Use what Act I taught: functions, if, for, match, tuples and arrays. Skip
-//  iterator chains. Every body is todo!() for now, so the tests fail until
-//  you write them. Don't edit the tests.
+//  Use what Act I taught: functions, if, for, tuples, arrays and the String
+//  and Vec basics from the toolbox. Every body except format_money is
+//  todo!() for now, so the tests fail until you write them. Don't edit the
+//  tests.
 //
 //  cargo forge          check your work (re-runs every time you save)
 //  cargo forge hint     a nudge in the right direction
@@ -32,7 +33,20 @@ fn tax(subtotal: u32, rate_bp: u32) -> u32 {
 }
 
 fn format_money(cents: u32) -> String {
-    todo!()
+    // Given. It uses char_indices and String building, which Chapter 8 explains.
+    let dollars = (cents / 100).to_string();
+    let digits = dollars.len();
+    let mut grouped = String::new();
+    for (i, ch) in dollars.char_indices() {
+        // Count from the right: a comma goes before every third digit,
+        // except at the very start.
+        if i > 0 && (digits - i) % 3 == 0 {
+            grouped.push(',');
+        }
+        grouped.push(ch);
+    }
+    let rest = cents % 100;
+    format!("${grouped}.{rest:02}")
 }
 
 fn render(items: &[(&str, u32, u32)], rate_bp: u32) -> String {
@@ -83,25 +97,23 @@ mod tests {
     #[test]
     fn renders_a_two_item_receipt() {
         let items = [("Coffee", 2, 350), ("Bagel", 1, 1250)];
-        let expected = [
-            "Coffee            2     $7.00",
-            "Bagel             1    $12.50",
-            "Subtotal               $19.50",
-            "Tax                     $1.61",
-            "Total                  $21.11",
-        ]
-        .join("\n");
+        let expected = concat!(
+            "Coffee            2     $7.00\n",
+            "Bagel             1    $12.50\n",
+            "Subtotal               $19.50\n",
+            "Tax                     $1.61\n",
+            "Total                  $21.11\n",
+        );
         assert_eq!(render(&items, 825), expected);
     }
 
     #[test]
     fn renders_an_empty_receipt() {
-        let expected = [
-            "Subtotal                $0.00",
-            "Tax                     $0.00",
-            "Total                   $0.00",
-        ]
-        .join("\n");
+        let expected = concat!(
+            "Subtotal                $0.00\n",
+            "Tax                     $0.00\n",
+            "Total                   $0.00\n",
+        );
         assert_eq!(render(&[], 825), expected);
     }
 }

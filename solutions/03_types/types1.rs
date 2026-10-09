@@ -3,8 +3,8 @@
 // ----------------------------------------------------------------------------
 //  A u8 holds 0 to 255, so the running total needs a wider type. A u32 holds
 //  the sum of any realistic list of u8 values. An average of u8 values can
-//  never be bigger than 255, so casting it back to u8 is safe. Check for the
-//  empty list before dividing, because dividing by zero panics.
+//  never be bigger than 255, so casting it back to u8 is safe. The empty
+//  list returns early, because dividing by zero panics.
 //
 //  `u32::from(age)` widens a u8 without losing anything. `from` only exists
 //  for conversions that cannot lose data, so the compiler checks that for

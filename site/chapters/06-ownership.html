@@ -53,7 +53,7 @@
   <thead><tr><th></th><th>Manual<br>C, C++</th><th>At runtime<br>PHP, JS, Java, Go</th><th>At compile time<br>Rust</th></tr></thead>
   <tbody>
     <tr><td><strong>Who frees?</strong></td><td>You call <code>free()</code></td><td>A reference counter or garbage collector, while the program runs</td><td>The compiler writes the free for you, at the end of the owner's scope</td></tr>
-    <tr><td><strong>Typical bugs</strong></td><td>Double free, use after free, leaks</td><td>Pauses, extra memory, leaks through cycles</td><td>Those bugs can't compile. You pay by following the ownership rules.</td></tr>
+    <tr><td><strong>Typical bugs</strong></td><td>Double free, use after free, leaks</td><td>Pauses, extra memory, leaks from references that stay reachable</td><td>Double free and use after free can't compile. Leaks still compile, for example an <code>Rc</code> cycle (Chapter 17). You pay by following the ownership rules.</td></tr>
     <tr><td><strong>Runtime cost</strong></td><td>None</td><td>Counting, scanning, pausing</td><td>None</td></tr>
   </tbody>
 </table>
@@ -86,14 +86,14 @@
 
 <div class="ox-meet" data-cast="leash" data-say="One rope, one holder. Hand me over with a move, and the old crab turns grey."></div>
 
-<p class="ox-pull">A value is a parcel with exactly one name on its label.</p>
+<p class="ox-pull">Every value has exactly one owner, and only the owner holds the leash.</p>
 
 <aside class="ox-callout" data-kind="insight">
-  <p>Picture every heap value as a parcel with a shipping label. The label has room for <strong>one name</strong>. Whoever is on the label must dispose of the parcel when they leave the room (the end of their scope). You can:</p>
+  <p>Picture every heap value as a crab on a leash. The leash has room for <strong>one holder</strong>. Whoever holds it when they leave the room (the end of their scope) drops the value. You can:</p>
   <ul>
-    <li><strong>hand it over</strong>: the label is rewritten with a new name. That is a <em>move</em>.</li>
-    <li><strong>photocopy it</strong>: a brand-new parcel with its own label. That is a <em>clone</em>.</li>
-    <li><strong>let someone look at it</strong> without taking it. That is a <em>borrow</em>, and it's the next chapter.</li>
+    <li><strong>hand the leash over</strong>: the new holder takes it, and the old crab turns grey. That is a <em>move</em>.</li>
+    <li><strong>bring a second crab</strong> on a second leash, with a copy of the value. That is a <em>clone</em>.</li>
+    <li><strong>let someone look</strong> without taking the leash. That is a <em>borrow</em>, and it's the next chapter.</li>
   </ul>
 </aside>
 </section>
@@ -188,13 +188,17 @@ let a = Noisy("a");
 </section>
 
 <section>
-<h2 id="move">Move: handing over the parcel</h2>
+<h2 id="move">Move: handing over the leash</h2>
 
 <p>Now the line that surprises every PHP developer. Before you step through it, decide what you think <code>let b = a;</code> does.</p>
 
 <div class="ox-xray ox-wide" data-scenario="move-error"></div>
 
 <div class="ox-meet" data-cast="inspector" data-say="I check every leash before the program runs. When a rule breaks, I stamp the crab with the error code."></div>
+
+<p>The <strong>borrow checker</strong> is the part of the Rust compiler that checks every move, borrow and lifetime in your program before it runs. In this course it appears as the Inspector.</p>
+
+<p>The E0384 you met in Chapter 2 (assigning twice to a variable without <code>mut</code>) was the borrow checker's work too. The Inspector checks mutability as well.</p>
 
 <p>Here is the real compiler output for that program. Learn to read it from the top: the error code and summary, then the arrows that tell the story in order: <em>move occurs because…</em>, <em>value moved here</em>, <em>value borrowed here after move</em>.</p>
 
@@ -300,7 +304,7 @@ fn main() {
 <div class="ox-xray ox-wide" data-scenario="clone-string"></div>
 
 <aside class="ox-callout" data-kind="insight">
-  <p><strong>Copy</strong> is implicit, and Rust only allows it for types where copying is guaranteed to be cheap. <strong>Clone</strong> is explicit because it may allocate. When you see <code>.clone()</code> in a code review, you're looking at a deliberate cost.</p>
+  <p><strong>Copy</strong> is implicit. It only copies bits, with no allocation and no custom code, so it is cheap for small types. A large <code>Copy</code> array is still copied in full. <strong>Clone</strong> is explicit because it may allocate. When you see <code>.clone()</code> in a code review, you're looking at a deliberate cost.</p>
 </aside>
 
 <p>PHP has a <code>clone</code> keyword too, and it does something different. It copies an object's properties into a new object and stops there. An object inside the copy is still the same object as before. An array inside the copy is copied on write.</p>
@@ -349,7 +353,7 @@ fn main() {
     b.owner.name = "Bo".to_string();
     println!("{}", a.owner.name);  // Ana: the clone gave a its own Author
 }</pre>
-  <div class="ox-bridge-note"><p>PHP's <code>clone</code> is shallow. The copy gets the same property values, so an object inside it is shared. Rust's derived <code>Clone</code> calls <code>.clone()</code> on every field, so <code>a</code> keeps its own Author. To share one Author between two values in Rust, you use <code>Rc</code> (Chapter 17). PHP's <code>__clone()</code> lets you write the deep copy yourself. In Rust, you write <code>impl Clone</code> by hand for the same job.</p></div>
+  <div class="ox-bridge-note"><p>The <code>#[derive(Clone)]</code> lines ask the compiler to write the method for you. Chapter 9 explains <code>derive</code>. PHP's <code>clone</code> is shallow. The copy gets the same property values, so an object inside it is shared. Rust's derived <code>Clone</code> calls <code>.clone()</code> on every field, so <code>a</code> keeps its own Author. To share one Author between two values in Rust, you use <code>Rc</code> (Chapter 17). PHP's <code>__clone()</code> lets you write the deep copy yourself. In Rust, you write <code>impl Clone</code> by hand for the same job.</p></div>
 </div>
 
 <div class="ox-quiz" data-id="06:copy-tuple">
@@ -376,7 +380,7 @@ fn main() {
 
 <div class="ox-xray ox-wide" data-scenario="fn-move,give-back"></div>
 
-<p>The same handoff, drawn with the function's own parameter. Watch where the leash goes.</p>
+<p>The same handoff, drawn with the function's own parameter. Watch where the leash goes: the parameter becomes the new owner.</p>
 
 <div class="ox-motion" data-scene="ch06-fn-move"></div>
 
@@ -528,7 +532,7 @@ fn main() {
   <div class="ox-why"><p><code>shout</code> takes <code>String</code> by value, so calling it moves <code>word</code> in. It returns a <em>different</em> String; the original was dropped at the end of <code>shout</code>. Changing the parameter to <code>s: &amp;str</code> and calling <code>shout(&amp;word)</code> fixes it.</p></div>
 </div>
 
-<p>One longer program, read line by line. The question is always the same: after this line, who holds the leash to the first String? Pick a crab, the function, or nobody.</p>
+<p>One longer program, read line by line. The question is always the same: after this line, who owns the first String? The owner is the one holding its leash. Pick a crab, the function, or nobody.</p>
 
 <style>
 #passleash .pl-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 14px; margin-bottom: 12px; }
@@ -588,7 +592,7 @@ fn main() {
     <div class="pl-code"><div class="pl-code-head">Rust</div><pre aria-label="Program"></pre></div>
     <div class="pl-stage">
       <p class="pl-q"></p>
-      <div class="pl-row" role="group" aria-label="Who holds the leash?"></div>
+      <div class="pl-row" role="group" aria-label="Who owns the first String?"></div>
       <div class="pl-side">
         <div class="pl-string" aria-label="The first String"></div>
         <div class="pl-insp" hidden></div>
@@ -628,7 +632,7 @@ fn main() {
     { line: 10, holder: "none", hint: "When a function ends, its parameter is dropped.",
       say: "The function ended, so its parameter was dropped and the first String was freed. Nobody holds that leash now. <b>c</b> still has its own copy.",
       st: { a: "ghost", b: "ghost", c: "ok", fn: "gone", alive: false } },
-    { line: 11, holder: "none", hint: "Line 11 reads <code>b</code>. Who holds the leash to what <code>b</code> names?",
+    { line: 11, holder: "none", hint: "Line 11 reads <code>b</code>. Who owns what <code>b</code> names?",
       say: "<b>b</b> is grey, and its String went into <code>consume</code>. The Inspector stamps E0382 on this line, and the program does not compile.",
       st: { a: "ghost", b: "ghost", c: "ok", fn: "gone", alive: false }, bad: true },
   ];
@@ -672,7 +676,7 @@ fn main() {
     var step = STEPS[i];
     prog.textContent = "Step " + (i + 1) + " of " + STEPS.length + " · line " + step.line;
     renderCode(step.line);
-    q.innerHTML = "After line " + step.line + ", who holds the leash to the first String?";
+    q.innerHTML = "After line " + step.line + ", who owns the first String?";
     row.innerHTML = CHOICES.map(function (c) {
       var rope = answered && c.key === step.holder && c.key !== "none" ? '<span class="pl-rope">' + OxCast.prop("leash") + "</span>" : "";
       return '<button type="button" class="pl-choice' + (answered && c.key === step.holder ? " is-holder" : "") + '" data-key="' + c.key + '"' +

@@ -174,6 +174,7 @@
 
   .mp-oxi { position: absolute; z-index: 3; width: 0; height: 0; pointer-events: none; }
   .mp-oxi-body { position: absolute; left: 0; top: 0; width: 56px; transform: translate(-50%, calc(-100% - 12px)); }
+  .mp-oxi.is-below .mp-oxi-body { transform: translate(-50%, 16px); }
   .mp-oxi-body .ca { display: block; width: 100%; animation: mp-bob 2.6s ease-in-out infinite; }
   .mp-progress { fill: none; stroke: var(--oxide); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
   @keyframes mp-pulse { 0% { transform: scale(0.8); opacity: 0.8; } 100% { transform: scale(1.6); opacity: 0; } }
@@ -388,7 +389,7 @@ Edit <span class="b">quests/06_ownership/move1.rs</span>
     renderProgress();
     var reset = document.getElementById("h-reset");
     function resetIdle() {
-      reset.innerHTML = '<button type="button" class="ox-btn is-small" id="h-reset-btn">Reset progress</button><span>Clears XP, quiz answers and completed chapters in this browser.</span>';
+      reset.innerHTML = '<button type="button" class="ox-btn is-small" id="h-reset-btn">Reset progress</button><span>Erases, in this browser: XP, quiz and fill-in answers, completed chapters and quests, the Field Guide, your Recall Deck schedule and lab scores. Your theme and view settings stay.</span>';
       document.getElementById("h-reset-btn").addEventListener("click", function () {
         reset.innerHTML = '<span><strong>Erase all progress?</strong> This can\'t be undone.</span><button type="button" class="ox-btn is-small" id="h-reset-yes" style="border-color:var(--bad);color:var(--bad)">Erase it</button><button type="button" class="ox-btn is-small" id="h-reset-no">Keep it</button>';
         document.getElementById("h-reset-yes").addEventListener("click", function () { Ox.reset(); });
@@ -613,6 +614,24 @@ Edit <span class="b">quests/06_ownership/move1.rs</span>
       var w = stage.clientWidth;
       if (!w) return;
       frame.classList.toggle("is-narrow", w < 640);
+      keepOxiClear();
+    }
+    // Oxi stands on the current stone with its body above it. Where that body
+    // would cover a region name on the island, it hangs below the stone instead.
+    // Measured without the hop offset, so it checks where Oxi finally rests.
+    function keepOxiClear() {
+      var body = stage.querySelector(".mp-oxi-body");
+      if (!body || !frame.offsetWidth) return;
+      var host = body.parentNode, hop = oxiEl.style.transform;
+      host.classList.remove("is-below");
+      oxiEl.style.transform = "";
+      var o = body.getBoundingClientRect();
+      var hit = Array.prototype.some.call(stage.querySelectorAll(".mp-label"), function (g) {
+        var r = g.getBoundingClientRect();
+        return r.width > 0 && r.left < o.right && r.right > o.left && r.top < o.bottom && r.bottom > o.top;
+      });
+      if (hit) host.classList.add("is-below");
+      oxiEl.style.transform = hop;
     }
     sizeCheck();
     if ("ResizeObserver" in window) new ResizeObserver(sizeCheck).observe(scroll);
@@ -634,7 +653,7 @@ Edit <span class="b">quests/06_ownership/move1.rs</span>
       bMap.setAttribute("aria-pressed", String(!isList));
       bList.setAttribute("aria-pressed", String(isList));
       if (remember) { try { st.homeView = v; Ox.save(); } catch (e) { /* storage unavailable: this view only */ } }
-      if (!isList) centerOxi();
+      if (!isList) { centerOxi(); keepOxiClear(); }
     }
     bMap.addEventListener("click", function () { setView("map", true); });
     bList.addEventListener("click", function () { setView("list", true); });

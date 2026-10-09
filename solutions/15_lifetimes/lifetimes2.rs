@@ -18,19 +18,18 @@ impl<'a> Tokenizer<'a> {
     // Returns the next word, or None when the input is used up. The slice
     // borrows the input for 'a, not the tokenizer.
     fn next_token(&mut self) -> Option<&'a str> {
-        // Copy the reference out first. Its type is &'a str, so slices taken
-        // from it are valid for 'a and do not borrow `self`.
-        let input: &'a str = self.input;
-        let rest = input[self.pos..].trim_start();
+        // self.input is a &'a str, so a slice of it keeps 'a and does not
+        // borrow `self`.
+        let rest = self.input[self.pos..].trim_start();
         if rest.is_empty() {
             return None;
         }
-        // `rest` is a suffix of `input`, so the difference in length is the
+        // `rest` is a suffix of the input, so the difference in length is the
         // byte offset where the word starts.
-        let start = input.len() - rest.len();
+        let start = self.input.len() - rest.len();
         let len = rest.find(char::is_whitespace).unwrap_or(rest.len());
         self.pos = start + len;
-        Some(&input[start..self.pos])
+        Some(&self.input[start..self.pos])
     }
 }
 

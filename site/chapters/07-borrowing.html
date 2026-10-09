@@ -63,7 +63,9 @@ fn main() {
 
 <p>It works, but every caller has to unpack the tuple, and every function has to repeat the trick. A <strong>borrow</strong> removes the need. An <code>&amp;</code> in front of a value makes a reference: a pointer that lets the callee look at the value while the caller keeps ownership.</p>
 
-<div class="ox-meet" data-cast="borrows" data-say="Any number of you may look. One of you may lock the value, and then nobody else may look."></div>
+<p>The <strong>borrow checker</strong>, which you met in Chapter 6, checks moves, borrows (shared and exclusive), mutability and lifetimes. This chapter is about the borrows.</p>
+
+<div class="ox-meet" data-cast="borrows" data-say="Any number of you may look. One of you may take an exclusive borrow, and then nobody else may look."></div>
 
 <pre class="rs" data-run data-stdout="hello has 5 bytes">
 fn len(s: &amp;String) -&gt; usize {
@@ -136,7 +138,7 @@ For more information about this error, try `rustc --explain E0308`.</pre>
 
 <p>A reference is a different type from the value it points to. <code>&amp;i32</code> is not <code>i32</code>. Two rules keep that manageable:</p>
 <ul>
-  <li>Arithmetic and comparisons want the value itself, so you follow the pointer with <code>*</code>.</li>
+  <li>Comparisons want the same type on both sides, so you follow the pointer with <code>*</code>: <code>*r == 5</code>. Arithmetic on plain numbers also works through a reference (<code>r + 1</code> compiles), but <code>*r + 1</code> shows the dereference.</li>
   <li>Method calls don't need the star. <code>rs.len()</code> works on a <code>&amp;String</code>, because the compiler dereferences automatically when it looks up a method.</li>
 </ul>
 
@@ -169,7 +171,7 @@ fn main() {
     <li data-correct>No. <code>&amp;i32</code> and <code>i32</code> are different types. Write <code>*r == 5</code>.</li>
   </ol>
   <div class="ox-why">
-    <p>Method calls dereference automatically. Operators such as <code>==</code> and <code>+</code> don't. They compare the types you wrote, so you say which level you mean.</p>
+    <p>Method calls dereference automatically. <code>==</code> doesn't. It compares the types you wrote, and there is no <code>==</code> between <code>&amp;i32</code> and <code>i32</code>, so you say which level you mean. (Arithmetic on references to numbers is implemented, so <code>r + 1</code> works.)</p>
     <pre class="rustc">error[E0277]: can't compare `&amp;{integer}` with `{integer}`
  --&gt; src/main.rs:4:10
   |
@@ -184,6 +186,58 @@ help: consider dereferencing here
 
 
 For more information about this error, try `rustc --explain E0277`.</pre>
+  </div>
+
+<h3 id="ref-patterns">Patterns that take references apart</h3>
+
+<p>When you loop over a borrowed list, each item is a reference. A pattern can copy the value out of it for you: <code>for &amp;x in &amp;v</code> makes <code>x</code> an <code>i32</code> instead of an <code>&amp;i32</code>. The same works in closures: <code>|&amp;x| x &gt; 2</code>. This only works when the type is <code>Copy</code>, because the value is copied out of the borrow. The keyword <code>ref</code> goes the other way: <code>let ref x = s;</code> binds <code>x</code> as a reference to <code>s</code>, so <code>s</code> is borrowed and stays usable.</p>
+
+<pre class="rs" data-run data-stdout="10\ntrue">
+fn main() {
+    let v = vec![1, 2, 3, 4];
+
+    let mut total = 0;
+    for &amp;x in &amp;v {
+        total += x;
+    }
+    println!("{total}");
+
+    let any_big = v.iter().any(|&amp;x| x &gt; 2);
+    println!("{any_big}");
+}
+</pre>
+
+<div class="ox-quiz" data-id="07:ref-pattern-check" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0507">
+fn main() {
+    let names = vec![String::from("Ana")];
+    for &amp;name in &amp;names {
+        println!("{name}");
+    }
+}
+</pre>
+  <ol class="ox-choices">
+    <li>Yes. The pattern copies each name out, the same way it copies a number.</li>
+    <li data-correct>No. A <code>String</code> is not <code>Copy</code>, so the pattern would move it out of the reference. That is E0507.</li>
+  </ol>
+  <div class="ox-why">
+    <p>The loop item is a <code>&amp;String</code>. The <code>&amp;</code> pattern tries to take the <code>String</code> out of the reference, and only <code>Copy</code> types can be taken that way. Write <code>for name in &amp;names</code> to keep <code>name</code> as a reference.</p>
+    <pre class="rustc">error[E0507]: cannot move out of a shared reference
+ --&gt; src/main.rs:3:18
+  |
+3 |     for &amp;name in &amp;names {
+  |          ----    ^^^^^^
+  |          |
+  |          data moved here because `name` has type `String`, which does not implement the `Copy` trait
+  |
+help: consider removing the borrow
+  |
+3 -     for &amp;name in &amp;names {
+3 +     for name in &amp;names {
+  |
+
+For more information about this error, try `rustc --explain E0507`.</pre>
   </div>
 </div>
 </section>
@@ -246,9 +300,11 @@ For more information about this error, try `rustc --explain E0596`.</pre>
 
 <div class="ox-xray ox-wide" data-scenario="mut-borrow"></div>
 
-<p>An exclusive borrow is the one key to the editing room. While it exists, nobody else may even look.</p>
+<p>An exclusive borrow (<code>&amp;mut</code>) is the one key to the editing room. While it exists, nobody else may even look.</p>
 
-<p>Watch the rule play out. Three readers look at <code>v</code>, and then a fourth asks for the lock. Predict the verdict at the question.</p>
+<p><code>&amp;mut</code> is checked when you compile, and no lock exists at runtime. Chapter 18's <code>Mutex</code> is a real lock that threads wait on.</p>
+
+<p>Watch the rule play out. Three readers look at <code>v</code>, and then a fourth asks for an exclusive borrow. Predict the verdict at the question.</p>
 
 <div class="ox-motion" data-scene="ch07-readers-writer"></div>
 </section>
@@ -266,7 +322,7 @@ For more information about this error, try `rustc --explain E0596`.</pre>
 
 <p class="ox-pull">Many readers or one writer. Never both.</p>
 
-<p>The first half prevents data races. Two readers can't corrupt each other. A writer that changes data while a reader is looking at it can, and that is a race. Chapter 18 shows how the same rule keeps threads apart.</p>
+<p>The rule prevents data races. Two readers can't corrupt each other, but a writer that changes data while a reader is looking at it can, and that is a race. The exclusive writer closes that gap. Chapter 18 shows how the same rule keeps threads apart.</p>
 
 <div class="ox-quiz" data-id="07:rule-shared" data-label="Check yourself">
   <p class="ox-q">Does this compile?</p>
@@ -389,7 +445,7 @@ help: instead, you are more likely to want to return an owned value
 
 For more information about this error, try `rustc --explain E0106`.</pre>
 
-<p><code>s</code> is a local. It is dropped when <code>dangle</code> returns, so a reference to it would point at memory that has already been freed. The signature has no input to borrow from, and the compiler reports that as a missing lifetime. The help text offers two fixes. Ignore the <code>'static</code> one, which is almost never what you want here. The second one is the right answer: return an owned value, so ownership moves out to the caller.</p>
+<p><code>s</code> is a local. It is dropped when <code>dangle</code> returns, so a reference to it would point at memory that has already been freed. The signature has no input to borrow from, and the compiler reports that as a missing lifetime. E0106 is a lifetime error, so the compiler reports it before the borrow checker runs. The help text offers two fixes. Ignore the <code>'static</code> one, which is almost never what you want here. The second one is the right answer: return an owned value, so ownership moves out to the caller.</p>
 
 <pre class="rs" data-run data-stdout="x">
 fn fixed() -&gt; String {
@@ -416,7 +472,7 @@ fn main() {
 <section>
 <h2 id="desk">Borrow Desk</h2>
 
-<p>This is a simulator of the checker, and it follows the rules in this chapter. The owner is <code>s</code>, and up to three borrows can exist at once. Press the buttons to build a program one line at a time. Each line gets a verdict, the way rustc would judge the finished program. After every call you make, the Inspector stamps the desk: APPROVED in green, or the error code in red.</p>
+<p>This is a simulator of the borrow checker, and it follows the rules in this chapter. The owner is <code>s</code>, and up to three borrows can exist at once. Press the buttons to build a program one line at a time. Each line gets a verdict, the way rustc would judge the finished program. After every call you make, the Inspector stamps the desk: APPROVED in green, or the error code in red.</p>
 
 <p>The judgment rests on one idea. A borrow is alive from the line that creates it to the last line that uses it. An access that conflicts with a live borrow is an error. The desk starts with two lines: <code>s</code> is owned, and <code>r1</code> borrows it.</p>
 
@@ -831,7 +887,7 @@ for v in v.iter_mut() {
     *v *= 2;
 }
   </pre>
-  <div class="ox-bridge-note"><p>The Rust loop borrows the vector mutably for exactly as long as the loop runs. The loop variable is a <code>&amp;mut i32</code> to one element, and nothing else can see the vector while that borrow is alive. When the loop ends, the borrow ends with it. In PHP the alias outlives the loop, so you have to end it yourself with <code>unset($v)</code>.</p></div>
+  <div class="ox-bridge-note"><p><code>iter_mut()</code> hands out each element by mutable reference. Chapter 13 explains iterators. The Rust loop borrows the vector mutably for exactly as long as the loop runs. The loop variable is a <code>&amp;mut i32</code> to one element, and nothing else can see the vector while that borrow is alive. When the loop ends, the borrow ends with it. In PHP the alias outlives the loop, so you have to end it yourself with <code>unset($v)</code>.</p></div>
 </div>
 
 <p>The bug from the PHP example has a Rust cousin: a mutable alias that is still used after a read of the same vector. It doesn't compile.</p>
@@ -880,7 +936,7 @@ For more information about this error, try `rustc --explain E0502`.</pre>
 <section>
 <h2 id="errors">Reading borrow errors</h2>
 
-<p>You have met E0502 and E0106. Two more codes come up constantly. Here are their real reports, with a plain reading and a fix for each.</p>
+<p>You have met E0502 and E0106. Here are the other codes that come up most often in borrow errors. Each has its real report, a plain reading and a fix.</p>
 
 <h3>E0499: two mutable borrows</h3>
 
@@ -932,6 +988,91 @@ fn main() {
 
 
 For more information about this error, try `rustc --explain E0506`.</pre>
+
+<h3>E0505: moving a value that is still borrowed</h3>
+
+<pre class="rs" data-check="E0505">
+fn main() {
+    let s = String::from("hi");
+    let r1 = &amp;s;
+    let t = s;
+    println!("{r1} {t}");
+}
+</pre>
+
+<pre class="rustc">error[E0505]: cannot move out of `s` because it is borrowed
+ --&gt; src/main.rs:4:13
+  |
+2 |     let s = String::from("hi");
+  |         - binding `s` declared here
+3 |     let r1 = &amp;s;
+  |              -- borrow of `s` occurs here
+4 |     let t = s;
+  |             ^ move out of `s` occurs here
+5 |     println!("{r1} {t}");
+  |                -- borrow later used here
+  |
+help: consider cloning the value if the performance cost is acceptable
+  |
+3 |     let r1 = &amp;s.clone();
+  |              ++++++++
+
+For more information about this error, try `rustc --explain E0505`.</pre>
+
+<p>E0505 says you moved or dropped a value while a borrow of it is still used later. The compiler points at the move on line 4. The borrow <code>r1</code> is still used on line 5, so the move has to wait. Finish with the borrow first, or borrow instead of moving. Here, <code>let t = &amp;s;</code> keeps <code>s</code> where it is.</p>
+
+<h3>E0515: returning a reference to a local</h3>
+
+<pre class="rs" data-check="E0515">
+fn longest_name(name: &amp;str) -&gt; &amp;String {
+    let s = String::from(name);
+    &amp;s
+}
+
+fn main() {
+    let s = longest_name("hi");
+    println!("{s}");
+}
+</pre>
+
+<pre class="rustc">error[E0515]: cannot return reference to local variable `s`
+ --&gt; src/main.rs:3:5
+  |
+3 |     &amp;s
+  |     ^^ returns a reference to data owned by the current function
+
+For more information about this error, try `rustc --explain E0515`.</pre>
+
+<p>This signature has an input, so the compiler can tie the result to it. It gets as far as the body, and there it finds that the reference points at <code>s</code>. <code>s</code> is dropped when the function returns. E0106 is the error for a signature with no input at all. E0515 is the error for a body that returns a reference to its own local. The fix is the same as before: return the owned <code>String</code>.</p>
+
+<h3>E0597: a borrow outlives its value</h3>
+
+<pre class="rs" data-check="E0597">
+fn main() {
+    let r;
+    {
+        let x = 5;
+        r = &amp;x;
+    }
+    println!("{r}");
+}
+</pre>
+
+<pre class="rustc">error[E0597]: `x` does not live long enough
+ --&gt; src/main.rs:5:13
+  |
+4 |         let x = 5;
+  |             - binding `x` declared here
+5 |         r = &amp;x;
+  |             ^^ borrowed value does not live long enough
+6 |     }
+  |     - `x` dropped here while still borrowed
+7 |     println!("{r}");
+  |                - borrow later used here
+
+For more information about this error, try `rustc --explain E0597`.</pre>
+
+<p>E0597 is the cousin of E0515. <code>x</code> lives only inside the inner block, but <code>r</code> is still used after the block ends, so the borrow would outlive <code>x</code>. The compiler marks the closing brace, where <code>x</code> is dropped. The fix is to give the value a scope at least as long as the borrow. Declare <code>x</code> outside the block, and <code>r</code> can point at it.</p>
 
 <p>You can't overwrite <code>s</code> while <code>r</code> still needs the old value. Finish with <code>r</code> first, or copy out whatever you still need before the assignment.</p>
 
@@ -1098,7 +1239,10 @@ fn main() {
     <li data-left="Two &amp;mut of the same value are alive at once">E0499</li>
     <li data-left="A &amp;mut is taken while a shared borrow is still used later">E0502</li>
     <li data-left="A value is assigned while a borrow of it is still used">E0506</li>
-    <li data-left="A function returns a reference to one of its own locals">E0106</li>
+    <li data-left="A function with no reference parameter returns a reference">E0106</li>
+    <li data-left="A function returns a reference to one of its own locals">E0515</li>
+    <li data-left="A value is moved while a borrow of it is still used">E0505</li>
+    <li data-left="A borrow is still used after the value it points to is dropped">E0597</li>
     <li data-left="A &amp;mut is taken of a variable that isn't declared mut">E0596</li>
     <li data-left="Many shared borrows of one value at the same time">Fine, it compiles</li>
   </ul>
@@ -1120,8 +1264,8 @@ fn main() {
     <li><code>&amp;s</code> lends a value without taking it. The owner stays usable, and nothing is freed.</li>
     <li><code>&amp;mut s</code> is exclusive. While it is alive, no other borrow of <code>s</code> may exist, and the binding must be <code>mut</code>.</li>
     <li>Any number of <code>&amp;T</code>, or exactly one <code>&amp;mut T</code>, never both. A reference can't outlive its value.</li>
-    <li>A borrow lasts until its last use, not until the end of its scope. That is NLL.</li>
-    <li>E0502 and E0499 mean a conflicting borrow is still used later: end the earlier borrow first. E0506 means you assigned while borrowed. E0106 on a return means you returned a reference to a local, so return the owned value instead.</li>
+    <li>A borrow lasts until its last use, not until the end of its scope. That is NLL, short for non-lexical lifetimes.</li>
+    <li>E0502 and E0499 mean a conflicting borrow is still used later: end the earlier borrow first. E0506 means you assigned while borrowed, and E0505 means you moved while borrowed. E0106 means a returned reference has no input to borrow from. E0515 means you returned a reference to a local. For both, return the owned value. E0597 means a borrow outlives its value.</li>
   </ul>
 </div>
 

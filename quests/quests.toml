@@ -15,7 +15,7 @@ summary = "Make the program compile and greet the world."
 hint = """
 1. Read the first error. It says Rust expected a function and found a macro.
 2. Macros are called with a `!` after their name, such as `vec!` or `format!`.
-3. Add the `!` right after `println`, the way `println!` is written.
+3. Add the `!` right after `println`, the way `println!` is written. That leaves one more error: `println!` needs a format string before the value, as in `println!("{}", greeting());`.
 """
 
 [[quest]]
@@ -29,8 +29,8 @@ hint = """
    instead of printing it.
 2. Any variable in scope can go inside the braces: `format!("Hi {name}")`. For
    the cents, `/` gives the whole dollars and `%` gives the leftover cents.
-3. `{rest:02}` pads a number to two digits with leading zeros, so use it on the
-   cents to make 5 print as 05.
+3. `{rest:02}` pads a number to a width of two with zeros, so 5 prints as 05.
+   Chapter 1's `{:>8}` also sets a width, and `0` is the fill.
 """
 
 [[quest]]
@@ -86,10 +86,10 @@ summary = "Choose integer types that fit the data and don't overflow."
 hint = """
 1. The panic message says "attempt to add with overflow". Which variable is
    growing past its limit, and what type is it?
-2. A u8 holds at most 255. Choose a wider integer type for the running total,
-   and convert each age into it with `u32::from`.
-3. Return 0 early for an empty list. Otherwise total in the wider type, divide
-   by the count, and cast the result back to u8.
+2. A u8 holds at most 255. Choose a wider integer type for `total`, and convert
+   each age into it with `u32::from(age)`. That works because every u8 fits in a u32.
+3. Divide the wide total by the count, then cast the result back to u8 with
+   `as u8`. The average of u8 values always fits in a u8.
 """
 
 [[quest]]
@@ -101,8 +101,9 @@ summary = "Return several values at once and destructure them."
 hint = """
 1. A tuple is written in parentheses. A function returns its last expression,
    so ending with `(low, high)` hands back both values.
-2. Start `low` and `high` from the first value. Then go through the rest and
-   update either one when you see a smaller or larger value.
+2. Start `low` and `high` from `v[0]`, the first value. Then compare each value
+   in the loop and update either one when you see a smaller or larger value.
+   Indexing a slice works the same way as indexing an array.
 3. `let (a, b) = pair;` takes a tuple apart. Build the reversed tuple from those
    two names.
 """
@@ -116,10 +117,10 @@ summary = "Fixed-size arrays, indexing and length."
 hint = """
 1. `[u32; 7]` always holds seven values. Index them from 0, with `days[0]`
    through `days[6]`.
-2. For the total, start a counter at 0 and add each day. A `for day in days`
-   loop visits every value.
-3. For the busiest day, remember the best day and its hours so far. Replace both
-   only for a strictly larger value, which keeps the earlier day on a tie.
+2. For the total, the loop is already written. Start the total at 0, with the
+   type the function returns.
+3. For the busiest day, start with day 0 and its hours from `days[0]`. The loop
+   replaces both only for a strictly larger value, which keeps the earlier day on a tie.
 """
 
 [[quest]]
@@ -129,12 +130,13 @@ path = "03_types/types4.rs"
 title = "Casting with as"
 summary = "Convert between numeric types explicitly."
 hint = """
-1. `300 as u8` compiles and gives 44, with no error at all. Decide what an
-   out-of-range value should mean before you cast.
-2. `u8::try_from(x)` gives back a Result. The `.ok()` method turns an Ok into
-   Some and an Err into None.
-3. Limit the value with `x.clamp(0, 255)` before the cast. For `truncate`, a
-   plain `as` already does the job.
+1. `as` never fails at run time, but it can wrap. `300i32 as u8` compiles and
+   gives 44. A plain `300 as u8` does not compile, because the literal is
+   checked against u8. Decide what an out-of-range value should mean before you cast.
+2. `x.clamp(0, 255)` limits x to the range first, so the `as u8` after it cannot
+   wrap. For `low_byte`, a plain `as u8` keeps the low eight bits.
+3. For `truncate`, a plain `as i64` already does the job. It drops the fraction
+   toward zero and saturates at the limits of i64.
 """
 
 [[quest]]
@@ -205,13 +207,13 @@ summary = "Act I boss: totals, tax and aligned columns."
 boss = true
 hint = """
 1. Build from the bottom up. `line_total` and `subtotal` come first, and each
-   later function calls the earlier ones, so get those right before you move on.
-2. In `format_money`, work in whole dollars and leftover cents. Count the dollar
-   digits from the right to find where commas go, and put one before each group
-   of three, except at the start.
-3. In `render`, format each item row with `{name:<16}{qty:>3}{price:>10}`. Pad
-   the summary labels to 19 so their prices line up with the item prices, and
-   join the rows with a newline.
+   later function calls the earlier ones. In `subtotal`, `for (_, qty, unit_cents)
+   in items` gives references, so read the numbers with `*qty` and `*unit_cents`.
+2. In `tax`, do the multiplication in u64, add half of 10000, and divide by 10000
+   to round half up. `format_money` is written for you. Read it and move on.
+3. In `render`, start with `let mut text = String::new();`. For each item,
+   `text.push_str(&format!("{name:<16}{qty:>3}{price:>10}\n"))` adds one row and
+   its newline. The three summary rows use `{:<19}{:>10}` the same way.
 """
 
 [[quest]]
@@ -231,7 +233,7 @@ name = "memory2"
 chapter = 5
 path = "05_memory/memory2.rs"
 title = "Length vs capacity"
-summary = "Watch a String's heap buffer grow."
+summary = "Watch a Vec's capacity grow and size a String once."
 hint = """
 1. with_capacity(n) reserves room for n bytes without putting any text in the String. First work out the exact byte count of the finished line.
 2. needed_capacity adds the length of every field, then one comma for each gap between two neighbors. fields.len().saturating_sub(1) counts the gaps, and it is 0 for an empty list.
@@ -306,9 +308,12 @@ path = "07_borrowing/borrow2.rs"
 title = "Mutable borrow"
 summary = "Modify a value through &mut."
 hint = """
-1. A &mut parameter lets the function change the caller's value. Assign through it with *price = ..., where the * reaches the number the reference points to.
-2. Iterating a &mut [u32] with `for price in prices` gives you &mut u32 values. Do the multiplication in u64, because a price of one billion times 110 doesn't fit in u32. Integer division rounds the tax down.
-3. For capitalize_first, s.chars().next() gives the first character. Replace exactly its bytes with s.replace_range, using len_utf8 to find how many bytes it takes.
+1. A `&mut` parameter lets the function change the caller's value. `prices[i] = ...`
+   writes into the caller's slice, and `prices.len()` counts its entries.
+2. Do the tax math in u64, because a price of one billion times 110 doesn't fit
+   in u32. Integer division rounds the tax down. Cast the result back with `as u32`.
+3. For wrap_in_stars, `insert(0, '*')` puts a character at the start of the
+   String, and `push('*')` adds one at the end. Both change the String the caller owns.
 """
 
 [[quest]]
@@ -318,9 +323,14 @@ path = "07_borrowing/borrow3.rs"
 title = "Readers or a writer"
 summary = "Untangle overlapping shared and mutable borrows."
 hint = """
-1. Each error names a borrow that is still alive. E0502 is the shared reference that push_and_report keeps while it pushes. E0499 is two &mut references to elements of the same Vec.
-2. v.first() returns an Option<&i32>, which is a reference into the Vec. Calling copied() turns it into an Option<i32>, a plain value that doesn't borrow the Vec.
-3. For swap_first_two, one &mut borrow of the whole slice is allowed, and slices have a method that swaps two elements. Use that method.
+1. Each error names a borrow that is still alive. E0502 is the reference `&v[0]`
+   that push_and_report keeps while it pushes. E0499 is two `&mut` borrows of
+   elements of the same slice, alive at the same time.
+2. Copy the first value out with `v[0]`. An i32 is Copy, so the copy is a plain
+   number, and no borrow of v remains when you push. An empty Vec has no first
+   value, so check `is_empty()` before you index.
+3. For swap_first_two, copy one value into a `tmp` variable, then assign the two
+   places one after the other: `v[0] = v[1]` and then `v[1] = tmp`.
 """
 
 [[quest]]
@@ -354,9 +364,9 @@ path = "08_strings_slices/strings2.rs"
 title = "First word"
 summary = "Return a slice into the input."
 hint = """
-1. trim_matches(' ') removes spaces at both ends. Then find(' ') returns the byte index of the first space, and &s[..i] is a slice up to it.
-2. rfind(' ') finds the last space. The last word starts one byte after that space. If there is no space, the last word starts at 0.
-3. Apply map_or(0, |i| i + 1) to the result of rfind, then slice from that position to the end.
+1. `trim_matches(' ')` removes spaces at both ends. Then `find(' ')` returns an Option with the byte index of the first space. `match` on it: `Some(end)` gives `&s[..end]`, and `None` means the text is one word.
+2. `rfind(' ')` finds the last space. The last word starts one byte after that space. With no space, the last word is the whole text.
+3. Use `match` on the result of `rfind`, the same way: `Some(space) => &s[space + 1..]` and `None => s`. The Option box in Chapter 4 explains Some and None.
 """
 
 [[quest]]
@@ -366,9 +376,9 @@ path = "08_strings_slices/strings3.rs"
 title = "Characters, not bytes"
 summary = "Handle UTF-8 text correctly."
 hint = """
-1. len() counts bytes. chars() walks whole characters. "héllo" is 6 bytes and 5 characters, so count characters with chars().
-2. char_indices() yields (byte position, char) pairs. nth(max) is the first character you drop, and its byte position is where the prefix must end.
-3. reverse_chars can collect s.chars().rev() into a String. truncate_chars can match on char_indices().nth(max), slice up to the position it gives, and return s when it gives None.
+1. len() counts bytes. chars() walks whole characters. "héllo" is 6 bytes and 5 characters, so count characters with a loop over `s.chars()`.
+2. `insert(0, c)` puts a character at the front of a String. Walk the characters in order and insert each one at 0, and the string comes out reversed.
+3. char_indices() gives each character with its byte position. In truncate_chars, count the characters as you go. At the first character after `max`, return the slice up to its byte position. If the loop ends, the whole string fits.
 """
 
 [[quest]]
@@ -376,11 +386,11 @@ name = "strings4"
 chapter = 8
 path = "08_strings_slices/strings4.rs"
 title = "Building strings"
-summary = "push_str, format! and title case."
+summary = "Title-case words and build a URL slug."
 hint = """
-1. split_whitespace() splits on any run of spaces. Capitalize each word, then join the results with " ".
-2. to_uppercase() on one char returns an iterator, because one char can become several. Chain the rest of the word onto it and collect into a String.
-3. For slugify, loop over the chars. Keep each ASCII letter or digit, lowercased. For anything else, push one '-' unless the last char already is one. At the end, trim '-' from both ends.
+1. split_whitespace() splits on any run of spaces. Push each word's characters into a String, with one space between words.
+2. char_indices() gives each character with its position. For the first character (position 0), to_uppercase() can give more than one char, so loop over it and push each one. Push the other characters as they are.
+3. For slugify, loop over the chars. Keep each ASCII letter or digit, lowercased with to_ascii_lowercase(). For anything else, push one '-' unless the last char already is one. At the end, trim_matches('-') removes dashes at both ends.
 """
 
 [[quest]]
@@ -391,9 +401,9 @@ title = "Text statistics"
 summary = "Act II boss: analyze text without a single unnecessary clone."
 boss = true
 hint = """
-1. Start with words(). It yields &str slices of the text, so each function can count, measure or compare words without copying them.
-2. For longest_word, reduce keeps the earlier word on a tie if you replace the best only when the new word is strictly longer. For most_frequent, count with a HashMap<&str, usize> and entry(word).or_insert(0).
-3. In most_frequent, max_by can compare the counts first, then compare the words in reverse with b.cmp(a), so the alphabetically first word wins ties. In average_word_len, one fold can collect the total characters and the word count together.
+1. Start with the loops. `for word in text.split_whitespace()` visits each word as a &str slice, so nothing is copied. Count with `let mut count = 0;` and `count += 1;`.
+2. A char is not a byte. `chars()` visits characters, and `len()` counts bytes. For longest_word, keep the best word and its character count, and replace them only for a strictly longer word. average_word_len divides with `as f64`.
+3. For non_ascii_words, `bytes()` visits the raw bytes, and every byte of a non-ASCII character is above 127. For first_sentence, `char_indices()` gives each character with its byte position. The end marks are one byte long, so `&text[..i + 1]` ends right after one.
 """
 
 [[quest]]
@@ -449,11 +459,11 @@ name = "enums2"
 chapter = 10
 path = "10_enums_match/enums2.rs"
 title = "Exhaustive match"
-summary = "A traffic light state machine."
+summary = "An order status state machine."
 hint = """
 1. next is a match on s with one arm per variant. Return Some with the following status, or None where there is no next step.
-2. cancel can put the cancellable variants in one arm with |. Shipped and Delivered each get their own arm and message.
-3. Put Cancelled in the same arm as Pending and Paid, so cancelling a cancelled order is Ok. Leave out a _ arm so the compiler checks every variant.
+2. cancel can put the cancellable variants in one arm with |, and return Some(Cancelled) from it. Shipped and Delivered share the other arm, and return None.
+3. Put Cancelled in the same arm as Pending and Paid, so cancelling a cancelled order gives Some. Leave out a _ arm so the compiler checks every variant.
 """
 
 [[quest]]
@@ -463,9 +473,13 @@ path = "10_enums_match/option1.rs"
 title = "Option instead of null"
 summary = "Return None when there is nothing to return."
 hint = """
-1. find_user: iter() and find() give you the matching tuple inside an Option. Then map gets the name, and as_str() borrows it as a &str.
-2. safe_divide: look for an integer method that returns an Option instead of panicking, such as checked_div.
-3. first_even: iterate with copied(), then find the first value where n % 2 == 0.
+1. find_user: loop over the list with `for (user_id, name) in users`. When
+   `*user_id == id`, return `Some(name.as_str())`. If the loop ends with no match, return None.
+2. safe_divide: look for an integer method that returns an Option instead of
+   panicking, such as checked_div. It returns None for a zero divisor and for i32::MIN / -1.
+3. first_even: loop over v with `for x in v`. Each x is a reference, so `x % 2`
+   works and `*x` is the number to return. Return `Some(*x)` at the first even
+   value, and None after the loop.
 """
 
 [[quest]]
@@ -476,7 +490,7 @@ title = "if let and let else"
 summary = "Unwrap optional values without unwrap()."
 hint = """
 1. Each unwrap() panics on None, or on a bad parse. Replace it with a way to handle the missing case: if let, let else or unwrap_or.
-2. parse_port: parse() returns a Result. .ok() turns it into an Option, and unwrap_or(8080) gives the fallback.
+2. parse_port: parse() returns a Result, and Result has unwrap_or too. `unwrap_or(8080)` gives the fallback when the text is not a valid u16.
 3. initials: let Some(name) = name else { return String::new(); } handles the None case first. The iterator chain after it can stay as it is.
 """
 
@@ -512,8 +526,8 @@ title = "Your own error type"
 summary = "An error enum with Display."
 hint = """
 1. Display is one match on self with an arm for each variant. write!(f, "missing key: {key}") writes the text into the formatter.
-2. In get_port, find the "port" pair with pairs.iter().find(...). If there is none, return Err(ConfigError::Missing(...)) with the key name.
-3. Parse the value with parse::<u16>(), then map_err it into ConfigError::Invalid { key, value }. The value field holds the raw text.
+2. In get_port, loop over the pairs with `for (key, raw) in pairs`. The key is a reference, so compare `*key == "port"`. If no pair matches after the loop, return Err(ConfigError::Missing(...)) with the key name.
+3. Inside the matching branch, match on raw.parse::<u16>(). Ok(port) returns the port. Err returns Invalid with the key and the raw text.
 """
 
 [[quest]]
@@ -533,11 +547,11 @@ name = "vecs1"
 chapter = 12
 path = "12_collections/vecs1.rs"
 title = "Vec basics"
-summary = "push, get, iterate, remove."
+summary = "retain, sort a copy, and get without panicking."
 hint = """
 1. For remove_negatives, look at Vec::retain. It keeps the items a closure approves of, in place.
-2. top_three must not change its input. Copy the slice into a new Vec, sort the copy from biggest to smallest, then keep only the first three.
-3. sort_by_key with Reverse sorts biggest first, and truncate(3) keeps three. For safe_get, v.get(i) returns Option<&i32>, and copied() turns that into Option<i32>.
+2. top_three must not change its input. Copy the numbers into a new Vec with a loop, sort the copy from biggest to smallest, then keep only the first three.
+3. sort_by_key with Reverse sorts biggest first (Sorting and ordering in Chapter 12 explains it), and truncate(3) keeps three. For safe_get, check i < v.len() before you index with v[i].
 """
 
 [[quest]]
@@ -549,7 +563,7 @@ summary = "Count words with the entry API."
 hint = """
 1. Split the text with split_whitespace(). Lowercase each word before you use it as a key.
 2. *counts.entry(word).or_insert(0) += 1 adds one to a word's count, creating the entry when the word is new.
-3. For top_word, iter() followed by max_by finds the largest pair. For ties, compare the words in reverse, so the alphabetically first word counts as the larger one.
+3. For top_word, iter() followed by max_by finds the largest pair. For ties, compare the words in reverse, so the alphabetically first word counts as the larger one. Sorting and ordering in Chapter 12 explains max_by and then_with.
 """
 
 [[quest]]
@@ -572,7 +586,7 @@ title = "Unique tags"
 summary = "HashSet and BTreeSet for de-duplication and order."
 hint = """
 1. A BTreeSet ignores a repeated insert and keeps its items sorted. Loop over each post and each tag, and insert every tag.
-2. For common_tags, put the tags from b in a HashSet, so "is it in b?" is a quick check. Keep the tags from a that pass, then sort the Vec<String> at the end, because a HashSet has no order.
+2. For common_tags, put the tags from b in a HashSet, so "is it in b?" is a quick check. Tags in a can repeat, so collect the matches into a HashSet (or call dedup() after sorting), then turn them into a sorted Vec<String>. A HashSet has no order.
 3. For has_duplicates, HashSet::insert returns false when the value is already in the set. Use that on each number and stop at the first repeat.
 """
 
@@ -604,7 +618,7 @@ hint = """
 name = "iter2"
 chapter = 13
 path = "13_iterators_closures/iter2.rs"
-title = "fold, zip and sum"
+title = "zip, scan and windows"
 summary = "Combine iterators to compute results."
 hint = """
 1. a.iter().zip(b) pairs up the elements. Then map multiplies each pair, and sum adds them.
@@ -634,7 +648,7 @@ boss = true
 hint = """
 1. Start with the small pieces: Display has one arm per variant, and open is one entry(...).or_insert(0) call. Then write a helper that checks an account exists, and one that returns a &mut u64 for an account or UnknownAccount for a missing name.
 2. A transfer checks from, then to, then the funds, and only then moves money. Make withdraw check the funds before it writes. Chaining the steps with ? gives the all-or-nothing rule.
-3. apply_all can be txs.iter().filter_map(|tx| self.apply(tx).err()).collect(). For top_accounts, collect (name, balance) pairs, sort_by with b.1.cmp(&a.1) then a.0.cmp(&b.0), then truncate(n).
+3. apply_all can be txs.iter().filter_map(|tx| self.apply(tx).err()).collect(). For top_accounts, collect (name, balance) pairs, sort_by with b.1.cmp(&a.1) then a.0.cmp(&b.0), then truncate(n). Sorting and ordering in Chapter 12 explains sort_by, cmp and then_with.
 """
 
 [[quest]]
@@ -718,7 +732,7 @@ summary = "A parser that holds a &str."
 hint = """
 1. The struct stores an &'a str, so new only has to keep the input and start pos at 0.
 2. In next_token, skip whitespace with trim_start(), then find the next whitespace with find(char::is_whitespace). Store the end offset in pos so the next call starts where this one stopped.
-3. Return a slice of the input, not of self. Copy self.input into a local &'a str first and slice that. The local's type carries 'a, so a token can outlive the tokenizer.
+3. Return a slice of the input, not of self. Slice self.input itself: it is a &'a str, so the slice keeps 'a and does not borrow the tokenizer. The signature -> Option<&'a str> is what promises this.
 """
 
 [[quest]]
@@ -729,7 +743,7 @@ title = "Outlive me"
 summary = "Fix borrowed values that don't live long enough."
 hint = """
 1. There are two separate errors. E0515 is in build_label: the String is dropped when the function returns, so no reference to it can escape. E0597 is in main: long_word is dropped at the end of its block, but word is used after that.
-2. Return an owned value. A String moves out to the caller, so nothing borrows from the local.
+2. Return an owned value. A String moves out to the caller, so nothing borrows from the local. The test module also reports E0277 about &'static str. It has the same cause, and the same change makes it go away.
 3. In main, declare the owner before the borrow, at the outer level. Remove the braces around the block and long_word lives through every use of word.
 """
 
@@ -740,7 +754,7 @@ path = "16_modules_cargo/modules1.rs"
 title = "Visibility"
 summary = "pub, private fields and constructors."
 hint = """
-1. E0603 says the function is private, so its visibility is the first fix. rustc reports the private fields (E0451) only after that is fixed.
+1. E0603 says the function is private, so its visibility is the first fix. After that the tests fail on the missing Account::new (E0599), and main's struct literal reports the private fields (E0451) once new exists.
 2. The tests call bank::Account::new("Ana") and expect a zero balance. Add pub fn new(owner: &str) -> Account inside impl Account, with balance: 0.
 3. In main, create the account with new and then call deposit. Keep owner and balance private, because the constructor is the only way to make an account.
 """
@@ -839,7 +853,7 @@ summary = "Run work on threads and collect the results."
 hint = """
 1. Read the E0597 error. It says data must be borrowed for 'static, because a spawned thread can run after parallel_sum returns.
 2. Adding move is not enough, because chunk is still a slice of data. Each thread needs numbers that it owns.
-3. Use data.into_iter() and pull each chunk out with by_ref().take(chunk_size).collect(). Move each owned chunk into its thread, and stop when a chunk comes back empty.
+3. Use data.into_iter() and pull each chunk out with by_ref().take(chunk_size).collect(). by_ref() lends the iterator instead of consuming it, so each take continues where the last one stopped. Move each owned chunk into its thread, and stop when a chunk comes back empty.
 """
 
 [[quest]]

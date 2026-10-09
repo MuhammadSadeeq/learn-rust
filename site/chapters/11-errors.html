@@ -71,7 +71,7 @@ thread 'main' (27578) panicked at src/main.rs:3:24:
 index out of bounds: the len is 3 but the index is 3
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace</pre>
 
-<p>Read the message from the top. The first line names the thread and the place: line 3 of <code>src/main.rs</code>. The second line says what went wrong. The number in parentheses is the process id, so yours will differ. Set <code>RUST_BACKTRACE=1</code> and the same panic also prints a stack trace, the chain of calls that led to that line. Reach for it when a panic shows up somewhere you didn't expect.</p>
+<p>Read the message from the top. The first line names the thread and the place: line 3 of <code>src/main.rs</code>. The second line says what went wrong. The number in parentheses is the operating system's id for the thread that panicked, so yours will differ. Set <code>RUST_BACKTRACE=1</code> and the same panic also prints a stack trace, the chain of calls that led to that line. Reach for it when a panic shows up somewhere you didn't expect.</p>
 
 <div class="ox-quiz" data-id="11:panic-or-result" data-label="Check yourself">
   <p class="ox-q">Your app reads <code>config.toml</code> when it starts. Someone forgot to deploy the file. What should the code do?</p>
@@ -100,7 +100,7 @@ use std::io;
 fn load_config(path: &amp;str) -&gt; Result&lt;String, io::Error&gt; {
     fs::read_to_string(path)
 }</pre>
-  <div class="ox-bridge-note"><p>In PHP, <code>loadConfig(): string</code> says nothing about failure. Any function can throw, and the only hint is a <code>@throws</code> docblock, if someone wrote one. In Rust, <code>-&gt; Result&lt;String, io::Error&gt;</code> is part of the signature, and every caller has to deal with it. The break: nothing unwinds to a <code>catch</code>. The error is a value that the caller receives and inspects.</p></div>
+  <div class="ox-bridge-note"><p>In PHP, <code>loadConfig(): string</code> says nothing about failure. Any function can throw, and the only hint is a <code>@throws</code> docblock, if someone wrote one. In Rust, <code>-&gt; Result&lt;String, io::Error&gt;</code> is part of the signature, and every caller has to deal with it. The break: nothing unwinds to a <code>catch</code>. The error is a value that the caller receives and inspects. The two <code>use</code> lines bring <code>fs</code> and <code>io</code> into scope, the way a PHP <code>use</code> does; Chapter 16 covers modules and paths in full.</p></div>
 </div>
 
 <p>PHP 8.1 added a return type for the other case: a function that never returns normally. Declare it <code>never</code>, and it must throw or exit.</p>
@@ -240,6 +240,8 @@ fn main() {
   </tbody>
 </table>
 </div>
+
+<p>Each <code>f</code> in the table is a closure: a small function written inline, with its parameters between two bars, like <code>|e| format!(...)</code>. Chapter 13 explains closures in full. The example below uses several of them, so read <code>|e|</code> as "a function that takes <code>e</code>".</p>
 
 <pre class="rs" data-run data-stdout="Ok(31)\nErr(&quot;x: invalid digit found in string&quot;)\nErr(&quot;12 is under 18&quot;)\n18\n(x: invalid digit found in string)\n0\nSome(7)\nErr(&quot;no value&quot;)" data-title="src/main.rs">
 fn parse_age(text: &amp;str) -&gt; Result&lt;u32, String&gt; {
@@ -538,7 +540,7 @@ Error: ParseIntError { kind: InvalidDigit }</pre>
   </div>
   <p class="rw-status" aria-live="polite">Nothing fails yet. Press Run to send a value through, or break a station first.</p>
   <div class="rw-result"><span class="ox-label">Result</span><code class="rw-value">not run yet</code></div>
-  <p class="ox-caption">Each toggle stands for a bad input at that station: an empty line for read_input, an age of thirty for parse, an age of 12 for validate, and the name admin for save. The result line shows each value the way the code builds it. The Switchman throws the lever at the first failing station, and the car takes that station's <code>?</code> exit ramp. Every later station is skipped.</p>
+  <p class="ox-caption">Each toggle stands for a bad input at that station: an empty line for read_input, an age of thirty for parse, an age of 12 for validate, and the name admin for save. The result line shows each value the way <code>{:?}</code> prints it. The Switchman throws the lever at the first failing station, and the car takes that station's <code>?</code> exit ramp. Every later station is skipped.</p>
 </div>
 
 <script>
@@ -548,10 +550,10 @@ Error: ParseIntError { kind: InvalidDigit }</pre>
   if (!root) return;
 
   var STATIONS = [
-    { name: "read_input", line: 2, cx: 81,  err: 'Err(AppError::Invalid("empty input"))' },
-    { name: "parse",      line: 3, cx: 187, err: "Err(AppError::Parse(ParseIntError { kind: InvalidDigit }))" },
-    { name: "validate",   line: 4, cx: 293, err: 'Err(AppError::Invalid("must be 18 or older"))' },
-    { name: "save",       line: 5, cx: 399, err: 'Err(AppError::Invalid("name already taken"))' }
+    { name: "read_input", line: 2, cx: 81,  err: 'Err(Invalid("empty input"))' },
+    { name: "parse",      line: 3, cx: 187, err: "Err(Parse(ParseIntError { kind: InvalidDigit }))" },
+    { name: "validate",   line: 4, cx: 293, err: 'Err(Invalid("must be 18 or older"))' },
+    { name: "save",       line: 5, cx: 399, err: 'Err(Invalid("name already taken"))' }
   ];
   var OK_VALUE = 'Ok(User { name: "Ana", age: 31 })';
   var START_X = 34, TRACK_Y = 96, END_X = 446;
@@ -597,11 +599,13 @@ Error: ParseIntError { kind: InvalidDigit }</pre>
     var n = switchman && switchman.querySelector(".ca");
     if (n && window.OxCast) OxCast.pose(n, pose, ms);
   }
-  function slide(x0, x1, y, ms) {
+  // Each animation frame checks the run id, so a Reset stops the car where clearRun put it.
+  function slide(x0, x1, y, ms, id) {
     return new Promise(function (resolve) {
       if (reduce) { place(x1, y); resolve(); return; }
       var t0 = null;
       function frame(now) {
+        if (id !== runId) { resolve(); return; }
         if (t0 === null) t0 = now;
         var p = Math.min(1, (now - t0) / ms);
         var e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
@@ -611,7 +615,7 @@ Error: ParseIntError { kind: InvalidDigit }</pre>
       requestAnimationFrame(frame);
     });
   }
-  function drop(path, ms) {
+  function drop(path, ms, id) {
     return new Promise(function (resolve) {
       var total = path.getTotalLength();
       if (reduce) {
@@ -622,6 +626,7 @@ Error: ParseIntError { kind: InvalidDigit }</pre>
       }
       var t0 = null;
       function frame(now) {
+        if (id !== runId) { resolve(); return; }
         if (t0 === null) t0 = now;
         var p = Math.min(1, (now - t0) / ms);
         var pt = path.getPointAtLength(total * p);
@@ -695,7 +700,7 @@ Error: ParseIntError { kind: InvalidDigit }</pre>
       markLines(st.line, 0);
       markStation(i, "is-now");
       say("Checking " + st.name + " on line " + st.line + ".");
-      await slide(x, st.cx, TRACK_Y, 420);
+      await slide(x, st.cx, TRACK_Y, 420, id);
       x = st.cx;
       await wait(260);
       if (id !== runId) return;
@@ -709,7 +714,7 @@ Error: ParseIntError { kind: InvalidDigit }</pre>
         setCar("err", st.name);
         setSwitch("oops", 1600);
         say(st.name + " returned Err. The ? on line " + st.line + " takes the exit ramp, and the stations after it are skipped.");
-        await drop(ramps[i], 900);
+        await drop(ramps[i], 900, id);
         if (id !== runId) return;
         errTrack.classList.add("is-live");
         show(st.err, "is-bad");
@@ -722,7 +727,7 @@ Error: ParseIntError { kind: InvalidDigit }</pre>
 
     markLines(6, 0);
     setSwitch("happy", 1400);
-    await slide(x, END_X, TRACK_Y, 420);
+    await slide(x, END_X, TRACK_Y, 420, id);
     if (id !== runId) return;
     show(OK_VALUE, "is-ok");
     say("All four stations returned Ok, so the function returns the User.");
@@ -765,6 +770,8 @@ Error: ParseIntError { kind: InvalidDigit }</pre>
 <h2 id="custom">Your own error type</h2>
 
 <p>A function that can fail in several ways needs an error type that says which way. A <code>String</code> can hold any message, but the caller can't match on it. An enum gives each failure its own variant, so the caller can react to each one differently.</p>
+
+<p>The block below has three new things. <code>impl fmt::Display for AppError</code> is the form <code>impl Trait for Type</code>: it fills in a standard interface for your type, here the one that lets <code>{}</code> print it. Chapter 14 explains traits. Inside <code>fmt</code>, <code>write!</code> works like <code>println!</code>, but it writes into the formatter <code>f</code> instead of the terminal. The formatter's full type is <code>Formatter&lt;'_&gt;</code>, where <code>'_</code> is an anonymous lifetime that the compiler fills in; Chapter 15 explains it.</p>
 
 <pre class="rs" data-run data-stdout="found Ana\nerror: user 7 not found\nerror: could not parse number: invalid digit found in string\nerror: invalid input: id is empty" data-title="src/main.rs">
 use std::error::Error;
@@ -822,6 +829,8 @@ fn main() {
     }
 }</pre>
 
+<p><code>find_name</code> uses two closures, <code>|(uid, _)| *uid == id</code> and <code>|(_, name)| *name</code>, inside the iterator methods <code>find</code> and <code>map</code>. Chapter 13 explains closures, and the iterator methods that take them.</p>
+
 <p>Three things make this type work with <code>?</code>:</p>
 
 <ol class="ox-steps">
@@ -844,7 +853,7 @@ enum AppError {
     Parse(ParseIntError),
 }
 
-impl [[From&lt;ParseIntError&gt;]] for AppError {
+impl [[From&lt;ParseIntError&gt;|From&lt;std::num::ParseIntError&gt;|std::convert::From&lt;ParseIntError&gt;]] for AppError {
     fn from(e: ParseIntError) -&gt; Self {
         AppError::Parse(e)
     }

@@ -2,17 +2,17 @@
 //  SOLUTION types2 · Tuples                      Chapter 03 · Types Are Shapes
 // ----------------------------------------------------------------------------
 //  Start `low` and `high` from the first value, then compare every value
-//  against them. `let (mut low, mut high) = (v[0], v[0]);` is a destructuring
-//  `let`: it takes the tuple apart into two bindings in one step. The slice
-//  must not be empty, because `v[0]` panics otherwise.
+//  against them. `v[0]` indexes a slice the same way it indexes an array. The
+//  slice must not be empty, because `v[0]` panics otherwise.
 //
-//  `swap` destructures its parameter the same way, then builds the reversed
-//  tuple as its last expression. There is no `return`, because the last
-//  expression is the value.
+//  `swap` destructures its parameter with `let (number, letter) = p;`, then
+//  builds the reversed tuple as its last expression. There is no `return`,
+//  because the last expression is the value.
 // ============================================================================
 
 fn min_max(v: &[i32]) -> (i32, i32) {
-    let (mut low, mut high) = (v[0], v[0]);
+    let mut low = v[0];
+    let mut high = v[0];
     for &x in v {
         if x < low {
             low = x;

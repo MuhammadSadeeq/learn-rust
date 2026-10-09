@@ -712,7 +712,7 @@ mod tests {
     }
 }</pre>
 
-<p>Running <code>cargo test</code> on that file prints one line per test. The order can change from run to run, because tests run in parallel. This is real output from the file above.</p>
+<p>The <code>fn main</code> at the bottom exists only so this block runs on its own here. A real <code>src/lib.rs</code> would not have one. Running <code>cargo test</code> on that file prints one line per test. The order can change from run to run, because tests run in parallel. This is real output from the file above.</p>
 
 <pre class="text" data-title="cargo test">
 running 5 tests
