@@ -42,9 +42,6 @@ def t2i(t):
 
 # ---------------------------------------------------------------- basics
 
-def silence(n=N):
-    return np.zeros(n, dtype=np.float64)
-
 
 def tvec(n):
     return np.arange(n, dtype=np.float64) / SR
@@ -56,72 +53,6 @@ def rng(tag):
     for ch in tag:
         h = (h * 131 + ord(ch)) & 0xFFFFFFFF
     return np.random.default_rng((SEED ^ h) & 0xFFFFFFFF)
-
-
-def place(buf, sig, t0, gain=1.0):
-    """Add sig into buf starting at time t0 (seconds). Clips to buffer bounds."""
-    i0 = t2i(t0)
-    if i0 >= len(buf) or i0 + len(sig) <= 0:
-        return buf
-    s0 = 0
-    if i0 < 0:
-        s0 = -i0
-        i0 = 0
-    n = min(len(sig) - s0, len(buf) - i0)
-    buf[i0:i0 + n] += gain * sig[s0:s0 + n]
-    return buf
-
-
-def env_adsr(n, a, d, s, r, hold=None):
-    """Simple ADSR over n samples. a/d/r in seconds, s is sustain level 0..1.
-    Every edge is a raised-cosine-ish ramp so there are no clicks. The release
-    always ends at zero."""
-    if hold is None:
-        hold = n / SR
-    out = np.zeros(n)
-    na = max(1, int(a * SR))
-    nd = max(1, int(d * SR))
-    nr = max(1, int(r * SR))
-    nh = int(hold * SR)
-    i = 0
-    # attack: 0 -> 1
-    m = min(na, n)
-    if m > 0:
-        out[:m] = 0.5 - 0.5 * np.cos(np.pi * np.arange(m) / na)
-    i = m
-    # decay: 1 -> s, up to end of hold
-    m2 = max(0, min(nd, nh - i, n - i))
-    if m2 > 0:
-        x = np.arange(m2) / nd
-        out[i:i + m2] = s + (1 - s) * np.exp(-5.0 * x)
-    i += max(0, min(nd, nh - (i if i < nh else i)))
-    i = max(i, min(nh, n))
-    # sustain until hold end
-    if i < n and i < nh:
-        out[i:min(nh, n)] = s
-    # release from current level to zero, starting at hold end
-    rs = max(0, min(nh, n))
-    lvl = out[rs - 1] if rs > 0 else 0.0
-    m3 = min(nr, n - rs)
-    if m3 > 0:
-        x = np.arange(m3) / nr
-        out[rs:rs + m3] = lvl * (0.5 + 0.5 * np.cos(np.pi * x))
-    # tail-safety: force the last 2 ms to zero
-    fz = min(n, int(0.002 * SR))
-    out[n - fz:] *= np.linspace(1, 0, fz) if fz > 0 else 1
-    return out
-
-
-def fade_edges(sig, fi=0.004, fo=0.004):
-    """Short raised-cosine fades at both ends so no voice starts or stops with a click."""
-    n = len(sig)
-    a = min(int(fi * SR), n // 2)
-    b = min(int(fo * SR), n // 2)
-    if a > 0:
-        sig[:a] *= 0.5 - 0.5 * np.cos(np.pi * np.arange(a) / a)
-    if b > 0:
-        sig[n - b:] *= 0.5 + 0.5 * np.cos(np.pi * np.arange(b) / b)
-    return sig
 
 
 def midi_hz(m):
@@ -148,15 +79,6 @@ def hz(name):
 
 # ---------------------------------------------------------------- filters
 
-def onepole_lp(x, fc):
-    """Time-varying-safe one-pole low-pass. fc may be scalar or per-sample array."""
-    fc = np.broadcast_to(np.asarray(fc, dtype=np.float64), x.shape)
-    a = 1.0 - np.exp(-2.0 * np.pi * np.clip(fc, 1, SR * 0.45) / SR)
-    y = np.empty_like(x)
-    acc = 0.0
-    # vectorised via scipy-free loop in blocks is slow; use recursive form via lfilter emulation
-    return _ssm_lp(x, a)
-
 
 def _ssm_lp(x, a):
     """Exact one-pole y[n] = y[n-1] + a[n]*(x[n]-y[n-1]) computed with a
@@ -179,119 +101,29 @@ def _ssm_lp(x, a):
 
 
 def _iir1_const(x, a, y0=0.0):
-    """y[n] = (1-b) y[n-1] + a x[n] with b = 1-a... implemented as
-    y[n] = p*y[n-1] + a*x[n], p = 1-a, using a blocked closed form so it stays
-    fast in numpy: y = sum_k p^(n-k) a x[k]."""
+    """Exact one-pole y[n] = (1-a) y[n-1] + a x[n], evaluated block by block.
+    Each block is a convolution with the geometric kernel a(1-a)^j (via FFT),
+    plus the carried state decayed by (1-a)^(j+1)."""
     p = 1.0 - a
     n = len(x)
-    if n == 0:
-        return x.copy()
     B = 2048
     y = np.empty(n)
     state = y0
-    k = np.arange(B)
-    pw = p ** (k + 1)
-    # within block: y[j] = p^(j+1) state + sum_{k<=j} p^(j-k) a x[k]
-    inv = p ** (-k) if p > 1e-12 else None
+    if n == 0:
+        return y
     for s in range(0, n, B):
         xb = x[s:s + B]
         m = len(xb)
-        if p < 1e-9:
-            yb = a * xb
-            yb = yb.copy()
-            yb[0] += 0.0
-        else:
-            # convolve with the geometric kernel h[j] = a p^j via FFT
-            h = a * (p ** np.arange(m))
-            L = 1
-            while L < 2 * m:
-                L <<= 1
-            yb = np.fft.irfft(np.fft.rfft(xb, L) * np.fft.rfft(h, L), L)[:m]
-            yb = yb + state * (p ** (np.arange(m) + 1))
+        j = np.arange(m)
+        h = a * p ** j
+        L = 1
+        while L < 2 * m:
+            L <<= 1
+        yb = np.fft.irfft(np.fft.rfft(xb, L) * np.fft.rfft(h, L), L)[:m]
+        yb = yb + state * p ** (j + 1)
         y[s:s + m] = yb
         state = yb[-1]
     return y
-
-
-def biquad_coeffs(kind, fc, q=0.707, gain_db=0.0):
-    """RBJ cookbook biquad coefficients, returned normalised (b0,b1,b2,a1,a2)."""
-    w0 = 2 * np.pi * min(fc, SR * 0.45) / SR
-    cw, sw = np.cos(w0), np.sin(w0)
-    alpha = sw / (2 * q)
-    A = 10 ** (gain_db / 40)
-    if kind == "lp":
-        b0 = (1 - cw) / 2; b1 = 1 - cw; b2 = (1 - cw) / 2
-        a0 = 1 + alpha; a1 = -2 * cw; a2 = 1 - alpha
-    elif kind == "hp":
-        b0 = (1 + cw) / 2; b1 = -(1 + cw); b2 = (1 + cw) / 2
-        a0 = 1 + alpha; a1 = -2 * cw; a2 = 1 - alpha
-    elif kind == "bp":
-        b0 = alpha; b1 = 0.0; b2 = -alpha
-        a0 = 1 + alpha; a1 = -2 * cw; a2 = 1 - alpha
-    elif kind == "peak":
-        b0 = 1 + alpha * A; b1 = -2 * cw; b2 = 1 - alpha * A
-        a0 = 1 + alpha / A; a1 = -2 * cw; a2 = 1 - alpha / A
-    else:
-        raise ValueError(kind)
-    return np.array([b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0])
-
-
-def biquad(x, coeffs):
-    """Direct-form I biquad over a whole signal. Block-recursive via FFT is not
-    exact for IIR feedback, so we run a lean python loop over 48 kHz samples in
-    numba-free numpy with a 2nd-order recurrence vectorised over blocks of
-    the feed-forward part and a short serial pass for the feedback."""
-    b0, b1, b2, a1, a2 = coeffs
-    n = len(x)
-    # feed-forward first (vectorised), then serial feedback through a 2-pole recursion
-    ff = b0 * x
-    ff[1:] += b1 * x[:-1]
-    ff[2:] += b2 * x[:-2]
-    y = np.empty(n)
-    y1 = y2 = 0.0
-    fl = ff.tolist()
-    out = [0.0] * n
-    for i in range(n):
-        v = fl[i] - a1 * y1 - a2 * y2
-        out[i] = v
-        y2 = y1
-        y1 = v
-    y[:] = out
-    return y
-
-
-def svf_lp_hp(x, fc, q=0.707):
-    """Chamberlin/TPT-like state variable filter. Returns (lp, bp, hp).
-    Serial in time; used only on short voices, so the python loop cost is fine."""
-    f = 2 * np.sin(np.pi * min(fc, SR * 0.45) / SR)
-    qq = 1.0 / q
-    lp = np.empty_like(x); bp = np.empty_like(x); hp = np.empty_like(x)
-    lo = bnd = 0.0
-    xl = x.tolist()
-    LP, BP, HP = [0.0] * len(xl), [0.0] * len(xl), [0.0] * len(xl)
-    for i, v in enumerate(xl):
-        hpv = v - lo - qq * bnd
-        bnd += f * hpv
-        lo += f * bnd
-        LP[i] = lo; BP[i] = bnd; HP[i] = hpv
-    lp[:] = LP; bp[:] = BP; hp[:] = HP
-    return lp, bp, hp
-
-
-def env_follow(x, attack=0.001, release=0.1):
-    """Peak envelope follower (for side-chain detection). Vectorised by chunks."""
-    a_att = np.exp(-1.0 / (attack * SR))
-    a_rel = np.exp(-1.0 / (release * SR))
-    ax = np.abs(x).tolist()
-    out = [0.0] * len(ax)
-    e = 0.0
-    for i, v in enumerate(ax):
-        if v > e:
-            e = a_att * e + (1 - a_att) * v
-        else:
-            e = a_rel * e + (1 - a_rel) * v
-        out[i] = e
-    return np.array(out)
 
 
 # ---------------------------------------------------------------- stereo helpers
@@ -300,10 +132,6 @@ def pan_mono(x, pan):
     """Constant-power pan. pan in -1..1 (left..right). Returns (2, n)."""
     th = (pan + 1) * np.pi / 4
     return np.vstack([np.cos(th) * x, np.sin(th) * x])
-
-
-def stereo_from(l, r):
-    return np.vstack([l, r])
 
 
 def add_stereo(dst, src, t0, gain=1.0):
@@ -322,23 +150,6 @@ def add_stereo(dst, src, t0, gain=1.0):
         return dst
     dst[:, i0:i0 + n] += gain * src[:, s0:s0 + n]
     return dst
-
-
-def delay_line(x, delay_s, fb, n_out=None):
-    """Feedback delay for a mono signal, implemented as a blocked recursion
-    (delay >> block size keeps it exact, so we use the sample-accurate loop on
-    the tail only). Returns the wet signal of length len(x)."""
-    d = int(round(delay_s * SR))
-    n = len(x) if n_out is None else n_out
-    buf = np.zeros(n + d * 40)
-    buf[:len(x)] = x
-    # y[n] = x[n] + fb * y[n-d]; iterate in blocks of d (exact because d >= block)
-    out = np.zeros(n + d * 40)
-    out[:len(x)] = x
-    for s in range(d, len(out), d):
-        e = min(len(out), s + d)
-        out[s:e] += fb * out[s - d:e - d]
-    return out[:n]
 
 
 def fft_convolve(x, h):
@@ -379,15 +190,6 @@ def reverb(stereo_in, ir):
 
 
 # ---------------------------------------------------------------- soft clip / norm
-
-def soft_clip(x, drive=1.0):
-    return np.tanh(drive * x) / np.tanh(drive)
-
-
-def dc_block(x, fc=20.0):
-    """Gentle high-pass to remove DC and sub-rumble below ~25 Hz."""
-    cf = biquad_coeffs("hp", fc, q=0.707)
-    return biquad(x, cf)
 
 
 # ---------------------------------------------------------------- noise and filters
@@ -505,7 +307,7 @@ def v_kick(amp=1.0):
     t = tvec(n)
     f = 46.0 + 120.0 * np.exp(-t / 0.028)
     body = drive(np.sin(2.0 * np.pi * np.cumsum(f) / SR), 1.4)
-    click = hp1(nz(n), 3000.0) * np.exp(-t / 0.0025) * 0.35
+    click = lp1(hp1(nz(n), 3000.0), 9000.0) * np.exp(-t / 0.0025) * 0.35
     y = amp * (body * env_ad(n, 0.0012, 0.12) + click)
     return fade_edges(y, 0.0005, 0.01)
 
@@ -515,7 +317,7 @@ def v_snare(amp=1.0, body_f=190.0, noise_amt=0.55, dur=0.24, tau=0.11):
     t = tvec(n)
     f = body_f * (1.0 + 0.5 * np.exp(-t / 0.02))
     body = np.sin(2.0 * np.pi * np.cumsum(f) / SR) * env_ad(n, 0.0008, 0.07)
-    rattle = hp1(nz(n), 1500.0) * env_ad(n, 0.0006, tau)
+    rattle = lp1(hp1(nz(n), 1500.0), 9000.0) * env_ad(n, 0.0006, tau)
     return fade_edges(amp * (0.6 * body + noise_amt * rattle), 0.0005, 0.006)
 
 
@@ -534,7 +336,7 @@ def v_hat(amp=0.3, open_=False):
     dur = 0.22 if open_ else 0.05
     n = int(dur * SR)
     t = tvec(n)
-    x = hp1(hp1(nz(n), 6500.0), 6500.0)
+    x = lp1(hp1(hp1(nz(n), 6500.0), 6500.0), 13000.0)
     env = np.exp(-t / (0.07 if open_ else 0.018)) * (1.0 - np.exp(-t / 0.0008))
     return fade_edges(amp * x * env, 0.0003, 0.003)
 
@@ -572,7 +374,7 @@ def v_anvil(amp=1.0, f0=330.0):
     for ratio, a, tau in ANVIL_PARTIALS:
         y += a * np.sin(2.0 * np.pi * f0 * ratio * t) * np.exp(-t / tau)
     y *= np.minimum(1.0, t / 0.0008)
-    click = hp1(nz(n), 4000.0) * np.exp(-t / 0.003) * 0.7
+    click = lp1(hp1(nz(n), 1500.0), 6500.0) * np.exp(-t / 0.003) * 0.7
     return fade_edges(amp * (y + click), 0.0002, 0.01)
 
 
@@ -614,14 +416,14 @@ def v_click(f=2400.0, amp=1.0):
     n = int(0.012 * SR)
     t = tvec(n)
     y = np.sin(2.0 * np.pi * f * t) * np.exp(-t / 0.0025)
-    y += hp1(nz(n), 3000.0) * np.exp(-t / 0.0012) * 0.5
+    y += lp1(hp1(nz(n), 3000.0), 9000.0) * np.exp(-t / 0.0012) * 0.5
     return fade_edges(amp * y, 0.0003, 0.002)
 
 
 def v_typeclick(amp=0.22):
     n = int(0.03 * SR)
     t = tvec(n)
-    y = hp1(nz(n), 2000.0) * np.exp(-t / 0.003)
+    y = lp1(hp1(nz(n), 2000.0), 9000.0) * np.exp(-t / 0.003)
     return fade_edges(amp * y, 0.0002, 0.002)
 
 
@@ -770,7 +572,7 @@ def v_rev_cymbal(dur=0.25):
     """Reversed cymbal: a noise decay played backwards, so it swells into the cut it lands on."""
     n = int(dur * SR)
     t = tvec(n)
-    x = hp1(nz(n), 2500.0) * np.exp(-t / 0.08)
+    x = lp1(hp1(nz(n), 2500.0), 10000.0) * np.exp(-t / 0.08)
     return fade_edges(0.45 * x[::-1].copy(), 0.01, 0.002)
 
 
@@ -854,8 +656,10 @@ class Group:
         self.duck = duck
         self.dry = np.zeros((2, N))
         self.snd = np.zeros((2, N))
+        self.voices = []          # (start_s, end_s) of every placed voice, for the onset map
 
     def mono(self, sig, t0, gain=1.0, pan=0.0, send=None):
+        self.voices.append((round(float(t0), 6), round(float(t0) + len(sig) / SR, 6)))
         st = pan_mono(sig, pan) * gain
         add_stereo(self.dry, st, t0, 1.0)
         s = self.send_amt if send is None else send
@@ -863,6 +667,7 @@ class Group:
             add_stereo(self.snd, st, t0, s)
 
     def stereo(self, st, t0, gain=1.0, send=None):
+        self.voices.append((round(float(t0), 6), round(float(t0) + st.shape[1] / SR, 6)))
         st = st * gain
         add_stereo(self.dry, st, t0, 1.0)
         s = self.send_amt if send is None else send
@@ -877,7 +682,7 @@ def duck_curve(hits, depth=0.6, rel=0.12, att=0.004):
     t = tvec(N)
     idx = np.searchsorted(h, t, side="right") - 1
     valid = idx >= 0
-    dt = t - h[np.clip(idx, 0, None)]
+    dt = np.maximum(t - h[np.clip(idx, 0, None)], 0.0)
     shape = (1.0 - np.exp(-dt / att)) * np.exp(-dt / rel)
     shape = np.where(valid, shape, 0.0)
     return 1.0 - depth * shape
@@ -1019,7 +824,7 @@ def compose():
         gR.mono(SN_SMALL, tr, gain=0.35 + 0.65 * frac)
 
     # ---- breath: total silence 15.5-16.0, except the reversed swell that ends on 16.0
-    gX.mono(SWELL, C["impact"] - 0.4, gain=0.35)
+    gX.mono(SWELL, C["impact"] - 0.4, gain=0.12)
 
     # ---- S3 IGNITION (16-24): the impact, then pads, groove, bass, sparkles, zoom riser
     gI.mono(ANVIL, C["impact"], gain=1.0)
@@ -1159,6 +964,19 @@ TARGET_PEAK = 10.0 ** (-1.05 / 20.0)       # -1.05 dBFS: peak never above -1 dBF
 DRIVE_IN = 1.25                            # pre-clip drive for the soft clipper
 
 
+def brickwall(x, f_lo=19000.0, f_hi=20000.0):
+    """Exact frequency-domain low-pass: unity to 19 kHz, raised-cosine to zero at 20 kHz.
+    Padded to a power of two, so the circular wrap cannot reach the signal."""
+    n = x.shape[1]
+    L = 1 << int(np.ceil(np.log2(2 * n)))
+    f = np.fft.rfftfreq(L, 1.0 / SR)
+    g = np.where(f <= f_lo, 1.0, np.where(f >= f_hi, 0.0,
+                 0.5 + 0.5 * np.cos(np.pi * (f - f_lo) / (f_hi - f_lo))))
+    g = g * (1.0 - np.exp(-(f / 6.0) ** 2))      # kill DC and sub-6 Hz drift exactly
+    X = np.fft.rfft(x, L, axis=1)
+    return np.fft.irfft(X * g[None, :], L, axis=1)[:, :n]
+
+
 def master_linear(mix):
     """Gentle low cut below ~25 Hz (two cascaded one-poles), then the master fade to silence at 64.0."""
     x = mix.copy()
@@ -1169,6 +987,17 @@ def master_linear(mix):
     env = np.ones(N)
     env[f0:] = 0.5 + 0.5 * np.cos(np.pi * np.arange(L) / L)
     return x * env
+
+
+def write_wav_float(path, st):
+    """32-bit float stereo WAV (format 3), used for the stems so nothing clips."""
+    import struct
+    data = np.ascontiguousarray(st.T.astype("<f4")).tobytes()
+    fmt = struct.pack("<HHIIHH", 3, 2, SR, SR * 2 * 4, 2 * 4, 32)
+    with open(path, "wb") as fh:
+        fh.write(b"RIFF" + struct.pack("<I", 36 + len(data)) + b"WAVE")
+        fh.write(b"fmt " + struct.pack("<I", len(fmt)) + fmt)
+        fh.write(b"data" + struct.pack("<I", len(data)) + data)
 
 
 def write_wav(path, st):
@@ -1274,6 +1103,9 @@ def main():
     os.makedirs(OUT_DIR, exist_ok=True)
 
     groups, DUCK = compose()
+    onset_map = {g.name: g.voices for g in groups}
+    with open(os.path.join(OUT_DIR, "music_onsets.json"), "w", encoding="utf-8") as fh:
+        json.dump({"sample_rate": SR, "voices_s": onset_map}, fh, indent=0)
     ir = make_ir(2.2, 3.2, seed_tag="verb")
     outs = {}
     for g in groups:
@@ -1283,7 +1115,7 @@ def main():
         mix += o
 
     lin = master_linear(mix)
-    drv = np.tanh(DRIVE_IN * lin)
+    drv = brickwall(np.tanh(DRIVE_IN * lin))     # clipper harmonics above 20 kHz are removed too
     peak_drv = float(np.max(np.abs(drv)))
     scale = TARGET_PEAK / peak_drv
     master = drv * scale
@@ -1293,7 +1125,7 @@ def main():
         os.makedirs(STEM_DIR, exist_ok=True)
         lin_k = DRIVE_IN * scale          # stems are linear: they sum to the pre-clip mix at master gain
         for name, o in outs.items():
-            write_wav(os.path.join(STEM_DIR, f"{name}.wav"), master_linear_stem(o) * lin_k)
+            write_wav_float(os.path.join(STEM_DIR, f"{name}.wav"), master_linear_stem(o) * lin_k)
 
     mono = master.mean(axis=0)
     print(f"[music] rendered {N} samples ({N / SR:.3f} s) in {time.time() - t0:.1f} s")

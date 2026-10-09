@@ -293,6 +293,7 @@
   function renderMutex(R, tv, T) {
     V.set(R.room, { s: lerp(0.94, 1, V.p(T, 36.0, 36.4, E.outExpo)), o: V.p(T, 36.0, 36.3) });
     R.roomLabel.style.opacity = String(f(V.p(T, 36.1, 36.4)));
+    R.count.style.opacity = String(f(V.p(T, 36.0, 36.3)));
     const kp = pop(T, 36.0);
     put(R.keeper, 0, 0, kp.s, kp.o);
     const ins = [36.5, 37.0, 37.5];

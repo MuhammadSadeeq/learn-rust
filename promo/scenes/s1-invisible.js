@@ -140,6 +140,7 @@
 
     // Screen shake and red flash at the error.
     const sh = V.shake(T, [ERR_AT], 6, 0.35);
+    const TF = 1 / V.FPS; // a cue's frame shows the first step of its entrance
     V.set(shake, { x: sh.x, y: sh.y });
     red.style.opacity = String(V.flash(T, [ERR_AT], 0.3, 0.1));
 
@@ -161,11 +162,11 @@
     V.set(caretEl, { x: CX + cell.col * CW, y: CY + cell.li * LH + 10 });
 
     // The red wave draws under {name}, in 0.3 s from the error.
-    wave.style.strokeDashoffset = String(1 - P(T, ERR_AT, ERR_AT + 0.25, E.outCubic));
+    wave.style.strokeDashoffset = String(1 - P(T + TF, ERR_AT, ERR_AT + 0.25, E.outCubic));
 
     // The compiler block slides up 24 px and fades in.
-    const ein = P(T, ERR_AT, ERR_AT + 0.4, E.outExpo);
-    err.style.opacity = String(P(T, ERR_AT, ERR_AT + 0.12, E.linear));
+    const ein = P(T + TF, ERR_AT, ERR_AT + 0.4, E.outExpo);
+    err.style.opacity = String(P(T + TF, ERR_AT, ERR_AT + 0.12, E.linear));
     V.set(err, { y: 24 * (1 - ein) });
 
     // The code dims to 35 %, then to 8 % during the dissolve.

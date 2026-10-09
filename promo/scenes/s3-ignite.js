@@ -205,7 +205,8 @@
     }
 
     // Oxi pops on the logo's right side (scale 0 -> 1, outBack), then hops twice.
-    const pop = P(T, OXI_POP, OXI_POP + 0.45, E.outBack);
+    const TF = 1 / V.FPS; // the cue frame already shows the first step of each entrance
+    const pop = P(T + TF, OXI_POP, OXI_POP + 0.45, E.outBack);
     if (T < OXI_POP) {
       oxi.style.display = "none";
     } else {
@@ -219,13 +220,13 @@
     }
 
     // The subtitle: a left-to-right mask over 500 ms, sliding in 40 px.
-    const su = P(T, SUB_AT, SUB_AT + 0.5, E.outCubic);
+    const su = P(T + TF, SUB_AT, SUB_AT + 0.5, E.outCubic);
     subWrap.style.display = T >= SUB_AT ? "flex" : "none";
     sub.style.clipPath = `inset(-30px ${((1 - su) * 100).toFixed(3)}% -30px 0)`;
     V.set(sub, { x: lerp(-40, 0, su), blur });
 
     // The tagline: fades up 12 px.
-    const tu = P(T, TAG_AT, TAG_AT + 0.5, E.outCubic);
+    const tu = P(T + TF, TAG_AT, TAG_AT + 0.5, E.outCubic);
     tagWrap.style.display = T >= TAG_AT ? "flex" : "none";
     tag.style.opacity = String(tu);
     V.set(tag, { y: lerp(12, 0, tu), blur });

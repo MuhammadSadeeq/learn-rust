@@ -166,8 +166,9 @@
 
     // Cards: scale 1.18 -> 1 and fade in over 120 ms (outQuad). Older cards dim to 60 %.
     cards.forEach((c, i) => {
-      const e = P(T, c.t, c.t + 0.12, E.outQuad);
-      const a = P(T, c.t, c.t + 0.12, E.linear);
+      const TF = 1 / V.FPS; // the cue frame already shows the first step of the slam
+      const e = P(T + TF, c.t, c.t + 0.12, E.outQuad);
+      const a = P(T + TF, c.t, c.t + 0.12, E.linear);
       // Older cards dim by brightness (they stay opaque, so they still cover what is below).
       const dim = i < cards.length - 1 ? lerp(1, 0.6, P(T, cards[i + 1].t, cards[i + 1].t + 0.15, E.linear)) : 1;
       V.set(c.el, { x: c.x, y: c.y, r: c.r, s: lerp(1.18, 1, e), o: a, origin: "50% 50%" });
