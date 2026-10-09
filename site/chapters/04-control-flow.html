@@ -72,6 +72,22 @@ fn add(a: i32, b: i32) -> i32 {
 
 <div class="ox-xray ox-wide" data-scenario="fn-frames"></div>
 
+<h3>Functions that never return</h3>
+
+<p>PHP 8.1 added the <code>never</code> return type, for a function that always throws or exits. Rust has the same idea as the never type, written <code>!</code>. The difference is when the rule is checked.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+function fail(string $why): never {
+    throw new RuntimeException($why);
+}</pre>
+  <pre class="rs" data-check="ok">
+fn fail(why: &amp;str) -&gt; ! {
+    panic!("{why}");
+}</pre>
+  <div class="ox-bridge-note"><p>PHP checks <code>never</code> when the function returns. If the body finishes normally, PHP throws a <code>TypeError</code> at that point, after the body has already run. rustc checks <code>!</code> before the program runs, so a body that could finish normally is error E0308. The same type also covers expressions. A <code>break</code>, a <code>continue</code> or a <code>return</code> has type <code>!</code>, so it fits in a match arm that must produce a value.</p></div>
+</div>
+
 <div class="ox-quiz" data-id="04:fn-types" data-xp="10">
   <p class="ox-q">Does this compile?</p>
   <pre class="rs" data-check="error">
@@ -140,6 +156,29 @@ fn main() {
     <li>Nothing. It doesn't compile, because a block must end with an expression.</li>
   </ol>
   <div class="ox-why"><p>The block's last line is <code>5;</code>, a statement. A block that ends in a statement has no value to give back, so its type is <code>()</code>, the unit type. The program compiles and prints <code>()</code>.</p></div>
+</div>
+
+<h3>Expressions chain</h3>
+
+<p>Most Rust code reads as a chain, where each expression's value feeds the next call. PHP 8.5 added the pipe operator <code>|&gt;</code>, which chains plain functions the same way. Each step takes one value and passes its result on.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+&lt;?php
+$slug = "  Hello Rust World  "
+    |&gt; trim(...)
+    |&gt; strtolower(...)
+    |&gt; (fn(string $s): string =&gt; str_replace(' ', '-', $s));
+echo $slug;</pre>
+  <pre class="rs" data-run data-stdout="hello-rust-world">
+fn main() {
+    let slug = "  Hello Rust World  "
+        .trim()
+        .to_lowercase()
+        .replace(' ', "-");
+    println!("{slug}");
+}</pre>
+  <div class="ox-bridge-note"><p>The pipe accepts any one-argument callable, so each step can be a plain function. Rust chains methods on the value, so each step has to be a method of its type. A free function goes in a nested call instead. Chapter 13 covers the iterator methods that make long Rust chains common.</p></div>
 </div>
 </section>
 
@@ -330,21 +369,22 @@ fn main() {
 
 <div class="ox-bridge">
   <pre class="php">
-$label = match (true) {
-    $n === 0 =&gt; 'zero',
-    $n &gt;= 1 &amp;&amp; $n &lt;= 9 =&gt; 'small',
-};
-// 42 matches no arm, so PHP throws
-// UnhandledMatchError at runtime.</pre>
-  <pre class="rs">
-fn label(n: i32) -> &amp;'static str {
-    match n {
-        0 => "zero",
-        1..=9 => "small",
-        _ => "big",
+function label(int $status): string {
+    return match ($status) {
+        200 =&gt; 'ok',
+        404 =&gt; 'not found',
+    };
+}
+
+echo label(500);   // UnhandledMatchError, when this line runs</pre>
+  <pre class="rs" data-check="E0004">
+fn label(status: u16) -&gt; &amp;'static str {
+    match status {
+        200 =&gt; "ok",
+        404 =&gt; "not found",
     }
 }</pre>
-  <div class="ox-bridge-note"><p>PHP 8's <code>match</code> is an expression too, and it also tries arms from top to bottom. The difference is when you find a gap. PHP finds it while the program runs, on the first value nobody covered. Rust finds it at compile time, so a program with the gap never runs.</p></div>
+  <div class="ox-bridge-note"><p>PHP's <code>match</code> (8.0) is an expression too. Its arms compare with <code>===</code>, and a value no arm covers throws <code>UnhandledMatchError</code> while the program runs. Rust checks the arms against every value <code>status</code> can hold. The gap is error E0004 at compile time, so a program with the gap never runs. Adding a <code>_</code> arm closes the gap, and then it compiles.</p></div>
 </div>
 
 <div class="ox-quiz" data-id="04:match-exhaustive" data-xp="10">

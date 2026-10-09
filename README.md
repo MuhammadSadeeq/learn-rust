@@ -40,7 +40,7 @@ recompiles every time you save, and moves you on when the tests pass.
 | **See the invisible** | Memory X-Ray step-throughs, lifetime timelines and a custom interactive in every chapter (a bit-level integer explorer, a UTF-8 byte explorer, a borrow desk, a lazy-iterator conveyor belt, a data-race simulator, an async executor simulator…). |
 | **Predict first** | Before every surprising step you commit to an answer. Being wrong first is what makes the right answer stick. |
 | **Become the compiler** | "Does this compile?" checks throughout, real `rustc` errors decoded, and a borrow-checker game. Once you can predict the compiler, Rust stops being a fight. |
-| **Start from PHP** | Every concept starts next to the PHP/Laravel you know (arrays, Collections, Eloquent, middleware, queues) and then shows exactly where the comparison breaks. |
+| **Start from PHP** | Every concept starts next to the PHP you write today (PHP 8.5, Laravel 13: arrays, Collections, Eloquent, middleware, queues, enums, property hooks, the pipe operator) and then shows exactly where the comparison breaks. |
 | **Write real code** | 77 quests and 5 boss projects, checked by the real compiler. |
 | **Remember it** | Recall cards at the end of every chapter, reviewed on a spaced-repetition schedule in the Recall Deck. |
 | **Agent era** | Every chapter shows how its concept appears in AI-written Rust, and the Agent Code Review Dojo trains you to review it. |
@@ -68,7 +68,7 @@ worker threads.
 - **Memory X-Ray**: every step-through program in the course in one place.
 - **Be the Borrow Checker**: an arcade game of 45 programs. Accept or reject each one, then name the rule it breaks.
 - **Error Museum**: the 25 compiler errors you'll meet most, each with real `rustc` output and fixes that compile.
-- **PHP → Rust Rosetta**: 111 PHP and Laravel habits next to the Rust that replaces them, searchable.
+- **PHP → Rust Rosetta**: 119 PHP 8.5 and Laravel 13 habits next to the Rust that replaces them, searchable.
 - **Agent Code Review Dojo**: 18 programs an AI agent wrote. Flag the lines a senior reviewer would question, then compare with the reviewed version.
 - **Recall Deck**: spaced-repetition review of every chapter's cards.
 
@@ -104,6 +104,7 @@ commit it with your work. The Forge is about 1,200 lines of std-only Rust (tests
 
 ```sh
 node tools/check-snippets.mjs    # compile every Rust snippet on the site
+node tools/check-php.mjs         # every PHP sample parses on PHP 8.5, no outdated idioms
 node tools/check-quests.mjs      # starters must fail, solutions must pass
 node tools/sync-quests.mjs       # regenerate quests/Cargo.toml + site data from quests.toml
 cargo forge verify --solutions   # the same check from Rust

@@ -9,5 +9,6 @@
   { id: "c04-loopval", ch: 4, q: "Which loops can `break` with a value, and what does the loop evaluate to?", a: "Only `loop`. `break value;` makes the whole `loop` evaluate to `value`.\n\n`while` and `for` always have type `()`." },
   { id: "c04-range", ch: 4, q: "How many values does `1..5` yield, and which ones?", a: "Four: 1, 2, 3 and 4. The end is excluded.\n\n`1..=5` yields 1 to 5, because the end is included." },
   { id: "c04-label", ch: 4, q: "How do you leave an outer loop from inside an inner loop?", a: "Give the outer loop a label, such as `'outer: for ...`, and write `break 'outer;`.\n\nA plain `break` leaves only the innermost loop." },
-  { id: "c04-match", ch: 4, q: "Must a `match` cover every possible value?", a: "Yes. A `match` must be **exhaustive**, or the compiler reports **E0004**.\n\nUse `_` as the last arm to catch everything else." }
+  { id: "c04-match", ch: 4, q: "Must a `match` cover every possible value?", a: "Yes. A `match` must be **exhaustive**, or the compiler reports **E0004**.\n\nUse `_` as the last arm to catch everything else." },
+  { id: "c04-never", ch: 4, q: "What does Rust's `!` type mean, and when does PHP check its `never` return type?", a: "`!` is the **never type**. A function declared `-> !` never returns normally. Inside an expression, `break`, `continue` and `return` have type `!`, so they fit in any branch.\n\nPHP checks `never` when the function returns, at runtime. rustc checks `-> !` at compile time, and a body that could finish normally is E0308." }
 );

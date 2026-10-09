@@ -311,7 +311,7 @@
         "</section>" +
         '<section class="em-block"><h3>What rustc says</h3>' + plate(e.error, "rustc", { label: "rustc output" }) + "</section>" +
         '<section class="em-block"><h3>What it means</h3><p>' + md(e.plain) + "</p>" +
-          (e.php ? '<aside class="ox-callout" data-kind="php"><div class="ox-callout-head">' + icon.php + "<span>Your PHP brain says</span></div><p>" + md(e.php) + "</p></aside>" : "") +
+          (e.phpNote ? '<aside class="ox-callout" data-kind="php"><div class="ox-callout-head">' + icon.php + "<span>Your PHP brain says</span></div><p>" + md(e.phpNote) + "</p></aside>" : "") +
         "</section>" +
         '<section class="em-block"><h3>Fix it</h3>' + fixTabs(e.fixes, "fx-" + e.id.toLowerCase()) + "</section>" +
         '<div class="em-learn">' +

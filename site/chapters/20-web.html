@@ -42,8 +42,9 @@
 <table class="ox-table">
   <thead><tr><th>Laravel</th><th>axum and the Rust ecosystem</th><th>What is different</th></tr></thead>
   <tbody>
-    <tr><td><code>Route::get('/notes', …)</code> in <code>routes/api.php</code></td><td><code>.route("/notes", get(list))</code></td><td>Routes are values you build in code. Invalid route syntax panics when the router is built, so the mistake shows up at startup.</td></tr>
+    <tr><td><code>Route::apiResource('notes', NoteController::class)</code> in <code>routes/api.php</code></td><td><code>.route("/notes", get(index).post(store))</code></td><td>Routes are values you build in code. Invalid route syntax panics when the router is built, so the mistake shows up at startup.</td></tr>
     <tr><td>Controller method</td><td>An <code>async fn</code> handler</td><td>A plain function. Its parameters list everything it needs.</td></tr>
+    <tr><td>API resource (<code>JsonResource</code>)</td><td>A struct that derives <code>Serialize</code>, or a view struct built from the model</td><td>You choose the output fields by writing a struct. A type that derives <code>Serialize</code> writes every field it has.</td></tr>
     <tr><td>Form Request and <code>$request-&gt;validate()</code></td><td>Extractors such as <code>Json&lt;T&gt;</code> and <code>Path&lt;T&gt;</code>, with serde, plus your own checks</td><td>The arguments do the validation. If an extractor fails, the function body never runs.</td></tr>
     <tr><td>Middleware</td><td>tower layers, such as <code>TraceLayer</code> and <code>TimeoutLayer</code></td><td>Same idea, with one catch: where the layer runs is different. Section 2 shows where.</td></tr>
     <tr><td>Service container and <code>app()</code></td><td><code>State&lt;AppState&gt;</code></td><td>Shared state is passed in explicitly. Nothing is resolved by name.</td></tr>
@@ -62,15 +63,25 @@
 
 <p>Two rows need a closer look. Rust has no built-in ORM, so the database choice is yours. The middleware row hides a real difference in timing, and the next section is about that.</p>
 
+<p>Laravel 13 gets its API routes from <code>routes/api.php</code>, which <code>php artisan install:api</code> creates. One line registers the five resource routes, and each route calls one method on the controller:</p>
+
+<pre class="php">
+// routes/api.php, created by `php artisan install:api`
+use App\Http\Controllers\NoteController;
+use Illuminate\Support\Facades\Route;
+
+Route::apiResource('notes', NoteController::class);</pre>
+
+<p>The <code>show</code> method is the one that matches the Rust handler below:</p>
+
 <div class="ox-bridge">
   <pre class="php">
-// routes/api.php
-Route::get('/notes/{note}', [NoteController::class, 'show']);
-
-// app/Http/Controllers/NoteController.php
-public function show(Note $note): JsonResponse
+final class NoteController extends Controller
 {
-    return response()->json($note);
+    public function show(Note $note): JsonResponse
+    {
+        return response()-&gt;json($note);
+    }
 }</pre>
 <pre class="rs" data-check="skip" data-title="src/handlers.rs">/// GET /api/notes/{id}
 pub async fn show(
@@ -396,6 +407,31 @@ pub async fn show(
   <p>If some code must see the raw URL before the router does, wrap the whole router in a tower service instead. That wrapper runs before routing. Changing the URL inside a <code>.layer()</code> cannot change which route runs, because the route is already chosen.</p>
 </aside>
 
+<p>Laravel registers global middleware in <code>bootstrap/app.php</code>. The same file configures routing and exceptions, so there is no HTTP Kernel to edit. Here is a global middleware next to the axum layers:</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+&lt;?php
+
+use App\Http\Middleware\LogRequests;
+use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Configuration\Middleware;
+
+return Application::configure(basePath: dirname(__DIR__))
+    -&gt;withRouting(
+        api: __DIR__.'/../routes/api.php',
+        health: '/up',
+    )
+    -&gt;withMiddleware(function (Middleware $middleware): void {
+        $middleware-&gt;append(LogRequests::class);  // global: runs before routing
+    })-&gt;create();</pre>
+  <pre class="rs" data-check="skip">
+let app = Router::new()
+    .route("/api/notes", get(index).post(store))
+    .layer(TraceLayer::new_for_http());</pre>
+  <div class="ox-bridge-note"><p><code>append</code> adds <code>LogRequests</code> to the global stack, so it runs for every request before the router picks a route. The axum <code>.layer()</code> runs after the router has chosen the route, so it wraps the route that was picked. The row in the table above is about this difference. To run code before routing in axum, wrap the whole router, as the trap above says.</p></div>
+</div>
+
 <details class="ox-think">
   <summary>A POST body has no <code>title</code>. Which stage stops the request, and does <code>store</code> run?</summary>
   <div class="ox-think-body">
@@ -527,6 +563,43 @@ pub struct UpdateNote {
 }</pre>
 
 <p><code>Note</code> derives <code>Serialize</code>, so it can become JSON, and <code>Deserialize</code>, so it can be read from JSON. The request types leave out <code>id</code>, because the server assigns it. <code>CreateNote</code> marks its optional fields with <code>#[serde(default)]</code>. <code>UpdateNote</code> makes every field an <code>Option</code>, where <code>None</code> means leave the field alone. That is how PATCH works.</p>
+
+<h3>Output shapes</h3>
+
+<p>A Laravel API resource decides which fields leave the server. <code>Note</code> serializes every field it has, so the notes API has no such step. If a field must stay private, add a view struct:</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+namespace App\Http\Resources;
+
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+final class NoteResource extends JsonResource
+{
+    public function toArray(Request $request): array
+    {
+        return [
+            'id' => $this-&gt;id,
+            'title' => $this-&gt;title,
+            'pinned' => $this-&gt;pinned,
+        ];
+    }
+}</pre>
+  <pre class="rs" data-check="skip" data-title="src/models.rs">#[derive(Serialize)]
+pub struct NoteView {
+    pub id: u64,
+    pub title: String,
+    pub pinned: bool,
+}
+
+impl From&lt;&amp;Note&gt; for NoteView {
+    fn from(note: &amp;Note) -&gt; Self {
+        Self { id: note.id, title: note.title.clone(), pinned: note.pinned }
+    }
+}</pre>
+  <div class="ox-bridge-note"><p>Both classes decide the output in one place. The resource's <code>toArray</code> lists the fields, and the Rust <code>From</code> impl must set every field of <code>NoteView</code>, or the code will not compile. A column added to <code>Note</code> stays out of the response until you add it to the view.</p></div>
+</div>
 
 <h3>Shared state</h3>
 
@@ -974,6 +1047,39 @@ snake_case key: missing field `createdAt` at line 1 column 42
 {"id":2,"title":"y","createdAt":"z","pinned":true,"body":null}</pre>
 
 <p>Read the output line by line. <code>rename_all</code> maps <code>created_at</code> to <code>createdAt</code> in both directions, so the Rust name stays snake_case. A missing <code>Option</code> field becomes <code>None</code>, and <code>None</code> is written as <code>null</code>. <code>#[serde(default)]</code> fills a missing <code>bool</code> with <code>false</code>. The snake_case key is rejected, because serde looks only for the renamed key.</p>
+
+<h3>Unknown fields</h3>
+
+<p>serde ignores keys it does not know, unless you tell it not to. The notes API works that way. Laravel ignores them by default too. A key that no rule mentions is never validated. Both frameworks have an opt-in that rejects extra keys. In Laravel 13 you add the <code>#[FailOnUnknownFields]</code> attribute to the Form Request:</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+use Illuminate\Foundation\Http\Attributes\FailOnUnknownFields;
+use Illuminate\Foundation\Http\FormRequest;
+
+#[FailOnUnknownFields]
+class StoreNoteRequest extends FormRequest
+{
+    public function rules(): array
+    {
+        return [
+            'title' => ['required', 'string'],
+            'body' => ['nullable', 'string'],
+            'pinned' => ['boolean'],
+        ];
+    }
+}</pre>
+  <pre class="rs" data-check="skip" data-title="src/models.rs">#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CreateNote {
+    pub title: String,
+    #[serde(default)]
+    pub body: String,
+    #[serde(default)]
+    pub pinned: bool,
+}</pre>
+  <div class="ox-bridge-note"><p>The idea is the same in both: name the fields you accept, and reject the rest. The serde version fails while the JSON is parsed. The error names the key that broke the rule: <code>unknown field `color`, expected one of `title`, `body`, `pinned`</code>. Laravel's check is part of the Form Request, so it runs with your other rules. Add <code>deny_unknown_fields</code> to <code>CreateNote</code> and a request with an extra key gets a 422 instead of a 201. <code>StoreNoteRequest</code> is a sketch, not a file in this project.</p></div>
+</div>
 
 <h3>Bad input becomes a status code</h3>
 

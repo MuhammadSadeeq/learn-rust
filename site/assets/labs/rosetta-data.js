@@ -13,7 +13,7 @@ window.OX_ROSETTA = [
     title: "Variables and reassignment",
     php: `
       $count = 0;
-      $count = $count + 1;
+      $count += 1;
       echo "$count\\n";
       `,
     rust: `
@@ -30,15 +30,17 @@ window.OX_ROSETTA = [
     cat: "basics",
     title: "Constants",
     php: `
-      const MAX_RETRIES = 3;
-      echo "retry up to " . MAX_RETRIES . " times";
+      final class Retry {
+          public const int MAX_RETRIES = 3;
+      }
+      echo "retry up to " . Retry::MAX_RETRIES . " times";
       `,
     rust: `
       const MAX_RETRIES: u32 = 3;
       println!("retry up to {MAX_RETRIES} times");
       `,
     check: "ok",
-    note: `A Rust constant always has a type and is inlined where it is used. Use <code>static</code> when you need one fixed place in memory. Rust has no class constants that a subclass can override, because it has no inheritance.`,
+    note: `A Rust constant always has a type and is inlined where it is used. PHP 8.3 added types to class constants, and PHP 8.1 added <code>final</code>, which stops a subclass from overriding one. Rust has no subclasses, so nothing can override a constant. Use <code>static</code> when you need one fixed place in memory.`,
     chapter: 2
   },
   {
@@ -81,7 +83,7 @@ window.OX_ROSETTA = [
     title: "Truthiness",
     php: `
       $items = [];
-      if (!$items) {
+      if ($items === []) {
           echo "nothing to do\\n";
       }
       `,
@@ -92,7 +94,7 @@ window.OX_ROSETTA = [
       }
       `,
     check: "ok",
-    note: `Rust never converts a value to a bool. <code>if items</code> does not compile, because the condition must be a <code>bool</code>. Ask the exact question instead: <code>is_empty()</code>, <code>!= 0</code> or <code>is_some()</code>. That removes PHP surprises, such as <code>"0"</code> being falsy.`,
+    note: `Rust never converts a value to a bool, so <code>if items</code> does not compile. Ask the exact question instead: <code>is_empty()</code>, <code>!= 0</code> or <code>is_some()</code>. The PHP side asks the same way, with <code>=== []</code>. Exact checks remove PHP surprises, such as <code>"0"</code> being falsy.`,
     chapter: 4
   },
   {
@@ -120,7 +122,10 @@ window.OX_ROSETTA = [
     title: "No null: use Option",
     php: `
       function findName(int $id): ?string {
-          return $id === 1 ? "Ada" : null;
+          return match ($id) {
+              1 => "Ada",
+              default => null,
+          };
       }
       echo findName(2) ?? "guest";
       `,
@@ -266,7 +271,7 @@ window.OX_ROSETTA = [
     title: "Trim and change case",
     php: `
       $raw = "  Ada Lovelace  ";
-      echo strtoupper(trim($raw));
+      echo mb_strtoupper(mb_trim($raw));
       `,
     rust: `
       let raw = "  Ada Lovelace  ";
@@ -274,7 +279,7 @@ window.OX_ROSETTA = [
       println!("{shout}");
       `,
     check: "ok",
-    note: `<code>to_uppercase</code> is Unicode-aware, and the result can be longer than the input: <code>"ß"</code> becomes <code>"SS"</code>. PHP 8.2 and later change only ASCII letters in <code>strtoupper</code>, so use <code>mb_strtoupper</code> in PHP when you need Unicode.`,
+    note: `<code>to_uppercase</code> is Unicode-aware, and the result can be longer than the input: <code>"ß"</code> becomes <code>"SS"</code>. PHP's <code>trim</code> removes only ASCII whitespace, so the PHP side uses <code>mb_trim</code>, which arrived in PHP 8.4. PHP 8.2 and later change only ASCII letters in <code>strtoupper</code>, so use <code>mb_strtoupper</code> when you need Unicode.`,
     chapter: 8
   },
   {
@@ -386,7 +391,7 @@ window.OX_ROSETTA = [
     php: `
       $nums = [10, 20, 30];
       echo count($nums);
-      var_dump(empty($nums));
+      var_dump($nums === []);
       `,
     rust: `
       let nums = Vec::from([10, 20, 30]);
@@ -420,8 +425,8 @@ window.OX_ROSETTA = [
     title: "Keep matching items",
     php: `
       $nums = [1, 2, 3, 4];
-      $evens = array_filter($nums, fn($n) => $n % 2 === 0);
-      // keeps the keys: [1 => 2, 3 => 4]
+      $evens = array_values(array_filter($nums, fn(int $n) => $n % 2 === 0));
+      // array_filter alone keeps the keys: [1 => 2, 3 => 4]
       `,
     rust: `
       let nums = [1, 2, 3, 4];
@@ -429,7 +434,7 @@ window.OX_ROSETTA = [
       println!("{evens:?}");
       `,
     check: "ok",
-    note: `<code>array_filter</code> keeps the original keys, so you can end up with a sparse array. Rust's <code>filter</code> yields only the matching items, and <code>collect</code> decides the container. The result is a plain list with no leftover keys.`,
+    note: `<code>array_filter</code> keeps the original keys, so you can end up with a sparse array. <code>array_values</code> renumbers them. Rust's <code>filter</code> yields only the matching items, and <code>collect</code> decides the container. The result is a plain list with no leftover keys.`,
     chapter: 13
   },
   {
@@ -498,6 +503,64 @@ window.OX_ROSETTA = [
       `,
     check: "ok",
     note: `<code>&amp;nums[1..3]</code> borrows the items, so nothing is copied. The end of a Rust range is exclusive, so <code>1..3</code> gives two items where <code>array_slice</code> takes a length. A slice that runs past the end panics.`,
+    chapter: 12
+  },
+  {
+    id: "pipe-chain",
+    cat: "lists",
+    title: "Pipe a value through steps",
+    php: `
+      $total = [1, 2, 3, 4]
+          |> (fn(array $xs) => array_filter($xs, fn(int $n) => $n % 2 === 0))
+          |> array_sum(...);
+      echo $total;
+      `,
+    rust: `
+      let nums = [1, 2, 3, 4];
+      let total: i32 = nums.iter().copied().filter(|n| n % 2 == 0).sum();
+      println!("{total}");
+      `,
+    check: "ok",
+    note: `The pipe <code>|&gt;</code> passes the value on the left into the next step, so the code reads top to bottom. Each step must take one argument, which is why the filter is wrapped in an arrow function. PHP runs each step on the whole array and builds a new array, so every step is eager. Rust has no pipe operator, because method calls already read left to right. Its iterator chain is lazy: no item moves until <code>sum</code> asks for it.`,
+    chapter: 13
+  },
+  {
+    id: "find-any-all",
+    cat: "lists",
+    title: "Find, any and all",
+    php: `
+      $nums = [1, 2, 3];
+      $firstBig = array_find($nums, fn(int $n) => $n > 1); // 2
+      $anyBig = array_any($nums, fn(int $n) => $n > 2);    // true
+      $allBig = array_all($nums, fn(int $n) => $n > 0);    // true
+      `,
+    rust: `
+      let nums = [1, 2, 3];
+      let first_big = nums.iter().copied().find(|n| *n > 1);
+      let any_big = nums.iter().any(|n| *n > 2);
+      let all_big = nums.iter().all(|n| *n > 0);
+      println!("{first_big:?} {any_big} {all_big}");
+      `,
+    check: "ok",
+    note: `These are the PHP 8.4 functions for a plain array. PHP's <code>array_find</code> returns <code>null</code> when nothing matches, the same value a stored <code>null</code> gives. Rust's <code>find</code> returns an <code>Option</code>, so a miss is <code>None</code> and a hit is <code>Some</code>. For an empty list, both languages answer <code>false</code> to any and <code>true</code> to all. Rust's three methods stop at the first item that settles the answer.`,
+    chapter: 13
+  },
+  {
+    id: "first-last",
+    cat: "lists",
+    title: "First and last item",
+    php: `
+      $nums = [10, 20, 30];
+      echo array_first($nums), " ", array_last($nums), "\\n";
+      $none = array_first([]); // null for an empty array
+      `,
+    rust: `
+      let nums = vec![10, 20, 30];
+      let empty: Vec<i32> = Vec::new();
+      println!("{:?} {:?} {:?}", nums.first(), nums.last(), empty.first());
+      `,
+    check: "ok",
+    note: `PHP 8.5's <code>array_first</code> and <code>array_last</code> return the item, or <code>null</code> for an empty array. But an array can also hold <code>null</code>, so a null result does not always mean empty. Rust's <code>first</code> and <code>last</code> return an <code>Option</code> of a reference: <code>None</code> means empty, and a list that holds 0 gives <code>Some(&amp;0)</code>. The reference points into the list, so nothing is copied.`,
     chapter: 12
   },
 
@@ -716,14 +779,14 @@ window.OX_ROSETTA = [
   {
     id: "switch-match",
     cat: "control",
-    title: "switch becomes match",
+    title: "Choose a value with match",
     php: `
       $code = 404;
-      switch ($code) {
-          case 200: $label = "ok"; break;
-          case 404: $label = "not found"; break;
-          default:  $label = "other";
-      }
+      $label = match ($code) {
+          200 => "ok",
+          404 => "not found",
+          default => "other",
+      };
       `,
     rust: `
       let code = 404;
@@ -735,7 +798,7 @@ window.OX_ROSETTA = [
       println!("{label}");
       `,
     check: "ok",
-    note: `Each arm stops by itself, so there is no fall-through and no <code>break</code> to forget. <code>match</code> must cover every possible value, and <code>_</code> is the catch-all. Delete the <code>_</code> arm and the compiler lists what is missing.`,
+    note: `PHP's <code>match</code> has the same shape as Rust's, but it compares with <code>===</code>, so <code>"404"</code> does not match 404. With no matching arm and no <code>default</code>, it throws <code>UnhandledMatchError</code> at runtime. Rust's <code>match</code> must cover every possible value, so a missing case is a build error. The old <code>switch</code> fell through into the next case unless each case ended with <code>break</code>, and Rust has no fall-through.`,
     chapter: 10
   },
   {
@@ -760,7 +823,7 @@ window.OX_ROSETTA = [
       println!("{label}");
       `,
     check: "ok",
-    note: `The <code>match (true)</code> trick is PHP's way to write a pattern. Rust matches on the value itself, with range patterns, and the compiler checks that every case is covered, so a forgotten case is an error.`,
+    note: `PHP has no range patterns, so <code>match (true)</code> tests each condition in turn and takes the first arm that is true. Rust matches on the value itself, with range patterns, and the compiler checks that every case is covered. A PHP <code>match</code> with no arm that fits throws at runtime, while Rust rejects a missing case at build time.`,
     chapter: 10
   },
   {
@@ -884,12 +947,13 @@ window.OX_ROSETTA = [
     title: "Guard clause with let else",
     php: `
       function firstWord(string $s): string {
-          $word = explode(" ", trim($s))[0];
+          $word = array_first(explode(" ", mb_trim($s))) ?? "";
           if ($word === "") {
               return "(empty)";
           }
           return $word;
       }
+      echo firstWord("  hello world");
       `,
     rust: `
       fn first_word(s: &str) -> &str {
@@ -951,10 +1015,14 @@ window.OX_ROSETTA = [
     cat: "functions",
     title: "Named arguments as a struct",
     php: `
-      function makeUser(string $name, bool $admin = false): array {
-          return compact('name', 'admin');
+      class NewUser {
+          public function __construct(
+              public string $name,
+              public bool $admin = false,
+          ) {}
       }
-      $user = makeUser(admin: true, name: "Ada");
+      $user = new NewUser(admin: true, name: "Ada");
+      echo "{$user->name} admin=" . var_export($user->admin, true);
       `,
     rust: `
       #[derive(Default)]
@@ -967,7 +1035,7 @@ window.OX_ROSETTA = [
       println!("{} admin={}", user.name, user.admin);
       `,
     check: "ok",
-    note: `The closest thing to named arguments is a struct with named fields. Field names are checked, and a missing field is a compile error. Add <code>..Default::default()</code> to the literal to fill in the rest with defaults.`,
+    note: `PHP's named arguments can skip a parameter that has a default, and an unknown name throws an <code>Error</code> when the call runs. Rust has no named arguments, so the closest thing is a struct with named fields. Field names are checked at build time, and a missing field is a build error. Add <code>..Default::default()</code> to the literal to fill in the rest with defaults.`,
     chapter: 9
   },
   {
@@ -1014,7 +1082,7 @@ window.OX_ROSETTA = [
       }
       `,
     check: "ok",
-    note: `The tuple is the multi-value return. An empty input has no minimum, so the function returns an <code>Option</code>. In PHP 8, <code>min([])</code> throws a <code>ValueError</code> instead.`,
+    note: `The tuple is the multi-value return. An empty input has no minimum, so the function returns an <code>Option</code>. PHP's <code>min()</code> throws a <code>ValueError</code> on an empty array, so the PHP side checks for an empty array first.`,
     chapter: 4
   },
   {
@@ -1121,6 +1189,7 @@ window.OX_ROSETTA = [
               return "Hi {$this->name}";
           }
       }
+      echo new User("Ada")->greet();
       `,
     rust: `
       struct User {
@@ -1169,7 +1238,7 @@ window.OX_ROSETTA = [
       println!("{} {}", user.name, user.age);
       `,
     check: "ok",
-    note: `<code>new</code> is an ordinary function by convention, not a keyword. Because it is a normal function, it can return a <code>Result</code> when construction can fail. A PHP constructor cannot return a value, so failure has to be an exception.`,
+    note: `<code>new</code> is an ordinary function by convention, not a keyword. Because it is a normal function, it can return a <code>Result</code> when construction can fail. A PHP constructor cannot return a value, so a constructor that can fail has to throw.`,
     chapter: 9
   },
   {
@@ -1181,11 +1250,13 @@ window.OX_ROSETTA = [
           public function area(): float;
       }
       class Circle implements Shape {
-          public function __construct(private float $r) {}
+          public function __construct(private readonly float $r) {}
+          #[\\Override]
           public function area(): float {
               return M_PI * $this->r ** 2;
           }
       }
+      printf("%.2f\\n", new Circle(2.0)->area());
       `,
     rust: `
       use std::f64::consts::PI;
@@ -1222,8 +1293,10 @@ window.OX_ROSETTA = [
           }
       }
       class User extends Model {
+          #[\\Override]
           protected function table(): string { return "users"; }
       }
+      echo new User()->describe();
       `,
     rust: `
       trait Model {
@@ -1256,11 +1329,13 @@ window.OX_ROSETTA = [
       class User {
           public function __construct(public string $name) {}
       }
-      class Admin extends User {
+      final class Admin extends User {
           public function __construct(string $name, public int $level) {
               parent::__construct($name);
           }
       }
+      $admin = new Admin("Ada", 3);
+      echo "{$admin->name} {$admin->level}";
       `,
     rust: `
       struct User {
@@ -1379,6 +1454,149 @@ window.OX_ROSETTA = [
     note: `A PHP enum is a fixed set of named cases, optionally backed by one scalar. A Rust enum variant can carry its own data, so each variant can have different fields. A <code>match</code> on it must handle every variant.`,
     chapter: 10
   },
+  {
+    id: "clone-with",
+    cat: "oop",
+    title: "Copy an object with one field changed",
+    php: `
+      final class Point {
+          public function __construct(
+              public readonly int $x,
+              public readonly int $y,
+          ) {}
+
+          public function withX(int $x): static {
+              return clone($this, ['x' => $x]);
+          }
+      }
+      $origin = new Point(0, 0);
+      $moved = $origin->withX(5);
+      echo "{$moved->x},{$moved->y}";
+      `,
+    rust: `
+      #[derive(Debug)]
+      struct Point {
+          x: i32,
+          y: i32,
+      }
+
+      let origin = Point { x: 0, y: 0 };
+      let moved = Point { x: 5, ..origin };
+      println!("{origin:?} {moved:?}");
+      `,
+    check: "ok",
+    note: `PHP 8.5's clone-with copies the object, then sets the named properties on the copy. Outside the class, that fails for readonly properties and throws an <code>Error</code> at runtime. Rust's struct update syntax sits inside the struct literal, so the compiler checks every field name and type. Fields you leave out come from <code>origin</code>. If one of them is not <code>Copy</code>, it moves out of <code>origin</code>. These fields are all <code>Copy</code>, so <code>origin</code> still works.`,
+    chapter: 9
+  },
+  {
+    id: "property-hook",
+    cat: "oop",
+    title: "A computed property with a hook",
+    php: `
+      class Name {
+          public function __construct(
+              private string $first,
+              private string $last,
+          ) {}
+
+          public string $full {
+              get => "{$this->first} {$this->last}";
+          }
+      }
+      $name = new Name("Ada", "Lovelace");
+      echo $name->full;
+      `,
+    rust: `
+      struct Name {
+          first: String,
+          last: String,
+      }
+
+      impl Name {
+          fn full(&self) -> String {
+              format!("{} {}", self.first, self.last)
+          }
+      }
+
+      let name = Name { first: "Ada".into(), last: "Lovelace".into() };
+      println!("{}", name.full());
+      `,
+    check: "ok",
+    note: `A PHP <code>get</code> hook runs each time the property is read, and the caller writes <code>$name-&gt;full</code> with no parentheses. Rust has no property syntax, so the same value is a method, and the caller writes <code>name.full()</code>. A <code>set</code> hook runs on assignment and can check or change the value first. Rust does that in a setter method that the caller has to call by name.`,
+    chapter: 9
+  },
+  {
+    id: "asymmetric-visibility",
+    cat: "oop",
+    title: "Read from outside, write only inside",
+    php: `
+      class Invoice {
+          public private(set) bool $paid = false;
+
+          public function markPaid(): void {
+              $this->paid = true;
+          }
+      }
+      $invoice = new Invoice();
+      $invoice->markPaid();
+      echo $invoice->paid ? "paid" : "open";
+      `,
+    rust: `
+      mod billing {
+          pub struct Invoice {
+              paid: bool,
+          }
+
+          impl Invoice {
+              pub fn new() -> Self {
+                  Self { paid: false }
+              }
+
+              pub fn mark_paid(&mut self) {
+                  self.paid = true;
+              }
+
+              pub fn is_paid(&self) -> bool {
+                  self.paid
+              }
+          }
+      }
+
+      let mut invoice = billing::Invoice::new();
+      invoice.mark_paid();
+      println!("{}", if invoice.is_paid() { "paid" } else { "open" });
+      `,
+    check: "ok",
+    note: `<code>public private(set)</code> lets any code read <code>paid</code>, and only the class can write it. The rule is enforced at runtime: a write from outside throws an <code>Error</code> when that line runs. Rust gets the same shape from a private field and a <code>pub</code> getter. A write from outside the module is a build error, and the compiler reports it before the program runs.`,
+    chapter: 9
+  },
+  {
+    id: "readonly-class",
+    cat: "oop",
+    title: "A class that cannot change",
+    php: `
+      readonly class Money {
+          public function __construct(
+              public int $cents,
+              public string $currency,
+          ) {}
+      }
+      $price = new Money(500, "USD");
+      echo "{$price->cents} {$price->currency}";
+      `,
+    rust: `
+      struct Money {
+          cents: u64,
+          currency: &'static str,
+      }
+
+      let price = Money { cents: 500, currency: "USD" };
+      println!("{} {}", price.cents, price.currency);
+      `,
+    check: "ok",
+    note: `A <code>readonly class</code> lets each property be set once, from inside the class, and any later write throws an <code>Error</code> at runtime. Rust makes the same choice with no keyword: a binding without <code>mut</code> cannot change any field. Writing <code>price.cents = 1</code> is error E0594, and the program does not build. Add <code>mut</code> only where the value really changes.`,
+    chapter: 9
+  },
 
   /* ---------------------------------------------------------------- errors */
   {
@@ -1387,7 +1605,10 @@ window.OX_ROSETTA = [
     title: "try and catch become Result",
     php: `
       function parsePort(string $raw): int {
-          $port = (int) $raw;
+          $port = filter_var($raw, FILTER_VALIDATE_INT);
+          if ($port === false) {
+              throw new InvalidArgumentException("not a number: $raw");
+          }
           if ($port < 1) {
               throw new InvalidArgumentException("port must be at least 1");
           }
@@ -1396,7 +1617,7 @@ window.OX_ROSETTA = [
       try {
           echo parsePort("0");
       } catch (InvalidArgumentException $e) {
-          echo "error: " . $e->getMessage();
+          echo "error: {$e->getMessage()}";
       }
       `,
     rust: `
@@ -1425,8 +1646,12 @@ window.OX_ROSETTA = [
     title: "Your own error type",
     php: `
       class PortError extends DomainException {}
-      class OutOfRange extends PortError {}
-      throw new OutOfRange("port 0 is out of range");
+      final class OutOfRange extends PortError {}
+      try {
+          throw new OutOfRange("port 0 is out of range");
+      } catch (PortError $e) {
+          echo $e->getMessage();
+      }
       `,
     rust: `
       use std::fmt;
@@ -1452,7 +1677,7 @@ window.OX_ROSETTA = [
       println!("{err}");
       `,
     check: "ok",
-    note: `The enum's variants are the error kinds. A caller can match on them, and the compiler makes it handle each one, which a catch block cannot promise. <code>Display</code> gives the message, and <code>Error</code> lets the error travel as a <code>Box&lt;dyn Error&gt;</code>.`,
+    note: `The enum's variants are the error kinds. A caller can match on them, and the compiler makes it handle each one, which a catch block cannot promise. Add a variant and every match on the enum stops compiling until it handles the new case. Add a subclass in PHP and the existing catch blocks still compile. <code>Display</code> gives the message, and <code>Error</code> lets the error travel as a <code>Box&lt;dyn Error&gt;</code>.`,
     chapter: 11
   },
   {
@@ -1460,7 +1685,7 @@ window.OX_ROSETTA = [
     cat: "errors",
     title: "The same error with thiserror",
     php: `
-      class NotANumber extends DomainException {
+      final class NotANumber extends DomainException {
           public function __construct(string $raw) {
               parent::__construct("not a number: $raw");
           }
@@ -1518,9 +1743,13 @@ window.OX_ROSETTA = [
           public function __construct(public string $name) {}
       }
       function findUser(int $id): ?User {
-          return $id === 1 ? new User("Ada") : null;
+          return match ($id) {
+              1 => new User("Ada"),
+              default => null,
+          };
       }
       $name = findUser(2)?->name ?? "guest";
+      echo $name;
       `,
     rust: `
       struct User {
@@ -1950,7 +2179,7 @@ window.OX_ROSETTA = [
     cat: "io",
     title: "Read an environment variable",
     php: `
-      $debug = env('APP_DEBUG', false);
+      $debug = config('app.debug');
       `,
     rust: `
       let debug = std::env::var("APP_DEBUG")
@@ -1959,7 +2188,7 @@ window.OX_ROSETTA = [
       println!("debug: {debug}");
       `,
     check: "ok",
-    note: `A missing variable is an <code>Err</code>, not null. <code>unwrap_or(false)</code> puts the default where you can read it, in the same job as the second argument of <code>env()</code>.`,
+    note: `A missing variable is an <code>Err</code>, not null. The PHP side reads <code>config('app.debug')</code>, which the default <code>config/app.php</code> fills from <code>APP_DEBUG</code>. Call <code>env()</code> only in config files, because after <code>config:cache</code> the <code>.env</code> file is no longer read. <code>unwrap_or(false)</code> puts the default where you can read it.`,
     chapter: 20
   },
   {
@@ -2071,7 +2300,7 @@ window.OX_ROSETTA = [
     title: "Validate input",
     php: `
       $request->validate([
-          'name' => 'required|max:50',
+          'name' => ['required', 'max:50'],
       ]);
       `,
     rust: `
@@ -2098,12 +2327,12 @@ window.OX_ROSETTA = [
     cat: "web",
     title: "Middleware",
     php: `
-      class AuthMiddleware {
+      final class AuthMiddleware {
           public function handle(Request $request, Closure $next): Response {
-              if ($request->header('X-Token') !== 'secret') {
-                  return response('Unauthorized', 401);
-              }
-              return $next($request);
+              return match ($request->header('X-Token')) {
+                  'secret' => $next($request),
+                  default => response('Unauthorized', 401),
+              };
           }
       }
       `,
@@ -2150,8 +2379,8 @@ window.OX_ROSETTA = [
     cat: "web",
     title: "Constructor injection",
     php: `
-      class SignupController {
-          public function __construct(private Mailer $mailer) {}
+      final class SignupController {
+          public function __construct(private readonly Mailer $mailer) {}
           public function register(string $email): string {
               return $this->mailer->send($email, 'welcome');
           }
@@ -2184,7 +2413,7 @@ window.OX_ROSETTA = [
       println!("{}", signup.register("ada@example.com"));
       `,
     check: "ok",
-    note: `No container resolves a name at runtime. The dependency is a type parameter, so the compiler makes a copy of <code>Signup</code> for each concrete mailer. When the choice must wait until runtime, use <code>Box&lt;dyn Mailer&gt;</code> instead.`,
+    note: `Laravel's container reads the type hint at runtime and builds the object for you, once an interface is bound to a class. Rust has no container: the dependency is a type parameter, so the compiler makes a copy of <code>Signup</code> for each concrete mailer. When the choice must wait until runtime, use <code>Box&lt;dyn Mailer&gt;</code> instead.`,
     chapter: 14
   },
   {
@@ -2192,7 +2421,7 @@ window.OX_ROSETTA = [
     cat: "web",
     title: "Call an HTTP API",
     php: `
-      $status = Http::get('https://example.com/api/status')->json();
+      $status = Http::get('https://example.com/api/status')->throw()->json();
       `,
     rust: `
       fn fetch_status() -> Result<serde_json::Value, Box<dyn std::error::Error>> {
@@ -2205,6 +2434,42 @@ window.OX_ROSETTA = [
     note: `The connection, the status check and the body parse can each fail, so every step returns a <code>Result</code>. <code>blocking</code> suits scripts. Inside an async server, use reqwest's async client, so a slow request does not hold a thread.`,
     chapter: 20
   },
+  {
+    id: "unknown-fields",
+    cat: "web",
+    title: "Reject fields you did not ask for",
+    php: `
+      use Illuminate\\Foundation\\Http\\Attributes\\FailOnUnknownFields;
+      use Illuminate\\Foundation\\Http\\FormRequest;
+
+      #[FailOnUnknownFields]
+      class StoreNoteRequest extends FormRequest {
+          public function rules(): array {
+              return [
+                  'title' => ['required', 'string', 'max:255'],
+              ];
+          }
+      }
+      `,
+    rust: `
+      use serde::Deserialize;
+
+      #[derive(Deserialize)]
+      #[serde(deny_unknown_fields)]
+      struct StoreNote {
+          title: String,
+      }
+
+      let ok = r#"{"title": "Hello"}"#;
+      let extra = r#"{"title": "Hello", "color": "red"}"#;
+      let accepted: StoreNote = serde_json::from_str(ok).expect("valid input");
+      println!("accepted: {}", accepted.title);
+      println!("{}", serde_json::from_str::<StoreNote>(extra).is_err());
+      `,
+    check: "skip",
+    note: `Laravel's <code>FailOnUnknownFields</code> rejects any input key that no rule defines. Rust's serde reads the input while it deserializes, and <code>deny_unknown_fields</code> makes an extra key an error with no other code. The accepted fields are listed once, in the struct. serde is a crate, not part of the language, so this entry needs <code>serde</code> and <code>serde_json</code> in <code>Cargo.toml</code>.`,
+    chapter: 20
+  },
 
   /* ---------------------------------------------------------------- testing */
   {
@@ -2212,9 +2477,13 @@ window.OX_ROSETTA = [
     cat: "testing",
     title: "assertEquals becomes assert_eq",
     php: `
+      use PHPUnit\\Framework\\Attributes\\Test;
+      use Tests\\TestCase;
+
       class AddTest extends TestCase {
-          public function test_adds_two_numbers(): void {
-              $this->assertEquals(4, add(2, 2));
+          #[Test]
+          public function adds_two_numbers(): void {
+              $this->assertSame(4, add(2, 2));
           }
       }
       `,
@@ -2238,7 +2507,7 @@ window.OX_ROSETTA = [
       }
       `,
     check: "ok",
-    note: `Tests sit next to the code, and <code>cargo test</code> compiles them. Watch the argument order: PHPUnit takes the expected value first, while <code>assert_eq!</code> takes two values and the convention is actual first. When it fails, it prints both sides.`,
+    note: `Tests sit next to the code, and <code>cargo test</code> compiles them. Watch the argument order: PHPUnit takes the expected value first, while <code>assert_eq!</code> takes two values and the convention is actual first. <code>assertSame</code> checks the type as well as the value, which is closer to <code>assert_eq!</code>, where mismatched types do not compile. When it fails, it prints both sides.`,
     chapter: 16
   },
   {
@@ -2246,9 +2515,13 @@ window.OX_ROSETTA = [
     cat: "testing",
     title: "assertTrue becomes assert",
     php: `
+      use PHPUnit\\Framework\\Attributes\\Test;
+      use Tests\\TestCase;
+
       class UserTest extends TestCase {
-          public function test_admin_flag(): void {
-              $this->assertTrue($user->isAdmin());
+          #[Test]
+          public function admin_flag_is_read(): void {
+              $this->assertTrue(new User(admin: true)->isAdmin());
           }
       }
       `,
@@ -2286,8 +2559,12 @@ window.OX_ROSETTA = [
     cat: "testing",
     title: "Expect an error",
     php: `
+      use PHPUnit\\Framework\\Attributes\\Test;
+      use Tests\\TestCase;
+
       class PortTest extends TestCase {
-          public function test_rejects_port_zero(): void {
+          #[Test]
+          public function rejects_port_zero(): void {
               $this->expectException(InvalidArgumentException::class);
               parsePort("0");
           }
@@ -2325,6 +2602,9 @@ window.OX_ROSETTA = [
     cat: "testing",
     title: "setUp becomes a helper",
     php: `
+      use PHPUnit\\Framework\\Attributes\\Test;
+      use Tests\\TestCase;
+
       class UserTest extends TestCase {
           private User $user;
 
@@ -2332,7 +2612,8 @@ window.OX_ROSETTA = [
               $this->user = new User("Ada", admin: true);
           }
 
-          public function test_admin_can_delete(): void {
+          #[Test]
+          public function admin_can_delete(): void {
               $this->assertTrue($this->user->isAdmin());
           }
       }
@@ -2363,7 +2644,7 @@ window.OX_ROSETTA = [
       }
       `,
     check: "ok",
-    note: `There is no <code>setUp</code>. Each test builds the data it needs with a plain function, so no test depends on another and nothing is shared by accident. Cleanup belongs in a <code>Drop</code> impl, as in finally becomes Drop under Errors.`,
+    note: `Rust has no <code>setUp</code> hook. Each test builds the data it needs with a plain function, so no test depends on another and nothing is shared by accident. Cleanup belongs in a <code>Drop</code> impl, as in finally becomes Drop under Errors.`,
     chapter: 16
   },
   {
@@ -2371,8 +2652,11 @@ window.OX_ROSETTA = [
     cat: "testing",
     title: "A fake that implements the trait",
     php: `
-      $mailer = $this->mock(Mailer::class);
-      $mailer->shouldReceive('send')->once()->andReturn(true);
+      use Mockery\\MockInterface;
+
+      $mailer = $this->mock(Mailer::class, function (MockInterface $mock) {
+          $mock->expects('send')->andReturn(true);
+      });
       `,
     rust: `
       trait Mailer {
@@ -2500,7 +2784,7 @@ window.OX_ROSETTA = [
     cat: "tooling",
     title: "Debug or release build",
     php: `
-      if (app()->environment('local')) {
+      if (app()->isLocal()) {
           echo "debug build";
       }
       `,
@@ -2535,10 +2819,11 @@ window.OX_ROSETTA = [
     cat: "tooling",
     title: "Mark an old function deprecated",
     php: `
-      /** @deprecated use totalCents() instead */
+      #[\\Deprecated(message: "use totalCents() instead", since: "1.2.0")]
       function total(int $cents): int {
           return $cents;
       }
+      echo total(5);
       `,
     rust: `
       #[deprecated(since = "1.2.0", note = "use \`total_cents\` instead")]
@@ -2553,7 +2838,7 @@ window.OX_ROSETTA = [
       println!("{}", total_cents(5));
       `,
     check: "ok",
-    note: `The attribute makes the compiler warn at every call site, which a docblock never does. The note text appears in the warning, so the reader learns the replacement at the point of use.`,
+    note: `PHP 8.4 added the <code>#[\\Deprecated]</code> attribute. PHP prints its notice each time a call runs, and the message names the replacement. Rust's <code>#[deprecated]</code> warns at build time, so the warning comes before the program runs at all. Either way, the note text tells the reader the replacement at the point of use.`,
     chapter: 16
   },
   {
@@ -2562,7 +2847,7 @@ window.OX_ROSETTA = [
     title: "Strictness settings as lints",
     php: `
       declare(strict_types=1);
-      error_reporting(E_ALL);
+      // PHP 8 reports every error level by default, so error_reporting() is not needed.
       `,
     rust: `
       #![forbid(unsafe_code)]
@@ -2602,8 +2887,14 @@ window.OX_ROSETTA = [
     cat: "tooling",
     title: "Warn when a result is ignored",
     php: `
-      // Nothing warns you: PHP does not check for ignored return values.
-      calculateTotal($prices);
+      #[\\NoDiscard("the total is the whole point of this call")]
+      function calculateTotal(array $prices): int {
+          return array_sum($prices);
+      }
+      $prices = [100, 250];
+      $sum = calculateTotal($prices);
+      (void) calculateTotal($prices); // a deliberate discard
+      echo $sum;
       `,
     rust: `
       #[must_use = "the total is the whole point of this call"]
@@ -2616,7 +2907,7 @@ window.OX_ROSETTA = [
       println!("{sum}");
       `,
     check: "ok",
-    note: `<code>#[must_use]</code> makes the compiler warn when a call's result is dropped. The standard library marks its lazy iterator adapters this way, so an iterator that nothing consumes gets flagged.`,
+    note: `<code>#[must_use]</code> makes the compiler warn when a call's result is dropped. PHP 8.5's <code>#[\\NoDiscard]</code> does the same job, but its warning appears only when that line runs, while Rust's appears at build time. Discard on purpose with <code>(void)</code> in PHP and <code>let _ =</code> in Rust. The standard library marks its lazy iterator adapters this way, so an iterator that nothing consumes gets flagged.`,
     chapter: 21
   },
 ];

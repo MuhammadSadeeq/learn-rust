@@ -91,7 +91,7 @@
   <summary>Think first: in PHP, how much memory does <code>$x = 5;</code> use?</summary>
   <div class="ox-think-body">
     <p>Guess before you read on, and be specific about what you counted.</p>
-    <p>The answer is more than four bytes. The value 5 is stored in a <strong>zval</strong>, PHP's internal container for any value. On 64-bit PHP 7 and later, a zval is 16 bytes, and it keeps the type tag next to the value. The variable also needs a slot in a table that PHP keeps for its scope, and that table has bookkeeping of its own. The exact total depends on the PHP version and on whether <code>$x</code> is global or local, so treat any figure as approximate. The 5 itself sits inside the zval, so PHP does not allocate anything extra on the heap for it.</p>
+    <p>The answer is more than four bytes. The value 5 is stored in a <strong>zval</strong>, PHP's internal container for any value. On a 64-bit build, a zval is 16 bytes, and it keeps the type tag next to the value. The variable needs a slot of its own too. Inside a function, that is a slot in the call's frame. In the global scope, it is an entry in a symbol table, which has bookkeeping of its own. The exact total depends on the PHP build and on where <code>$x</code> lives, so treat any figure as approximate. The 5 itself sits inside the zval, so PHP does not allocate anything extra on the heap for it.</p>
     <p>The lesson is that every value carries overhead, and PHP hides that overhead from you. Rust shows you the overhead in the types, and the Size Lab later in this chapter lets you check it.</p>
   </div>
 </details>
@@ -365,7 +365,7 @@ fn main() {
 <section>
 <h2 id="php">How PHP does it, and why Rust shows you</h2>
 
-<p>PHP manages all of this for you, and it does it well. Every value is a zval. Strings and arrays are allocated on the heap and <strong>reference counted</strong>, so each one is released when its last reference goes away. Arrays and strings are <strong>copy on write</strong>: <code>$b = $a;</code> shares the memory until one side changes. A cycle collector finds objects that point at each other. At the end of a request, PHP releases everything the request allocated. <code>memory_get_usage()</code> tells you how much PHP is holding, but not what it is holding it for.</p>
+<p>PHP manages all of this for you, and it does it well. Every variable holds a <strong>zval</strong>, the engine's container for one value, with the type tag beside it. Strings, arrays and objects live on the heap and are <strong>reference counted</strong>, so each one is released when its last reference goes away. Arrays and strings are <strong>copy on write</strong>: <code>$b = $a;</code> shares the memory until one side changes. Objects follow a different rule. A variable holds a <strong>handle</strong> to the object, so <code>$b = $a;</code> copies the handle, and both names reach the same object. A cycle collector finds objects that point at each other, which reference counting alone would leave alive. At the end of a request, PHP releases everything the request allocated. <code>memory_get_usage()</code> tells you how much PHP is holding, but not what it is holding it for.</p>
 
 <details class="ox-think">
   <summary>Think first: a PHP function builds an array of 100,000 rows and returns it. When is that memory released?</summary>
@@ -383,7 +383,36 @@ $b[] = 4;      // now PHP copies it, quietly</pre>
 let a = vec![1, 2, 3];
 let mut b = a.clone(); // a new heap buffer, copied now
 b.push(4);</pre>
-  <div class="ox-bridge-note"><p>PHP copies later, and you don't see the copy. Rust copies only where you write <code>clone()</code>, so the cost sits on a line you can point to. The comparison breaks when you look closely: in PHP a copy can happen inside any write, while in Rust the copy is always written out. Chapter 06 covers the ownership rules behind this.</p></div>
+  <div class="ox-bridge-note"><p>PHP copies later, and you don't see the copy. Rust copies a <code>Vec</code> only where you write <code>clone()</code>, so the cost sits on a line you can point to. The comparison breaks when you look closely: in PHP a copy can happen inside any write, while in Rust the copy is always written out. Chapter 06 covers the ownership rules behind this.</p></div>
+</div>
+
+<p>Objects are the other case. In PHP, <code>$b = $a;</code> with an object copies only the handle, and no copy of the object is made. Rust has no such default. A struct has one owner, and shared access takes an explicit handle:</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+final class Counter {
+    public function __construct(public int $n = 0) {}
+}
+
+$a = new Counter();
+$b = $a;          // copies the handle, not the object
+$b-&gt;n = 1;
+echo $a-&gt;n;       // 1</pre>
+  <pre class="rs" data-stdout="1">
+use std::cell::RefCell;
+use std::rc::Rc;
+
+struct Counter {
+    n: i32,
+}
+
+fn main() {
+    let a = Rc::new(RefCell::new(Counter { n: 0 }));
+    let b = Rc::clone(&amp;a);   // a second handle to the same value
+    b.borrow_mut().n = 1;
+    println!("{}", a.borrow().n);
+}</pre>
+  <div class="ox-bridge-note"><p>PHP makes every object a handle, and you never ask for it. In Rust, the handle is a choice you write. <code>Rc</code> counts its owners at runtime, and <code>RefCell</code> checks its borrows at runtime. Chapter 17 covers both. A plain Rust struct is never shared behind your back, so the question of who may change it is answered in the code.</p></div>
 </div>
 
 <aside class="ox-callout" data-kind="insight">

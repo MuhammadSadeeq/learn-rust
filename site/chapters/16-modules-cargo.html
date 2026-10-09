@@ -70,9 +70,12 @@ shop/
 </div>
 
 <div class="ox-bridge">
-  <pre class="php" data-title="composer.json">
+  <pre class="json" data-title="composer.json">
 {
     "name": "acme/shop",
+    "require": {
+        "php": "^8.5"
+    },
     "autoload": {
         "psr-4": {"App\\": "app/"}
     }
@@ -82,7 +85,7 @@ shop/
 name = "shop"
 version = "0.1.0"
 edition = "2024"</pre>
-  <div class="ox-bridge-note"><p>Both files name the package and describe how to build it. Composer maps namespaces to folders with <code>psr-4</code>. Cargo has no such mapping, because the module tree is written in your source (you will see that in the files section below). The name in <code>Cargo.toml</code> does different work: it names the library crate, so other crates write <code>shop::</code> at the start of every path they use to reach it.</p></div>
+  <div class="ox-bridge-note"><p>Both files name the package and state the language version the code needs. <code>require.php</code> in Composer does that, and <code>^8.5</code> means 8.5 or any later 8.x. Cargo's <code>rust-version</code> field does that for the Rust compiler, and <code>edition</code> picks the language rules. Composer maps namespaces to folders with <code>psr-4</code>. Cargo has no such mapping, because the module tree is written in your source (you will see that in the files section below). The name in <code>Cargo.toml</code> does different work: it names the library crate, so other crates write <code>shop::</code> at the start of every path they use to reach it.</p></div>
 </div>
 
 <p>Every crate starts at one root file, <code>src/lib.rs</code> or <code>src/main.rs</code>. Everything else hangs off that root through <code>mod</code> lines, and those lines form a tree. Most of this chapter is about that tree: how it is built, and who is allowed to see into it.</p>
@@ -379,22 +382,18 @@ For more information about this error, try `rustc --explain E0603`.</pre>
 
 <div class="ox-bridge">
   <pre class="php">
-// app/Models/User.php declares App\Models\User
-namespace App\Models;
-
-class User {}
-
-// Elsewhere. No require needed: the autoloader
-// maps the name to the file on first use.
+// No require needed. The autoloader finds
+// App\Models\User in app/Models/User.php on first use.
 use App\Models\User;
-$user = new User();</pre>
+
+$user = new User('Ana');</pre>
   <pre class="rs" data-check="skip" data-title="src/lib.rs and src/models/mod.rs">
 // src/lib.rs
 pub mod models;      // reads src/models/mod.rs and makes it part of the crate
 
 // src/models/mod.rs
 pub mod user;        // reads src/models/user.rs, which is now part of the crate</pre>
-  <div class="ox-bridge-note"><p>Composer maps a name to a file and loads it when it is used. Rust has no autoloader and no runtime lookup. A file is compiled only if a <code>mod</code> line reaches it, and a file with no such line is ignored, even when it sits in <code>src/</code>.</p></div>
+  <div class="ox-bridge-note"><p>Composer maps a name to a file and loads it when it is used. A PHP namespace is a prefix on class names, and PSR-4 makes the folder path follow that prefix by convention. Rust has no autoloader and no runtime lookup. A module is a node in the crate's tree, and a <code>mod</code> line creates that node. A file is compiled only if a <code>mod</code> line reaches it, and a file with no such line is ignored, even when it sits in <code>src/</code>.</p></div>
 </div>
 
 <p>Explore the crate in the map below. The left column is the disk. The right column is the module tree that rustc builds from the <code>mod</code> lines. Click a file or a module to see its full path, the <code>use</code> line that <code>main.rs</code> would need, and whether <code>main.rs</code> can reach it. A path is reachable only when every segment on it is visible to <code>main.rs</code>.</p>
@@ -716,7 +715,7 @@ test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out</pre>
 <table class="ox-table">
   <thead><tr><th>PHPUnit or Pest</th><th>Rust</th></tr></thead>
   <tbody>
-    <tr><td><code>assertEquals($a, $b)</code></td><td><code>assert_eq!(a, b)</code></td></tr>
+    <tr><td><code>assertSame($a, $b)</code></td><td><code>assert_eq!(a, b)</code></td></tr>
     <tr><td><code>assertTrue($x)</code></td><td><code>assert!(x)</code></td></tr>
     <tr><td><code>assertNotEquals($a, $b)</code></td><td><code>assert_ne!(a, b)</code></td></tr>
     <tr><td><code>expectException(X::class)</code></td><td><code>#[should_panic]</code>, or return an <code>Err</code> and assert on it</td></tr>
@@ -726,6 +725,49 @@ test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out</pre>
   </tbody>
 </table>
 </div>
+
+<p>Here are the same two tests in a Laravel 13 app. PHPUnit marks each test method with the <code>#[Test]</code> attribute. Pest turns each test into a function that takes a name and a closure. Both ship with Laravel, and PHPUnit 12 no longer reads <code>@test</code> docblocks.</p>
+
+<pre class="php">
+declare(strict_types=1);
+
+namespace Tests\Unit;
+
+use DivisionByZeroError;
+use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\TestCase;
+
+final class DivideTest extends TestCase
+{
+    #[Test]
+    public function dividesEvenly(): void
+    {
+        $this-&gt;assertSame(5, intdiv(10, 2));
+    }
+
+    #[Test]
+    public function refusesZero(): void
+    {
+        $this-&gt;expectException(DivisionByZeroError::class);
+        intdiv(1, 0);
+    }
+}</pre>
+
+<pre class="php">
+test('divides evenly', function () {
+    expect(intdiv(10, 2))-&gt;toBe(5);
+});
+
+test('refuses zero', function () {
+    expect(fn () =&gt; intdiv(1, 0))-&gt;toThrow(DivisionByZeroError::class);
+});</pre>
+
+<pre class="sh">php artisan test --filter dividesEvenly   # one test, by name
+php artisan test                        # every test, PHPUnit and Pest alike
+cargo test divides                      # tests whose path contains "divides"
+cargo test                              # every test in the crate</pre>
+
+<p><code>php artisan test</code> wraps the same runners as <code>vendor/bin/pest</code> and <code>vendor/bin/phpunit</code>, and it passes their arguments through. <code>cargo test</code> needs no wrapper. The test harness is part of the toolchain, and <code>#[test]</code> marks the functions it runs.</p>
 
 <p>A few details matter. <code>#[should_panic]</code> with no <code>expected</code> passes on any panic, including one caused by a bug, so always give it text. A test can return <code>Result&lt;(), E&gt;</code> and use <code>?</code>, which makes an <code>Err</code> fail the test. <code>cargo test divide</code> runs every test whose name contains <code>divide</code>, and <code>cargo test -- --ignored</code> runs the ignored ones.</p>
 
@@ -937,7 +979,7 @@ fn main() {
     <li data-left="vendor/">~/.cargo/registry, where downloaded crates live</li>
     <li data-left="namespace App\Models">a module, declared with <code>mod models;</code></li>
     <li data-left="use App\Models\User;">use crate::models::User;</li>
-    <li data-left="phpunit">cargo test</li>
+    <li data-left="php artisan test">cargo test</li>
     <li data-left="phpstan">cargo clippy</li>
   </ul>
 </div>

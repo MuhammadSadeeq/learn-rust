@@ -4,7 +4,7 @@
 //  A chain is lazy: nothing runs until sum() or collect() pulls the items.
 //  paid_total keeps the paid orders and adds up their totals.
 //  customers collects into a BTreeSet, which drops repeats and sorts in one
-//  step. PHP needs unique(), sort() and values() for the same result.
+//  step. A Laravel collection needs unique(), sort() and values() for the same result.
 // ============================================================================
 
 use std::collections::BTreeSet;

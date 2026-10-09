@@ -8,6 +8,6 @@
   { id: "c06-order", ch: 6, q: "In what order are local variables dropped at the end of a scope?", a: "In **reverse** order of declaration: the last one declared is dropped first." },
   { id: "c06-fnparam", ch: 6, q: "What happens to `s` after calling `fn f(x: String)` as `f(s)`?", a: "`s` is moved into `x`. Unless `f` returns it, the String is dropped when `f` ends, and `s` can't be used again in the caller." },
   { id: "c06-fixes", ch: 6, q: "Three ways to fix E0382 \"use of moved value\"?", a: "1. **Reorder**: use the value before you move it.\n\n2. **Clone**: if you really need two independent copies.\n\n3. **Borrow** with `&` if the other code only needs to look." },
-  { id: "c06-php", ch: 6, q: "PHP frees memory with ___ ; Rust frees memory with ___.", a: "PHP: reference counting plus a cycle collector at **runtime** (and the end of each request).\n\nRust: `drop` calls the **compiler** inserts at the end of each owner's scope." },
+  { id: "c06-php", ch: 6, q: "PHP frees memory with ___ ; Rust frees memory with ___.", a: "PHP: reference counting plus a cycle collector at **runtime** (and the end of each request).\n\nRust: the **compiler** inserts a `drop` call at the end of each owner's scope." },
   { id: "c06-for", ch: 6, q: "Why does `for n in names { }` make `names` unusable afterwards?", a: "`for` over a `Vec` by value calls `into_iter()`, which **moves** the vector into the loop. Use `for n in &names` to borrow instead." }
 );

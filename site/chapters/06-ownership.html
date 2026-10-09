@@ -51,7 +51,7 @@
 </div>
 
 <aside class="ox-callout" data-kind="php">
-  <p>PHP keeps a reference count on every value. When the count reaches zero, the value is freed immediately, and a cycle collector occasionally cleans up objects that point at each other. On top of that, a classic PHP-FPM request throws away <em>all</em> of its memory when the response is sent. That is why you have rarely had to think about memory: most leaks die with the request.</p>
+  <p>PHP keeps a reference count on every string, array and object. When the count reaches zero, the value is freed immediately, and a cycle collector occasionally cleans up objects that point at each other. On top of that, a classic PHP-FPM request throws away <em>all</em> of its memory when the response is sent. That is why you have rarely had to think about memory: most leaks die with the request.</p>
   <p>Rust programs are usually long-running: servers, CLIs, agents, game loops. There is no end-of-request reset to clean up after you, so the language needs a precise rule for when every single value is freed.</p>
 </aside>
 
@@ -133,21 +133,24 @@ fn main() {
 
 <div class="ox-bridge">
   <pre class="php">
-class Noisy {
+declare(strict_types=1);
+
+final class Noisy
+{
     public function __construct(
-        public string $name
+        public readonly string $name,
     ) {}
 
-    public function __destruct() {
+    public function __destruct()
+    {
         echo "drop {$this->name}\n";
     }
 }
 
 $a = new Noisy("a");
-// __destruct runs when the refcount
-// reaches zero, which might be much
-// later if something else (a cache,
-// a closure, a cycle) still holds $a.</pre>
+$cache = [$a];
+unset($a);     // no drop yet: $cache still holds the object
+$cache = [];   // the last reference is gone, so __destruct runs now</pre>
   <pre class="rs" data-check="skip">
 struct Noisy(&amp;'static str);
 
@@ -282,6 +285,55 @@ fn main() {
 <aside class="ox-callout" data-kind="insight">
   <p><strong>Copy</strong> is implicit, and Rust only allows it for types where copying is guaranteed to be cheap. <strong>Clone</strong> is explicit because it may allocate. When you see <code>.clone()</code> in a code review, you're looking at a deliberate cost.</p>
 </aside>
+
+<p>PHP has a <code>clone</code> keyword too, and it does something different. It copies an object's properties into a new object and stops there. An object inside the copy is still the same object as before. An array inside the copy is copied on write.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+declare(strict_types=1);
+
+final class Author
+{
+    public function __construct(public string $name) {}
+}
+
+final class Playlist
+{
+    public function __construct(
+        public array $tracks,
+        public Author $owner,
+    ) {}
+}
+
+$a = new Playlist(["one"], new Author("Ana"));
+$b = clone $a;
+$b->tracks[] = "two";     // only $b changes: the array was copied on write
+$b->owner->name = "Bo";   // both hold the same Author
+echo $a->owner->name;     // Bo: the change shows through $a</pre>
+  <pre class="rs" data-stdout="Ana">
+#[derive(Clone)]
+struct Author {
+    name: String,
+}
+
+#[derive(Clone)]
+struct Playlist {
+    tracks: Vec&lt;String&gt;,
+    owner: Author,
+}
+
+fn main() {
+    let a = Playlist {
+        tracks: vec!["one".to_string()],
+        owner: Author { name: "Ana".to_string() },
+    };
+    let mut b = a.clone();
+    b.tracks.push("two".to_string());
+    b.owner.name = "Bo".to_string();
+    println!("{}", a.owner.name);  // Ana: the clone gave a its own Author
+}</pre>
+  <div class="ox-bridge-note"><p>PHP's <code>clone</code> is shallow. The copy gets the same property values, so an object inside it is shared. Rust's derived <code>Clone</code> calls <code>.clone()</code> on every field, so <code>a</code> keeps its own Author. To share one Author between two values in Rust, you use <code>Rc</code> (Chapter 17). PHP's <code>__clone()</code> lets you write the deep copy yourself. In Rust, you write <code>impl Clone</code> by hand for the same job.</p></div>
+</div>
 
 <div class="ox-quiz" data-id="06:copy-tuple">
   <p class="ox-q">Does this compile?</p>

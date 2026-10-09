@@ -34,7 +34,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try \`rustc --explain E0382\`.`,
     plain: `Assigning a String to a new name moves it. The old name is no longer valid, so any later use of it is an error.`,
-    php: `In PHP, \`$greeting = $name;\` leaves both variables usable. PHP strings and arrays are values, and objects are shared handles, so there is no moved-from state. Rust has neither, and after a move the old name cannot be used.`,
+    phpNote: `In PHP, \`$greeting = $name;\` leaves both variables usable. PHP strings and arrays are values, and objects are shared handles, so there is no moved-from state. Rust has neither, and after a move the old name cannot be used.`,
     fixes: [
       {
         title: "Clone it",
@@ -92,7 +92,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try \`rustc --explain E0499\`.`,
     plain: `Only one \`&mut\` may be alive at a time, and while it is alive nothing else may touch the value. Here \`first\` is still used after \`second\` asks for its own \`&mut\`.`,
-    php: `PHP has no such rule. \`$first = &$scores; $second = &$scores;\` gives two names for one array, and both can write whenever they like. Rust allows one writer at a time, so this bug cannot compile.`,
+    phpNote: `PHP has no such rule. \`$first = &$scores; $second = &$scores;\` gives two names for one array, and both can write whenever they like. Rust allows one writer at a time, so this bug cannot compile.`,
     fixes: [
       {
         title: "Finish the first borrow",
@@ -142,7 +142,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try \`rustc --explain E0502\`.`,
     plain: `A shared borrow promises that the value will not change while the borrow is alive. \`push\` may move the vector's buffer to a new place, which would leave \`first\` pointing at freed memory, so the change is refused while \`first\` is still needed.`,
-    php: `\`$first = $names[0];\` copies the value, so later pushes cannot affect it. Rust's \`&names[0]\` points into the vector's buffer, and \`push\` may move that buffer, so the borrow checker stops the push while \`first\` is still in use.`,
+    phpNote: `\`$first = $names[0];\` copies the value, so later pushes cannot affect it. Rust's \`&names[0]\` points into the vector's buffer, and \`push\` may move that buffer, so the borrow checker stops the push while \`first\` is still in use.`,
     fixes: [
       {
         title: "Copy the value out",
@@ -203,7 +203,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try \`rustc --explain E0505\`.`,
     plain: `You cannot move a value while something is still borrowing it. \`view\` would point at a String that \`consume\` now owns, and that String is freed when \`consume\` returns.`,
-    php: `PHP never moves a value out from under another name. \`consume($title)\` passes a copy-on-write string, and \`$view\` keeps working. In Rust the move transfers the one owner, so no borrow may still point at the old owner.`,
+    phpNote: `PHP never moves a value out from under another name. \`consume($title)\` passes a copy-on-write string, and \`$view\` keeps working. In Rust the move transfers the one owner, so no borrow may still point at the old owner.`,
     fixes: [
       {
         title: "Borrow instead of moving",
@@ -276,7 +276,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try \`rustc --explain E0506\`.`,
     plain: `Assigning to a value while it is borrowed would change what the borrow sees. Rust makes you finish with the borrow before you assign.`,
-    php: `In PHP, \`$snapshot = &$level; $level = 4;\` changes what \`$snapshot\` reads, because both names refer to one variable. Rust refuses the write while the borrow is needed, so the reader always sees a stable value.`,
+    phpNote: `In PHP, \`$snapshot = &$level; $level = 4;\` changes what \`$snapshot\` reads, because both names refer to one variable. Rust refuses the write while the borrow is needed, so the reader always sees a stable value.`,
     fixes: [
       {
         title: "Copy it into its own name",
@@ -334,7 +334,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try \`rustc --explain E0507\`.`,
     plain: `You cannot take a value out of something you only borrowed. The owner would be left with a missing field, and it could no longer be used or dropped safely.`,
-    php: `In PHP, \`return $order->customer;\` returns a copy, and the order keeps its value. Rust cannot move a field out of a borrowed struct, because the owner would be left with a hole in it.`,
+    phpNote: `In PHP, \`return $order->customer;\` hands back the string, and the order keeps its own value. Rust cannot move a field out of a borrowed struct, because the owner would be left with a hole in it.`,
     fixes: [
       {
         title: "Clone the field",
@@ -412,7 +412,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try \`rustc --explain E0596\`.`,
     plain: `A binding is immutable unless it says \`mut\`. Taking a \`&mut\` borrow, or calling a method that needs one, requires that permission on the binding itself.`,
-    php: `PHP arrays are mutable by default, so \`$names[] = 'Ada';\` just works. In Rust, mutability belongs to the binding, and you must write \`mut\` when you create it.`,
+    phpNote: `PHP arrays are mutable by default, so \`$names[] = 'Ada';\` just works. In Rust, mutability belongs to the binding, and you must write \`mut\` when you create it.`,
     fixes: [
       {
         title: "Declare it mut",
@@ -463,7 +463,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try \`rustc --explain E0597\`.`,
     plain: `\`word\` is dropped at the closing brace of the inner block. \`longest\` is used after that brace, so it would point at memory that has already been freed.`,
-    php: `PHP has no block scope. A variable created inside an \`if\` still exists after the closing brace. Rust ends \`word\` at its brace and refuses any reference that would outlive it.`,
+    phpNote: `PHP has no block scope. A variable created inside an \`if\` still exists after the closing brace. Rust ends \`word\` at its brace and refuses any reference that would outlive it.`,
     fixes: [
       {
         title: "Keep the owner outside",
@@ -526,7 +526,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try \`rustc --explain E0716\`.`,
     plain: `\`String::from("hello")\` is a temporary value. It is dropped at the end of the \`let\` statement, but \`shout\` still borrows from it and uses it afterwards.`,
-    php: `PHP has no borrowed view of a temporary. A string value stays alive for as long as something holds it, so this mistake cannot be written in PHP.`,
+    phpNote: `A PHP string stays alive while any name holds it, so no view of a temporary can dangle. \`$shout = strtoupper('hello');\` just keeps the result. In Rust the temporary is freed at the end of the statement, and \`as_str()\` must not outlive it.`,
     fixes: [
       {
         title: "Name the owner",
@@ -584,7 +584,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try \`rustc --explain E0106\`.`,
     plain: `A function that returns a reference must say which input it came from. With one reference input rustc can guess, but with two it cannot.`,
-    php: `PHP functions return values, not views into their arguments, so there is no lifetime to name. In Rust a returned reference is valid only as long as its source, and the signature must say which source.`,
+    phpNote: `PHP has no lifetimes to name. A function can return a reference, and PHP keeps the value alive while any name holds it, so the reference cannot dangle. In Rust a returned reference is valid only as long as its source, and the signature must say which source.`,
     fixes: [
       {
         title: "Name the lifetime",
@@ -661,7 +661,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try \`rustc --explain E0373\`.`,
     plain: `The thread may still run after \`main\` has finished using its local \`orders\`. \`move\` gives the thread ownership of the data, so it never points into a frame that is gone.`,
-    php: `PHP-FPM requests do not share memory, so this never came up. In Rust a spawned thread can outlive the function that started it, so the compiler asks whether the thread owns its data or borrows it safely.`,
+    phpNote: `Ordinary PHP has no threads, so this never came up. In Rust a spawned thread can outlive the function that started it, so the compiler asks whether the thread owns its data or borrows it safely.`,
     fixes: [
       {
         title: "Move the data in",
@@ -723,7 +723,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try \`rustc --explain E0384\`.`,
     plain: `A binding is immutable by default. \`total += price\` assigns to it again, and Rust refuses to assign to an immutable binding.`,
-    php: `PHP variables are always mutable, so \`$total += $price;\` is normal. In Rust a binding is immutable unless you write \`mut\`. This is one of the most common first errors, and the fix is one word.`,
+    phpNote: `PHP variables are always mutable, so \`$total += $price;\` is normal. In Rust a binding is immutable unless you write \`mut\`. This is one of the most common first errors, and the fix is one word.`,
     fixes: [
       {
         title: "Make it mut",
@@ -780,7 +780,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try \`rustc --explain E0381\`.`,
     plain: `A variable declared without a value must be assigned on every path before it is read. The path where the score is below 70 never sets \`grade\`.`,
-    php: `In PHP, reading \`$grade\` when no branch set it gives \`Warning: Undefined variable\` at runtime, and only on that path. Rust refuses to build the program at all.`,
+    phpNote: `In PHP, reading \`$grade\` when no branch set it gives \`Warning: Undefined variable $grade\` at runtime, and only on that path. Rust refuses to build the program at all.`,
     fixes: [
       {
         title: "Cover the last path",
@@ -845,7 +845,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try \`rustc --explain E0308\`.`,
     plain: `Every value has one exact type. \`count\` is a number, but the function promised to return a \`String\`. Rust does not convert between them for you.`,
-    php: `PHP coerces types silently. With a \`: string\` return type in its default mode, \`return $count;\` turns the integer into a string. Rust never converts for you, so a \`u32\` is not a \`String\`.`,
+    phpNote: `PHP coerces scalar types silently. With a \`: string\` return type in its default mode, \`return $count;\` turns the integer into a string. Rust never converts for you, so a \`u32\` is not a \`String\`.`,
     fixes: [
       {
         title: "Convert it",
@@ -914,7 +914,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try \`rustc --explain E0277\`.`,
     plain: `The \`{}\` placeholder needs the \`Display\` trait. \`Point\` does not implement it, so \`println!\` cannot format it.`,
-    php: `PHP's nearest equivalent is \`__toString()\`, and string interpolation calls it when it exists. Without it PHP fails at runtime. Rust needs the \`Display\` impl written out, and it fails at compile time.`,
+    phpNote: `PHP's nearest equivalent is \`__toString()\`, and string interpolation calls it when it exists. Without it PHP fails at runtime. Rust needs the \`Display\` impl written out, and it fails at compile time.`,
     fixes: [
       {
         title: "Print the Debug form",
@@ -991,7 +991,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try \`rustc --explain E0599\`.`,
     plain: `\`name\` is an \`Option<&str>\`, a box that may be empty. \`to_uppercase\` exists on the \`&str\` inside the box, not on the box itself.`,
-    php: `In PHP, calling a method on null, as in \`$name->upper()\`, fails at runtime with \`Call to a member function upper() on null\`. In Rust, \`Option<&str>\` is a different type from \`&str\`, so the call fails to compile until you open the box.`,
+    phpNote: `In PHP, calling a method on null, as in \`$name->upper()\`, fails at runtime with \`Call to a member function upper() on null\`. The nullsafe \`?->\` returns null instead, so a null can travel on unnoticed. In Rust, \`Option<&str>\` is a different type from \`&str\`, so the call fails to compile until you open the box.`,
     fixes: [
       {
         title: "Map over it",
@@ -1052,7 +1052,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try \`rustc --explain E0425\`.`,
     plain: `rustc cannot find a name: a function, variable or constant that is not visible where it is used. \`with_vat\` lives in the \`pricing\` module, and nothing in \`main\` brings it into scope.`,
-    php: `In PHP, calling a function that was never loaded fails at runtime with \`Call to undefined function\`. Rust reports the same mistake at compile time, and it also suggests the import.`,
+    phpNote: `In PHP, calling a function that was never loaded fails at runtime with \`Call to undefined function\`. Rust reports the same mistake at compile time, and it also suggests the import.`,
     fixes: [
       {
         title: "Import it",
@@ -1110,7 +1110,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try \`rustc --explain E0433\`.`,
     plain: `\`HashMap\` is a type in the standard library's \`collections\` module. Until you import it or write its full path, rustc cannot resolve the name.`,
-    php: `PHP arrays are maps, so \`$stock = []\` needs no import. Rust's map is an ordinary library type, so it needs the same kind of \`use\` you would write for a class from another namespace.`,
+    phpNote: `PHP arrays are maps, so \`$stock = []\` needs no import. Rust's map is an ordinary library type, so it needs the same kind of \`use\` you would write for a class from another namespace.`,
     fixes: [
       {
         title: "Import HashMap",
@@ -1164,7 +1164,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try \`rustc --explain E0609\`.`,
     plain: `\`totl_cents\` is not a field of \`Cart\`. rustc suggests \`total_cents\`, the field you almost certainly meant.`,
-    php: `PHP finds a misspelled property only at runtime. \`$cart->totl_cents\` gives a warning about an undefined property and quietly yields null. Rust checks the field name when the program compiles, so the typo never reaches a request.`,
+    phpNote: `PHP finds a misspelled property only at runtime. \`$cart->totl_cents\` gives a warning about an undefined property and quietly yields null. Rust checks the field name when the program compiles, so the typo never reaches a request.`,
     fixes: [
       {
         title: "Fix the spelling",
@@ -1236,7 +1236,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try \`rustc --explain E0061\`.`,
     plain: `\`deposit\` needs an amount and the call passes none. Rust checks the number of arguments against the signature when the program is compiled.`,
-    php: `PHP throws an \`ArgumentCountError\` when you omit a required argument, but only when that line runs. Rust checks the count at compile time and never fills in a missing value.`,
+    phpNote: `PHP throws an \`ArgumentCountError\` when you omit a required argument, but only when that line runs. Rust checks the count at compile time and never fills in a missing value.`,
     fixes: [
       {
         title: "Pass the amount",
@@ -1325,7 +1325,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try \`rustc --explain E0004\`.`,
     plain: `A \`match\` must handle every possible value. \`Status::Refunded\` has no arm, so the match does not cover all the cases.`,
-    php: `PHP's \`match\` throws \`UnhandledMatchError\` at runtime when no arm applies. Rust moves that failure to compile time, so a new variant breaks the build everywhere a match forgot it.`,
+    phpNote: `PHP's \`match\` throws \`UnhandledMatchError\` at runtime when no arm applies. Rust moves that failure to compile time, so a new variant breaks the build everywhere a match forgot it.`,
     fixes: [
       {
         title: "Add the missing arm",
@@ -1400,7 +1400,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try \`rustc --explain E0282\`.`,
     plain: `rustc must know the type of every value at compile time. \`Vec::new()\` creates an empty vector that could hold any element type, and nothing in this program says which one.`,
-    php: `PHP arrays hold any values, so \`$scores = [];\` never needs a type. A Rust \`Vec<T>\` has one element type, and an empty vector has no elements to infer it from.`,
+    phpNote: `PHP arrays hold any values, so \`$scores = [];\` never needs a type. A Rust \`Vec<T>\` has one element type, and an empty vector has no elements to infer it from.`,
     fixes: [
       {
         title: "Annotate the type",
@@ -1470,7 +1470,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try \`rustc --explain E0369\`.`,
     plain: `\`==\` is not defined for \`Money\`, because the struct does not implement the \`PartialEq\` trait. Rust never compares two structs field by field unless you ask for it.`,
-    php: `PHP's \`==\` on two objects of the same class compares their properties by default. Rust's \`==\` is the \`PartialEq\` trait, and a type must opt in with a derive or a manual impl.`,
+    phpNote: `PHP's \`==\` on two objects of the same class compares their properties by default. Rust's \`==\` is the \`PartialEq\` trait, and a type must opt in with a derive or a manual impl.`,
     fixes: [
       {
         title: "Derive PartialEq",
@@ -1537,7 +1537,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try \`rustc --explain E0603\`.`,
     plain: `\`secret_code\` belongs to the \`vault\` module and is private to it. Only items marked \`pub\` can be used from outside the module.`,
-    php: `PHP's \`private\` is a keyword on class members. In Rust every item is private to its module by default, including plain functions, and only \`pub\` makes it visible outside.`,
+    phpNote: `PHP's \`private\` is a keyword on class members. In Rust every item is private to its module by default, including plain functions, and only \`pub\` makes it visible outside.`,
     fixes: [
       {
         title: "Mark it pub",
@@ -1595,7 +1595,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try \`rustc --explain E0515\`.`,
     plain: `\`loud\` is a local String, and it is freed when \`shout\` returns. A reference to it would outlive its owner, so rustc refuses to return it.`,
-    php: `In PHP, \`return $loud;\` returns a copy of the string, and the local is simply discarded. In Rust, \`&loud\` would point at memory that is freed when the function returns, so the compiler refuses to build it.`,
+    phpNote: `In PHP, \`return $loud;\` returns a copy of the string, and the local is simply discarded. In Rust, \`&loud\` would point at memory that is freed when the function returns, so the compiler refuses to build it.`,
     fixes: [
       {
         title: "Return an owned String",

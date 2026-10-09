@@ -599,8 +599,21 @@ fn main() {
 }</pre>
 
 <aside class="ox-callout" data-kind="php">
-  <p>A PHP fluent setter usually ends with <code>return $this</code>, so every call changes the same shared object. A Rust builder moves the value through each call, and there is no shared object to change. Nothing outside the chain can see the half-built state.</p>
+  <p>A PHP fluent setter usually ends with <code>return $this</code>, so every call changes the same shared object. PHP 8.5 also offers an immutable style. <code>clone($this, [...])</code> copies the object with the new values, and the original stays as it was.</p>
 </aside>
+
+<pre class="php">
+final readonly class RequestOptions
+{
+    public function __construct(public int $retries = 0, public int $timeout = 30) {}
+
+    public function withRetries(int $retries): static
+    {
+        return clone($this, ['retries' => $retries]);
+    }
+}</pre>
+
+<p>A Rust builder method takes <code>self</code> by value, so the old value is moved into the call. A PHP caller can still read <code>$base</code> after <code>withRetries()</code>, because the original object is still there. In Rust, <code>let more = base.retries(2);</code> moves <code>base</code>. A later use of <code>base</code> is error E0382, and the compiler reports it before the program runs.</p>
 
 <p>Typestate goes one step further. Sometimes the state of a value decides which methods make sense. A request that hasn't been sent has no response to read. Typestate puts that state in the type, using a marker type for each state:</p>
 
@@ -1008,6 +1021,38 @@ Before you report a task as finished:
 - Don't ignore a `Result`. Handle it, pass it up, or explain in a comment why dropping it is safe.</pre>
 
 <p>Practice these reviews in the <a href="../labs/ai-dojo.html">Agent Code Review Dojo</a>.</p>
+
+<p>The same review applies to PHP written by an agent. PHP 8.5 can flag a discarded return value with <code>#[\NoDiscard]</code>, and the flag appears at runtime, on the line that runs:</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+#[\NoDiscard('check the save result')]
+function save(string $name): bool
+{
+    return $name !== '';
+}
+
+save('ana');        // warns at runtime
+(void) save('bo');  // the cast says: ignored on purpose</pre>
+  <pre class="rs" data-stdout="done">
+fn save(name: &amp;str) -&gt; Result&lt;(), String&gt; {
+    if name.is_empty() {
+        Err("empty name".into())
+    } else {
+        Ok(())
+    }
+}
+
+fn main() {
+    let _ = save("bo");  // the binding says: ignored on purpose
+    println!("done");
+}</pre>
+  <div class="ox-bridge-note"><p><code>Result</code> is <code>#[must_use]</code>, so rustc warns at compile time when a call drops one without <code>let _</code>. The rulebook above turns warnings into errors. The PHP warning appears only when the line runs, so a path that no test reaches stays silent.</p></div>
+</div>
+
+<aside class="ox-callout" data-kind="php">
+  <p>PHPStan at its highest level and Psalm catch many type mistakes, but only when someone runs them. PHP runs code that they reject, unless your pipeline stops on their output. PHP has a fix for stringly typed states too, a backed <code>enum</code>. A PHP enum case carries no data. A Rust variant can carry a reason, as in <code>Banned { reason: String }</code>, and a PHP case cannot.</p>
+</aside>
 
 <aside class="ox-callout" data-kind="ai">
   <p>Never approve code only because it compiles and the tests pass. An agent can write a test that asserts whatever the code happens to do. For each test, ask whether it would fail if the code were wrong. A test that can't fail is not a check.</p>

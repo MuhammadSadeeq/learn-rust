@@ -726,6 +726,50 @@ print_r($arr); // [0] =&gt; 1, [1] =&gt; 2, [2] =&gt; 2
 
 <p>The first loop leaves <code>$v</code> as an alias of <code>$arr[2]</code>, and nothing ends that alias. On the second loop's first pass, the value 1 is written into the slot that <code>$v</code> still aliases. The second pass copies 2 into it, and the third pass copies the 2 that is already there.</p>
 
+<p>A by-reference parameter follows the same rule. PHP accepts one variable in both slots of this call. The function runs without a warning, and both writes land in the same array:</p>
+
+<pre class="php">
+declare(strict_types=1);
+
+function addTwo(array &amp;$a, array &amp;$b): void
+{
+    $a[] = 'x';
+    $b[] = 'y';
+}
+
+$list = [];
+addTwo($list, $list);
+print_r($list);   // [0] =&gt; x, [1] =&gt; y
+</pre>
+
+<p>Rust refuses the same call before the program runs:</p>
+
+<pre class="rs" data-check="E0499">
+fn add_two(a: &amp;mut Vec&lt;&amp;str&gt;, b: &amp;mut Vec&lt;&amp;str&gt;) {
+    a.push("x");
+    b.push("y");
+}
+
+fn main() {
+    let mut list = Vec::new();
+    add_two(&amp;mut list, &amp;mut list);
+    println!("{list:?}");
+}
+</pre>
+
+<pre class="rustc">error[E0499]: cannot borrow `list` as mutable more than once at a time
+ --&gt; src/main.rs:8:24
+  |
+8 |     add_two(&amp;mut list, &amp;mut list);
+  |     ------- ---------  ^^^^^^^^^ second mutable borrow occurs here
+  |     |       |
+  |     |       first mutable borrow occurs here
+  |     first borrow later used by call
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0499`.</pre>
+
 <p>Rust makes that kind of overlap impossible to write. Here is the safe loop in both languages:</p>
 
 <div class="ox-bridge">
@@ -734,7 +778,7 @@ $arr = [1, 2, 3];
 foreach ($arr as &amp;$v) {
     $v *= 2;
 }
-// $v still aliases $arr[2]
+unset($v);   // without this, $v still aliases $arr[2]
   </pre>
   <pre class="rs">
 let mut v = vec![1, 2, 3];
@@ -742,7 +786,7 @@ for v in v.iter_mut() {
     *v *= 2;
 }
   </pre>
-  <div class="ox-bridge-note"><p>The Rust loop borrows the vector mutably for exactly as long as the loop runs. The loop variable is a <code>&amp;mut i32</code> to one element, and nothing else can see the vector while that borrow is alive. When the loop ends, the borrow ends with it, and there is no alias left to surprise you.</p></div>
+  <div class="ox-bridge-note"><p>The Rust loop borrows the vector mutably for exactly as long as the loop runs. The loop variable is a <code>&amp;mut i32</code> to one element, and nothing else can see the vector while that borrow is alive. When the loop ends, the borrow ends with it. In PHP the alias outlives the loop, so you have to end it yourself with <code>unset($v)</code>.</p></div>
 </div>
 
 <p>The bug from the PHP example has a Rust cousin: a mutable alias that is still used after a read of the same vector. It doesn't compile.</p>
@@ -782,7 +826,8 @@ For more information about this error, try `rustc --explain E0502`.</pre>
 </div>
 
 <aside class="ox-callout" data-kind="php">
-  <p>In PHP, <code>$v</code> is a name for a slot, and a reference makes a second name for the same slot. Nothing tracks which names are still alive, so a leftover alias from an earlier loop can change data you didn't touch in the current one.</p>
+  <p>In PHP, <code>$v</code> is a name for a slot, and a reference makes a second name for the same slot. The alias lasts until you <code>unset($v)</code> or bind <code>$v</code> to something else by reference. PHP doesn't check whether two names overlap, so a leftover alias from an earlier loop can change data you didn't touch in the current one.</p>
+  <p>PHP also has no read-only reference. Every by-reference parameter can write, so <code>&amp;$x</code> is closer to Rust's <code>&amp;mut T</code> than to <code>&amp;T</code>.</p>
   <p>Rust's references are checked. The compiler knows where each one is alive, so it can reject an overlap before the program runs.</p>
 </aside>
 </section>

@@ -2,8 +2,8 @@
 //  QUEST iter3 · Your own iterator           Chapter 13 · Iterators & Closures
 // ----------------------------------------------------------------------------
 //  The Fibonacci sequence as an iterator: 0, 1, 1, 2, 3, 5, 8, 13, ...
-//  A PHP generator does the same job. It hands out one value per request, and
-//  nothing is computed until someone asks.
+//  A PHP generator does the same job. A function with yield hands out one
+//  value at a time, and it computes nothing until the caller asks for the next.
 //
 //  Fill in two bodies:
 //    fib()    the starting state: the pair (a, b) = (0, 1)

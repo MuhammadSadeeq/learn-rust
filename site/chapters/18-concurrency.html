@@ -36,7 +36,7 @@
 <section>
 <h2 id="php-model">From shared-nothing to shared memory</h2>
 
-<p>Your PHP code almost never thinks about two things running at the same moment, and that comes from how PHP runs. A PHP-FPM worker handles one request from start to finish. Each worker is a separate process with its own memory, so two workers share nothing and cannot corrupt each other. More load means more workers. Background work goes to queue workers under Horizon, which are separate processes too.</p>
+<p>Your PHP code almost never thinks about two things running at the same moment, and that comes from how PHP runs. A PHP-FPM worker handles one request from start to finish. Each worker is a separate process with its own memory, so two workers share nothing and cannot corrupt each other. More load means more workers. Background work goes to queue workers under Horizon, which are separate processes too. Octane is the one setup to watch. It boots your app once and keeps each worker alive between requests, so a static variable can outlive the request that set it. Octane's docs warn that this can leak memory.</p>
 
 <p>A Rust program usually runs the other way. One process starts several threads, and all of them live in the same memory. That is fast: starting a thread is much cheaper than starting a process, and threads can hand each other data without copying it. It is also dangerous. When two threads touch the same memory with no coordination, and at least one of them writes, you have a <em>data race</em>. The result depends on timing, and it is often wrong without any error.</p>
 
@@ -67,7 +67,7 @@
   <path d="M74 262 V280 M200 262 V280 M326 262 V280" class="s-muted" stroke-width="2"/>
   <rect x="20" y="280" width="360" height="40" rx="6" class="f-heap" stroke-width="1.5"/>
   <text x="200" y="305" font-size="13" font-weight="700" text-anchor="middle">shared heap</text>
-  <text x="16" y="354" font-size="12" class="t-muted">PHP workers share nothing, so nothing races.</text>
+  <text x="16" y="354" font-size="12" class="t-muted">PHP-FPM workers share nothing, so nothing races.</text>
   <text x="16" y="370" font-size="12" class="t-muted">Rust threads share memory: every access must be safe.</text>
 </svg>
 <figcaption>Same language features, different memory model. The rest of this chapter is about the Rust half, at the bottom.</figcaption>
@@ -212,6 +212,37 @@ fn main() {
     <p><code>thread::spawn</code> promises nothing about when its thread ends, so the closure must own its data. <code>thread::scope</code> joins every thread before it returns, so the borrowed data is guaranteed to outlive them. The signature of <code>scope</code> expresses that, and the compiler checks it.</p>
   </div>
 </details>
+
+<h3>Laravel's Concurrency facade</h3>
+
+<p>Laravel has a helper for running independent tasks at the same time. The <code>Concurrency</code> facade takes an array of closures, runs them together, and returns the results in the same order:</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+use Illuminate\Support\Facades\Concurrency;
+use Illuminate\Support\Facades\DB;
+
+[$userCount, $orderCount] = Concurrency::run([
+    fn () =&gt; DB::table('users')-&gt;count(),
+    fn () =&gt; DB::table('orders')-&gt;count(),
+]);</pre>
+  <pre class="rs" data-stdout="3 users, 2 orders">
+use std::thread;
+
+fn main() {
+    let users = vec!["ana", "bo", "cy"];
+    let orders = vec![10, 20];
+
+    let (user_count, order_count) = thread::scope(|s| {
+        let users_task = s.spawn(|| users.len());
+        let orders_task = s.spawn(|| orders.len());
+        (users_task.join().unwrap(), orders_task.join().unwrap())
+    });
+
+    println!("{user_count} users, {order_count} orders");
+}</pre>
+  <div class="ox-bridge-note"><p>The shape matches: two tasks run at once, and you get both results back. The memory model does not. <code>Concurrency::run</code> serializes each closure, runs it in a child PHP process, and serializes the result back. Each child works on a copy of what its closure captured, so it cannot change your variables. The scoped threads borrow <code>users</code> and <code>orders</code> from <code>main</code>. They share that memory, and the compiler checks that both threads finish before <code>main</code> uses the data again.</p></div>
+</div>
 </section>
 
 <section>
@@ -283,6 +314,34 @@ fn main() {
   <div class="ox-why"><p>The threads finish and drop their clones, but the <code>tx</code> that <code>main</code> created is still alive. The channel stays open, so <code>for n in rx</code> waits for a message that is never sent. Add <code>drop(tx);</code> before the loop. Don't run this program as written: it will hang.</p></div>
 </div>
 
+<p>In Laravel 13, a job states its own retry rules with attributes. Each attribute sets one rule for that job class:</p>
+
+<pre class="php">
+namespace App\Jobs;
+
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Queue\Attributes\Backoff;
+use Illuminate\Queue\Attributes\Timeout;
+use Illuminate\Queue\Attributes\Tries;
+
+#[Tries(3)]
+#[Backoff([10, 60, 300])]
+#[Timeout(30)]
+class ProcessInvoice implements ShouldQueue
+{
+    use Queueable;
+
+    public function __construct(public readonly int $invoiceId) {}
+
+    public function handle(): void
+    {
+        // Send the invoice. The worker calls this once per attempt.
+    }
+}</pre>
+
+<p><code>Tries</code> sets how many attempts the job gets. <code>Backoff</code> sets how many seconds Laravel waits before each retry. <code>Timeout</code> sets how long one attempt may run, and it needs the <code>pcntl</code> extension. Here is how the job travels from a controller to a worker:</p>
+
 <div class="ox-bridge">
   <pre class="php">
 // In a controller: hand the work to the queue.
@@ -308,7 +367,7 @@ fn main() {
     worker.join().unwrap();
 }
 </pre>
-  <div class="ox-bridge-note"><p>The shape is the same: one side hands off a job, and one consumer takes jobs in order. The differences matter. A Laravel queue is stored in Redis or a database, so jobs survive a crash and the workers can run on other machines. A channel lives in one process's memory and disappears with it. Use the queue for durable work between processes, and channels for coordination inside one program.</p></div>
+  <div class="ox-bridge-note"><p>The shape is the same: one side hands off a job, and one consumer takes jobs in order. The differences matter. A Laravel queue is stored in Redis or a database, so jobs survive a crash and the workers can run on other machines. A channel lives in one process's memory and disappears with it. Use the queue for durable work between processes, and channels for coordination inside one program. The Rust worker above has no retries. A job that fails is gone unless your loop puts it back. In Laravel, <code>Tries</code> and <code>Backoff</code> handle that part for you.</p></div>
 </div>
 </section>
 
@@ -939,7 +998,7 @@ fn main() {
 <div class="ox-match" data-id="18:match" data-left-label="PHP / Laravel" data-right-label="Rust">
   <ul>
     <li data-left="A PHP-FPM worker handling one request">a thread started by <code>thread::spawn</code></li>
-    <li data-left="dispatch(new Job) onto a queue"><code>tx.send(job)</code> into an mpsc channel</li>
+    <li data-left="ProcessInvoice::dispatch() onto a queue"><code>tx.send(job)</code> into an mpsc channel</li>
     <li data-left="Horizon's pool of queue workers">several threads that take jobs from one shared receiver</li>
     <li data-left="Cache::lock('report')"><code>Mutex::lock()</code></li>
     <li data-left="Redis INCR on a counter key"><code>AtomicUsize::fetch_add(1, ...)</code></li>

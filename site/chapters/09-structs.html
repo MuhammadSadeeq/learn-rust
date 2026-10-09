@@ -98,6 +98,51 @@ fn main() {
   <div class="ox-bridge-note"><p>Constructor promotion declares the fields and the parameters in one place. A Rust struct declares each field once, and every literal has to name every field. A forgotten PHP argument fails when the code runs. A forgotten Rust field fails when the code compiles. Rust also has no default parameter values, so the function supplies the defaults itself.</p></div>
 </div>
 
+<p>PHP 8.2 added the <code>readonly class</code>. Every property of such a class is read-only, and the check happens when the code runs. Rust has no class-level keyword for this. A struct value is read-only unless its binding is <code>mut</code>, and the check happens at compile time:</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+declare(strict_types=1);
+
+final readonly class User
+{
+    public function __construct(
+        public string $name,
+        public int $logins = 0,
+    ) {}
+}
+
+$u = new User('Ana');
+$u-&gt;logins += 1;   // Error at runtime: Cannot modify readonly property User::$logins</pre>
+  <pre class="rs" data-check="E0594">
+struct User {
+    name: String,
+    logins: u64,
+}
+
+fn main() {
+    let u = User { name: String::from("Ana"), logins: 0 };
+    u.logins += 1;
+    println!("{} {}", u.name, u.logins);
+}</pre>
+  <div class="ox-bridge-note"><p>Both languages stop the write, but at different times. PHP's <code>Error</code> comes when the request reaches that line, so a test has to hit it. Rust's error comes before the program exists. Rust also decides per binding: <code>let mut u</code> makes the same write legal, while PHP fixes the rule for the whole class.</p></div>
+</div>
+
+<pre class="rustc">error[E0594]: cannot assign to `u.logins`, as `u` is not declared as mutable
+ --&gt; src/main.rs:8:5
+  |
+8 |     u.logins += 1;
+  |     ^^^^^^^^^^^^^ cannot assign
+  |
+help: consider changing this to be mutable
+  |
+7 |     let mut u = User { name: String::from("Ana"), logins: 0 };
+  |         +++
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0594`.</pre>
+
 <div class="ox-quiz" data-id="09:missing-field">
   <p class="ox-q">Does this compile?</p>
   <pre class="rs" data-check="E0063">
@@ -206,6 +251,41 @@ For more information about this error, try `rustc --explain E0382`.
 <aside class="ox-callout" data-kind="trap">
   <p>After <code>..u1</code>, <code>u1</code> is partly moved. Its <code>name</code> is gone, but <code>email</code>, <code>active</code> and <code>logins</code> are still usable, because the update never took them. Check which fields the update actually took before you reuse the original.</p>
 </aside>
+
+<p>PHP 8.5 has a relative of struct update syntax. <code>clone($obj, [...])</code> copies an object and overwrites the named properties. Inside the class, it also works on <code>readonly</code> properties. A method that wraps it and returns a changed copy is the usual shape of a with-er:</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+declare(strict_types=1);
+
+final class Point
+{
+    public function __construct(
+        public readonly int $x,
+        public readonly int $y,
+    ) {}
+
+    public function withX(int $x): static
+    {
+        return clone($this, ['x' =&gt; $x]);
+    }
+}
+
+$p = new Point(1, 2);
+$q = $p-&gt;withX(9);   // $q-&gt;x is 9, and $p is unchanged</pre>
+  <pre class="rs" data-stdout="1 2 / 9 2">
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+fn main() {
+    let p = Point { x: 1, y: 2 };
+    let q = Point { x: 9, ..p };
+    println!("{} {} / {} {}", p.x, p.y, q.x, q.y);
+}</pre>
+  <div class="ox-bridge-note"><p>Both forms copy a value and change a few fields. Rust's <code>..p</code> is part of the struct literal, so the compiler checks that every field is either written or taken from <code>p</code>, and that each one has the right type. PHP's clone-with doesn't run the constructor, so a check that lives there is skipped, and a with-er can set any value the property type allows. If a rule matters, check it in the with-er itself.</p></div>
+</div>
 </section>
 
 <section>
@@ -333,6 +413,170 @@ impl User {
 </section>
 
 <section>
+<h2 id="privacy">Private fields and getters</h2>
+
+<p>Fields are private to the module that defines them. Code outside that module can't read or write a field directly. It goes through the functions the module chooses to expose. Chapter 16 covers modules in full. A <code>mod</code> block is enough to show the rule here.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+declare(strict_types=1);
+
+final class Account
+{
+    public function __construct(
+        public private(set) int $balance,
+    ) {}
+
+    public function deposit(int $amount): void
+    {
+        $this-&gt;balance += $amount;
+    }
+}
+
+$acc = new Account(100);
+$acc-&gt;deposit(25);
+echo $acc-&gt;balance;   // 125
+$acc-&gt;balance = 0;    // Error at runtime: Cannot modify private(set) property</pre>
+  <pre class="rs" data-run data-stdout="125">
+mod account {
+    pub struct Account {
+        balance: i64, // private: only this module can write it
+    }
+
+    impl Account {
+        pub fn new(balance: i64) -&gt; Self {
+            Account { balance }
+        }
+
+        // The getter. Code outside the module can read the balance through it.
+        pub fn balance(&amp;self) -&gt; i64 {
+            self.balance
+        }
+
+        pub fn deposit(&amp;mut self, amount: i64) {
+            self.balance += amount;
+        }
+    }
+}
+
+fn main() {
+    let mut acc = account::Account::new(100);
+    acc.deposit(25);
+    println!("{}", acc.balance());
+}</pre>
+  <div class="ox-bridge-note"><p>PHP 8.4 asymmetric visibility gives the same split as a private field with a getter: readable everywhere, writable only inside the class. The rule matches, but the enforcement doesn't. PHP throws an <code>Error</code> when the bad write runs. Rust refuses to compile it, so the bad write never reaches a running program.</p></div>
+</div>
+
+<p>The compiler applies the same boundary to fields. Does this compile?</p>
+
+<div class="ox-quiz" data-id="09:private-field">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0616">
+mod account {
+    pub struct Account {
+        balance: i64,
+    }
+
+    impl Account {
+        pub fn new(balance: i64) -&gt; Self {
+            Account { balance }
+        }
+
+        pub fn balance(&amp;self) -&gt; i64 {
+            self.balance
+        }
+
+        pub fn deposit(&amp;mut self, amount: i64) {
+            self.balance += amount;
+        }
+    }
+}
+
+fn main() {
+    let mut acc = account::Account::new(100);
+    acc.deposit(25);
+    println!("{}", acc.balance());
+    acc.balance = 0;
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. The struct is <code>pub</code>, so its fields are too.</li>
+    <li data-correct>No. <code>balance</code> is private to module <code>account</code>, so <code>main</code> can't assign to it. That is error E0616.</li>
+  </ol>
+  <div class="ox-why">
+    <p>Being <code>pub</code> makes the struct visible, not its fields. Each field needs its own <code>pub</code>. Here the only write path is <code>deposit</code>, and it lives inside the module.</p>
+    <pre class="rustc">error[E0616]: field `balance` of struct `Account` is private
+  --&gt; src/main.rs:25:9
+   |
+25 |     acc.balance = 0;
+   |         ^^^^^^^ private field
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0616`.</pre>
+  </div>
+</div>
+
+<p>PHP 8.4 property hooks go a step further. A <code>set</code> hook runs on every write to the property, so the class can check a value on the way in:</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+declare(strict_types=1);
+
+final class Account
+{
+    public int $balance = 0 {
+        set (int $value) {
+            if ($value &lt; 0) {
+                throw new InvalidArgumentException("balance cannot be negative");
+            }
+            $this-&gt;balance = $value;
+        }
+    }
+}
+
+$acc = new Account();
+$acc-&gt;balance = 40;
+$acc-&gt;balance = -1;   // throws, and the balance stays 40</pre>
+  <pre class="rs" data-run data-stdout="40\nrejected\n40">
+mod account {
+    pub struct Account {
+        balance: i64,
+    }
+
+    impl Account {
+        pub fn new() -&gt; Self {
+            Account { balance: 0 }
+        }
+
+        // Returns false and keeps the old value when the new one is negative.
+        pub fn set_balance(&amp;mut self, value: i64) -&gt; bool {
+            if value &lt; 0 {
+                return false;
+            }
+            self.balance = value;
+            true
+        }
+
+        pub fn balance(&amp;self) -&gt; i64 {
+            self.balance
+        }
+    }
+}
+
+fn main() {
+    let mut acc = account::Account::new();
+    acc.set_balance(40);
+    println!("{}", acc.balance());
+    if !acc.set_balance(-1) {
+        println!("rejected");
+    }
+    println!("{}", acc.balance());
+}</pre>
+  <div class="ox-bridge-note"><p>A PHP hook runs on every write, so <code>$acc-&gt;balance = -1</code> looks like a plain field assignment and still runs a check. The Rust call is visibly a method call, so the check sits in the source where a reader can see it. Rust has no way to run code on a plain field access. The <code>bool</code> is a stand-in here. Chapter 11 replaces that kind of answer with a <code>Result</code>, which the caller has to handle.</p></div>
+</div>
+</section>
+
+<section>
 <h2 id="assoc">Associated functions and constructors</h2>
 
 <p>A function in an <code>impl</code> block that takes no <code>self</code> is an <strong>associated function</strong>. You call it on the type, with two colons: <code>User::new(...)</code>. Rust has no special constructor syntax. By convention, the constructor is a function named <code>new</code> that returns <code>Self</code>.</p>
@@ -369,6 +613,25 @@ fn main() {
 </pre>
 
 <p>That example has two <code>impl</code> blocks for one type, and Rust allows as many as you like. Trait implementations are also separate <code>impl</code> blocks, which is how a type gets methods from a trait.</p>
+
+<aside class="ox-callout" data-kind="php">
+  <p>PHP 8.3 added the <code>#[\Override]</code> attribute. Put it on a method that is meant to replace a parent or interface method, and PHP checks the match as soon as it loads the class:</p>
+  <pre class="php">
+interface HasColor
+{
+    public function color(): string;
+}
+
+final class Card implements HasColor
+{
+    #[\Override]
+    public function color(): string
+    {
+        return 'red';
+    }
+}</pre>
+  <p>If the method matches nothing, PHP stops with a fatal error that names the attribute, such as <code>Card::label() has #[\Override] attribute, but no matching parent method exists</code>. Rust checks every trait impl this way, with no attribute needed. A method that the trait doesn't declare is error E0407. Chapter 14 covers traits in full.</p>
+</aside>
 
 <p>Constructors follow a few naming conventions. The standard library uses them everywhere, so learn them once:</p>
 
@@ -728,33 +991,42 @@ fn main() {
 
 <div class="ox-bridge">
   <pre class="php">
+declare(strict_types=1);
+
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Model;
+
+#[Fillable(['title'])]
 class Post extends Model
 {
-    protected $fillable = ['title'];
-
     public function publish(): void
     {
-        $this->published_at = now();
+        $this-&gt;published_at = now();
+    }
+
+    protected function casts(): array
+    {
+        return ['published_at' =&gt; 'datetime'];
     }
 }</pre>
-  <pre class="rs">
+  <pre class="rs" data-stdout="Hello Some(1700000000)">
 struct Post {
     title: String,
-    published: bool,
+    published_at: Option&lt;u64&gt;,
 }
 
 impl Post {
-    fn publish(&amp;mut self) {
-        self.published = true;
+    fn publish(&amp;mut self, now: u64) {
+        self.published_at = Some(now);
     }
 }
 
 fn main() {
-    let mut post = Post { title: String::from("Hello"), published: false };
-    post.publish();
-    println!("{} {}", post.title, post.published);
+    let mut post = Post { title: String::from("Hello"), published_at: None };
+    post.publish(1_700_000_000);
+    println!("{} {:?}", post.title, post.published_at);
 }</pre>
-  <div class="ox-bridge-note"><p>A Laravel model gets <code>save()</code>, <code>find()</code> and the rest from <code>Model</code>, a base class it inherits from. Rust has no base class to inherit from. <code>Post</code> carries only the fields it declares and the methods in its <code>impl</code> block, so the timestamp the PHP code sets has to become a field you declare. Behavior that many types share goes into a trait, which you will write in Chapter 14.</p></div>
+  <div class="ox-bridge-note"><p>A Laravel model gets <code>save()</code>, <code>find()</code> and the rest from <code>Model</code>, a base class it inherits from. Rust has no base class to inherit from. <code>Post</code> carries only the fields it declares and the methods in its <code>impl</code> block. The timestamp the PHP code sets becomes a field. It is null until the post is published, so the field is an <code>Option&lt;u64&gt;</code>. The <code>#[Fillable]</code> attribute controls mass assignment, and a Rust struct literal already names every field. Behavior that many types share goes into a trait, which you will write in Chapter 14.</p></div>
 </div>
 
 <aside class="ox-callout" data-kind="ai">
@@ -771,11 +1043,13 @@ fn main() {
     <li data-left="static function make()">A function in the impl block with no <code>self</code></li>
     <li data-left="public string $name"><code>pub name: String</code>, visible outside its module</li>
     <li data-left="__toString()"><code>impl Display</code> (Chapter 14)</li>
+    <li data-left="clone($p, ['x' =&gt; 9])">struct update: <code>Point { x: 9, ..p }</code></li>
+    <li data-left="public private(set) int $balance">a private field plus a getter: <code>fn balance(&amp;self)</code></li>
     <li data-left="extends Model">Composition plus traits: the data is a field of a plain struct, and shared behavior comes from traits</li>
   </ul>
 </div>
 
-<p>The match leaves out one rule. Fields are private to the module that defines them unless you mark them <code>pub</code>. You will meet modules in Chapter 16. In a single file everything can see everything else, so this rule is easy to miss until your code grows.</p>
+<p>The match leaves out one rule. Fields are private to the module that defines them unless you mark them <code>pub</code>, and the section on private fields shows that with a module block. Chapter 16 covers modules in full. In a single file everything can see everything else, so this rule is easy to miss until your code grows.</p>
 </section>
 
 <section>

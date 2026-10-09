@@ -94,6 +94,16 @@ fn load_config(path: &amp;str) -&gt; Result&lt;String, io::Error&gt; {
   <div class="ox-bridge-note"><p>In PHP, <code>loadConfig(): string</code> says nothing about failure. Any function can throw, and the only hint is a <code>@throws</code> docblock, if someone wrote one. In Rust, <code>-&gt; Result&lt;String, io::Error&gt;</code> is part of the signature, and every caller has to deal with it. The break: nothing unwinds to a <code>catch</code>. The error is a value that the caller receives and inspects.</p></div>
 </div>
 
+<p>PHP 8.1 added a return type for the other case: a function that never returns normally. Declare it <code>never</code>, and it must throw or exit.</p>
+
+<pre class="php">
+function abortWith(string $message): never
+{
+    throw new RuntimeException($message);
+}</pre>
+
+<p>PHP checks this at runtime. If the body can finish normally, PHP throws a <code>TypeError</code> when the function ends. Rust's <code>!</code> type makes the same promise, and the compiler checks it before the program runs. A function declared <code>-&gt; !</code> whose body can finish fails with E0308.</p>
+
 <p class="ox-pull">In Rust, a function that can fail says so in its return type.</p>
 </section>
 
@@ -158,9 +168,34 @@ help: use `let _ = ...` to ignore the resulting value
 
 warning: 1 warning emitted</pre>
 
-<aside class="ox-callout" data-kind="php">
-  <p>In PHP, an uncaught exception stops the request, and the framework renders the error page. Nothing in the code has to acknowledge it. In Rust, an unused <code>Result</code> doesn't stop anything. The program keeps running, and the only sign is a warning. That warning is the one thing asking you to look.</p>
-</aside>
+<p>In PHP, a thrown exception can't be ignored. It keeps moving up the stack until something catches it. A return value can be dropped without any sign. PHP 8.5 added an opt-in check for that: a function marked <code>#[\NoDiscard]</code> warns at runtime when a caller drops its return value, and the warning appears only when that line runs.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+declare(strict_types=1);
+
+#[\NoDiscard('check the result of saveUser()')]
+function saveUser(array $data): bool
+{
+    return $data !== [];
+}
+
+saveUser([]);         // warns at runtime: the return value is ignored
+(void) saveUser([]);  // the cast says the discard is intentional</pre>
+  <pre class="rs" data-title="src/main.rs">
+fn save_user(data: &amp;[&amp;str]) -&gt; Result&lt;(), String&gt; {
+    if data.is_empty() {
+        Err("no data".to_string())
+    } else {
+        Ok(())
+    }
+}
+
+fn main() {
+    let _ = save_user(&amp;[]);  // the let says the discard is intentional
+}</pre>
+  <div class="ox-bridge-note"><p>Where it holds: both languages let you say "I meant to ignore this", and the spelling is short. Where it breaks: Rust's check comes from the type. <code>Result</code> is marked <code>#[must_use]</code>, so every function that returns one gets the check at compile time, before the program runs. PHP checks only the functions that opted in, and only on the path that actually runs.</p></div>
+</div>
 
 <p>Use <code>let _ =</code> only when ignoring the error is the right behavior, and say why in a comment. The warning exists because an ignored error is usually a bug that hasn't shown up yet.</p>
 
@@ -877,7 +912,7 @@ Caused by:
 <ul>
   <li><strong><code>findOrFail()</code></strong> becomes a lookup that returns an Option, followed by <code>.ok_or(...)?</code>, which says which error a missing value means.</li>
   <li><strong>A validation exception</strong> becomes a variant of your error enum, such as <code>Invalid(String)</code>, with the messages inside it.</li>
-  <li><strong><code>Handler::render</code></strong> becomes one place at the edge of the app that turns your error into an HTTP response.</li>
+  <li><strong>Exception rendering in <code>bootstrap/app.php</code></strong>, set with <code>withExceptions()</code>, becomes one place at the edge of the app that turns your error into an HTTP response.</li>
 </ul>
 
 <p>The first habit in Rust:</p>
@@ -906,12 +941,10 @@ fn main() {
 
 <div class="ox-bridge">
   <pre class="php">
-try {
-    $user = $users-&gt;findOrFail($id);
-    $mailer-&gt;welcome($user);
-} catch (ModelNotFoundException $e) {
-    return response()-&gt;json(['error' =&gt; 'not found'], 404);
-}</pre>
+// No try block. When no model matches, Laravel
+// sends a 404 response on its own.
+$user = $users-&gt;findOrFail($id);
+$mailer-&gt;welcome($user);</pre>
   <pre class="rs" data-run data-stdout="user 2 not found" data-title="src/main.rs">
 #[derive(Debug)]
 enum AppError {
@@ -932,10 +965,10 @@ fn main() {
         Err(AppError::NotFound(id)) =&gt; println!("user {id} not found"),
     }
 }</pre>
-  <div class="ox-bridge-note"><p>The <code>try</code> block catches any exception thrown below it, including ones you didn't expect, and it chooses the handler by class. The <code>match</code> sees only the Result of the call in front of it, and it has to cover every variant. Add a variant later and the compiler points at every <code>match</code> that needs it. That's the trade: fewer surprises, in exchange for touching more lines when the set of errors grows.</p></div>
+  <div class="ox-bridge-note"><p>In PHP the framework catches the exception here, so the code never names it. A <code>try</code> block would catch any exception thrown below it, including ones you didn't expect, and it chooses the handler by class. The <code>match</code> sees only the Result of the call in front of it, and it has to cover every variant. Add a variant later and the compiler points at every <code>match</code> that needs it. That's the trade: fewer surprises, in exchange for touching more lines when the set of errors grows.</p></div>
 </div>
 
-<p>The third habit happens at the edge. Laravel's handler renders exceptions once, for the whole app. In Rust, you write the same kind of conversion for your web layer. A type implements a trait (axum calls it <code>IntoResponse</code>), so a route can return <code>Result&lt;Json&lt;User&gt;, AppError&gt;</code> and the framework turns the <code>Err</code> into a response. You'll build that in Chapter 20.</p>
+<p>The third habit happens at the edge. Laravel renders exceptions once, for the whole app, and you configure that in <code>bootstrap/app.php</code> with <code>withExceptions()</code>. In Rust, you write the same kind of conversion for your web layer. A type implements a trait (axum calls it <code>IntoResponse</code>), so a route can return <code>Result&lt;Json&lt;User&gt;, AppError&gt;</code> and the framework turns the <code>Err</code> into a response. You'll build that in Chapter 20.</p>
 
 <details class="ox-think">
   <summary>Think first: a repository finds no user. Where should that become a 404?</summary>
@@ -974,6 +1007,8 @@ fn main() {
     <li data-left="finally { … }">a Drop impl, which runs whenever the value leaves its scope</li>
     <li data-left="$user = findOrFail($id);">let user = find(id).ok_or(AppError::NotFound(id))?;</li>
     <li data-left="error_log($e); continue;">if let Err(e) = step() { eprintln!("{e}"); }</li>
+    <li data-left="(void) save($user);">let _ = save(&amp;user);</li>
+    <li data-left="function fail(): never">fn fail() -&gt; !</li>
   </ul>
 </div>
 

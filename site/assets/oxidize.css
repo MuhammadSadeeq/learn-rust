@@ -209,6 +209,10 @@ strong { font-weight: 700; color: var(--ink); }
 em { font-style: italic; }
 hr { border: 0; border-top: 1px solid var(--line); margin: 2.5rem 0; }
 
+/* No ligatures anywhere: JetBrains Mono would draw -> and |> as arrows,
+   and a learner must see the characters they will type. */
+/* !important because the `font` shorthand used across components resets it. */
+*, *::before, *::after { font-variant-ligatures: none !important; }
 code, kbd, samp { font-family: var(--font-mono); font-size: 0.86em; }
 :not(pre) > code {
   background: var(--surface-3);

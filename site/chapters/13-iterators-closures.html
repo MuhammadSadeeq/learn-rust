@@ -72,21 +72,23 @@ fn main() {
 
 <div class="ox-bridge">
   <pre class="php">
+declare(strict_types=1);
+
 $factor = 2;
-$byValue = function ($x) use ($factor) {
+$byValue = function (int $x) use ($factor): int {
     return $x * $factor;
 };
-$byRef = function ($x) use (&amp;$factor) {
+$byRef = function (int $x) use (&amp;$factor): int {
     return $x * $factor;
 };
-$arrow = fn ($x) => $x * $factor;</pre>
+$arrow = fn (int $x): int =&gt; $x * $factor;</pre>
   <pre class="rs" data-stdout="6">
 fn main() {
     let factor = 2;
     let times = |x: i32| x * factor;
     println!("{}", times(3));
 }</pre>
-  <div class="ox-bridge-note"><p>PHP writes the capture list into the closure's header, and that list decides what is copied. A plain <code>use ($factor)</code> copies the value when the closure is created, and <code>use (&amp;$factor)</code> shares the variable. The arrow form <code>fn</code> copies, like the plain <code>use</code>. Rust reads the body and picks the least it needs. This closure only reads <code>factor</code>, so it borrows it, the way <code>use (&amp;$factor)</code> does, and no list is required. Where the comparison breaks: the compiler enforces the borrow. While the closure is alive, it won't let you change <code>factor</code> (E0506). PHP never stops you from changing a shared variable.</p></div>
+  <div class="ox-bridge-note"><p>PHP writes the capture list into the closure's header, and that list decides what is copied. A plain <code>use ($factor)</code> copies the value when the closure is created, and <code>use (&amp;$factor)</code> shares the variable. The arrow form <code>fn</code> copies too, but it needs no list. It captures each outer variable it uses, by value, when the closure is created. Rust reads the body and picks the least it needs. This closure only reads <code>factor</code>, so it takes a shared borrow. Nothing is copied, and no list is required. Where the comparison breaks: the compiler enforces the borrow. While the closure is alive, it won't let you change <code>factor</code> (E0506). PHP has no such check. A closure that captured by reference sees every later change to the variable, and nothing complains. A Rust <code>move</code> closure takes ownership of its captures instead, and PHP has no word for that. The next section covers it.</p></div>
 </div>
 
 <details class="ox-callout" data-kind="deep">
@@ -283,6 +285,43 @@ fn main() {
 }</pre>
 
 <p><code>apply</code> takes <code>impl Fn(i32) -&gt; i32</code>, so a caller may pass any closure that only reads what it captured. <code>repeat</code> takes <code>F: FnMut()</code>, because it calls the closure over and over and the closure may change state on every call. Its parameter is written <code>mut f</code>, because calling an <code>FnMut</code> needs a mutable borrow of it.</p>
+
+<h3>Named functions as values</h3>
+
+<p>PHP 8.1 added first-class callable syntax. <code>strlen(...)</code> turns a named function into a <code>Closure</code> that you can pass anywhere a callable is expected. Rust has the same move with a fn item: the function's name, used as a value.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+declare(strict_types=1);
+
+function double(int $n): int
+{
+    return $n * 2;
+}
+
+function apply(callable $f, int $x): int
+{
+    return $f($x);
+}
+
+echo apply(double(...), 21), "\n";
+echo implode(", ", array_map(strlen(...), ["rust", "php"])), "\n";</pre>
+  <pre class="rs" data-run data-stdout="42\n[4, 3]" data-title="src/main.rs">
+fn double(n: i32) -&gt; i32 {
+    n * 2
+}
+
+fn apply(f: impl Fn(i32) -&gt; i32, x: i32) -&gt; i32 {
+    f(x)
+}
+
+fn main() {
+    println!("{}", apply(double, 21));
+    let lengths: Vec&lt;usize&gt; = ["rust", "php"].into_iter().map(str::len).collect();
+    println!("{lengths:?}");
+}</pre>
+  <div class="ox-bridge-note"><p>Where it holds: you pass a name, and the function gets called. Where it breaks: <code>double(...)</code> builds a <code>Closure</code> object when the line runs, and every call goes through that object. Rust's <code>double</code> is its own zero-sized type, known at compile time, and <code>apply</code> gets a separate copy for it, the same as for a closure. The signature is checked at compile time, so passing a function with the wrong parameter type is a compile error.</p></div>
+</div>
 </section>
 
 <section>
@@ -535,8 +574,40 @@ fn main() {
 <p>The laziness pays off at the end of the line. <code>take(2)</code> stops asking after the second item it keeps, and the stages before it stop with it. The eager version has no such stop. Each stage must finish its whole array first, so <code>take</code> throws away the last items after they were already computed.</p>
 
 <aside class="ox-callout" data-kind="php">
-  <p>Laravel's <code>Collection</code> is eager, and Laravel 11's source shows it for the methods this chapter uses. <code>Collection::map</code> calls <code>Arr::map</code>, which is an <code>array_map</code> over every item. <code>filter</code> calls <code>Arr::where</code>, which is an <code>array_filter</code>. Each returns a complete new array. If you want the lazy behavior in Laravel, <code>-&gt;lazy()</code> returns a <code>LazyCollection</code>, whose <code>map</code> uses a generator.</p>
+  <p>Laravel's <code>Collection</code> is eager. Each method runs over every item and returns a new <code>Collection</code>, so a chain builds one complete collection per step. For lazy behavior, call <code>-&gt;lazy()</code>. That returns a <code>LazyCollection</code>, which uses PHP generators, so each item moves through the chain only when the next step asks for it.</p>
 </aside>
+
+<p>PHP 8.5 added the pipe operator, <code>|&gt;</code>. Its steps look like an iterator chain, but the pipe is eager. Each step takes the whole value and returns a whole value, so one step finishes before the next one starts.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+declare(strict_types=1);
+
+function scaled(array $xs): array
+{
+    return array_map(fn (int $x): int =&gt; $x * 10, $xs);
+}
+
+function bigEnough(array $xs): array
+{
+    return array_values(array_filter($xs, fn (int $x): bool =&gt; $x % 20 === 0));
+}
+
+$out = range(1, 8)
+    |&gt; scaled(...)
+    |&gt; bigEnough(...)
+    |&gt; (fn (array $xs): array =&gt; array_slice($xs, 0, 2));</pre>
+  <pre class="rs" data-run data-stdout="[20, 40]" data-title="src/main.rs">
+fn main() {
+    let out: Vec&lt;i32&gt; = (1..=8)
+        .map(|x| x * 10)
+        .filter(|x| x % 20 == 0)
+        .take(2)
+        .collect();
+    println!("{out:?}");
+}</pre>
+  <div class="ox-bridge-note"><p>Where it holds: the same numbers come out, and the steps read top to bottom. Where it breaks: the pipe is eager. <code>scaled</code> maps all eight numbers before <code>bigEnough</code> sees the first one. The Rust chain is lazy. <code>take(2)</code> stops the pulling after the second match, which is 40, so <code>map</code> runs only four times. The belt above shows the same difference.</p></div>
+</div>
 
 <p>Read the chain top to bottom and it looks like a pipeline that pushes items forward. At runtime it runs the other way. The last stage asks the stage before it, and that asks the one before, until the range is reached. A stage does work only when the stage after it asks. The order game in the practice section walks through one of these pulls.</p>
 </section>
@@ -693,7 +764,7 @@ fn main() {
 <table class="ox-table">
   <thead><tr><th>Laravel</th><th>Rust</th><th>What changes</th></tr></thead>
   <tbody>
-    <tr><td><code>map(fn)</code></td><td><code>.map(|x| …)</code></td><td>Lazy in Rust. Laravel builds a whole new array.</td></tr>
+    <tr><td><code>map(fn)</code></td><td><code>.map(|x| …)</code></td><td>Lazy in Rust. Laravel builds a whole new collection.</td></tr>
     <tr><td><code>filter(fn)</code></td><td><code>.filter(|x| …)</code></td><td>The closure gets a reference, so you read the value with <code>*x</code>, or match it with <code>|&amp;x|</code>.</td></tr>
     <tr><td><code>reject(fn)</code></td><td><code>.filter(|x| !…)</code></td><td><code>reject</code> is a filter with the answer flipped.</td></tr>
     <tr><td><code>pluck('name')</code></td><td><code>.map(|u| u.name.as_str())</code></td><td>Borrows each name, so nothing is copied.</td></tr>
@@ -724,7 +795,7 @@ fn main() {
 <div class="ox-bridge">
   <pre class="php">
 $names = collect($users)
-    ->filter(fn ($u) => $u->active)
+    ->filter(fn (User $u): bool => $u->active)
     ->sortBy('age')
     ->pluck('name')
     ->values()
@@ -1003,7 +1074,7 @@ fn main() {
     <li>An iterator implements one method, <code>next</code>. Adapters such as <code>map</code> and <code>filter</code> are built on it, and they are lazy.</li>
     <li>Nothing runs until a consumer pulls. <code>take(n)</code> stops the pulling early, so the stages before it do less work.</li>
     <li><code>collect</code> needs a target type. It can build a Vec, a HashMap, a String, or a <code>Result&lt;Vec&lt;T&gt;, E&gt;</code> that stops at the first error.</li>
-    <li>Laravel's Collection methods are eager, and each returns a new array. A Rust chain pulls one item at a time through every stage.</li>
+    <li>Laravel's Collection methods are eager, and each returns a new collection. A Rust chain pulls one item at a time through every stage. The PHP 8.5 pipe is eager too, so it works like the Laravel chain.</li>
   </ul>
 </div>
 

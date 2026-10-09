@@ -119,6 +119,37 @@ fn main() {
   <li><strong>Sharing is safer later.</strong> Many threads can read a value that nobody can change, without taking a lock. Chapter 18 relies on this.</li>
 </ul>
 
+<h3>PHP checks immutable properties at runtime</h3>
+
+<p>PHP has the same idea for object properties, and it enforces it at a different time. PHP 8.1 added <code>readonly</code> properties. A readonly property is set once, usually in the constructor, and a later write throws an <code>Error</code>. PHP 8.2 added <code>readonly class</code>, which makes every property readonly.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+final readonly class Money {
+    public function __construct(
+        public int $amount,
+        public string $currency,
+    ) {}
+}
+
+$money = new Money(500, 'USD');
+echo "made\n";
+$money->amount = 600;   // throws Error, when this line runs</pre>
+  <pre class="rs" data-check="E0594">
+struct Money {
+    amount: i64,
+    currency: String,
+}
+
+fn main() {
+    let money = Money { amount: 500, currency: String::from("USD") };
+    money.amount = 600;
+}</pre>
+  <div class="ox-bridge-note"><p>Both versions refuse the write, but at different times. PHP throws when the line runs, so the program prints <code>made</code> first. rustc refuses before the program exists. In Rust, a field is immutable because the binding that owns it is immutable, and the same <code>let</code> and <code>mut</code> rule decides it.</p></div>
+</div>
+
+<p>PHP 8.4 added asymmetric visibility. A property can be readable from anywhere and writable only inside its class: <code>public private(set) array $items = [];</code>. A write from outside throws <code>Error: Cannot modify private(set) property</code>, again at runtime. Rust can get a similar effect with a private field and a method that reads it. Chapter 09 covers methods, and Chapter 16 covers the module rules that decide who can see a field.</p>
+
 <div class="ox-quiz" data-id="02:mut">
   <p class="ox-q">Does this compile?</p>
   <pre class="rs" data-check="E0384">
@@ -435,15 +466,15 @@ fn main() {
 
 <div class="ox-bridge">
   <pre class="php">
-define('TIMEOUT', 30);
+const TIMEOUT = 30;
 
-class Limits {
-    const MAX_USERS = 100000;
+final class Limits {
+    public const int MAX_USERS = 100_000;
 }</pre>
   <pre class="rs">
 const TIMEOUT: u32 = 30;
 const MAX_USERS: u32 = 100_000;</pre>
-  <div class="ox-bridge-note"><p><code>define()</code> can take a value computed while the program runs. A Rust <code>const</code> is computed by the compiler before the program runs, and it always names its type.</p></div>
+  <div class="ox-bridge-note"><p>A PHP <code>const</code> must be a constant expression, and PHP reports a bad one before the file runs. Typed class constants, such as <code>const int</code>, arrived in PHP 8.3. <code>define()</code> is the exception, because it accepts a value computed while the program runs. A Rust <code>const</code> is computed by the compiler before the program runs, and it always names its type.</p></div>
 </div>
 
 <pre class="rs" data-run data-stdout="50 seats left">
@@ -609,14 +640,14 @@ fn main() {
 <div class="ox-match" data-id="02:match" data-left-label="PHP" data-right-label="Rust">
   <ul>
     <li data-left="$x = 5; (a variable)"><code>let mut x = 5;</code></li>
-    <li data-left="class Limits { const RETRIES = 3; }"><code>const RETRIES: u32 = 3;</code></li>
+    <li data-left="final class Limits { public const int RETRIES = 3; }"><code>const RETRIES: u32 = 3;</code></li>
     <li data-left="public readonly string $name; (set once in the constructor)"><code>let name = "Ana";</code></li>
     <li data-left="$x = (int) &quot;42&quot;;"><code>let x: i32 = "42".parse().unwrap();</code></li>
   </ul>
 </div>
 
 <aside class="ox-callout" data-kind="trap">
-  <p>Two of these pairs break in places. A PHP <code>readonly</code> property is fixed per object. A Rust <code>let</code> is fixed per binding, and a new <code>let</code> can shadow it, which a <code>readonly</code> property can't do. The cast <code>(int) "abc"</code> never fails, and it gives 0. <code>parse()</code> returns a <code>Result</code>, and <code>unwrap()</code> panics on an error. Chapter 11 covers errors properly.</p>
+  <p>Two of these pairs break in places. A PHP <code>readonly</code> property is fixed once it is set, and PHP enforces that at runtime, when the write runs. A Rust <code>let</code> is fixed per binding, and rustc enforces that before the program runs. A new <code>let</code> can shadow a name, which a <code>readonly</code> property can't do. The cast <code>(int) "abc"</code> never fails, and it gives 0. <code>parse()</code> returns a <code>Result</code>, and <code>unwrap()</code> panics on an error. Chapter 11 covers errors properly.</p>
 </aside>
 </section>
 

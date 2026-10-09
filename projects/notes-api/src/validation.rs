@@ -1,5 +1,7 @@
 //! Validation rules and the `ValidJson` extractor. Laravel counterpart: a
 //! Form Request. The handler only ever receives input that already passed.
+//! Unknown keys are ignored, as in a Form Request without
+//! `#[FailOnUnknownFields]`.
 
 use axum::Json;
 use axum::extract::{FromRequest, Request};

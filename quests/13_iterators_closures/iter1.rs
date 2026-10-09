@@ -2,8 +2,8 @@
 //  QUEST iter1 · Collection pipeline         Chapter 13 · Iterators & Closures
 // ----------------------------------------------------------------------------
 //  Laravel collections, in PHP:
-//    collect($orders)->filter(fn ($o) => $o['paid'])
-//                    ->map(fn ($o) => $o['total_cents'])->sum();
+//    collect($orders)->filter(fn (array $o): bool => $o['paid'])
+//                    ->map(fn (array $o): int => $o['total_cents'])->sum();
 //    collect($orders)->pluck('customer')->unique()->sort()->values();
 //
 //  Rust runs the same pipeline on iterators. Write both functions as iterator

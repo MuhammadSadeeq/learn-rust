@@ -9,5 +9,6 @@
   { id: "c03-array", ch: 3, q: "Is `[i32; 3]` the same type as `[i32; 4]`?", a: "No. The length is part of an array's type, so a function that takes `[i32; 3]` rejects a four-slot array (E0308)." },
   { id: "c03-as", ch: 3, q: "What does `300i32 as u8` produce, and why?", a: "44. `as` keeps only the low 8 bits, and 300 - 256 = 44. It never panics and never reports that information was lost." },
   { id: "c03-tryfrom", ch: 3, q: "When do you use `try_from` instead of `as`?", a: "When the value comes from outside the program (input, a file, a database) and might not fit. `try_from` returns a `Result`, so the failure gets handled instead of silently truncated." },
-  { id: "c03-truthy", ch: 3, q: "Why doesn't `if count { }` compile when `count` is an `i32`?", a: "`if` needs a `bool`, and Rust has no truthiness. Write the comparison: `if count != 0 { }`." }
+  { id: "c03-truthy", ch: 3, q: "Why doesn't `if count { }` compile when `count` is an `i32`?", a: "`if` needs a `bool`, and Rust has no truthiness. Write the comparison: `if count != 0 { }`." },
+  { id: "c03-strict", ch: 3, q: "What does `declare(strict_types=1);` change in a PHP file, and whose file's setting counts?", a: "Calls made from that file must pass the exact scalar types. `add(\"5\", 5)` with `int` parameters throws a `TypeError` instead of converting the string.\n\nThe setting belongs to the **calling** file. A weak file that calls a strict function still gets the conversion." }
 );

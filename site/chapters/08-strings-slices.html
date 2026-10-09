@@ -304,7 +304,7 @@ fn main() {
     println!("{:?}", s.get(0..2));                           // None, not a panic
 }
   </pre>
-  <div class="ox-bridge-note"><p>PHP strings are byte arrays too, so the byte view matches. The difference is what happens at the boundary. <code>substr()</code> hands you a broken byte sequence, and that string keeps travelling through your code. Rust never lets a <code>&amp;str</code> hold invalid UTF-8, and each method says whether it counts bytes or characters.</p></div>
+  <div class="ox-bridge-note"><p>PHP strings are byte arrays too, so the byte view matches. PHP offers both views as separate functions, <code>strlen()</code> for bytes and <code>mb_strlen()</code> for characters, and nothing stops you from calling the byte one by mistake. The difference is also what happens at the boundary. <code>substr()</code> hands you a broken byte sequence, and that string keeps travelling through your code. Rust never lets a <code>&amp;str</code> hold invalid UTF-8, and each method says whether it counts bytes or characters.</p></div>
 </div>
 
 <aside class="ox-callout" data-kind="ai">
@@ -471,6 +471,35 @@ fn main() {
     println!("{report}");
 }</pre>
 
+<p>PHP has the same operations under other names, and the Unicode-aware versions carry an <code>mb_</code> prefix. This bridge runs the same checks on both sides:</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+$name = "\u{00A0} Ünal \u{3000}";    // no-break space, text, ideographic space
+trim($name);                         // unchanged: the no-break space is not ASCII
+mb_trim($name);                      // "Ünal"
+str_contains($name, "nal");          // true
+str_starts_with($name, "\u{00A0}");  // true
+mb_ucfirst("élan");                  // "Élan"</pre>
+  <pre class="rs" data-stdout="&quot;Ünal&quot;\ntrue\ntrue\nÉlan">
+fn ucfirst(s: &amp;str) -&gt; String {
+    let mut chars = s.chars();
+    match chars.next() {
+        Some(first) =&gt; first.to_uppercase().chain(chars).collect(),
+        None =&gt; String::new(),
+    }
+}
+
+fn main() {
+    let name = "\u{00A0} Ünal \u{3000}";
+    println!("{:?}", name.trim());          // "Ünal": trim removes Unicode spaces
+    println!("{}", name.contains("nal"));
+    println!("{}", name.starts_with('\u{00A0}'));
+    println!("{}", ucfirst("élan"));        // Élan
+}</pre>
+  <div class="ox-bridge-note"><p>PHP's <code>trim()</code> knows only ASCII whitespace and the NUL byte, so the no-break space at the start stops it. <code>mb_trim()</code> also removes Unicode spaces. Rust's <code>trim()</code> removes every character with the Unicode White_Space property, so the no-break space and the ideographic space both go. <code>contains()</code> and <code>str_contains()</code> both match bytes. A valid UTF-8 needle only matches whole characters, so a byte search can't split one. The standard library has no capitalize method. The <code>ucfirst</code> function above is the <code>chars()</code> version of PHP's <code>mb_ucfirst()</code>.</p></div>
+</div>
+
 <p>There is one operator on strings, <code>+</code>, and it follows the ownership rules from Chapter 06. <code>s1 + &amp;s2</code> calls <code>add(self, &amp;str)</code>. The left side is moved into the call, and its buffer is reused for the result. The right side is only borrowed.</p>
 
 <pre class="rs" data-run data-stdout="tic-tac\n-tac">
@@ -592,14 +621,18 @@ fn main() {
   <ul>
     <li data-left="strlen($s)">the byte count: <code>s.len()</code></li>
     <li data-left="mb_strlen($s)">the character count: <code>s.chars().count()</code></li>
+    <li data-left="mb_str_split($s)">one value per character: <code>s.chars().collect::&lt;Vec&lt;char&gt;&gt;()</code></li>
     <li data-left="explode(' ', $s)">split on a separator: <code>s.split(' ')</code></li>
     <li data-left="implode(', ', $parts)">join pieces: <code>parts.join(", ")</code></li>
-    <li data-left="strtoupper($s)">uppercase: <code>s.to_uppercase()</code></li>
-    <li data-left="trim($s)">strip the edges: <code>s.trim()</code></li>
+    <li data-left="mb_strtoupper($s)">uppercase: <code>s.to_uppercase()</code></li>
+    <li data-left="mb_trim($s)">strip the edges: <code>s.trim()</code></li>
+    <li data-left="str_contains($s, $needle)">search: <code>s.contains(needle)</code></li>
   </ul>
 </div>
 
 <p><code>split</code> returns a lazy iterator, not an array. When you need the array that <code>explode</code> gives you, add <code>.collect::&lt;Vec&lt;_&gt;&gt;()</code>. Nothing is split until something pulls on the iterator.</p>
+
+<p>The uppercase row is the one to watch. <code>strtoupper()</code> changes only ASCII letters, so <code>strtoupper("é")</code> returns <code>é</code> unchanged. Use <code>mb_strtoupper()</code> for text with accents, and it matches <code>to_uppercase()</code>.</p>
 </section>
 
 <section>

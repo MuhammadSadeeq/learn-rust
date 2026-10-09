@@ -71,11 +71,11 @@ bare 405 with no body.
 | `Cargo.toml`, `Cargo.lock` | Dependencies, with exact versions locked | `composer.json`, `composer.lock` |
 | `src/main.rs` | Boots the server once and waits for Ctrl+C | `public/index.php` and `bootstrap/app.php`, which run on every request in Laravel |
 | `src/lib.rs` | Exposes `app()` so `main` and the tests build the same router | The application factory that tests call |
-| `src/routes.rs` | Routes, the fallback, and the layers (middleware) | `routes/api.php` and the middleware in `bootstrap/app.php` |
-| `src/handlers.rs` | One async function per endpoint | A resource controller such as `NoteController` |
-| `src/models.rs` | `Note`, plus the request bodies `CreateNote` and `UpdateNote` | The Eloquent model, and the input shapes of Form Requests |
+| `src/routes.rs` | Routes, the fallback, and the layers (middleware) | `routes/api.php` (created by `php artisan install:api`) and the middleware in `bootstrap/app.php` |
+| `src/handlers.rs` | One async function per endpoint | A resource controller, such as `NoteController`, wired up by `Route::apiResource` |
+| `src/models.rs` | `Note`, plus the request bodies `CreateNote` and `UpdateNote` | The Eloquent model, the input shapes of Form Requests, and the API resource. `Note` serializes every field, so it also serves as the resource |
 | `src/state.rs` | The in-memory table, shared by every handler | A singleton in the service container, plus a repository |
-| `src/validation.rs` | Validation rules and the `ValidJson` extractor | Form Request `rules()` |
+| `src/validation.rs` | Validation rules and the `ValidJson` extractor | Form Request `rules()`. Unknown keys are ignored, as they are by default in Laravel. `#[FailOnUnknownFields]` is the opt-in, and `#[serde(deny_unknown_fields)]` is the Rust one |
 | `src/error.rs` | `AppError`, which every failure turns into JSON | The exception handler (`withExceptions` in `bootstrap/app.php`) |
 | `tests/api.rs` | HTTP tests that send requests with `oneshot`, no server | `tests/Feature/NoteTest.php` with `$this->postJson()` |
 

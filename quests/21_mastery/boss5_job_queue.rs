@@ -2,8 +2,8 @@
 //  QUEST boss5_job_queue · Job queue                      Chapter 21 · Mastery
 // ----------------------------------------------------------------------------
 //  Final boss. A Laravel queue works like this: you dispatch a job, a worker
-//  picks it up, and a failing job is retried up to a limit. Build the same
-//  thing with threads and channels.
+//  picks it up, and a failing job is retried up to its #[Tries] limit. Build
+//  the same thing with threads and channels.
 //
 //    Queue::new     start `workers` threads. They share one Receiver, behind
 //                   an Arc<Mutex<..>>, and each runs worker_loop.

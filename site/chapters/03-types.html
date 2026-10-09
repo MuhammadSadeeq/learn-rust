@@ -36,7 +36,7 @@
 <section>
 <h2 id="static" data-toc="One type per value">One value, one type, decided before running</h2>
 
-<p>In PHP, adding a string to a number just works. <code>"5" + 5</code> is <code>10</code>, because PHP reads the string as a number and carries on. Rust doesn't guess. Predict first.</p>
+<p>In PHP, adding a numeric string to a number just works. <code>"5" + 5</code> is <code>10</code>, because PHP reads the string as a number and carries on. A string that isn't a number, such as <code>"five"</code>, throws a <code>TypeError</code>. Rust doesn't guess in either case. Predict first.</p>
 
 <details class="ox-think">
   <summary>Does <code>"5" + 5</code> compile in Rust? If not, what stops it?</summary>
@@ -170,7 +170,7 @@ fn main() {
     println!("{:?}", max.checked_add(1));
 }
   </pre>
-  <div class="ox-bridge-note"><p>PHP quietly switches to a float when an integer runs out of room. In Rust, an <code>i64</code> stays an <code>i64</code>. Adding 1 to <code>i64::MAX</code> is an overflow, and you choose what happens: a panic, a wrap, a clamp, or an <code>Option</code> from <code>checked_add</code>. The next section covers each one.</p></div>
+  <div class="ox-bridge-note"><p>PHP quietly switches to a float when an integer runs out of room. In Rust, an <code>i64</code> stays an <code>i64</code>. Adding 1 to <code>i64::MAX</code> is an overflow. A debug build panics, and a release build wraps to <code>i64::MIN</code>. The next section covers each choice, and the methods that let you pick one in the code.</p></div>
 </div>
 
 <div class="ox-quiz" data-id="03:default-int" data-xp="10" data-label="Check yourself">
@@ -652,6 +652,72 @@ error: aborting due to 1 previous error
 For more information about this error, try `rustc --explain E0308`.
 </pre>
 
+<h3>PHP's strict mode is the closest match</h3>
+
+<p>PHP converts arguments for you by default. A file that starts with <code>declare(strict_types=1);</code> turns that off for the calls it makes, so a scalar of the wrong type is an error. The rule belongs to the calling file. A strict file that calls a function in a weak file is still checked, and a weak file that calls a strict function gets the conversion.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+&lt;?php
+declare(strict_types=1);
+
+function add(int $a, int $b): int {
+    return $a + $b;
+}
+
+echo add("5", 5);   // TypeError: "5" is a string</pre>
+  <pre class="rs" data-check="E0308">
+fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+fn main() {
+    println!("{}", add("5", 5));
+}</pre>
+  <div class="ox-bridge-note"><p>Both reject the call before any sum is computed. PHP does it while the program runs, on the line that makes the call. rustc does it before the program exists. Rust has no weak mode to switch off, because it never converts a string to a number for you.</p></div>
+</div>
+
+<pre class="rustc">
+error[E0308]: mismatched types
+ --&gt; src/main.rs:6:24
+  |
+6 |     println!("{}", add("5", 5));
+  |                    --- ^^^ expected `i32`, found `&amp;str`
+  |                    |
+  |                    arguments to this function are incorrect
+  |
+note: function defined here
+ --&gt; src/main.rs:1:4
+  |
+1 | fn add(a: i32, b: i32) -&gt; i32 {
+  |    ^^^ ------
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0308`.</pre>
+
+<p>Strict mode also checks union types, such as <code>int|string</code>, which PHP 8.0 added, and DNF types, such as <code>(HasId&amp;HasName)|null</code>, which PHP 8.2 added. Rust has no union type in a function signature. The closest match is an enum with one variant per type, and the caller has to choose a variant. Chapter 10 covers enums in full.</p>
+
+<pre class="rs" data-stdout="number 5\ntext abc">
+enum Id {
+    Number(i64),
+    Text(String),
+}
+
+fn show(id: Id) -> String {
+    match id {
+        Id::Number(n) => format!("number {n}"),
+        Id::Text(t) => format!("text {t}"),
+    }
+}
+
+fn main() {
+    println!("{}", show(Id::Number(5)));
+    println!("{}", show(Id::Text(String::from("abc"))));
+}</pre>
+
+<p>A DNF type has no direct match in a signature. The nearest Rust shape is <code>Option&lt;T&gt;</code> with a trait bound such as <code>T: HasId + HasName</code>, which Chapter 14 covers.</p>
+
 <p><code>as</code> is the explicit conversion between number types. It compiles for any pair of them, and it doesn't report when information is lost:</p>
 
 <pre class="rs" data-run data-stdout="44\n255\n3\n2147483647">
@@ -740,7 +806,7 @@ fn main() {
   </ul>
 </div>
 
-<p>Two rows deserve a second look. PHP's <code>"é"[0]</code> is a single byte, which is why the right-hand match is <code>u8</code> and not <code>char</code>. And PHP's <code>int</code> is always 64 bits, so <code>i64</code> is the closest match, while <code>i32</code> is what Rust picks when nothing else decides the type.</p>
+<p>Two rows deserve a second look. PHP's <code>"é"[0]</code> is a single byte, which is why the right-hand match is <code>u8</code> and not <code>char</code>. And PHP's <code>int</code> is 64 bits on a 64-bit build, so <code>i64</code> is the closest match, while <code>i32</code> is what Rust picks when nothing else decides the type.</p>
 </section>
 
 <section>
@@ -761,6 +827,7 @@ fn main() {
     <li><code>char</code> is one 4-byte Unicode scalar value. <code>bool</code> has no truthiness, so an <code>if</code> needs a comparison.</li>
     <li>A tuple has a fixed shape and an array has a fixed length. Both are part of the type.</li>
     <li><code>as</code> truncates silently. <code>From</code> is for conversions that can't lose data. <code>TryFrom</code> returns a <code>Result</code> when a value might not fit.</li>
+    <li>PHP's <code>declare(strict_types=1)</code> is the closest match to Rust's rule. It checks scalar arguments, but only for calls made from the file that declares it.</li>
   </ul>
 </div>
 

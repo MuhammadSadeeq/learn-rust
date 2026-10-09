@@ -168,7 +168,7 @@ fn main() {
 <p>Sometimes one owner is not enough. Two parts of a program need the same configuration, and neither is the natural owner. <code>Rc&lt;T&gt;</code>, short for reference counted, gives one value several owners in one thread. Each owner holds an <code>Rc</code> handle, and the value keeps a count of how many handles exist. When the count reaches zero, the value is freed.</p>
 
 <aside class="ox-callout" data-kind="php">
-  <p>PHP already works this way for objects. <code>$b = $a</code> gives a second handle to the same object, and PHP keeps a count of the handles. <code>Rc</code> is the same idea with the counting written out. <code>Rc::strong_count</code> shows the number, and the value is freed as soon as the number reaches zero.</p>
+  <p>PHP already works this way for objects. <code>$b = $a</code> gives a second handle to the same object, and PHP keeps a count of the handles. <code>Rc</code> is the same idea with the counting written out. <code>Rc::strong_count</code> shows the number, and the value is freed as soon as the number reaches zero. PHP adds one thing for loops, which the cycles section covers.</p>
 </aside>
 
 <div class="ox-quiz" data-id="17:rc-freed" data-xp="10" data-label="Predict, then check">
@@ -575,6 +575,50 @@ fn main() {
   <p>Rust's safety guarantees cover use after free and double free. They do not promise that every value is freed. Leaking memory is considered safe, so the compiler accepts a cycle without a word. The leak is still your bug, and no compiler message will point at it.</p>
 </aside>
 
+<aside class="ox-callout" data-kind="php">
+  <p>PHP has the same loop, and PHP does not leak it. The reference count never reaches zero, so the engine has a second mechanism: a cycle collector. It looks for groups of objects that refer only to each other, and it frees them. It runs on its own once enough candidates build up, and <code>gc_collect_cycles()</code> forces a run. Rust has no collector. An <code>Rc</code> cycle stays in memory until the process exits, and no <code>drop</code> ever runs.</p>
+</aside>
+
+<pre class="php">
+declare(strict_types=1);
+
+final class Node
+{
+    public ?Node $next = null;
+
+    public function __construct(public readonly string $name) {}
+
+    public function __destruct()
+    {
+        echo "drop {$this->name}\n";
+    }
+}
+
+function build(): void
+{
+    $a = new Node('a');
+    $b = new Node('b');
+    $a->next = $b;
+    $b->next = $a;
+    echo "built\n";
+}
+
+build();
+echo "after build, before gc\n";
+$freed = gc_collect_cycles();
+echo "collected: $freed\n";
+echo "end\n";
+</pre>
+
+<pre class="text" data-title="output">built
+after build, before gc
+drop a
+drop b
+collected: 2
+end</pre>
+
+<p>The output shows the same loop as the Rust program above, with the collector added. The two <code>drop</code> lines wait until <code>gc_collect_cycles()</code> runs. Then the collector frees both objects and reports how many it freed.</p>
+
 <p>The fix is to make one direction of the link a <code>Weak</code>. A <code>Weak&lt;T&gt;</code> points at a value without owning it. It does not add to the strong count, so it cannot keep the value alive. You create one with <code>Rc::downgrade(&amp;rc)</code>, and you read it with <code>upgrade()</code>, which returns <code>Option&lt;Rc&lt;T&gt;&gt;</code>. <code>Some</code> means the value is still alive. <code>None</code> means it was freed.</p>
 
 <p>The classic use is a tree. A parent owns its children with strong handles, and each child points back at its parent with a weak one:</p>
@@ -628,6 +672,53 @@ fn main() {
     <p>The parent would still hold the child, and the child would still hold the parent. Neither count would reach zero, so both would leak. There would be no drop message and no way for the program to free them.</p>
   </div>
 </details>
+
+<p>PHP has the same kind of handle. A <code>WeakReference</code> points at an object without keeping it alive, which is what <code>Weak&lt;T&gt;</code> does. Here is a small class, and then the two side by side:</p>
+
+<pre class="php">
+final readonly class Session
+{
+    public function __construct(public string $user) {}
+}</pre>
+
+<div class="ox-bridge">
+  <pre class="php">
+$session = new Session('ana');
+$handle = WeakReference::create($session);
+echo $handle-&gt;get()?-&gt;user ?? 'gone', "\n";  // ana
+
+unset($session);
+echo $handle-&gt;get()?-&gt;user ?? 'gone', "\n";  // gone</pre>
+  <pre class="rs" data-stdout="ana\ngone">
+use std::rc::{Rc, Weak};
+
+struct Session {
+    user: &amp;'static str,
+}
+
+fn main() {
+    let session = Rc::new(Session { user: "ana" });
+    let handle: Weak&lt;Session&gt; = Rc::downgrade(&amp;session);
+    println!("{}", handle.upgrade().map_or("gone", |s| s.user));
+
+    drop(session);
+    println!("{}", handle.upgrade().map_or("gone", |s| s.user));
+}</pre>
+  <div class="ox-bridge-note"><p>Both handles follow the lifetime of one object. When the last owner goes, the object is freed, and the handle reports it. Rust returns an <code>Option</code>, so the compiler makes you handle the empty case before you touch the value. PHP returns <code>null</code>, and its type says so. The check comes at runtime, when the code uses that null.</p></div>
+</div>
+
+<p>PHP's <code>WeakMap</code> covers the cache case. Its keys are objects, and an entry disappears when its key is freed:</p>
+
+<pre class="php">
+$cache = new WeakMap();
+$key = new Session('bo');
+$cache[$key] = 'computed';
+echo count($cache), "\n";  // 1
+
+unset($key);
+echo count($cache), "\n";  // 0</pre>
+
+<p>The standard library has no weak map. In Rust you keep a <code>Vec</code> or a <code>HashMap</code> of <code>Weak</code> handles, and remove each entry whose <code>upgrade()</code> returns <code>None</code>.</p>
 
 <details class="ox-callout" data-kind="deep">
   <summary>Cow&lt;str&gt;: borrow until you must change it</summary>
@@ -845,7 +936,7 @@ fn main() {
 <details class="ox-think">
   <summary>Explain it back: why is a PHP object like an <code>Rc&lt;RefCell&lt;T&gt;&gt;</code>, and why doesn't Rust do that by default?</summary>
   <div class="ox-think-body">
-    <p>One good answer: "A PHP object is a handle. Several variables can point at one object, any of them can change it, and PHP counts the handles to free it. That is shared ownership with mutation, which is what <code>Rc&lt;RefCell&lt;T&gt;&gt;</code> expresses. Rust does not make it the default, because the combination costs a count and a runtime borrow check on every use, and it hides who really owns the data. Most Rust code has one clear owner, so Rust asks you to say when you need several."</p>
+    <p>One good answer: "A PHP object is a handle. Several variables can point at one object, any of them can change it, and PHP counts the handles to free it, with a cycle collector for the loops. That is shared ownership with mutation, which is what <code>Rc&lt;RefCell&lt;T&gt;&gt;</code> expresses. Rust does not make it the default, because the combination costs a count and a runtime borrow check on every use, and it hides who really owns the data. Most Rust code has one clear owner, so Rust asks you to say when you need several."</p>
     <p>If your answer mentioned <em>several owners</em>, <em>mutation through a handle</em>, and <em>the cost and the hidden ownership</em>, you have it.</p>
   </div>
 </details>

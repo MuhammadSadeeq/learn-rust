@@ -55,7 +55,7 @@
 <p>There are three shapes of variant. <code>Quit</code> carries nothing. <code>Move</code> has named fields, which read well when there are several. <code>Write</code> and <code>Color</code> list their types by position, which is fine for one or two.</p>
 
 <div class="ox-bridge">
-  <pre class="php">final class Message
+  <pre class="php">final readonly class Message
 {
     public function __construct(
         public string  $kind,          // 'quit', 'move', 'write' or 'color'
@@ -75,7 +75,7 @@
     // three unnamed fields
     Color(u8, u8, u8),
 }</pre>
-  <div class="ox-bridge-note"><p>PHP 8.1 has enums too, but a backed case such as <code>case Hearts = 'H';</code> holds one fixed value and nothing else. Without per-case data, the PHP habit is one class with nullable fields and a kind column that says which ones matter, or a class hierarchy with one subclass per case. A Rust enum does both jobs: one type, and each variant has only the fields it needs.</p></div>
+  <div class="ox-bridge-note"><p>PHP enums can have methods, constants and interfaces, but a case can't carry data. A backed case such as <code>case Hearts = 'H';</code> holds one fixed value and nothing else. Without per-case data, the PHP habit is one class with nullable fields and a kind column that says which ones matter, or a class hierarchy with one subclass per case. A Rust enum does both jobs: one type, and each variant has only the fields it needs.</p></div>
 </div>
 
 <p>The compiler is strict about the shape you build a value with. Try this one:</p>
@@ -111,6 +111,46 @@ help: you might have meant to create a new value of the struct
 
 For more information about this error, try `rustc --explain E0533`.</pre>
   </div>
+</div>
+
+<p>PHP enums and Rust enums are closest on one point: both can have methods. Here is the same small enum in each language, with a method that matches on the value:</p>
+
+<div class="ox-bridge">
+  <pre class="php">enum Suit: string
+{
+    case Hearts = 'H';
+    case Spades = 'S';
+
+    public function color(): string
+    {
+        return match ($this) {
+            self::Hearts =&gt; 'red',
+            self::Spades =&gt; 'black',
+        };
+    }
+}
+
+echo Suit::from('H')-&gt;color(), "\n";   // red</pre>
+  <pre class="rs" data-stdout="red\nblack">
+enum Suit {
+    Hearts,
+    Spades,
+}
+
+impl Suit {
+    fn color(&amp;self) -&gt; &amp;'static str {
+        match self {
+            Suit::Hearts =&gt; "red",
+            Suit::Spades =&gt; "black",
+        }
+    }
+}
+
+fn main() {
+    println!("{}", Suit::Hearts.color());
+    println!("{}", Suit::Spades.color());
+}</pre>
+  <div class="ox-bridge-note"><p>PHP enums can implement interfaces, which is the PHP counterpart of a Rust trait (Chapter 14). The gap that remains is data. A PHP case is a named singleton with a fixed value, and it can't carry anything else. A Rust variant can carry its own fields, as <code>Move { x, y }</code> did above.</p></div>
 </div>
 </section>
 
@@ -289,6 +329,84 @@ For more information about this error, try `rustc --explain E0004`.</pre>
   <li><div><p>The <code>note</code> points at the variant in the enum and marks <code>Quit</code> as not covered, so you can go straight to the definition.</p></div></li>
   <li><div><p>The <code>help</code> is the compiler's own suggested fix. It offers <code>todo!()</code>, which compiles, and panics if that case is ever reached. Write the real arm instead.</p></div></li>
 </ol>
+
+<h3>The same mistake in PHP</h3>
+
+<p>PHP's <code>match</code> is an expression too, and it has no compile-time check. Add a case to the enum and forget its arm, and the file still loads. The error waits for the code path that reaches the missing case:</p>
+
+<div class="ox-bridge">
+  <pre class="php">enum Suit: string
+{
+    case Hearts = 'H';
+    case Spades = 'S';
+    case Clubs = 'C';   // new case, with no arm below
+
+    public function color(): string
+    {
+        return match ($this) {
+            self::Hearts =&gt; 'red',
+            self::Spades =&gt; 'black',
+        };
+    }
+}
+
+try {
+    echo Suit::Clubs-&gt;color();
+} catch (UnhandledMatchError $e) {
+    echo $e-&gt;getMessage(), "\n";
+}</pre>
+  <pre class="rs" data-check="E0004">
+enum Suit {
+    Hearts,
+    Spades,
+    Clubs,
+}
+
+impl Suit {
+    fn color(&amp;self) -&gt; &amp;'static str {
+        match self {
+            Suit::Hearts =&gt; "red",
+            Suit::Spades =&gt; "black",
+        }
+    }
+}
+
+fn main() {
+    println!("{}", Suit::Clubs.color());
+}</pre>
+  <div class="ox-bridge-note"><p>The PHP file loads and runs, and it fails only when <code>Clubs</code> reaches <code>color()</code>. A test that never builds a club still passes. The Rust version doesn't compile, so the missing arm is reported before any test runs.</p></div>
+</div>
+
+<p>PHP prints this when the code reaches the missing case:</p>
+
+<pre class="text">Unhandled match case Suit::Clubs</pre>
+
+<p>rustc reports the same mistake before the program exists:</p>
+
+<pre class="rustc">error[E0004]: non-exhaustive patterns: `&amp;Suit::Clubs` not covered
+  --&gt; src/main.rs:9:15
+   |
+ 9 |         match self {
+   |               ^^^^ pattern `&amp;Suit::Clubs` not covered
+   |
+note: `Suit` defined here
+  --&gt; src/main.rs:1:6
+   |
+ 1 | enum Suit {
+   |      ^^^^
+...
+ 4 |     Clubs,
+   |     ----- not covered
+   = note: the matched value is of type `&amp;Suit`
+help: ensure that all possible cases are being handled by adding a match arm with a wildcard pattern or an explicit pattern as shown
+   |
+11 ~             Suit::Spades =&gt; "black",
+12 ~             &amp;Suit::Clubs =&gt; todo!(),
+   |
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0004`.</pre>
 
 <aside class="ox-callout" data-kind="ai">
   <p>When an agent hits E0004, it often adds <code>_ =&gt; todo!()</code> or <code>_ =&gt; {}</code> and moves on. On an enum you own, a <code>_</code> arm means the next variant you add will fall into it silently. The compiler will never point at this <code>match</code> again.</p>
@@ -490,13 +608,20 @@ For more information about this error, try `rustc --explain E0369`.</pre>
 <p>The compiler knows <code>n</code> might be <code>None</code>, so it refuses to add to it. The fix is to decide what should happen when the box is empty. The methods in the next part do exactly that.</p>
 
 <div class="ox-bridge">
-  <pre class="php">// The return type is the only hint that the result may be null.
-function findUser(int $id): ?User
+  <pre class="php">final class UserRepository
 {
-    return $this-&gt;users[$id] ?? null;
+    public function __construct(
+        private array $users,
+    ) {}
+
+    // The return type is the only hint that the result may be null.
+    public function findUser(int $id): ?User
+    {
+        return $this-&gt;users[$id] ?? null;
+    }
 }
 
-$name = $this-&gt;findUser(1)?-&gt;name ?? 'guest';</pre>
+$name = $repo-&gt;findUser(1)?-&gt;name ?? 'guest';</pre>
   <pre class="rs" data-check="skip">let user: Option&lt;User&gt; = find_user(1);
 let name = user.map(|u| u.name).unwrap_or(String::from("guest"));</pre>
   <div class="ox-bridge-note"><p><code>?-&gt;</code> and <code>??</code> are two PHP operators for one job, and <code>map</code> and <code>unwrap_or</code> are the Rust methods for it. The Rust versions work on any <code>Option</code>, and the compiler makes sure the <code>None</code> case was handled. The analogy breaks at one point: in PHP a missing value quietly flows on as <code>null</code>. In Rust it stays an <code>Option</code> until you turn it back into a plain value.</p></div>
@@ -792,11 +917,19 @@ fn main() {
 <p>A <code>Shipped</code> order can't exist without a <code>tracking</code> string, because its only constructor needs one. <code>ship</code> accepts a paid order, and any other state gives <code>None</code>. There is no way to write a status that says shipped while the tracking number is missing, because the enum has no such value.</p>
 
 <div class="ox-bridge">
-  <pre class="php">final class Order
+  <pre class="php">enum OrderStatus: string
 {
-    public string  $status = 'pending';      // pending, paid, shipped or cancelled
-    public ?int    $paid_at = null;          // only meaningful once paid
-    public ?string $tracking_number = null;  // only meaningful once shipped
+    case Pending = 'pending';
+    case Paid = 'paid';
+    case Shipped = 'shipped';
+    case Cancelled = 'cancelled';
+}
+
+final class Order
+{
+    public OrderStatus $status = OrderStatus::Pending;
+    public ?int $paid_at = null;              // only meaningful once paid
+    public ?string $tracking_number = null;   // only meaningful once shipped
 }</pre>
   <pre class="rs">enum OrderStatus {
     Pending,
@@ -804,7 +937,7 @@ fn main() {
     Shipped { at: u64, tracking: String },
     Cancelled { reason: String },
 }</pre>
-  <div class="ox-bridge-note"><p>PHP's typed properties help a little, but a class always has every property, and nullable ones can be set in any combination. A Rust enum has one shape per state. The PHP model asks you to remember which fields belong together. The Rust model makes you say it once, in the type, so the mistake can't be written.</p></div>
+  <div class="ox-bridge-note"><p>A backed enum helps. A misspelled status fails at the assignment with a <code>TypeError</code>. Still, a class always has every property, and nullable ones can be set in any combination, so nothing ties <code>tracking_number</code> to the <code>Shipped</code> case. A Rust enum has one shape per state. The PHP model asks you to remember which fields belong together. The Rust model makes you say it once, in the type, so the mistake can't be written.</p></div>
 </div>
 
 <p>Before the next section, match these PHP habits to their Rust forms:</p>

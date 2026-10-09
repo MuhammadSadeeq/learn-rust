@@ -1,10 +1,12 @@
 // ============================================================================
 //  QUEST newtype1 · Newtypes guard invariants             Chapter 21 · Mastery
 // ----------------------------------------------------------------------------
-//  A String accepts anything. In PHP you validate an email in the request and
-//  then trust every function that receives it. A newtype moves the check into
-//  the type. Email wraps a String, and the one way in is TryFrom, which runs
-//  the check first.
+//  A String accepts anything. In PHP you usually validate an email once, in a
+//  Form Request, and then pass a plain string to every function. A newtype
+//  moves the check into the type. Email wraps a String, and the one way in is
+//  TryFrom, which runs the check first. A PHP value object can do the same
+//  job with a typed parameter, but PHP checks that type when the call runs.
+//  Rust checks it when the program is built.
 //
 //  Implement TryFrom<&str> for Email, as_str and Display. A valid address has
 //  exactly one '@', a non-empty part on each side of it, and a '.' in the

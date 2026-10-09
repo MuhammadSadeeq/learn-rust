@@ -1,8 +1,8 @@
 name: CI
 
 # Keeps the course honest: every Rust snippet on the site is compiled, every
-# quest must fail as shipped and pass with its solution, and the Forge itself
-# must build cleanly.
+# PHP sample parses on PHP 8.5, every quest must fail as shipped and pass with
+# its solution, and the Forge itself must build cleanly.
 on:
   push:
     branches: [main]
@@ -20,6 +20,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.5"
+          tools: none
+          coverage: none
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
@@ -39,6 +44,9 @@ jobs:
 
       - name: Every snippet on the site compiles (or fails exactly as documented)
         run: node tools/check-snippets.mjs
+
+      - name: Every PHP sample parses on PHP 8.5 and uses modern idioms
+        run: node tools/check-php.mjs
 
       - name: Every quest fails as shipped and passes with its solution
         run: node tools/check-quests.mjs

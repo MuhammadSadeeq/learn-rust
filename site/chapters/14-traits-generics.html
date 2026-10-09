@@ -140,12 +140,13 @@ interface Summary {
     public function summarize(): string;
 }
 
-final class Tweet implements Summary {
+final readonly class Tweet implements Summary {
     public function __construct(
         public string $user,
         public string $text,
     ) {}
 
+    #[\Override]
     public function summarize(): string {
         return "@{$this-&gt;user}: {$this-&gt;text}";
     }
@@ -167,6 +168,8 @@ impl Summary for Tweet {
 }</pre>
   <div class="ox-bridge-note"><p>The <code>implements</code> clause sits on the class. In Rust the <code>impl</code> block stands beside the struct, and it can be written later or in another file. That is the next section. PHP interfaces have no place for a default body, so the default-method half of a Rust trait has no PHP equivalent at all.</p></div>
 </div>
+
+<p>PHP 8.3 added <code>#[\Override]</code> for part of this check. Put it on a method, and PHP verifies that a parent or an interface really declares a method with that name. If the method is spelled <code>summarise</code>, the class fails to load. Rust checks every impl at compile time. A misspelled method is error E0407, and a missing required method is E0046.</p>
 </section>
 
 <section>
@@ -433,6 +436,11 @@ fn main() {
 </pre>
 
 <p>Nothing in the body mentions <code>i32</code> or <code>char</code>. The compiler checks the body against the bounds, then makes a specialized copy for each type it is used with. Section 5 explains that step.</p>
+
+<aside class="ox-callout" data-kind="php">
+  <p>PHP 8.5 has no generics. Its syntax has no type parameters, so <code>function first&lt;T&gt;(array $xs): T</code> is a parse error. The closest tool is a docblock: <code>@template T</code> and <code>@param list&lt;User&gt; $users</code>. PHPStan and Psalm read those comments. PHP itself ignores them, so a wrong element type goes unnoticed until you run the analyzer.</p>
+  <p>Rust generics are part of the language. The compiler checks the body against the bounds, and it checks each call against the concrete types.</p>
+</aside>
 
 <h3>Leave out a bound and the body fails</h3>
 
@@ -784,7 +792,7 @@ $this-&gt;app-&gt;bind(
     StripeGateway::class,
 );
 
-class Checkout {
+final readonly class Checkout {
     public function __construct(
         private PaymentGateway $gateway,
     ) {}

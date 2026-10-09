@@ -249,11 +249,11 @@ edition = "2024"
 <p><code>edition = "2024"</code> tells the compiler which edition of the language to use. Editions let Rust add changes without breaking code written for an older edition.</p>
 
 <div class="ox-bridge">
-  <pre class="text" data-title="composer.json">
+  <pre class="json" data-title="composer.json">
 {
     "name": "acme/shop",
     "require": {
-        "php": "^8.3",
+        "php": "^8.5",
         "monolog/monolog": "^3.0"
     }
 }</pre>
@@ -265,8 +265,16 @@ edition = "2024"
 
 [dependencies]
 serde_json = "1"</pre>
-  <div class="ox-bridge-note"><p>Both files declare the same things: the name, the version and the dependencies. The difference is what comes after. Cargo fetches and compiles dependencies as part of the build. There is no autoloader. Code is included because your program declares it, which you will see in Chapter 16.</p></div>
+  <div class="ox-bridge-note"><p>Both files declare the name and the dependencies. The <code>php</code> line says which PHP the project needs, and the <code>edition</code> line says which Rust edition the code is written in. The bigger difference comes after that. Cargo fetches and compiles dependencies as part of the build, and there is no autoloader. Code is included because your program declares it, which you will see in Chapter 16.</p></div>
 </div>
+
+<p>Laravel adds Artisan on top of Composer. Its commands run through PHP. A new Laravel app starts like this:</p>
+
+<pre class="sh">laravel new shop
+cd shop
+php artisan serve</pre>
+
+<p>Cargo has no second tool for this job. For a Rust web app, <code>cargo run</code> builds the server and starts it in one step.</p>
 
 <p>Once you know the Composer and Artisan commands, the Cargo ones are easy to find. This is the table to keep open for a while:</p>
 
@@ -274,8 +282,8 @@ serde_json = "1"</pre>
 <table class="ox-table">
   <thead><tr><th>Task</th><th>PHP, Composer, Artisan</th><th>Cargo</th></tr></thead>
   <tbody>
-    <tr><td>Create a project</td><td><code>composer create-project</code></td><td><code>cargo new</code></td></tr>
-    <tr><td>Run it</td><td><code>php index.php</code>, <code>php artisan serve</code></td><td><code>cargo run</code>, which builds first if needed</td></tr>
+    <tr><td>Create a project</td><td><code>composer create-project</code>, or <code>laravel new</code></td><td><code>cargo new</code></td></tr>
+    <tr><td>Run it</td><td><code>php index.php</code>, or a framework's dev server</td><td><code>cargo run</code>, which builds first if needed</td></tr>
     <tr><td>Build for release</td><td>No build step</td><td><code>cargo build --release</code></td></tr>
     <tr><td>Check without running</td><td><code>php -l</code>, which checks syntax only</td><td><code>cargo check</code>, which also checks types and borrows</td></tr>
     <tr><td>Run tests</td><td><code>phpunit</code>, <code>pest</code></td><td><code>cargo test</code></td></tr>
@@ -396,7 +404,7 @@ fn main() {
 </div>
 
 <aside class="ox-callout" data-kind="php">
-  <p>PHP's <code>printf</code> uses placeholders such as <code>%s</code> and <code>%05.2f</code>. Extra arguments are silently ignored, and a missing one fails only when that line runs. In Rust the placeholders are checked against the arguments at compile time, so <code>println!("{} {}", 1)</code> with one argument is a compile error.</p>
+  <p>PHP's <code>printf</code> uses placeholders such as <code>%s</code> and <code>%05.2f</code>. Extra arguments are silently ignored, and a missing one throws an <code>ArgumentCountError</code> only when that line runs. In Rust the placeholders are checked against the arguments at compile time, so <code>println!("{} {}", 1)</code> with one argument is a compile error.</p>
 </aside>
 
 <aside class="ox-callout" data-kind="trap">

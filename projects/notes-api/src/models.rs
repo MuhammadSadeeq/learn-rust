@@ -1,5 +1,6 @@
-//! The data shapes. Laravel counterpart: the Eloquent model plus the
-//! request payloads a Form Request would accept.
+//! The data shapes. Laravel counterpart: the Eloquent model, the request
+//! payloads a Form Request would accept, and the API resource. `Note`
+//! serializes every field, so it also serves as the resource.
 
 use serde::{Deserialize, Serialize};
 

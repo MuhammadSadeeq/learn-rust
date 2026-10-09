@@ -73,6 +73,7 @@
 <aside class="ox-callout" data-kind="php">
   <p>In PHP, the code is the only sign of what you meant. <code>$list[] = $x;</code> and <code>$byId[$id] = $user;</code> use the same syntax on the same kind of value. Nothing in the file says which one is a list and which one is a lookup table.</p>
   <p>In Rust the type says it. <code>Vec&lt;i32&gt;</code> and <code>HashMap&lt;u64, User&gt;</code> are different types, and each one is a visible promise about how the value is used.</p>
+  <p>PHP 8.1 added <code>array_is_list()</code> to ask the question at runtime. It returns true only when the keys are 0, 1, 2 and so on, in order. A <code>Vec</code> is always a list, so Rust has no such check to make.</p>
 </aside>
 
 <details class="ox-think">
@@ -220,6 +221,40 @@ fn main() {
 }</pre>
 
 <p><code>retain</code> keeps the elements that match a closure. <code>drain(..2)</code> removes a range and gives you the removed elements as an iterator, so you collect them if you want to keep them. <code>sort_by_key</code> sorts by a value you compute from each element.</p>
+
+<h3>Asking the list a question</h3>
+
+<p>PHP 8.4 added <code>array_find()</code>, <code>array_any()</code> and <code>array_all()</code>. PHP 8.5 added <code>array_first()</code> and <code>array_last()</code>. Rust asks the same questions with iterator methods and <code>Vec</code> methods. The answers differ in one way: PHP returns a value or <code>null</code>, and Rust returns an <code>Option</code>.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+declare(strict_types=1);
+
+$scores = [90, 72, 85];
+
+var_dump(array_find($scores, fn (int $s): bool =&gt; $s &lt; 80));   // int(72)
+var_dump(array_any($scores, fn (int $s): bool =&gt; $s === 100)); // bool(false)
+var_dump(array_all($scores, fn (int $s): bool =&gt; $s &gt;= 70));   // bool(true)
+var_dump(array_first($scores));                                // int(90)
+var_dump(array_last($scores));                                 // int(85)
+var_dump(array_first([]));                                     // NULL</pre>
+  <pre class="rs" data-run data-stdout="Some(72) false true Some(90) Some(85)\nNone None" data-title="src/main.rs">
+fn main() {
+    let scores = vec![90, 72, 85];
+    let below_80 = scores.iter().find(|&amp;&amp;s| s &lt; 80);
+    let has_100 = scores.iter().any(|&amp;s| s == 100);
+    let all_pass = scores.iter().all(|&amp;s| s &gt;= 70);
+    let first = scores.first();
+    let last = scores.last();
+    println!("{below_80:?} {has_100} {all_pass} {first:?} {last:?}");
+
+    let empty: Vec&lt;i32&gt; = Vec::new();
+    println!("{:?} {:?}", empty.first(), empty.last());
+}</pre>
+  <div class="ox-bridge-note"><p>Where it holds: the same question gets the same answer. Where it breaks: PHP's <code>null</code> is ambiguous. <code>array_find()</code> returns <code>null</code> when nothing matches, and it also returns <code>null</code> when the matching value is itself <code>null</code>. Rust's <code>Option</code> keeps the two apart. <code>Some</code> means a match was found, and <code>None</code> means it wasn't.</p></div>
+</div>
+
+<p>Laravel 13 also defines <code>array_first()</code> and <code>array_last()</code> on PHP versions before 8.5. Older Laravel code calls <code>array_first($items, $callback)</code>, and the built-in function takes only the array. For the callback form, use <code>Arr::first()</code>.</p>
 
 <h3>Growth</h3>
 
@@ -683,6 +718,8 @@ fn main() {
     <li data-left="isset($map[$key])">HashMap::contains_key</li>
     <li data-left="array_unique($tags)">HashSet&lt;T&gt;</li>
     <li data-left="ksort($prices)">BTreeMap&lt;K, V&gt;</li>
+    <li data-left="array_first($list)"><code>first()</code>, which returns an Option</li>
+    <li data-left="array_find($list, $test)"><code>iter().find($test)</code>, which returns an Option</li>
   </ul>
 </div>
 
@@ -709,6 +746,7 @@ fn main() {
     <li>You cannot move a value out of an index. Borrow it, clone it, remove it, or take it with <code>std::mem::take</code>.</li>
     <li><code>HashMap::insert</code> moves the key and the value in. Map iteration order is not promised, so sort before you print.</li>
     <li>The entry API counts and groups in one line: <code>*m.entry(k).or_insert(0) += 1</code>.</li>
+    <li>PHP's <code>array_find</code> and <code>array_first</code> return a value or <code>null</code>. Rust's <code>find</code> and <code>first</code> return an <code>Option</code>. A <code>Vec</code> is always a list, so there is no <code>array_is_list</code> check.</li>
   </ul>
 </div>
 

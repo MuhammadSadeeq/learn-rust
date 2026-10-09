@@ -106,6 +106,57 @@ invalid**. In prose use `<span class="c-own">`, `c-ref`, `c-mut`, `c-ghost`,
   the version that resolved.
 - Never invent benchmark numbers. Qualitative claims only, unless you measure.
 
+### PHP and Laravel accuracy
+
+The learner writes PHP today, so every PHP sample is the PHP a good developer
+writes **now**: **PHP 8.5** (released November 2025) and **Laravel 13**
+(March 2026, requires PHP 8.3+). Old PHP is never the baseline the comparison
+is made against; when a sentence is about history ("enums arrived in PHP
+8.1"), say so plainly.
+
+- **Every PHP sample is parsed by `node tools/check-php.mjs`** with PHP 8.5's
+  own parser and checked against rules that reject replaced idioms. Locally,
+  without PHP 8.5 installed:
+  `PHP_BIN="npx -y @php-wasm/cli@3.1.57" PHP=8.5 node tools/check-php.mjs <files>`.
+  The same WASM build runs PHP code: `PHP=8.5 npx -y @php-wasm/cli@3.1.57 file.php`.
+  **Run any PHP whose behavior you describe** (output, errors, warnings).
+- A PHP block is one parseable file, or a set of class members (methods,
+  properties). Don't mix top-level statements and methods in one block; split
+  them or wrap the method in its class. Non-PHP text (JSON, shell, Blade-free
+  config) uses its own class: `json`, `sh`, `toml`.
+- **Types everywhere.** Parameter, return and property types; constructor
+  property promotion; `readonly` (or `readonly class`) for values that don't
+  change; explicit `?Type` for nullable parameters (implicit nullable is
+  deprecated in 8.4). `declare(strict_types=1);` at the top of whole files.
+- **Use the modern feature when a PHP developer would reach for it today**,
+  and use it to sharpen the Rust comparison:
+
+  | PHP | Since | Bridges to Rust |
+  |---|---|---|
+  | `match`, named arguments, nullsafe `?->`, `str_contains()` | 8.0 | `match`, struct literals, `Option` + `?`/`and_then` |
+  | backed `enum`, `readonly` properties, first-class callables `f(...)`, `never` | 8.1 | `enum` (PHP cases carry no data), immutability by default, fn items, `!` |
+  | `readonly class`, DNF types | 8.2 | |
+  | typed class constants, `#[\Override]`, `json_validate()` | 8.3 | `const` with a type, trait impls |
+  | property hooks, asymmetric visibility `public private(set)`, `new Foo()->bar()`, `array_find()`, `array_any()`, `array_all()` | 8.4 | private fields + getters, `iter().find/any/all` |
+  | pipe `\|>`, `clone($obj, ['x' => 1])`, `array_first()`, `array_last()`, `#[\NoDiscard]` with `(void)` to discard | 8.5 | iterator chains, struct update `..old`, `.first()/.last()`, `#[must_use]` with `let _ =` |
+
+  Pipe: each step is a one-argument callable; wrap arrow functions in
+  parentheses: `$s |> trim(...) |> (fn(string $s): string => …)`.
+  `clone($this, [...])` works inside the class; outside it, readonly
+  properties are `protected(set)` and the clone fails.
+- **Laravel 13 shape.** `bootstrap/app.php` configures routing, middleware and
+  exceptions (no HTTP Kernel, no RouteServiceProvider). Eloquent models are
+  configured with attributes from `Illuminate\Database\Eloquent\Attributes`
+  (`#[Table('flights')]`, `#[Fillable([...])]`, `#[Hidden([...])]`,
+  `#[Appends]`, `#[ObservedBy]`, `#[ScopedBy]`) and casts with
+  `protected function casts(): array`. Queued jobs use
+  `Illuminate\Queue\Attributes` (`#[Tries(3)]`, `#[Backoff([...])]`,
+  `#[Timeout(30)]`) and the `Illuminate\Foundation\Queue\Queueable` trait.
+  Routes: `[NoteController::class, 'show']`. Tests: Pest, or PHPUnit with the
+  `#[Test]` attribute (docblock annotations are gone in PHPUnit 12).
+  Check a Laravel API against the official 13.x docs before using it
+  (`git clone --depth 1 -b 13.x https://github.com/laravel/docs`).
+
 ## 4. Page template
 
 Copy the `<head>` exactly from `06-ownership.html`, changing only `<title>`,
@@ -375,7 +426,8 @@ all of them.
 
 ## 8. Before you finish
 
-1. `node tools/check-snippets.mjs <your html files> <your data files>` → 0 failures.
+1. `node tools/check-snippets.mjs <your html files> <your data files>` → 0 failures,
+   and `node tools/check-php.mjs <the same files>` → 0 failures.
 2. Quests: `node tools/check-quests.mjs <names>` → all ok.
 3. Open your page in the headless browser if you can and fix console errors.
 4. Don't edit shared files (`oxidize.css`, `oxidize.js`, `xray.js`,
