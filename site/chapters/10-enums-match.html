@@ -925,7 +925,7 @@ fn main() {
     <li data-correct>8: <code>None</code> is the all-zero address, so no tag is needed</li>
     <li>4: the size of an <code>i32</code></li>
   </ol>
-  <div class="ox-why"><p>A reference is never null in safe Rust, so the compiler uses the zero address for <code>None</code>. <code>Option&lt;&amp;i32&gt;</code> then costs the same as <code>&amp;i32</code>. Rust guarantees this one. <code>Option&lt;&amp;T&gt;</code>, <code>Option&lt;&amp;mut T&gt;</code> and <code>Option&lt;Box&lt;T&gt;&gt;</code> are the same size as the pointer, for a sized <code>T</code>, and the standard library documents that guarantee in the <code>Option</code> docs under Representation. It does not promise the same for every enum, such as <code>Option&lt;bool&gt;</code> or <code>Message</code>, so use <code>size_of</code> when it matters.</p></div>
+  <div class="ox-why"><p>A reference is never null in safe Rust, so the compiler uses the zero address for <code>None</code>. <code>Option&lt;&amp;i32&gt;</code> then costs the same as <code>&amp;i32</code>. Rust guarantees this one. <code>Option&lt;&amp;T&gt;</code>, <code>Option&lt;&amp;mut T&gt;</code> and <code>Option&lt;Box&lt;T&gt;&gt;</code> are the same size as the pointer, for a sized <code>T</code>, and the standard library documents that guarantee in the <code>Option</code> docs under Representation. The same holds for the <code>NonZero</code> integer types, so <code>Option&lt;NonZeroU32&gt;</code> is 4 bytes. It does not promise the same for every enum, such as <code>Option&lt;bool&gt;</code> or <code>Message</code>, so use <code>size_of</code> when it matters.</p></div>
 </div>
 </section>
 

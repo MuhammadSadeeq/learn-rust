@@ -55,7 +55,7 @@
 
 <p>Every reference in Rust has a <em>lifetime</em>: the span of code where that reference must stay valid. The borrow bars from Chapter 07 were lifetimes. Each one ran from a borrow to the last place that borrow was used.</p>
 
-<div class="ox-meet" data-cast="tick" data-say="I am an hourglass for one scope. A reference tied to me has to finish before my sand runs out."></div>
+<div class="ox-meet" data-cast="tick" data-say="I am the lifetime of one value. A reference tied to me has to finish before my sand runs out."></div>
 
 <p>The compiler works out nearly all of them for you, inside function bodies. That is why most Rust code never writes one down. You do write them in signatures, where the compiler needs a relationship spelled out. The next two sections show why.</p>
 
@@ -87,7 +87,7 @@ For more information about this error, try `rustc --explain E0597`.</pre>
   </div>
 </details>
 
-<p>Watch the same program as a motion explainer. Each block has a Tick, and its sand runs out at the closing brace.</p>
+<p>Watch the same program as a motion explainer. Each block has a Tick. Its sand is the lifetime of the value declared in that block: the span of code where a reference to the value must stay valid. When the sand runs out, the value is dropped.</p>
 
 <div class="ox-motion" data-scene="ch15-sand"></div>
 
@@ -904,22 +904,47 @@ fn main() {
         { name: "y", kind: "own", from: entry.bars.y[0], to: entry.bars.y[1], label: "owner", bad: [] },
         { name: "result", kind: "ref", from: entry.bars.result[0], to: entry.bars.result[1], label: "from " + entry.borrows, bad: err ? [errLine] : [] }
       ];
-      grid.style.gridTemplateColumns = "minmax(max-content, 1fr) repeat(" + vars.length + ", minmax(76px, 100px))";
-      grid.style.gridTemplateRows = "auto repeat(" + lines.length + ", 30px)";
-      var h = '<div class="tl-head" style="text-align:left;background:var(--code-bg);color:var(--code-dim);border-bottom-color:var(--code-line)">code</div>';
-      vars.forEach(function (v) { h += '<div class="tl-head is-' + v.kind + '">' + v.name + '<small>' + esc(v.label) + '</small></div>'; });
-      lines.forEach(function (l, k) {
-        var n = k + 1;
-        h += '<div class="tl-code' + (n === errLine ? ' is-err' : '') + '" data-line="' + n + '"><span class="lnno">' + n + '</span>' + (l || " ") + '</div>';
-        vars.forEach(function (v) {
-          var inner = "";
-          if (n >= v.from && n <= v.to) {
-            var cls = ["tl-bar", "is-" + v.kind, n === v.from && "is-start", n === v.to && "is-end", v.bad.indexOf(n) >= 0 && "is-bad"].filter(Boolean).join(" ");
-            inner = '<span class="' + cls + '"></span>';
-          }
-          h += '<div class="tl-cell">' + inner + '</div>';
+      // On a phone the code and the bars cannot sit side by side. Each code line
+      // gets a short bar row under it, so the bars stay on screen. The code still
+      // scrolls sideways inside .tl-scroll.
+      var phone = !!(window.matchMedia && window.matchMedia("(max-width: 640px)").matches);
+      var h = "";
+      if (phone) {
+        grid.style.minWidth = "0";
+        grid.style.gridTemplateColumns = "repeat(" + vars.length + ", minmax(0, 1fr))";
+        grid.style.gridTemplateRows = "auto" + " 30px 20px".repeat(lines.length);
+        vars.forEach(function (v) { h += '<div class="tl-head is-' + v.kind + '">' + v.name + '<small>' + esc(v.label) + '</small></div>'; });
+        lines.forEach(function (l, k) {
+          var n = k + 1;
+          h += '<div class="tl-code' + (n === errLine ? ' is-err' : '') + '" data-line="' + n + '" style="grid-column: 1 / -1"><span class="lnno">' + n + '</span>' + (l || " ") + '</div>';
+          vars.forEach(function (v) {
+            var inner = "";
+            if (n >= v.from && n <= v.to) {
+              var cls = ["tl-bar", "is-" + v.kind, n === v.from && "is-start", n === v.to && "is-end", v.bad.indexOf(n) >= 0 && "is-bad"].filter(Boolean).join(" ");
+              inner = '<span class="' + cls + '"></span>';
+            }
+            h += '<div class="tl-cell" style="min-width:0">' + inner + '</div>';
+          });
         });
-      });
+      } else {
+        grid.style.minWidth = "";
+        grid.style.gridTemplateColumns = "minmax(max-content, 1fr) repeat(" + vars.length + ", minmax(76px, 100px))";
+        grid.style.gridTemplateRows = "auto repeat(" + lines.length + ", 30px)";
+        h = '<div class="tl-head" style="text-align:left;background:var(--code-bg);color:var(--code-dim);border-bottom-color:var(--code-line)">code</div>';
+        vars.forEach(function (v) { h += '<div class="tl-head is-' + v.kind + '">' + v.name + '<small>' + esc(v.label) + '</small></div>'; });
+        lines.forEach(function (l, k) {
+          var n = k + 1;
+          h += '<div class="tl-code' + (n === errLine ? ' is-err' : '') + '" data-line="' + n + '"><span class="lnno">' + n + '</span>' + (l || " ") + '</div>';
+          vars.forEach(function (v) {
+            var inner = "";
+            if (n >= v.from && n <= v.to) {
+              var cls = ["tl-bar", "is-" + v.kind, n === v.from && "is-start", n === v.to && "is-end", v.bad.indexOf(n) >= 0 && "is-bad"].filter(Boolean).join(" ");
+              inner = '<span class="' + cls + '"></span>';
+            }
+            h += '<div class="tl-cell">' + inner + '</div>';
+          });
+        });
+      }
       grid.innerHTML = h;
       badge.textContent = err ? entry.check : "compiles";
       badge.className = "sv-badge " + (err ? "is-bad" : "is-ok");

@@ -161,7 +161,7 @@ fn main() {}</pre>
 <p>The <code>Waker</code> is what makes <code>Pending</code> workable. When a future returns <code>Pending</code>, it hands its waker to the thing it is waiting on, such as a socket. When the data arrives, that source calls <code>wake()</code>, and the executor knows which task to poll again. A task that never gets its <code>wake()</code> is never polled again.</p>
 
 <aside class="ox-callout" data-kind="insight">
-  <p>A future is a <strong>paused recipe</strong>. The executor is the Waiter who picks up whichever recipe is ready. <code>.await</code> means "pause here, and let the Waiter work on something else".</p>
+  <p>A future is a <strong>paused order</strong>. The executor, the Waiter, picks up whichever order is ready. <code>.await</code> means "pause here, and let the Waiter work on something else".</p>
 </aside>
 
 <figure class="ox-figure">
@@ -301,7 +301,7 @@ fn main() {
 
 <p>A restaurant has one Waiter and several orders. Some orders need the Waiter's hands for a minute. Others go to the kitchen and need nothing from the Waiter for ten minutes. A good Waiter sets the kitchen order down and takes the next one. That is an executor. It runs whichever task is ready, and it never stands still waiting for a task that is waiting on I/O.</p>
 
-<p>Each task below is a script of steps. A compute step takes one tick of the Waiter's time. An I/O wait takes the number of ticks shown, and the task cannot run during that wait. Each tick, the Waiter polls the first ready task in the queue. When an I/O finishes, <code>wake()</code> puts that task at the back of the queue.</p>
+<p>Each task below is a script of steps. A compute step takes one tick of the Waiter's time. An I/O wait takes the number of ticks shown, and the task cannot run during that wait. Each tick, the Waiter polls the first ready task in the queue. When an I/O finishes, the task's waker rings its bell. <code>wake()</code> is the call that rings it, and it puts that task at the back of the queue.</p>
 
 <style>
 #execsim .es-controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
@@ -390,10 +390,11 @@ fn main() {
     <span><span class="es-key es-c-ready">q</span>in the ready queue</span>
     <span><span class="es-key es-c-done">&nbsp;&nbsp;&nbsp;</span>finished</span>
     <span><span class="es-key es-c-idle">idle</span>Waiter has nothing ready</span>
+    <span>Bell = the waker, rung when I/O finishes. Ticket = a task.</span>
   </div>
 </div>
 
-<p>Press Tick a few times and watch the queue. Then press Run to completion, and turn on Thread per task. Both versions run the same scripts on the same tick count.</p>
+<p>Press Tick a few times and watch the queue. Then press Run to completion, and turn on Thread per task. Both versions run the same scripts, and a tick is the same unit of time in both.</p>
 
 <p>With these scripts, the thread version finishes at tick 8 and the async version at tick 10. Threads win on wall-clock time here, because each task gets a worker of its own for its compute steps. Async wins on the cost of waiting. The async version used one thread. Its three waiting tasks cost saved state, not threads. The thread version used three threads, and they sat blocked for 13 thread-ticks, doing nothing.</p>
 
@@ -643,7 +644,7 @@ async fn handler() {
     tokio::time::sleep(Duration::from_secs(1)).await;     // gives the thread back
 }</pre>
 
-<p>The first line freezes the thread that runs the executor. Every task scheduled on that thread waits, including tasks that have nothing to do with this one. The second line yields to the executor. A blocking call inside async code compiles without any complaint, and it shows up later as latency under load.</p>
+<p>The first line freezes the thread that runs the executor, so that thread can run nothing for a second. On the multi-thread runtime, other worker threads can take many of the tasks queued on it. The pool is still one thread short, and a task that cannot be moved waits the full second. On a <code>current_thread</code> runtime, every task waits. The second line yields to the executor. A blocking call inside async code compiles without any complaint, and it shows up later as latency under load.</p>
 
 <div class="ox-motion" data-scene="ch19-blocking"></div>
 
@@ -878,11 +879,11 @@ async fn heartbeat() {
 }</pre>
   <ol class="ox-choices">
     <li data-feedback="std::thread::sleep does not yield. The worker has no chance to run anything else."><code>Other tasks on that worker keep running</code>, and only <code>heartbeat</code> pauses.</li>
-    <li data-correct>That worker is blocked for the whole second. Tasks queued on it wait, while the other worker threads carry on.</li>
+    <li data-correct>That worker is blocked for the whole second and runs nothing. The other worker threads carry on, and they can take many of the tasks queued behind it.</li>
     <li data-feedback="tokio does not move a blocked task to another thread.">tokio moves <code>heartbeat</code> to a new thread, so nothing else is affected.</li>
     <li data-feedback="The call compiles. Blocking is a runtime problem, not a type error.">It is a compile error, because async code cannot call <code>std::thread::sleep</code>.</li>
   </ol>
-  <div class="ox-why"><p><code>std::thread::sleep</code> parks the operating system thread. The executor cannot switch tasks while its thread is parked. Use <code>tokio::time::sleep(...).await</code> instead, which hands the thread back to the executor until the timer fires.</p></div>
+  <div class="ox-why"><p><code>std::thread::sleep</code> parks the operating system thread. The executor cannot switch tasks on that thread while it is parked, and one worker is lost for the whole second. Use <code>tokio::time::sleep(...).await</code> instead, which hands the thread back to the executor until the timer fires.</p></div>
 </div>
 
 <div class="ox-fill" data-id="19:fill-await">
