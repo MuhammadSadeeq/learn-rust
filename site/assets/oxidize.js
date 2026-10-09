@@ -68,7 +68,11 @@
     save();
     toast(`<b>+${amount} XP</b> ${esc(reason)}`);
     const after = levelFor(state.xp);
-    if (after.index > before) setTimeout(() => toast(`Level up: <b>${esc(after.name)}</b>`), 700);
+    if (after.index > before) {
+      const ev = new CustomEvent("ox:levelup", { cancelable: true, detail: { index: after.index, name: after.name, xp: state.xp } });
+      document.dispatchEvent(ev);
+      if (!ev.defaultPrevented) setTimeout(() => toast(`Level up: <b>${esc(after.name)}</b>`), 700);
+    }
     renderXp();
     return true;
   }
@@ -480,6 +484,7 @@
       if (fresh) {
         state.quiz[id] = { pick: i, right };
         save();
+        el.dispatchEvent(new CustomEvent("ox:answer", { bubbles: true, detail: { right, kind: "quiz" } }));
         if (right) { award(xp, "quiz", "quiz:" + id); $(".ox-quiz-xp", head).classList.add("is-earned"); }
         else { award(2, "for trying", "try:" + id); }
       }
@@ -534,6 +539,7 @@
         inp.classList.toggle("is-wrong", !ok);
         if (!ok) all = false;
       });
+      if (fresh) el.dispatchEvent(new CustomEvent("ox:answer", { bubbles: true, detail: { right: all, kind: "fill" } }));
       if (all) {
         msg.textContent = "All correct.";
         el.classList.add("is-answered");
@@ -601,6 +607,7 @@
         [pickL, pickR].forEach((b) => { b.classList.remove("is-picked"); b.classList.add("is-miss"); setTimeout(() => b.classList.remove("is-miss"), 400); });
         msg.textContent = "Those two don't belong together. Try another pair.";
       }
+      el.dispatchEvent(new CustomEvent("ox:answer", { bubbles: true, detail: { right: pickL.dataset.i === pickR.dataset.i, kind: "match" } }));
       pickL = pickR = null;
     };
     lt.forEach((b) => b.addEventListener("click", () => { lt.forEach((x) => x.classList.remove("is-picked")); pickL = b; b.classList.add("is-picked"); tryPair(); }));
@@ -652,6 +659,7 @@
     check.addEventListener("click", () => {
       draw(true);
       const ok = cur.every((x, k) => x.i === k);
+      el.dispatchEvent(new CustomEvent("ox:answer", { bubbles: true, detail: { right: ok, kind: "order" } }));
       if (ok) {
         msg.textContent = "Exactly right.";
         el.classList.add("is-answered");

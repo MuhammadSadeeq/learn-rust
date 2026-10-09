@@ -38,7 +38,7 @@ window.OX_COURSE = {
     { slug: "rosetta",        title: "PHP → Rust Rosetta",      blurb: "A searchable phrasebook from the PHP and Laravel you know to the Rust you need." },
     { slug: "ai-dojo",        title: "Agent Code Review Dojo",  blurb: "Spot the smells in AI-written Rust before they reach production." },
     { slug: "review",         title: "Recall Deck",             blurb: "Spaced-repetition flashcards from every chapter you have read." },
-    { slug: "story",          title: "Ownership Story",         blurb: "Preview: the Memory X-Ray acted out by crabs, fluffies and the Inspector." }
+    { slug: "cast",           title: "Field Guide",             blurb: "Every character of Rustopia you have met, and the Rust idea each one stands for." }
   ],
   levels: [
     { xp: 0,    name: "Hatchling" },

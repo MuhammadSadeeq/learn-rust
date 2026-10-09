@@ -262,11 +262,13 @@
     let scen, states, i, asked, autoTimer = null;
     const varEls = new Map(), blockEls = new Map(), frameEls = new Map();
 
-    function load(s) {
+    function load(s, step = 0) {
       scen = s;
       states = buildStates(s);
-      i = 0;
+      i = Math.max(0, Math.min(states.length - 1, step));
+      // Steps already passed were answered (or skipped) before the switch.
       asked = {};
+      for (let j = 0; j <= i; j++) asked[j] = true;
       varEls.clear(); blockEls.clear(); frameEls.clear();
       framesEl.innerHTML = ""; heapEl.innerHTML = ""; svg.innerHTML = "";
       titleEl.textContent = s.title || "";
@@ -274,7 +276,7 @@
       const lines = window.Ox && Ox.splitLines ? Ox.splitLines(hl) : hl.split("\n");
       codePre.innerHTML = lines.map((l, k) => `<span class="ln" data-line="${k + 1}"><span class="lnno">${k + 1}</span>${l || " "}</span>`).join("");
       if (picker) $$("button", picker).forEach((b) => b.classList.toggle("is-primary", b.dataset.id === s.id));
-      show(0, false);
+      show(i, false);
     }
 
     function renderState(st, step) {
@@ -498,17 +500,17 @@
 
     $('[data-act="next"]', el).addEventListener("click", goNext);
     $('[data-act="prev"]', el).addEventListener("click", () => { stopAuto(); asked[i] = asked[i] || false; show(i - 1, false); });
-    $('[data-act="restart"]', el).addEventListener("click", () => { stopAuto(); load(scen); });
+    $('[data-act="restart"]', el).addEventListener("click", () => { stopAuto(); load(scen, 0); });
     autoBtn.addEventListener("click", () => {
       if (autoTimer) return stopAuto();
       autoBtn.textContent = "Pause";
       autoTimer = setInterval(() => { if (i >= states.length - 1 || scen.steps[i + 1].ask && !asked[i + 1]) { goNext(); stopAuto(); } else goNext(); }, 2600);
     });
-    el.addEventListener("keydown", (e) => {
+    el._oxKey = (e) => {
       if (e.target.closest("button") && (e.key === " " || e.key === "Enter")) return;
       if (e.key === "ArrowRight") { e.preventDefault(); goNext(); }
       if (e.key === "ArrowLeft") { e.preventDefault(); show(i - 1, false); }
-    });
+    };
     let picker = $(".xr-picker", el);
     if (picker) {
       scens.forEach((s) => {
@@ -517,14 +519,85 @@
         b.className = "ox-btn is-small";
         b.dataset.id = s.id;
         b.textContent = s.title;
-        b.addEventListener("click", () => { stopAuto(); load(s); });
+        b.addEventListener("click", () => { stopAuto(); load(s, 0); });
         picker.appendChild(b);
       });
     }
-    if ("ResizeObserver" in window) new ResizeObserver(() => states && drawArrows(states[i], false)).observe(stage);
-    el.oxLoad = (id) => { const s = lib.find((x) => x.id === id); if (s) { stopAuto(); load(s); } };
-    load(scens[0]);
+    if ("ResizeObserver" in window) { el._oxRO = new ResizeObserver(() => states && drawArrows(states[i], false)); el._oxRO.observe(stage); }
+    el.oxLoad = (id) => { const s = lib.find((x) => x.id === id); if (s) { stopAuto(); load(s, 0); } };
+    el._oxStart = () => ({ id: scen.id, step: i });
+    el._oxStop = () => { stopAuto(); cancelAnimationFrame(raf); };
+    load(scens.find((s) => s.id === start.id) || scens[0], start.step || 0);
   }
+
+  /* ============================================================ views
+     Story / Diagram. One preference (Ox.state().view) for every X-Ray. A view
+     clears the element with enter(), then sets el._oxStart (where it is),
+     el._oxKey (keys) and el._oxStop (timers). The host listeners are wired
+     once per element and survive every switch. */
+  function prefView() {
+    let v;
+    try { v = window.Ox.state().view; } catch (e) { v = undefined; }
+    return v === "diagram" || !window.OxStory ? "diagram" : "story";
+  }
+  function setPref(view) {
+    try { if (window.Ox && Ox.state) { Ox.state().view = view; Ox.save(); } } catch (e) { /* storage unavailable */ }
+  }
+  // The Story / Diagram segmented control, for the header of either view.
+  function viewControl(view) {
+    if (!window.OxStory) return "";
+    const b = (v, label) => `<button type="button" class="ox-btn is-small${view === v ? " is-primary" : ""}" data-view="${v}" aria-pressed="${view === v}">${label}</button>`;
+    return `<span class="ox-btn-group xr-view" role="group" aria-label="View">${b("story", "Story")}${b("diagram", "Diagram")}</span>`;
+  }
+  function wire(el) {
+    if (el._oxWired) return;
+    el._oxWired = true;
+    el.addEventListener("click", (e) => {
+      const b = e.target.closest ? e.target.closest("[data-view]") : null;
+      if (b && el.contains(b)) setView(el, b.dataset.view);
+    });
+    el.addEventListener("keydown", (e) => { if (el._oxKey) el._oxKey(e); });
+  }
+  // Clear an element for a new view and reset its mount flags so it can be
+  // remounted. Stops whatever the previous view left running.
+  function enter(el, view) {
+    wire(el);
+    if (el._oxStop) el._oxStop();
+    if (el._oxRO) el._oxRO.disconnect();
+    el._oxRO = el._oxStop = el._oxKey = el._oxStart = null;
+    el.innerHTML = "";
+    delete el.dataset.xrDone;
+    delete el.dataset.stDone;
+    el.dataset.xrView = view;
+    el.dataset.xrDone = "1";
+    el.tabIndex = 0;
+  }
+  function render(el, view, start) {
+    if (view === "story" && window.OxStory) window.OxStory.mount(el, start);
+    else mountDiagram(el, start);
+  }
+  // Public mount: the element opens in the view the preference names.
+  function mountXray(el) {
+    if (el.dataset.xrDone) return;
+    render(el, prefView(), {});
+  }
+  // The switch: save the preference, re-render this X-Ray at the same
+  // scenario and step, then let the other X-Rays on the page follow.
+  function setView(el, view) {
+    if (el.dataset.xrView === view) return;
+    const start = el._oxStart ? el._oxStart() : {};
+    const hadFocus = el.contains(document.activeElement);
+    setPref(view);
+    render(el, view, start);
+    if (hadFocus) { const b = el.querySelector(`[data-view="${view}"]`); if (b) b.focus({ preventScroll: true }); }
+    document.dispatchEvent(new CustomEvent("ox:view", { detail: { view } }));
+  }
+  document.addEventListener("ox:view", () => {
+    const view = prefView();
+    $$(".ox-xray[data-scenario]").forEach((el) => {
+      if (el.dataset.xrDone && el.dataset.xrView !== view && el._oxStart) render(el, view, el._oxStart());
+    });
+  });
 
   /* ============================================================ timeline */
   function mountTimeline(el) {
@@ -609,7 +682,7 @@
     $$(".ox-xray[data-scenario]").forEach(mountXray);
     $$(".ox-timeline[data-scenario]").forEach(mountTimeline);
   }
-  window.OxXray = { mount: mountXray, build: buildStates };
+  window.OxXray = { mount: mountXray, mountDiagram, build: buildStates, enter, viewControl };
   window.OxTimeline = { mount: mountTimeline };
   if (window.Ox && window.Ox.ready) mountAll();
   else document.addEventListener("ox:ready", mountAll);
