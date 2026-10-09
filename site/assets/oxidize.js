@@ -479,7 +479,7 @@
         state.quiz[id] = { pick: i, right };
         save();
         if (right) { award(xp, "quiz", "quiz:" + id); $(".ox-quiz-xp", head).classList.add("is-earned"); }
-        else { award(2, "for trying", "quiz:" + id); }
+        else { award(2, "for trying", "try:" + id); }
       }
       if (right) $(".ox-quiz-xp", head).classList.add("is-earned");
       const retry = h("button", { type: "button", class: "ox-btn is-small", style: "margin-top:10px" }, "Try again");
@@ -878,6 +878,12 @@
       const span = h("span", { class: "ox-think-q" });
       while (sum.firstChild) span.appendChild(sum.firstChild);
       sum.appendChild(span);
+    });
+    // Wide diagrams scroll sideways on phones instead of shrinking their
+    // labels below a readable size.
+    $$(".ox-figure > svg[viewBox]").forEach((svg) => {
+      const w = svg.viewBox && svg.viewBox.baseVal ? svg.viewBox.baseVal.width : 0;
+      if (w > 480) svg.style.minWidth = Math.round(w * 0.75) + "px";
     });
     $$(".ox-callout").forEach(enhanceCallout);
     $$(".ox-bridge").forEach(enhanceBridge);

@@ -55,7 +55,7 @@
 
 <aside class="ox-callout" data-kind="php">
   <p>PHP-FPM runs one request per worker. When your controller calls Eloquent and the worker waits for MySQL, that worker is blocked until the answer comes back. You scale by adding workers.</p>
-  <p>ReactPHP, Amp and Swoole bring event loops to PHP, and PHP 8.1 added Fibers, which can pause a call stack. The closest model you already know is JavaScript's <code>async</code> and <code>await</code>: an <code>await</code> pauses one function and lets the event loop run something else.</p>
+  <p>ReactPHP, Amp and Swoole bring event loops to PHP, and PHP 8.1 added Fibers, which can pause a call stack. Laravel Octane keeps your app booted between requests. Whether a wait blocks then depends on the server underneath it. The closest model you already know is JavaScript's <code>async</code> and <code>await</code>: an <code>await</code> pauses one function and lets the event loop run something else.</p>
 </aside>
 
 <p>Async does not make code faster. A loop that crunches numbers takes the same time inside an async function, and while it runs, every other task on that thread waits too. The gain is in how cheaply the waiting is handled.</p>
@@ -656,7 +656,7 @@ note: required by a bound in `tokio::spawn`
 176 |         F: Future + Send + 'static,
     |                     ^^^^ required by this bound in `spawn`</pre>
 
-<p>The paths in the last note depend on your machine. The <code>…</code> stands for the cargo registry folder.</p>
+<p>This error comes from the tokio project above, so you need the tokio dependency to reproduce it. The paths in the last note depend on your machine. The <code>…</code> stands for the cargo registry folder.</p>
 
 <p>The compiler points at the guard, not at the lock. The lock itself is fine. The problem is that the guard is alive across the <code>.await</code>, so the future has to store it while it waits. There are two fixes. The first ends the guard's life before the await:</p>
 
