@@ -78,7 +78,8 @@
     const prev = layer.style.display;
     layer.style.display = "block";
     const o = letters[0];
-    const oCx = o.offsetLeft + o.offsetWidth / 2;
+    // The box includes the trailing letter-spacing (0.06em), so the glyph centre is 1/2 of that to the left.
+    const oCx = o.offsetLeft + (o.offsetWidth - 0.06 * 300) / 2;
     const oCy = 300 + o.offsetTop + o.offsetHeight / 2;
     layer.style.display = prev;
 
@@ -173,6 +174,8 @@
       const sc = lerp(1.25, 1, E.outExpo(clamp(dt / 0.4, 0, 1)));
       const bl = i === 0 ? 0 : blur;
       V.set(el, { y: drop, s: sc, blur: bl });
+      // The O darkens to ink as the dive ends, so the frame reads as one dark counter at 23.8 s.
+      if (i === 0 && T >= 23.2) el.style.color = V.mixColor(V.pal.oxide, V.pal.ink, P(T, 23.2, 23.8, E.linear));
     });
 
     // The underline grows from the center, 0 -> 1100 px.

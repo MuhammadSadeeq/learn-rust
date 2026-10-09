@@ -823,7 +823,7 @@ def kick_times():
 def clap_times():
     """Claps on beats 2 and 4 from bar 10, skipping bar 21 (half-time, clap on beat 3 at 41.0)."""
     ts = []
-    for b in range(10, 25):
+    for b in list(range(10, 24)) + list(range(25, 29)):
         if b == 21:
             continue
         ts += [bar_t(b) + 0.5, bar_t(b) + 1.5]
@@ -1040,13 +1040,13 @@ def compose():
             cut = 400.0 * (6000.0 / 400.0) ** u
         pad = chord_pad(ch, n, cut, seed=b)
         gP.stereo(pad, t0, gain=(0.14 if ch == "D" else 0.2))
-    for k in range(len(KS)):
-        t = KS[k]
+    for t in KS:
         if abs(t - C["impact"]) < 1e-6:
             continue
-        if t < 40.0 or 42.0 <= t < 56.0 or t >= 56.0:
-            gR.mono(KICK, t, gain=0.5 if t < 48.0 or t >= 56.0 or True else 0.5)
+        gR.mono(KICK, t, gain=0.5)
     for k, t in enumerate(hat_times(18.0, 48.0)):
+        if 44.0 <= t < 46.0:
+            continue                                     # 16th-note hats take over in the boss bars
         gR.mono(HAT, t, gain=0.24, pan=0.25 if k % 2 else -0.25)
     for b in range(10, 29):
         root = ROOT[chord_at(b)]
@@ -1110,8 +1110,8 @@ def compose():
                 gain=0.45 if i < 3 else 0.4, pan=-0.3 + 0.2 * i)
     for t in C["forgeHops"]:
         gE.mono(v_blip(hz("E5"), f_end=hz("A5"), amp=0.8, dur=0.09, tau=0.035), t, gain=0.4)
-    for k in range(10):
-        gR.mono(HAT, C["boss"] + 0.125 * k, gain=0.25, pan=0.25 if k % 2 else -0.25)
+    for k in range(16):
+        gR.mono(HAT, C["boss"] + 0.125 * k, gain=0.22, pan=0.25 if k % 2 else -0.25)
     for t in (44.0, 45.0, 46.0):
         gR.mono(v_tom(hz("D3"), amp=0.8, dur=0.4, tau=0.2), t, gain=0.6)
     for k, t in enumerate(C["bossHits"]):
@@ -1148,8 +1148,180 @@ def compose():
     gI.mono(ANVIL, C["finalHit"], gain=1.0)
     gI.mono(v_crash(1.0, dur=3.2, tau=1.2), C["finalHit"], gain=0.7)
     gI.mono(BOOM, C["finalHit"], gain=0.9)
-    gR.mono(KICK, 56.0, gain=0.5)
-    gR.mono(KICK, 57.0, gain=0.5)
 
     groups = [gD, gB, gR, gP, gA, gG, gL, gE, gI, gF, gX]
     return groups, DUCK
+
+
+# ---------------------------------------------------------------- master, measure, write
+
+TARGET_PEAK = 10.0 ** (-1.05 / 20.0)       # -1.05 dBFS: peak never above -1 dBFS after dither
+DRIVE_IN = 1.25                            # pre-clip drive for the soft clipper
+
+
+def master_linear(mix):
+    """Gentle low cut below ~25 Hz (two cascaded one-poles), then the master fade to silence at 64.0."""
+    x = mix.copy()
+    for _ in range(2):
+        x = x - np.vstack([lp1(x[0], 25.0), lp1(x[1], 25.0)])
+    f0 = t2i(C["fadeOut"][0])
+    L = N - f0
+    env = np.ones(N)
+    env[f0:] = 0.5 + 0.5 * np.cos(np.pi * np.arange(L) / L)
+    return x * env
+
+
+def write_wav(path, st):
+    """16-bit PCM stereo WAV with TPDF dither (seeded), using only the standard library."""
+    import wave
+    g = np.random.default_rng(SEED + 99)
+    d = (g.random((2, st.shape[1])) - g.random((2, st.shape[1]))) / 32768.0
+    q = np.clip(np.round(st * 32767.0 + d * 32767.0), -32768, 32767).astype("<i2")
+    inter = np.empty((st.shape[1], 2), dtype="<i2")
+    inter[:, 0] = q[0]
+    inter[:, 1] = q[1]
+    with wave.open(path, "wb") as w:
+        w.setnchannels(2)
+        w.setsampwidth(2)
+        w.setframerate(SR)
+        w.writeframes(inter.tobytes())
+
+
+def db(x):
+    return 20.0 * np.log10(max(float(x), 1e-12))
+
+
+def section_rms(mono):
+    rows = []
+    for name in ("s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8"):
+        a, b = C["sections"][name] if "sections" in C else CUE["sections"][name]
+        seg = mono[t2i(a):t2i(b)]
+        rows.append((name, a, b, db(np.sqrt(np.mean(seg * seg))), db(np.max(np.abs(seg)))))
+    return rows
+
+
+def spectrum_check(mono):
+    """Mean power spectrum over the whole track (Hann windows). Returns (dc, hf_frac, top_hz)."""
+    dc = float(np.mean(mono))
+    W, H = 4096, 2048
+    win = np.hanning(W)
+    nfr = (len(mono) - W) // H
+    idx = np.arange(W)[None, :] + H * np.arange(nfr)[:, None]
+    frames = mono[idx] * win[None, :]
+    P = np.mean(np.abs(np.fft.rfft(frames, axis=1)) ** 2, axis=0)
+    f = np.fft.rfftfreq(W, 1.0 / SR)
+    total = np.sum(P[1:])
+    hf = np.sum(P[f >= 20000.0]) / total
+    level = 10 * np.log10(P / P.max() + 1e-20)
+    above = f[level > -90.0]
+    top = float(above.max()) if len(above) else 0.0
+    return dc, hf, top, f, P
+
+
+def spectrogram_image(mono, path, groups_marks):
+    """Waveform on top, log spectrogram below (0-12 kHz), with cue markers. Written with PIL."""
+    from PIL import Image, ImageDraw
+    W, H = 1600, 900
+    img = Image.new("RGB", (W, H), (11, 13, 16))
+    dr = ImageDraw.Draw(img)
+    # waveform: min/max per pixel column
+    top_h = 300
+    per = len(mono) / W
+    for x in range(W):
+        a = int(x * per)
+        b = int((x + 1) * per)
+        seg = mono[a:b]
+        if len(seg) == 0:
+            continue
+        lo, hi = float(seg.min()), float(seg.max())
+        y0 = top_h // 2 - int(hi * (top_h // 2 - 8))
+        y1 = top_h // 2 - int(lo * (top_h // 2 - 8))
+        dr.line([(x, y0), (x, max(y1, y0 + 1))], fill=(232, 89, 12))
+    # spectrogram
+    Wn, Hn = 2048, 1024
+    win = np.hanning(Wn)
+    nfr = (len(mono) - Wn) // Hn
+    S = np.empty((nfr, Wn // 2 + 1), dtype=np.float32)
+    for i in range(0, nfr, 512):
+        j = min(nfr, i + 512)
+        idx = np.arange(Wn)[None, :] + Hn * np.arange(i, j)[:, None]
+        S[i:j] = 20 * np.log10(np.abs(np.fft.rfft(mono[idx] * win[None, :], axis=1)) + 1e-7)
+    fmax = 12000.0
+    kmax = int(fmax / (SR / Wn))
+    S = S[:, :kmax]
+    S = np.clip((S + 120.0) / 120.0, 0, 1)  # -120..0 dB
+    stops = np.array([[0, 0, 0], [60, 20, 60], [200, 70, 20], [255, 140, 60], [255, 230, 190]], float)
+    pos = np.linspace(0, 1, len(stops))
+    rgb = np.stack([np.interp(S, pos, stops[:, c]) for c in range(3)], axis=-1).astype(np.uint8)
+    spec_img = Image.fromarray(np.transpose(rgb, (1, 0, 2))[::-1]).resize((W, H - top_h - 40))
+    img.paste(spec_img, (0, top_h + 40))
+    # cue markers
+    for t, label in groups_marks:
+        x = int(t / DUR * W)
+        dr.line([(x, 0), (x, H)], fill=(60, 200, 120), width=1)
+        dr.text((x + 3, 4), label, fill=(60, 200, 120))
+    dr.text((8, top_h + 12), "spectrogram 0-12 kHz (dB)", fill=(255, 244, 227))
+    dr.text((8, 4), "waveform, 64 s, -1 dBFS ceiling", fill=(255, 244, 227))
+    img.save(path)
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Synthesize the OXIDIZE launch-film score.")
+    ap.add_argument("--stems", action="store_true", help="also write each instrument group to out/stems/")
+    ap.add_argument("--no-plot", action="store_true", help="skip the analysis PNG")
+    args = ap.parse_args()
+    t0 = time.time()
+    os.makedirs(OUT_DIR, exist_ok=True)
+
+    groups, DUCK = compose()
+    ir = make_ir(2.2, 3.2, seed_tag="verb")
+    outs = {}
+    for g in groups:
+        outs[g.name] = finish(g, duck=DUCK if g.duck else None, ir=ir)
+    mix = np.zeros((2, N))
+    for o in outs.values():
+        mix += o
+
+    lin = master_linear(mix)
+    drv = np.tanh(DRIVE_IN * lin)
+    peak_drv = float(np.max(np.abs(drv)))
+    scale = TARGET_PEAK / peak_drv
+    master = drv * scale
+    write_wav(os.path.join(OUT_DIR, "music.wav"), master)
+
+    if args.stems:
+        os.makedirs(STEM_DIR, exist_ok=True)
+        lin_k = DRIVE_IN * scale          # stems are linear: they sum to the pre-clip mix at master gain
+        for name, o in outs.items():
+            write_wav(os.path.join(STEM_DIR, f"{name}.wav"), master_linear_stem(o) * lin_k)
+
+    mono = master.mean(axis=0)
+    print(f"[music] rendered {N} samples ({N / SR:.3f} s) in {time.time() - t0:.1f} s")
+    print(f"[music] peak {db(np.max(np.abs(master))):.2f} dBFS, L/R peak "
+          f"{db(np.max(np.abs(master[0]))):.2f} / {db(np.max(np.abs(master[1]))):.2f} dBFS")
+    print("[music] RMS per section (mono):")
+    for name, a, b, r, p in section_rms(mono):
+        print(f"    {name} {a:5.1f}-{b:5.1f}s   RMS {r:7.2f} dBFS   peak {p:7.2f} dBFS")
+    br = mono[t2i(C["breath"]):t2i(C["impact"])]
+    print(f"[music] breath 15.5-16.0 s: RMS {db(np.sqrt(np.mean(br * br))):.2f} dBFS, "
+          f"peak {db(np.max(np.abs(br))):.2f} dBFS")
+    dc, hf, top, f, P = spectrum_check(mono)
+    print(f"[music] DC mean {dc:.2e}; energy above 20 kHz {10 * np.log10(hf + 1e-20):.1f} dB; "
+          f"highest bin above -90 dB rel. peak: {top:.0f} Hz")
+    d = np.abs(np.diff(master, axis=1))
+    print(f"[music] max sample-to-sample step {d.max():.4f} (L/R {d[0].max():.4f} / {d[1].max():.4f})")
+    if not args.no_plot:
+        marks = [(C["impact"], "IMPACT 16.0"), (C["stamp"], "E0502 30.0"),
+                 (C["ko"], "K.O. 46.5"), (C["finalHit"], "FINAL D 60.0")]
+        spectrogram_image(mono, os.path.join(OUT_DIR, "music_analysis.png"), marks)
+        print(f"[music] wrote {os.path.join(OUT_DIR, 'music_analysis.png')}")
+    print(f"[music] wrote {os.path.join(OUT_DIR, 'music.wav')} in {time.time() - t0:.1f} s total")
+
+
+def master_linear_stem(o):
+    """Stems carry the same low cut and fade as the master, but not the clipper."""
+    return master_linear(o)
+
+
+if __name__ == "__main__":
+    main()
