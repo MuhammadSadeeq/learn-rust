@@ -21,7 +21,7 @@ fn safe_divide(a: i32, b: i32) -> Option<i32> {
 }
 
 fn first_even(v: &[i32]) -> Option<i32> {
-    // find stops at the first match, so it does not look at the rest of the slice.
+    // find stops at the first match and never looks at the rest.
     v.iter().copied().find(|n| n % 2 == 0)
 }
 
@@ -60,13 +60,15 @@ mod tests {
     #[test]
     fn safe_divide_divides_when_it_can() {
         assert_eq!(safe_divide(7, 2), Some(3));
-        assert_eq!(safe_divide(-7, 2), Some(-3)); // integer division rounds toward zero
+        // Integer division rounds toward zero.
+        assert_eq!(safe_divide(-7, 2), Some(-3));
     }
 
     #[test]
     fn safe_divide_returns_none_instead_of_panicking() {
         assert_eq!(safe_divide(1, 0), None);
-        assert_eq!(safe_divide(i32::MIN, -1), None); // the one other case that overflows
+        // i32::MIN / -1 is the one other case that overflows.
+        assert_eq!(safe_divide(i32::MIN, -1), None);
     }
 
     #[test]

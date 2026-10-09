@@ -55,7 +55,8 @@ mod tests {
     #[test]
     fn accepts_zero_and_positive_numbers() {
         assert_eq!(parse_non_negative("42").unwrap(), 42);
-        assert_eq!(parse_non_negative("0").unwrap(), 0); // edge case: zero is allowed
+        // Edge case: zero is allowed.
+        assert_eq!(parse_non_negative("0").unwrap(), 0);
     }
 
     #[test]

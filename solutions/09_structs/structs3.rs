@@ -1,8 +1,8 @@
 // ============================================================================
 //  SOLUTION structs3 · Derive and compare     Chapter 09 · Structs & Methods
 // ----------------------------------------------------------------------------
-//  derive gives Debug, Clone and PartialEq for free. Default is written by hand
-//  because the app's font size default is 14, and derive would give 0.
+//  derive gives Debug, Clone and PartialEq for free. Default is written by
+//  hand, because the app's font size is 14. Derive would give 0 instead.
 // ============================================================================
 
 #[derive(Debug, Clone, PartialEq)]

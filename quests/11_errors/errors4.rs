@@ -3,7 +3,7 @@
 // ----------------------------------------------------------------------------
 //  The file does not compile. parse_non_negative uses ? on a ParseIntError,
 //  but AppError has no conversion from ParseIntError. Add
-//  `impl From<ParseIntError> for AppError`. After that, ? calls from() for you.
+//  `impl From<ParseIntError> for AppError`. Then ? calls from() for you.
 //
 //  Then fill in Display, which gives the messages the tests check:
 //    AppError::Parse(e)     "not a number: {e}"
@@ -54,7 +54,8 @@ mod tests {
     #[test]
     fn accepts_zero_and_positive_numbers() {
         assert_eq!(parse_non_negative("42").unwrap(), 42);
-        assert_eq!(parse_non_negative("0").unwrap(), 0); // edge case: zero is allowed
+        // Edge case: zero is allowed.
+        assert_eq!(parse_non_negative("0").unwrap(), 0);
     }
 
     #[test]

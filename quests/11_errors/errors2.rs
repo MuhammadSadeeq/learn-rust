@@ -24,7 +24,8 @@ fn sum_csv(line: &str) -> Result<i64, ParseIntError> {
 }
 
 fn parse_point(s: &str) -> Result<(i32, i32), ParseIntError> {
-    // split_once cuts at the first comma. With no comma, y is "", which fails to parse.
+    // split_once cuts at the first comma. With no comma, y is empty,
+    // and an empty string does not parse.
     let (x, y) = s.split_once(',').unwrap_or((s, ""));
     Ok((x.parse().unwrap(), y.parse().unwrap()))
 }

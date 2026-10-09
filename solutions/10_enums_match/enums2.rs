@@ -20,7 +20,7 @@ fn next(s: OrderStatus) -> Option<OrderStatus> {
         OrderStatus::Pending => Some(OrderStatus::Paid),
         OrderStatus::Paid => Some(OrderStatus::Shipped),
         OrderStatus::Shipped => Some(OrderStatus::Delivered),
-        // None means "no next step", which is a value you must handle, not a null.
+        // None means there is no next step. Callers must handle it.
         OrderStatus::Delivered | OrderStatus::Cancelled => None,
     }
 }

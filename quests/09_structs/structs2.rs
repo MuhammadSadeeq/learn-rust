@@ -3,11 +3,11 @@
 // ----------------------------------------------------------------------------
 //  Give Rect these five functions. Their bodies are todo!() for now, so the
 //  tests fail until you write them.
-//    new(w, h)               a constructor. No self, so it is called Rect::new.
+//    new(w, h)               a constructor. No self: call it as Rect::new.
 //    area(&self)             w * h. It only reads the rect.
 //    scale(&mut self, k)     multiplies width and height by k, in place.
-//    can_hold(&self, other)  true when self is at least as wide and at least as
-//                            tall as other. Equal sizes fit.
+//    can_hold(&self, other)  true when self is at least as wide and as tall
+//                            as other. Equal sizes fit.
 //    square(size)            a rect with equal sides. No self.
 //
 //  Don't edit the tests.
@@ -74,7 +74,8 @@ mod tests {
         let big = Rect::new(10, 8);
         assert!(big.can_hold(&Rect::new(4, 8))); // equal height still fits
         assert!(big.can_hold(&Rect::new(10, 8))); // an equal rect fits too
-        assert!(!big.can_hold(&Rect::new(11, 2))); // too wide, even though it is short
+        // Too wide, even though it is short.
+        assert!(!big.can_hold(&Rect::new(11, 2)));
     }
 
     #[test]

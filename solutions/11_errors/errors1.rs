@@ -10,7 +10,7 @@ fn parse_age(s: &str) -> Result<u8, String> {
     match s.parse::<u32>() {
         Err(_) => Err(String::from("not a number")),
         Ok(n) if n > 150 => Err(String::from("too old")),
-        // The guard above keeps n in 0..=150, so the cast to u8 cannot truncate.
+        // The guard keeps n in 0..=150, so the cast to u8 cannot truncate.
         Ok(n) => Ok(n as u8),
     }
 }
@@ -43,12 +43,13 @@ mod tests {
     #[test]
     fn text_is_not_a_number() {
         assert_eq!(parse_age("abc"), Err(String::from("not a number")));
-        assert_eq!(parse_age(""), Err(String::from("not a number"))); // edge case: empty input
+        // Edge case: empty input is not a number.
+        assert_eq!(parse_age(""), Err(String::from("not a number")));
     }
 
     #[test]
     fn numbers_too_big_for_a_u8_are_too_old() {
-        // Edge case: 300 is a number, so it gets "too old", not "not a number".
+        // 300 is a number, so it gets "too old", not "not a number".
         assert_eq!(parse_age("300"), Err(String::from("too old")));
     }
 }

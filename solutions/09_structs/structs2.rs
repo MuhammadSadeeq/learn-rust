@@ -69,7 +69,8 @@ mod tests {
         let big = Rect::new(10, 8);
         assert!(big.can_hold(&Rect::new(4, 8))); // equal height still fits
         assert!(big.can_hold(&Rect::new(10, 8))); // an equal rect fits too
-        assert!(!big.can_hold(&Rect::new(11, 2))); // too wide, even though it is short
+        // Too wide, even though it is short.
+        assert!(!big.can_hold(&Rect::new(11, 2)));
     }
 
     #[test]

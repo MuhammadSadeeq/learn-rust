@@ -4,7 +4,7 @@
 //  The file does not compile. Read each error, fix it, and make every function
 //  do what its name and the tests say.
 //
-//  User has named fields. Point is a tuple struct, so its fields are .0 and .1.
+//  User has named fields. Point is a tuple struct: its fields are .0 and .1.
 //  Admin is a unit struct: it has no fields and is written as its name alone.
 //
 //  Don't edit the tests.

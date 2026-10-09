@@ -93,7 +93,7 @@ mod tests {
 
     #[test]
     fn silent_has_an_empty_preview() {
-        // Edge case: there is nothing to show, so the preview is empty, not a panic.
+        // Edge case: nothing to show, so the preview is just empty.
         assert_eq!(preview(&Notification::Silent), "");
     }
 }

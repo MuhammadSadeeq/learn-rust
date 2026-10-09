@@ -1,11 +1,11 @@
 // ============================================================================
 //  QUEST option1 · Option instead of null  Chapter 10 · Enums & Pattern Matching
 // ----------------------------------------------------------------------------
-//  Option<T> is either Some(value) or None. Use it when a value may be missing.
+//  Option<T> is Some(value) or None. Use it when a value may be missing.
 //  Write three functions:
 //    find_user(users, id)  the name for an id, or None when no user has it
-//    safe_divide(a, b)     a / b, or None when the division cannot be done.
-//                          That is b == 0, and also i32::MIN / -1, which overflows.
+//    safe_divide(a, b)     a / b, or None when it cannot be done: b == 0,
+//                          or i32::MIN / -1, which overflows.
 //    first_even(v)         the first even number in v, or None
 //
 //  Return None where a panic would otherwise happen. Don't edit the tests.
@@ -63,13 +63,15 @@ mod tests {
     #[test]
     fn safe_divide_divides_when_it_can() {
         assert_eq!(safe_divide(7, 2), Some(3));
-        assert_eq!(safe_divide(-7, 2), Some(-3)); // integer division rounds toward zero
+        // Integer division rounds toward zero.
+        assert_eq!(safe_divide(-7, 2), Some(-3));
     }
 
     #[test]
     fn safe_divide_returns_none_instead_of_panicking() {
         assert_eq!(safe_divide(1, 0), None);
-        assert_eq!(safe_divide(i32::MIN, -1), None); // the one other case that overflows
+        // i32::MIN / -1 is the one other case that overflows.
+        assert_eq!(safe_divide(i32::MIN, -1), None);
     }
 
     #[test]

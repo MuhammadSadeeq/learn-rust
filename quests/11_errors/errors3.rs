@@ -3,9 +3,10 @@
 // ----------------------------------------------------------------------------
 //  ConfigError describes what went wrong with a config value. Finish the two
 //  pieces the file needs:
-//    Display     Missing("port")                    -> "missing key: port"
+//    Display     Missing("port")
+//                  -> "missing key: port"
 //                Invalid { key: "port", value: "abc" }
-//                                                   -> "invalid value 'abc' for key 'port'"
+//                  -> "invalid value 'abc' for key 'port'"
 //    get_port    finds the "port" pair and parses its value as a u16.
 //                No "port" pair gives Missing. A value that is not a u16 gives
 //                Invalid. 70000 is not a valid u16.

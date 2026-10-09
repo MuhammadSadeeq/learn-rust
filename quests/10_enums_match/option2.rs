@@ -4,9 +4,9 @@
 //  Every Option in this file is opened with unwrap(). That works until a None
 //  arrives, and then the program panics. Rewrite each function so that the
 //  missing case is handled:
-//    display_name(nick, full)  the nickname when there is one, else the full name
-//    parse_port(s)             the port number, or 8080 when s is not a valid u16
-//    initials(name)            "ada lovelace" -> "AL": the first letter of each
+//    display_name(nick, full)  the nickname if there is one, else the full name
+//    parse_port(s)             the port number, or 8080 if s is not a valid u16
+//    initials(name)            "ada lovelace" -> "AL": first letter of each
 //                              word, uppercase. None, or no words, gives ""
 //
 //  Use if let, let ... else, unwrap_or or map where each one fits.

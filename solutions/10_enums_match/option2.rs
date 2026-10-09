@@ -9,7 +9,7 @@
 const DEFAULT_PORT: u16 = 8080;
 
 fn display_name(nick: Option<&str>, full: &str) -> String {
-    // if let runs the block only when there is a value. Otherwise we fall through.
+    // if let runs its block only for Some. Otherwise we fall through.
     if let Some(nick) = nick {
         return nick.to_string();
     }

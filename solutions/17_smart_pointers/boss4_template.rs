@@ -124,12 +124,9 @@ impl Engine {
 }
 
 fn main() {
-    let engine = Engine::new();
+    let page = "Hi {{ name | trim | upper }}, welcome to {{city}}!";
     let ctx = HashMap::from([("name", "  ana  "), ("city", "Lisbon")]);
-    match engine.render("Hi {{ name | trim | upper }}, welcome to {{city}}!", &ctx) {
-        Ok(text) => println!("{text}"),
-        Err(err) => println!("render failed: {err:?}"),
-    }
+    println!("{:?}", Engine::new().render(page, &ctx));
 }
 
 #[cfg(test)]
