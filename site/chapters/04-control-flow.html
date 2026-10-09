@@ -34,6 +34,13 @@
   </ul>
 </header>
 
+<style>
+/* Scoped workaround until oxidize.css lays out .ox-outcomes items as blocks.
+   As flex items, they grow to their full text width on a phone and push the page sideways. */
+.ox-outcomes li { display: block; }
+.ox-outcomes li::before { display: inline-block; margin-right: 10px; vertical-align: -1px; }
+</style>
+
 <section>
 <h2 id="functions">Functions</h2>
 
