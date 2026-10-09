@@ -65,6 +65,28 @@ Poses (any character): `happy`, `oops`, `think`, `wow`, `talk`, `sleep`,
 for crabs: `ref`, `mutref`, `ghost`, `ended`. Set them with
 `OxCast.pose(node, "happy", 1600)`.
 
+### The act bosses
+
+Each act ends with a boss quest that combines everything from the act, and
+each boss quest is guarded by a creature built from the quest's own problem.
+Bosses are the only characters who are against you, and even they lose
+gracefully: the `defeated` pose is X eyes and a slump, never anything worse.
+
+| Act | Boss (`id`) | Guards | Weak to |
+|---|---|---|---|
+| I | **The Receipt Golem** (`golem`) | `boss1_receipt` · Print a receipt | functions, loops, `match` and format strings |
+| II | **The Babel Beetle** (`beetle`) | `boss2_text_stats` · Text statistics | borrowing, `&str` slices and UTF-8 |
+| III | **The Ledger Dragon** (`dragon`) | `boss3_ledger` · Bank ledger | enums, `Result`, `HashMap` and iterators |
+| IV | **The Template Mimic** (`mimic`) | `boss4_template` · Mini Blade | traits, lifetimes and smart pointers |
+| V | **The Queue Hydra** (`hydra`) | `boss5_job_queue` · Job queue | threads, channels, `Arc` and `Mutex` |
+
+**One test is one hit point.** In the terminal, `cargo forge` draws the boss
+beside every check of its quest: full HP while the file doesn't compile,
+one HP per failing test after that, and a knockout when the last test turns
+green. On the site, the boss card above the quest shows full HP until you tick
+the quest, then plays the same defeat. Art: `OxCast.boss(id, { pose })`,
+registry: `OxCast.bosses`. The terminal art lives in `forge/src/art.rs`.
+
 ## 3. Motion language
 
 - **Entrances** pop with a slight overshoot: `cubic-bezier(.3, 1.4, .5, 1)`,
@@ -90,7 +112,10 @@ for crabs: `ref`, `mutref`, `ghost`, `ended`. Set them with
 | `<div class="ox-xray" data-scenario="…">` | The Memory X-Ray, now with a **Story / Diagram** switch (Story is the default): crabs, fluffies, leashes and the Inspector act out the same states. | `xray.js` + `story.js` |
 | quizzes, fill-ins, match, order | Oxi pops up beside the answer and reacts. | `cast.js` (listens to `ox:answer`) |
 | level-up | Oxi molts: the old shell cracks and a bigger Oxi steps out with the new title. | `cast.js` (listens to `ox:levelup`) |
-| `labs/cast.html` | The Field Guide: every character, in color once met, as a silhouette before. | `cast.js` |
+| `labs/cast.html` | The Field Guide: every character, in color once met, as a silhouette before. Below it, the WANTED wall of act bosses. | `cast.js` |
+| boss quest cards | Automatic: every boss quest in an `.ox-quests` list gets its boss card (art, HP, weakness) and plays the defeat when ticked. | `cast.js` (listens to `ox:quest`) |
+| the island map | Each boss has a lair beside its chapter's stone: awake until defeated, then grey with a flag. | `index.html` |
+| `cargo forge` | Oxi celebrates every passed quest in ASCII; boss quests show the boss with an HP bar that drains as tests pass. | `forge/src/art.rs` |
 
 Motion scene format and authoring rules: see the header of
 `site/assets/motion.js`.

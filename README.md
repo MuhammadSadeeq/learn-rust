@@ -66,7 +66,9 @@ chapter, and every level-up is a molt.
 
 Each act ends with a boss quest: a receipt printer, a text analyzer, a bank
 ledger, a mini Blade template engine, and a Laravel-style job queue with
-worker threads.
+worker threads. A creature guards each one (the Receipt Golem, the Babel
+Beetle, the Ledger Dragon, the Template Mimic and the Queue Hydra), and every
+test you pass is a hit: the Forge draws its HP bar draining in your terminal.
 
 ## Labs
 
@@ -76,7 +78,7 @@ worker threads.
 - **PHP → Rust Rosetta**: 119 PHP 8.5 and Laravel 13 habits next to the Rust that replaces them, searchable.
 - **Agent Code Review Dojo**: 18 programs an AI agent wrote. Flag the lines a senior reviewer would question, then compare with the reviewed version.
 - **Recall Deck**: spaced-repetition review of every chapter's cards.
-- **Field Guide**: every character of Rustopia, in color once you have met it, with the Rust idea it stands for.
+- **Field Guide**: every character of Rustopia, in color once you have met it, with the Rust idea it stands for, plus a WANTED wall of the five act bosses.
 
 ## The Forge
 
