@@ -407,6 +407,7 @@
         if (!ve || ve.classList.contains("is-leaving")) return;
         const cell = $("[data-ptr]", ve);
         const S = center((cell || ve).getBoundingClientRect(), base);
+        const V = center(ve.getBoundingClientRect(), base);
         let kind = v.val.ptr !== undefined ? "own" : v.val.mut !== undefined ? "mut" : "ref";
         if ((v.status || "").includes("moved") || (v.status || "").includes("ended")) kind = "ghost";
         const tb = st.heap.find((b) => b.id === target);
@@ -418,19 +419,25 @@
           let tEl = be;
           if (v.val.at !== undefined) tEl = $(`.xr-byte[data-i="${v.val.at}"]`, be) || be;
           const T = center(tEl.getBoundingClientRect(), base);
-          // Leave from the bottom edge of the ptr cell and dip below the row, so
-          // the line never runs across the len and cap cells beside it.
-          const sx = cell ? S.x : S.r, sy = cell ? S.b : S.y;
+          // An owner's line leaves the bottom of its ptr cell, drops below the row
+          // and runs up the gutter beside the variable box, so it never crosses the
+          // len and cap cells. (A line to a byte keeps the plain curve.)
+          const sx = cell ? S.x : S.r, sy = cell ? S.b : S.y, gx = V.r + 12;
           if (T.l > S.r + 8) {
             ex = T.l - 2; ey = v.val.at !== undefined ? T.t - 1 : T.y;
-            if (v.val.at !== undefined) { ex = T.x; ey = T.t - 2; }
-            const dx = Math.max(30, (ex - sx) * 0.5);
-            d = v.val.at !== undefined ? `M${sx},${sy} C${sx + dx * 0.4},${sy + 24} ${ex},${ey - 40} ${ex},${ey}` : `M${sx},${sy} C${sx},${sy + 24} ${ex - dx},${ey} ${ex},${ey}`;
-            ang = v.val.at !== undefined ? Math.PI / 2 : 0;
+            if (v.val.at !== undefined) {
+              ex = T.x; ey = T.t - 2;
+              const dx = Math.max(30, (ex - sx) * 0.5);
+              d = `M${sx},${sy} C${sx + dx * 0.4},${sy + 24} ${ex},${ey - 40} ${ex},${ey}`;
+              ang = Math.PI / 2;
+            } else {
+              d = cell ? `M${sx},${sy} V${sy + 20} H${gx} V${ey} H${ex}` : `M${sx},${sy} H${ex}`;
+              ang = 0;
+            }
           } else {
-            // heap is below (narrow layout)
+            // heap is below (narrow layout): down the gutter, then into the block from above
             ex = T.x; ey = T.t - 2;
-            d = `M${sx},${sy} C${sx},${sy + 30} ${ex},${ey - 60} ${ex},${ey}`;
+            d = cell ? `M${sx},${sy} V${sy + 20} H${gx} V${ey - 14} H${ex} V${ey}` : `M${sx},${sy} C${sx},${sy + 30} ${ex},${ey - 60} ${ex},${ey}`;
             ang = Math.PI / 2;
           }
         } else if (tv) {

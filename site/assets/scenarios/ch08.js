@@ -12,7 +12,7 @@ fn main() {
 }`,
     steps: [
       { line: 1, say: "<p>A frame for <code>main</code>. Three variables are about to hold text, and each holds it in a different way.</p>", ops: [["frame", "main"]] },
-      { line: 2, say: "<p><code>\"hi\"</code> is a literal. Its two bytes are compiled into the program, in read-only memory, so the heap is not involved. <code>lit</code> holds a pointer to them and a length. That is a <code>&amp;'static str</code>.</p>", ops: [["static", "bin", "hi", 2, { label: "\"hi\" (read-only)" }], ["let", "lit", "&'static str", { ref: "bin", meta: { len: 2 } }]] },
+      { line: 2, say: "<p><code>\"hi\"</code> is a literal. Its two bytes are compiled into the program, in read-only memory, so the heap is not involved. <code>lit</code> holds a pointer to them and a length. That is a <code>&amp;'static str</code>.</p>", ops: [["static", "bin", "hi", 2, { label: "in the binary, read-only" }], ["let", "lit", "&'static str", { ref: "bin", meta: { len: 2 } }]] },
       { line: 3, say: "<p><code>String::from(\"hi\")</code> asks the allocator for two heap bytes and copies the text in. <code>owned</code> is the <span class=\"c-own\">owner</span>: pointer, length 2, capacity 2.</p>", ops: [["alloc", "h2", "hi", 2, { label: "String bytes" }], ["let", "owned", "String", { ptr: "h2", meta: { len: 2, cap: 2 } }]] },
       {
         line: 4,

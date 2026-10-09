@@ -297,7 +297,7 @@ For more information about this error, try `rustc --explain E0597`.</pre>
       </div>
     </div>
   </div>
-  <p class="sv-hint">On a narrow screen the code scrolls sideways. The bars sit to its right.</p>
+  <p class="sv-hint">On a narrow screen each bar sits under its line of code. Long lines scroll sideways.</p>
   <div class="tl-scroll"><div class="tl-grid" id="sv-grid"></div></div>
   <div class="sv-verdict" aria-live="polite">
     <span class="sv-badge is-ok" id="sv-badge">compiles</span>
@@ -964,6 +964,11 @@ fn main() {
       render();
     });
     render();
+    // Re-draw when the screen crosses the phone breakpoint.
+    try {
+      var mq = window.matchMedia("(max-width: 640px)");
+      if (mq.addEventListener) mq.addEventListener("change", render);
+    } catch (err) { /* older browsers keep the first layout */ }
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
   else start();
