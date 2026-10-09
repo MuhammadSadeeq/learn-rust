@@ -246,7 +246,7 @@ fn main() {
 }`,
     smells: [
       { lines: [1, 15, 25], kind: "String where &str suffices", severity: "idiom",
-        explain: "<p><code>normalize</code> only reads its input, but it asks for a <code>String</code>. Every caller must hand over an owned value, so the code allocates just to satisfy the signature. Take <code>&amp;str</code>, which accepts a literal, a <code>&amp;String</code> and a slice.</p>" },
+        explain: "<p><code>normalize</code> only reads its input, but it asks for a <code>String</code>. Every caller must hand over an owned value, so the code allocates just to satisfy the signature. Take <code>&amp;str</code>, which accepts a literal, a <code>&amp;String</code>, or a part of a longer string.</p>" },
       { lines: [16], kind: "needless clone", severity: "perf",
         explain: "<p><code>key.clone()</code> copies the key for every account it compares. <code>==</code> compares the two strings without taking ownership, so the clone buys nothing.</p>" },
     ],
@@ -904,7 +904,7 @@ fn main() {
       { lines: [11], kind: "wait after the last attempt", severity: "perf",
         explain: "<p>The <code>Err</code> arm waits even after the final attempt, so the caller pays for a delay that leads nowhere before it receives the error. Return the error on the last attempt, before any wait.</p>" },
       { lines: [7], kind: "sentinel error value", severity: "design",
-        explain: "<p><code>GatewayError(\"never called\")</code> is a placeholder that exists only to satisfy the compiler. It repeats an answer the loop already gives. Let the last attempt return its own error, and drop the placeholder.</p>" },
+        explain: "<p><code>GatewayError(\"never called\")</code> is a placeholder. Every failed attempt replaces it, so it is never returned, but it still has to be built and read. Let the last attempt return its own error, and drop the placeholder.</p>" },
     ],
     idiomatic: String.raw`use std::time::Duration;
 
@@ -1374,7 +1374,7 @@ fn main() {
 }`,
     smells: [
       { lines: [8, 13], kind: "String where &str suffices", severity: "idiom",
-        explain: "<p><code>get</code> only reads the key, but it takes a <code>String</code>, so every call allocates one. <code>size_of</code> shows the cost: it allocates a <code>String</code> just to pass it in. Take <code>&amp;str</code>, which accepts a literal, a <code>&amp;String</code> and a slice.</p>" },
+        explain: "<p><code>get</code> only reads the key, but it takes a <code>String</code>, so every call allocates one. <code>size_of</code> shows the cost: it allocates a <code>String</code> just to pass it in. Take <code>&amp;str</code>, which accepts a literal, a <code>&amp;String</code>, or a part of a longer string.</p>" },
       { lines: [9], kind: "needless clone", severity: "perf",
         explain: "<p><code>.cloned()</code> copies the whole image buffer on every lookup. <code>size_of</code> needs only the length, and most callers only read the bytes. Return <code>Option&lt;&amp;[u8]&gt;</code> and let the caller decide whether to copy.</p>" },
     ],

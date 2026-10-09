@@ -119,12 +119,19 @@ window.OX_ROSETTA = [
     cat: "basics",
     title: "No null: use Option",
     php: `
-      $name = null;
-      echo $name ?? "guest";
+      function findName(int $id): ?string {
+          return $id === 1 ? "Ada" : null;
+      }
+      echo findName(2) ?? "guest";
       `,
     rust: `
-      let name: Option<&str> = None;
-      println!("{}", name.unwrap_or("guest"));
+      fn find_name(id: u32) -> Option<&'static str> {
+          match id {
+              1 => Some("Ada"),
+              _ => None,
+          }
+      }
+      println!("{}", find_name(2).unwrap_or("guest"));
       `,
     check: "ok",
     note: `Rust has no null. A value that may be missing has type <code>Option&lt;T&gt;</code>, and you cannot use what is inside until you handle <code>None</code>. The type is the warning, so you do not have to remember to check.`,
@@ -362,7 +369,7 @@ window.OX_ROSETTA = [
       echo $nums[5] ?? "none"; // no warning with ??
       `,
     rust: `
-      let nums = vec![10, 20, 30];
+      let nums = [10, 20, 30];
       match nums.get(5) {
           Some(n) => println!("{n}"),
           None => println!("none"),
@@ -382,12 +389,12 @@ window.OX_ROSETTA = [
       var_dump(empty($nums));
       `,
     rust: `
-      let nums = vec![10, 20, 30];
+      let nums = Vec::from([10, 20, 30]);
       println!("{}", nums.len());
       println!("{}", nums.is_empty());
       `,
     check: "ok",
-    note: `<code>len</code> and <code>is_empty</code> are constant time on a <code>Vec</code>. Be careful with iterators: <code>count()</code> on an iterator walks the whole sequence and uses it up.`,
+    note: `<code>len</code> and <code>is_empty</code> are constant time for a <code>Vec</code>, an array or a slice. Be careful with iterators: <code>count()</code> on an iterator walks the whole sequence and uses it up.`,
     chapter: 12
   },
   {
@@ -399,7 +406,7 @@ window.OX_ROSETTA = [
       $doubled = array_map(fn($n) => $n * 2, $nums);
       `,
     rust: `
-      let nums = vec![1, 2, 3];
+      let nums = [1, 2, 3];
       let doubled: Vec<i32> = nums.iter().map(|n| n * 2).collect();
       println!("{doubled:?}");
       `,
@@ -417,7 +424,7 @@ window.OX_ROSETTA = [
       // keeps the keys: [1 => 2, 3 => 4]
       `,
     rust: `
-      let nums = vec![1, 2, 3, 4];
+      let nums = [1, 2, 3, 4];
       let evens: Vec<i32> = nums.iter().copied().filter(|n| n % 2 == 0).collect();
       println!("{evens:?}");
       `,
@@ -434,7 +441,7 @@ window.OX_ROSETTA = [
       var_dump(in_array(3, $nums, true));
       `,
     rust: `
-      let nums = vec![1, 2, 3];
+      let nums = [1, 2, 3];
       println!("{}", nums.contains(&3));
       `,
     check: "ok",
@@ -468,7 +475,7 @@ window.OX_ROSETTA = [
       echo array_sum($nums);
       `,
     rust: `
-      let nums = vec![1, 2, 3];
+      let nums = [1, 2, 3];
       let total: i32 = nums.iter().sum();
       println!("{total}");
       `,
@@ -876,22 +883,22 @@ window.OX_ROSETTA = [
     cat: "control",
     title: "Guard clause with let else",
     php: `
-      function firstWord(string $s): ?string {
+      function firstWord(string $s): string {
           $word = explode(" ", trim($s))[0];
           if ($word === "") {
-              return null;
+              return "(empty)";
           }
           return $word;
       }
       `,
     rust: `
-      fn first_word(s: &str) -> Option<&str> {
+      fn first_word(s: &str) -> &str {
           let Some(word) = s.split_whitespace().next() else {
-              return None;
+              return "(empty)";
           };
-          Some(word)
+          word
       }
-      println!("{:?}", first_word("  hello world"));
+      println!("{}", first_word("  hello world"));
       `,
     check: "ok",
     note: `<code>let else</code> takes the failure branch when the pattern does not match, and that branch must leave: <code>return</code>, <code>break</code>, <code>continue</code> or a panic. It is the guard clause that replaces a nested <code>if</code>.`,
@@ -1654,7 +1661,7 @@ window.OX_ROSETTA = [
           role: String,
       }
 
-      let users = vec![
+      let users = [
           User { name: "Ada".into(), role: "admin".into() },
           User { name: "Linus".into(), role: "dev".into() },
       ];
@@ -1725,7 +1732,7 @@ window.OX_ROSETTA = [
           age: u8,
       }
 
-      let mut users = vec![
+      let mut users = [
           User { name: "Linus", age: 54 },
           User { name: "Ada", age: 36 },
       ];
@@ -1733,7 +1740,7 @@ window.OX_ROSETTA = [
       println!("{}", users[0].name);
       `,
     check: "ok",
-    note: `<code>sortBy</code> returns a new collection and leaves the original alone. <code>sort_by_key</code> changes the <code>Vec</code> in place, which is why it needs <code>mut</code>. To keep the original order, collect <code>users.iter()</code> into a <code>Vec</code> of references and sort that.`,
+    note: `<code>sortBy</code> returns a new collection and leaves the original alone. <code>sort_by_key</code> changes the list in place, which is why it needs <code>mut</code>. To keep the original order, collect <code>users.iter()</code> into a <code>Vec</code> of references and sort that.`,
     chapter: 13
   },
   {
@@ -1781,11 +1788,16 @@ window.OX_ROSETTA = [
     cat: "collections",
     title: "Reduce to one value",
     php: `
-      $total = collect([1, 2, 3])->reduce(fn($carry, $n) => $carry + $n, 0);
+      $longest = collect(["ada", "grace", "linus"])
+          ->reduce(fn($carry, $n) => strlen($n) > strlen($carry) ? $n : $carry, "");
       `,
     rust: `
-      let total = [1, 2, 3].iter().fold(0, |acc, n| acc + n);
-      println!("{total}");
+      let names = ["ada", "grace", "linus"];
+      let longest = names
+          .iter()
+          .copied()
+          .fold("", |acc, n| if n.len() > acc.len() { n } else { acc });
+      println!("{longest}");
       `,
     check: "ok",
     note: `<code>fold</code> is <code>reduce</code>. It takes the starting value first, then a closure that gets the accumulator and the next item. <code>fold</code> always visits every item. <code>try_fold</code> stops early on the first error.`,
@@ -1845,7 +1857,7 @@ window.OX_ROSETTA = [
       $first = collect([1, 2, 3, 4])->take(2)->all(); // [1, 2]
       `,
     rust: `
-      let nums = vec![1, 2, 3, 4];
+      let nums = [1, 2, 3, 4];
       let first: Vec<i32> = nums.iter().take(2).copied().collect();
       println!("{first:?}");
       `,
@@ -2557,7 +2569,7 @@ window.OX_ROSETTA = [
       #![warn(clippy::unwrap_used)]
 
       fn main() {
-          let names = vec!["Ada", "Linus"];
+          let names = ["Ada", "Linus"];
           println!("{}", names.len());
       }
       `,
