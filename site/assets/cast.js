@@ -83,7 +83,7 @@
     node.innerHTML = `
       <div class="ox-meet-art">${OxCast.entry(id)}</div>
       <div class="ox-meet-body">
-        <div class="ox-meet-top"><span class="ox-label">New in Rustopia</span>${known ? `<span class="ox-meet-chip">In your Field Guide</span>` : ""}</div>
+        <div class="ox-meet-top">${known ? `<span class="ox-meet-chip">In your Field Guide</span>` : `<span class="ox-label">New in Rustopia</span>`}</div>
         <h3 class="ox-meet-name">${esc(e.name)}</h3>
         <p class="ox-meet-rust">In Rust: <b>${esc(e.rust)}</b></p>
         <p class="ox-meet-role">${esc(e.role)}</p>
