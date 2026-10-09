@@ -175,6 +175,8 @@
   .mp-oxi { position: absolute; z-index: 3; width: 0; height: 0; pointer-events: none; }
   .mp-oxi-body { position: absolute; left: 0; top: 0; width: 56px; transform: translate(-50%, calc(-100% - 12px)); }
   .mp-oxi.is-below .mp-oxi-body { transform: translate(-50%, 16px); }
+  .mp-oxi.is-left .mp-oxi-body { transform: translate(calc(-100% - 14px), -50%); }
+  .mp-oxi.is-right .mp-oxi-body { transform: translate(14px, -50%); }
   .mp-oxi-body .ca { display: block; width: 100%; animation: mp-bob 2.6s ease-in-out infinite; }
   .mp-progress { fill: none; stroke: var(--oxide); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
   @keyframes mp-pulse { 0% { transform: scale(0.8); opacity: 0.8; } 100% { transform: scale(1.6); opacity: 0; } }
@@ -251,7 +253,7 @@
     <article><span class="ox-label">Predict first</span><h3>Guess, then look</h3><p>Before each surprising step you commit to an answer. Being wrong first is how the right answer sticks.</p></article>
     <article><span class="ox-label">Become the compiler</span><h3>Know what rustc will say</h3><p>"Does this compile?" checks everywhere, real compiler errors decoded, and a borrow-checker game. Once you can predict rustc, Rust stops being a fight.</p></article>
     <article><span class="ox-label">Start from PHP</span><h3>Bridges, with limits</h3><p>Every concept starts next to the PHP or Laravel you know, and then shows exactly where that comparison stops being true.</p></article>
-    <article><span class="ox-label">Write real code</span><h3>The Forge</h3><p>88 quests and 5 boss projects in your own editor, checked by the real compiler every time you save. Some are small Cargo projects that use real crates: clap, tokio, serde, reqwest and axum.</p></article>
+    <article><span class="ox-label">Write real code</span><h3>The practice tool, <code>cargo forge</code></h3><p>88 quests and 5 boss projects in your own editor, checked by the real compiler every time you save. Some are small Cargo projects that use real crates: clap, tokio, serde, reqwest and axum.</p></article>
     <article><span class="ox-label">Agent era</span><h3>Review what AI writes</h3><p>Agents write plenty of Rust now. Each chapter shows how its idea shows up in agent-written code, and the Dojo trains you to review it.</p></article>
   </div>
 </section>
@@ -279,8 +281,8 @@
 </section>
 
 <section class="h-section" id="forge" aria-labelledby="forge-h">
-  <h2 id="forge-h">The Forge</h2>
-  <p class="h-sub">Reading builds recognition; writing builds skill. The Forge runs in your terminal next to your editor.</p>
+  <h2 id="forge-h">Practice with <code>cargo forge</code></h2>
+  <p class="h-sub">Reading builds recognition; writing builds skill. <code>cargo forge</code> runs in your terminal next to your editor.</p>
   <div class="h-forge">
     <figure class="h-term" aria-label="Example Forge session">
       <div class="h-term-bar"><i></i><i></i><i></i></div>
@@ -616,21 +618,43 @@ Edit <span class="b">quests/06_ownership/move1.rs</span>
       frame.classList.toggle("is-narrow", w < 640);
       keepOxiClear();
     }
-    // Oxi stands on the current stone with its body above it. Where that body
-    // would cover a region name on the island, it hangs below the stone instead.
-    // Measured without the hop offset, so it checks where Oxi finally rests.
+    // Oxi stands on the current stone with its body above it. When that would
+    // cover a region name or a neighbouring stone, the body moves to the side
+    // that covers the least. Measured without the hop offset, so it checks where
+    // Oxi finally rests.
     function keepOxiClear() {
       var body = stage.querySelector(".mp-oxi-body");
       if (!body || !frame.offsetWidth) return;
       var host = body.parentNode, hop = oxiEl.style.transform;
-      host.classList.remove("is-below");
-      oxiEl.style.transform = "";
-      var o = body.getBoundingClientRect();
-      var hit = Array.prototype.some.call(stage.querySelectorAll(".mp-label"), function (g) {
-        var r = g.getBoundingClientRect();
-        return r.width > 0 && r.left < o.right && r.right > o.left && r.top < o.bottom && r.bottom > o.top;
+      var labels = stage.querySelectorAll(".mp-label");
+      var stones = Array.prototype.filter.call(stage.querySelectorAll(".mp-stone"), function (s) {
+        return !s.classList.contains("is-current");
       });
-      if (hit) host.classList.add("is-below");
+      function measure() {
+        var o = body.getBoundingClientRect();
+        var hit = Array.prototype.some.call(labels, function (g) {
+          var r = g.getBoundingClientRect();
+          return r.width > 0 && r.left < o.right && r.right > o.left && r.top < o.bottom && r.bottom > o.top;
+        });
+        var worst = 0;
+        stones.forEach(function (s) {
+          var r = s.getBoundingClientRect();
+          var w = Math.min(r.right, o.right) - Math.max(r.left, o.left);
+          var h = Math.min(r.bottom, o.bottom) - Math.max(r.top, o.top);
+          if (w > 0 && h > 0 && r.width && r.height) worst = Math.max(worst, (w * h) / (r.width * r.height));
+        });
+        return (hit ? 1 : 0) + worst;
+      }
+      oxiEl.style.transform = "";
+      // Try the four sides in turn and keep the one with the least overlap. Above
+      // is first, so it wins any tie.
+      var best = "", bestScore = Infinity;
+      ["", "is-below", "is-left", "is-right"].forEach(function (c) {
+        host.className = "mp-oxi" + (c ? " " + c : "");
+        var score = measure();
+        if (score < bestScore - 1e-9) { bestScore = score; best = c; }
+      });
+      host.className = "mp-oxi" + (best ? " " + best : "");
       oxiEl.style.transform = hop;
     }
     sizeCheck();

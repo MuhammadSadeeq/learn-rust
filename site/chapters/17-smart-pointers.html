@@ -990,6 +990,24 @@ fn main() {
     <p>Lifetimes. A struct such as <code>Template&lt;'a&gt;</code> holds <code>&amp;'a str</code> slices of the source, and its signature says the pieces cannot outlive the input they point into.</p>
   </div>
 </details>
+<div class="ox-quiz" data-id="17:quiz-rc-assign" data-label="Check yourself">
+  <p class="ox-q">Chapter 07 taught that a shared reference reads and does not change. Does this compile?</p>
+  <pre class="rs" data-check="E0594">
+use std::rc::Rc;
+
+fn main() {
+    let shared = Rc::new(5);
+    *shared = 6;
+    println!("{shared}");
+}
+</pre>
+  <ol class="ox-choices">
+    <li>Yes. An <code>Rc</code> lets you change the value through any handle.</li>
+    <li data-correct>No, E0594. An <code>Rc</code> gives only shared access, so the value cannot be assigned through it.</li>
+    <li>No, E0596, because <code>shared</code> was not declared <code>mut</code>.</li>
+  </ol>
+  <div class="ox-why"><p>An <code>Rc</code> hands out shared references, and a shared reference cannot assign. To change the value, use a <code>RefCell</code> or a <code>Cell</code>, which Chapter 17 covers.</p></div>
+</div>
 </section>
 
 <section>

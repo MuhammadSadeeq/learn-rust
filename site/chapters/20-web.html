@@ -2000,7 +2000,7 @@ async fn read_events(client: &amp;reqwest::Client, url: &amp;str, parser: &amp;m
 
 <h3 id="retry">Retry with care</h3>
 
-<p>Retry only what is safe to repeat. A GET that reads a note can run twice with no harm. A POST that creates a note may create two. Chapter 19 writes a retry loop with a longer wait after each attempt, and the same loop fits here.</p>
+<p>Retry only what is safe to repeat. A GET that reads a note can run twice with no harm. A POST that creates a note may create two. Chapter 19 shows how to compute the waits (doubling, capped, with jitter). Wrap a loop around your call that sleeps for them; the Chapter 21 harness does this in <code>send_with_retry</code>.</p>
 
 <div class="ox-quiz" data-id="20:quiz-blocking-reqwest" data-label="Check yourself">
   <p class="ox-q">A tutorial calls <code>reqwest::blocking::get(url)</code>. Your Cargo.toml says <code>reqwest = "0.12"</code> and nothing else. Why does the compiler say it cannot find <code>blocking</code>?</p>
@@ -2408,11 +2408,31 @@ fn main() {
 }</pre>
   <div class="ox-why"><p>The mapping mirrors <code>error.rs</code>. A missing note is a 404, and a failed rule is a 422. The <code>match</code> must cover every variant. Add a variant without a status code, and the program does not compile until you add one.</p></div>
 </div>
+<div class="ox-quiz" data-id="20:quiz-private-fn" data-label="Check yourself">
+  <p class="ox-q">Chapter 16 taught visibility. Does this compile?</p>
+  <pre class="rs" data-check="E0603">
+mod notes {
+    fn list() -&gt; usize {
+        3
+    }
+}
+
+fn main() {
+    println!("{}", notes::list());
+}
+</pre>
+  <ol class="ox-choices">
+    <li>Yes, and it prints <code>3</code>.</li>
+    <li data-correct>No, E0603. A function is private to its module unless it is marked <code>pub</code>.</li>
+    <li>No, E0425, because <code>notes::list</code> does not exist.</li>
+  </ol>
+  <div class="ox-why"><p>Handlers, helpers and types that another module uses need <code>pub</code>. Without it, the path is refused at compile time, which is the same rule as Chapter 16.</p></div>
+</div>
 </section>
 
 <section>
 <h2 id="quests">Forge quests</h2>
-<p>Reading builds recognition. Writing code builds the skill. These quests run locally against the real compiler.</p>
+<p>Reading builds recognition. Writing code builds the skill. These quests run locally against the real compiler. <code>serde1</code>, <code>client1</code> and <code>axum1</code> are small cargo packages. Their first check downloads and builds their crates, which takes a few minutes.</p>
 <div class="ox-quests" data-chapter="20"></div>
 </section>
 

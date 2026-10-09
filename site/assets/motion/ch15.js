@@ -21,7 +21,7 @@
     { id: "inner", cast: "tick", opts: { level: 1 }, x: 300, y: 150, size: 80, label: "{ }", hidden: true },
     { id: "x", prop: "pebble", opts: { type: "i32", value: "5" }, x: 300, y: 240, size: 60, label: "x", hidden: true },
     { id: "r", cast: "crab", kind: "ref", x: 500, y: 150, size: 84, label: "r", hidden: true },
-    { id: "insp", cast: "inspector", x: 580, y: 222, size: 90, label: "Inspector", hidden: true },
+    { id: "insp", cast: "inspector", x: 556, y: 222, size: 90, label: "Inspector", hidden: true },
     { id: "err", prop: "errscroll", opts: { label: "E0597" }, x: 500, y: 45, size: 100, z: 5, hidden: true },
   ],
   beats: [
@@ -76,7 +76,14 @@
     }
 }`,
       check: "ok",
-      do: [["unlink", "rx", 0], ["poof", "err", 0], ["hide", "insp", 0]],
+      do: [
+        ["art", "x", { prop: "pebble", opts: { type: "i32", value: "5" } }, 0],
+        ["show", "x", 0],
+        ["link", "rx", "r", "x", "ref", 0],
+        ["unlink", "rx", 1200],
+        ["poof", "err", 0],
+        ["hide", "insp", 0],
+      ],
     },
   ],
 });
@@ -106,7 +113,7 @@ fn main() {
     { id: "inner", cast: "tick", opts: { level: 1 }, x: 320, y: 200, size: 66, label: "block", hidden: true },
     { id: "y", cast: "fluffy", x: 420, y: 200, size: 60, label: "y", hidden: true },
     { id: "result", cast: "crab", kind: "ref", x: 540, y: 130, size: 84, label: "result", hidden: true },
-    { id: "insp", cast: "inspector", x: 560, y: 235, size: 90, label: "Inspector", hidden: true },
+    { id: "insp", cast: "inspector", x: 540, y: 235, size: 90, label: "Inspector", hidden: true },
     { id: "err", prop: "errscroll", opts: { label: "E0597" }, x: 420, y: 265, size: 96, z: 5, hidden: true },
   ],
   beats: [

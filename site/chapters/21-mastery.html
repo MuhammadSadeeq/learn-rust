@@ -254,7 +254,12 @@ fn main() {
 
 <details class="ox-callout" data-kind="deep">
   <summary>How to see the real expansion</summary>
-  <p><code>rustc -Zunpretty=expanded</code> prints a file after every macro has run. The flag belongs to nightly Rust. Stable Rust accepts it only when you set <code>RUSTC_BOOTSTRAP=1</code>, which is fine for reading output and wrong for real builds. The expansions in the viewer were checked against this output, and they can change between compiler versions.</p>
+  <p><code>rustc -Zunpretty=expanded</code> prints a file after every macro has run. The flag belongs to nightly Rust. Stable Rust accepts it only when you set <code>RUSTC_BOOTSTRAP=1</code>, which is fine for reading output and wrong for real builds. The viewer shows simplified expansions. For <code>vec![1, 2, 3]</code>, rustc 1.97 prints the text below, and the viewer's note says what it leaves out. Expansions can change between compiler versions.</p>
+<pre class="text">
+let v =
+    ::alloc::boxed::box_assume_init_into_vec_unsafe(::alloc::intrinsics::write_box_via_move(::alloc::boxed::Box::new_uninit(),
+            [1, 2, 3]));
+</pre>
 </details>
 
 <aside class="ox-callout" data-kind="ai">
@@ -1160,11 +1165,11 @@ fn main() {
     }
 }</pre>
 
-<p>After <code>kill</code>, call <code>wait</code>. It collects the exit status, so the child does not stay behind as a zombie process. Here the status has no code, because a signal ended the program. The Forge uses this same loop for its tests. The timeout part of <a href="#forge-source">Read the Forge CLI</a> shows it on real code.</p>
+<p>After <code>kill</code>, call <code>wait</code>. It collects the exit status, so the child does not stay behind as a zombie process. Here the status has no code, because a signal ended the program. The Forge CLI uses this same loop for its tests. The timeout part of <a href="#forge-source">Read the Forge CLI</a> shows it on real code.</p>
 
 <h3>Environment and folder</h3>
 
-<p><code>env_clear</code> removes every variable the child would inherit. <code>env</code> adds one back. <code>current_dir</code> sets the folder the child starts in. The tool-runner harness uses all three. It clears the environment, gives the child a short <code>PATH</code>, and runs it in the sandbox folder.</p>
+<p><code>env_clear</code> removes every variable the child would inherit. <code>env</code> adds one back. <code>current_dir</code> sets the folder the child starts in. The capstone project below, the tool-runner harness, uses all three. It clears the environment, gives the child a short <code>PATH</code>, and runs it in the sandbox folder.</p>
 
 <pre class="rs" data-check="ok" data-stdout="ONLY_THIS=yes\n/">use std::process::Command;
 
@@ -1209,7 +1214,7 @@ fn main() {
 
 <h3>Capping output</h3>
 
-<p>A program that prints forever fills your memory if you collect all of its output. Read a fixed amount instead. <code>take(n)</code> lets a reader stop after <code>n</code> bytes. Read one byte more than the cap. If you got that byte, the program had more to say, so stop it. The tool-runner's <code>read_capped</code> function in <code>run_command.rs</code> works the same way.</p>
+<p>A program that prints forever fills your memory if you collect all of its output. Read a fixed amount instead. <code>take(n)</code> lets a reader stop after <code>n</code> bytes. Read one byte more than the cap. If you got that byte, the program had more to say, so stop it. The capstone project's <code>read_capped</code> function in <code>run_command.rs</code> works the same way.</p>
 
 <pre class="rs" data-check="ok" data-stdout="kept 16 bytes, cut: true">use std::io::Read;
 use std::process::{Command, Stdio};
@@ -1274,7 +1279,7 @@ async fn main() {
     }
 }</pre>
 
-<p>The timer wins after one second. The future that owns the <code>Child</code> is dropped with it, and the 10-second <code>sleep</code> is killed. The program prints <code>timed out</code>. The <code>tokio</code> crate needs the <code>process</code> and <code>time</code> features. The <code>full</code> feature turns on both, and the tool-runner project uses it.</p>
+<p>The timer wins after one second. The future that owns the <code>Child</code> is dropped with it, and the 10-second <code>sleep</code> is killed. The program prints <code>timed out</code>. The <code>tokio</code> crate needs the <code>process</code> and <code>time</code> features. The <code>full</code> feature turns on both, and the capstone project below uses it.</p>
 
 <h3>The Laravel bridge</h3>
 
@@ -1541,7 +1546,7 @@ error: aborting due to 2 previous errors</pre>
     <tr><td>17, Smart Pointers</td><td>The registry's <code>Box&lt;dyn Tool&gt;</code> owns each tool on the heap.</td><td><code>Box&lt;dyn Tool&gt;</code></td></tr>
     <tr><td>19, Async Rust</td><td>Each turn is an <code>async</code> call under a timeout. <code>tokio::select!</code> lets Ctrl+C cancel a wait. A <code>Semaphore</code> limits the tools that run at once. A <code>CancellationToken</code> carries the cancel signal.</td><td><code>select!</code> and <code>Semaphore</code> in <code>agent.rs</code></td></tr>
     <tr><td>19, Streams and Server-Sent Events</td><td><code>sse.rs</code> reads the bytes as they arrive and waits for the end of each event. <code>client.rs</code> reads the response as a stream.</td><td><code>SseParser::push</code>, <code>bytes_stream</code></td></tr>
-    <tr><td>20, Rust on the Web</td><td><code>client.rs</code> sends the request with reqwest, a timeout and a bearer token. It retries 429 and 5xx answers with the backoff from Chapter 19. Logs use <code>tracing</code>.</td><td><code>send_with_retry</code>, <code>tracing::info!</code></td></tr>
+    <tr><td>20, Rust on the Web</td><td><code>client.rs</code> sends the request with reqwest, a timeout and a bearer token. It retries 429 and 5xx answers with doubling waits and a cap, the first half of the backoff in Chapter 19. The harness adds no jitter. Logs use <code>tracing</code>.</td><td><code>send_with_retry</code>, <code>tracing::info!</code></td></tr>
     <tr><td>21, Running other programs</td><td><code>run_command</code> starts only programs on the allowlist. It clears the environment, sets a timeout, and kills the child on drop.</td><td><code>Command::new</code> in <code>run_command.rs</code></td></tr>
   </tbody>
 </table>
@@ -1759,7 +1764,7 @@ struct Cli {
 
 <h3>Run it</h3>
 
-<p>Edition 2024 needs Rust 1.85 or newer. We built and tested it with Rust 1.97 only, so older versions are unchecked.</p>
+<p>Needs Rust 1.88 or newer. Edition 2024 itself needs 1.85, and the locked dependencies need 1.88. We built and tested it with Rust 1.97 only, so older versions are unchecked.</p>
 
 <pre class="sh">cargo run --example mock_server     # terminal 1: the mock model on http://127.0.0.1:8080
 cargo run -- "What is 6 times 7?"   # terminal 2: the harness
@@ -1887,7 +1892,7 @@ cargo test                          # 51 tests, all offline</pre>
 <table class="ox-table">
   <thead><tr><th>Change</th><th>Edition 2021</th><th>Edition 2024</th></tr></thead>
   <tbody>
-    <tr><td>Let chains</td><td>Refused. <code>if let Some(x) = a &amp;&amp; x &gt; 0</code> gives "let chains are only allowed in Rust 2024 or later".</td><td>Accepted, since Rust 1.88. The Forge section above shows one.</td></tr>
+    <tr><td>Let chains</td><td>Refused. <code>if let Some(x) = a &amp;&amp; x &gt; 0</code> gives "let chains are only allowed in Rust 2024 or later".</td><td>Accepted, since Rust 1.88. The Forge CLI section above shows one.</td></tr>
     <tr><td>Temporaries in <code>if let</code></td><td>A temporary in the scrutinee lives until the whole <code>if let ... else</code> ends. The <code>else</code> block runs first.</td><td>The temporary is dropped before <code>else</code> runs. A lock taken in the scrutinee is no longer held inside <code>else</code>.</td></tr>
     <tr><td>Temporaries in a tail expression</td><td><code>cell.borrow().len()</code> as the last line of a function fails with E0597. The <code>Ref</code> temporary outlives the <code>cell</code> it borrows.</td><td>Compiles. Temporaries in the tail expression are dropped before the local variables.</td></tr>
     <tr><td><code>impl Trait</code> in return position</td><td>An <code>impl Iterator</code> return type does not capture the lifetime of a borrowed argument. Returning an iterator over that argument fails with E0700.</td><td>The return type captures every lifetime in scope. <code>+ use&lt;..&gt;</code> names exactly the lifetimes it captures, and <code>+ use&lt;&gt;</code> captures none.</td></tr>
@@ -2191,11 +2196,35 @@ fn main() {
     <p>Start with ownership at the boundary. Does each function take what it needs, and does it clone to hide a design problem? The compiler has already checked the rest, so the questions a reviewer adds are about design, error handling and what the agent claimed to have tested.</p>
   </div>
 </details>
+<div class="ox-quiz" data-id="21:quiz-drop-order" data-label="Check yourself">
+  <p class="ox-q">Chapter 17 taught <code>Drop</code>. What does this program print?</p>
+  <pre class="rs" data-stdout="body\ndrop b\ndrop a">
+struct Guard(&amp;'static str);
+
+impl Drop for Guard {
+    fn drop(&amp;mut self) {
+        println!("drop {}", self.0);
+    }
+}
+
+fn main() {
+    let _a = Guard("a");
+    let _b = Guard("b");
+    println!("body");
+}
+</pre>
+  <ol class="ox-choices">
+    <li><code>body</code>, then <code>drop a</code>, then <code>drop b</code>.</li>
+    <li data-correct><code>body</code>, then <code>drop b</code>, then <code>drop a</code>.</li>
+    <li><code>drop a</code>, then <code>drop b</code>, then <code>body</code>.</li>
+  </ol>
+  <div class="ox-why"><p>Locals are dropped in reverse order of their creation when the scope ends, so <code>_b</code> goes first. This is the order the RAII guards later in this chapter rely on.</p></div>
+</div>
 </section>
 
 <section>
 <h2 id="quests">Forge quests</h2>
-<p>Four quests cover this chapter: a macro, a newtype, a builder, and the job queue that ends the course. They run locally against the real compiler, and the last one is a boss.</p>
+<p>Five quests cover this chapter: a macro, a newtype, a builder, a program run with a timeout, and the job queue that ends the course. They run locally against the real compiler, and the last one is a boss.</p>
 <div class="ox-quests" data-chapter="21"></div>
 </section>
 

@@ -1,27 +1,26 @@
 /* Chapter 20 motion explainers: a request body poured into the Mold.
-   The code panel is std-only so the checker can compile it. serde's derive
-   is described in the captions and shown in the chapter's own blocks. */
+   The code panel is real serde code, built with the serde and serde_json
+   crates (checked with check-snippets --crates). */
 (window.OX_MOTION = window.OX_MOTION || []).push({
   id: "ch20-extract",
   title: "The Json extractor reads the parcel",
   w: 640,
   h: 300,
-  rust: [
-    "struct CreateNote {",
-    "    title: String,",
-    "    body: String,",
-    "    pinned: bool,",
-    "}",
-    "",
-    "fn main() {",
-    "    let note = CreateNote {",
-    '        title: String::from("Ana"),',
-    "        body: String::new(),",
-    "        pinned: false,",
-    "    };",
-    '    println!("{} {:?} {}", note.title, note.body, note.pinned);',
-    "}",
-  ].join("\n"),
+  rust: `use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct CreateNote {
+    title: String,
+    body: String,
+    pinned: bool,
+}
+
+fn main() {
+    let json = r#"{"title":"Ana","body":"","pinned":false,"color":"red"}"#;
+    let note: CreateNote = serde_json::from_str(json).unwrap();
+    println!("{} {:?} {}", note.title, note.body, note.pinned);
+}`,
+  crates: ["serde", "serde_json"],
   check: "ok",
   stdout: 'Ana "" false',
   actors: [
@@ -45,7 +44,7 @@
   beats: [
     {
       say: "<p>A client sends <code>POST /api/notes</code> with a JSON body. Postie carries the request parcel to the handler.</p>",
-      line: 1,
+      line: 11,
       do: [
         ["pose", "postie", "talk", 1200, 0],
         ["show", "jt", 400],
@@ -54,7 +53,7 @@
     },
     {
       say: "<p>The parcel opens. The <code>Json&lt;CreateNote&gt;</code> extractor reads the body with serde, and each key is poured into the field with the same name.</p>",
-      line: 9,
+      line: 12,
       do: [
         ["poof", "parcel", 0],
         ["move", "jt", { x: 522, y: 137 }, 600, 200],
@@ -70,7 +69,7 @@
     },
     {
       say: "<p>serde skips <code>color</code>, because no field has that name. The Mold ignores it, and the note is created.</p>",
-      line: 1,
+      line: 11,
       ask: {
         q: "The body also has a key named color. What does the default CreateNote do with it?",
         choices: [
@@ -88,7 +87,24 @@
     },
     {
       say: "<p>Add <code>#[serde(deny_unknown_fields)]</code> to the struct. Now the Mold refuses <code>color</code>, and the parcel comes back.</p>",
-      line: 1,
+      line: 4,
+      rust: `use serde::Deserialize;
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CreateNote {
+    title: String,
+    body: String,
+    pinned: bool,
+}
+
+fn main() {
+    let json = r#"{"title":"Ana","body":"","pinned":false,"color":"red"}"#;
+    let note: CreateNote = serde_json::from_str(json).unwrap();
+    println!("{} {:?} {}", note.title, note.body, note.pinned);
+}`,
+      check: "panic",
+      crates: ["serde", "serde_json"],
       do: [
         ["fade", "jc", 1, 300, 0],
         ["cls", "jc", "is-refused", true, 300],
@@ -103,7 +119,24 @@
     },
     {
       say: "<p>The parcel goes back as <b>422 Unprocessable Entity</b>. The error names the key: <code>unknown field `color`</code>. The handler never runs.</p>",
-      line: 1,
+      line: 13,
+      rust: `use serde::Deserialize;
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CreateNote {
+    title: String,
+    body: String,
+    pinned: bool,
+}
+
+fn main() {
+    let json = r#"{"title":"Ana","body":"","pinned":false,"color":"red"}"#;
+    let note: CreateNote = serde_json::from_str(json).unwrap();
+    println!("{} {:?} {}", note.title, note.body, note.pinned);
+}`,
+      check: "panic",
+      crates: ["serde", "serde_json"],
       do: [
         ["show", "msg", 200],
         ["pulse", "jc", 200],

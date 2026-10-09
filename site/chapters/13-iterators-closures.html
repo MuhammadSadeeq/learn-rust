@@ -531,7 +531,7 @@ fn main() {
 </div>
 <h3>Closures of different types in one list</h3>
 
-<p><code>impl Fn(i32) -&gt; i32</code> stands for one closure type, and every closure has a type of its own. So a <code>Vec</code> cannot hold two different closures by that rule. <code>Box&lt;dyn Fn(i32) -&gt; i32&gt;</code> erases the closure's type and keeps only what it does. Each box holds one closure on the heap, so closures with different captures can share one list.</p>
+<p><code>impl Fn(i32) -&gt; i32</code> stands for one closure type, and every closure has a type of its own. So a <code>Vec</code> cannot hold two different closures by that rule. <code>Box&lt;dyn Fn(i32) -&gt; i32&gt;</code> erases the closure's type and keeps only what it does. Each box owns one closure. A closure that captures data lives on the heap, and a closure that captures nothing takes no space. Either way, closures with different captures can share one list.</p>
 
 <pre class="rs" data-check="ok" data-stdout="[-3, -40, 4]">fn main() {
     let offset = 10;
@@ -1319,6 +1319,23 @@ fn main() {
 </details>
 
 <p>The Act III boss, <code>boss3_ledger</code>, combines all five. It is a bank ledger with enums for transaction kinds, Results for bad entries, a HashMap of balances and an iterator chain for the totals. The Rosetta lab has these translations as a searchable phrasebook when you want the Rust name for a PHP habit: <a href="../labs/rosetta.html">PHP → Rust Rosetta</a>.</p>
+<div class="ox-quiz" data-id="13:quiz-move-closure" data-label="Check yourself">
+  <p class="ox-q">Chapter 06 taught moves. Does this compile?</p>
+  <pre class="rs" data-check="E0382">
+fn main() {
+    let names = vec![String::from("ana")];
+    let show = move || println!("{names:?}");
+    show();
+    println!("{}", names.len());
+}
+</pre>
+  <ol class="ox-choices">
+    <li>Yes. The closure only borrows <code>names</code>, so <code>names</code> is still ours.</li>
+    <li data-correct>No, E0382. The <code>move</code> closure takes <code>names</code>, and the program uses <code>names</code> after that.</li>
+    <li>No, E0373, because the closure outlives <code>main</code>.</li>
+  </ol>
+  <div class="ox-why"><p>A <code>move</code> closure takes ownership of what it captures. The Vec now belongs to the closure, so the later <code>names.len()</code> reads a moved value.</p></div>
+</div>
 </section>
 
 <section>
@@ -1339,6 +1356,7 @@ fn main() {
     <li>Nothing runs until a consumer pulls. <code>take(n)</code> stops the pulling early, so the stages before it do less work.</li>
     <li><code>collect</code> needs a target type. It can build a Vec, a HashMap, a String, or a <code>Result&lt;Vec&lt;T&gt;, E&gt;</code> that stops at the first error.</li>
     <li>Laravel's Collection methods are eager, and each returns a new collection. A Rust chain pulls one item at a time through every stage. The PHP 8.5 pipe is eager too, so it works like the Laravel chain.</li>
+    <li><code>Box&lt;dyn Fn(i32) -&gt; i32&gt;</code> lets one <code>Vec</code> hold closures of different types. Each box owns one closure, and a closure that captures data lives on the heap.</li>
   </ul>
 </div>
 

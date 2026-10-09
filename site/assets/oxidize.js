@@ -487,7 +487,10 @@
         v.className = "ox-verdict " + (right ? "is-ok" : "is-bad");
         v.textContent = right ? "Correct." : "Not quite. The highlighted answer is right.";
       }
-      if (fresh) {
+      // Once a quiz has been answered right, later picks change nothing: they
+      // pay no XP and do not overwrite the stored right result.
+      const alreadyRight = !!(state.quiz[id] && state.quiz[id].right);
+      if (fresh && !alreadyRight) {
         // Right on the first try pays the full XP. A wrong pick pays 2 ("for
         // trying"), and a right pick after that pays half. Each award has its
         // own key, so nothing is ever paid twice.
@@ -755,7 +758,10 @@
     quests.forEach((q) => {
       const done = !!state.quests[q.name];
       const card = h("div", { class: "ox-quest" + (q.boss ? " is-boss" : "") + (done ? " is-done" : ""), "data-quest": q.name });
-      card.innerHTML = `<div class="ox-quest-icon">${ICON.anvil}</div><div><h4>${q.boss ? "Boss · " : ""}${esc(q.title)}</h4><p>${esc(q.summary || "")} <code>quests/${esc(q.path)}</code></p></div>`;
+      // A cargo quest is a small package: the file to edit is its lib.rs.
+      const cargo = q.kind === "cargo";
+      const editPath = cargo ? `quests/pkgs/${q.name}/src/lib.rs` : `quests/${q.path}`;
+      card.innerHTML = `<div class="ox-quest-icon">${ICON.anvil}</div><div><h4>${q.boss ? "Boss · " : ""}${esc(q.title)}</h4><p>${esc(q.summary || "")} <code>${esc(editPath)}</code>${cargo ? ' <span class="ox-quest-tag">cargo project</span>' : ""}</p></div>`;
       const lab = h("label", { class: "ox-quest-check" });
       const cb = h("input", { type: "checkbox" });
       cb.checked = done;
@@ -874,6 +880,8 @@
     }
     return glossaryLoad;
   }
+  // A quick self-test: each chip is a button that opens its definition inline.
+  // Entries with ch: null (Error Museum only) never reach a chapter's box.
   function buildTerms() {
     const n = parseInt(document.body.dataset.chapter || "0", 10);
     const recap = $("#recap");
@@ -883,11 +891,21 @@
       const items = (all || []).filter((t) => t.ch === n);
       if (!items.length) return;
       const box = h("section", { class: "ox-terms", "aria-labelledby": "ox-terms-title" });
-      box.innerHTML = `<h3 id="ox-terms-title">Terms you now know</h3><p class="ox-terms-note">Each term opens its entry in the <a href="${rel("labs/glossary.html")}">Glossary</a>, with a checked example.</p><ul class="ox-terms-chips"></ul>`;
+      box.innerHTML = `<h3 id="ox-terms-title">Terms you now know</h3><p class="ox-terms-note">Tap a term and say what it means before you look.</p><ul class="ox-terms-chips"></ul>`;
       const list = $(".ox-terms-chips", box);
       items.forEach((t) => {
         const li = h("li");
-        li.appendChild(h("a", { class: "ox-term-chip", "data-kind": t.kind, href: rel("labs/glossary.html#" + t.id) }, esc(t.term)));
+        const id = "ox-term-def-" + String(t.id).replace(/[^A-Za-z0-9_-]/g, "-");
+        const chip = h("button", { type: "button", class: "ox-term-chip", "data-kind": t.kind, "aria-expanded": "false", "aria-controls": id }, esc(t.term));
+        const def = h("div", { class: "ox-term-def", id, hidden: true });
+        def.innerHTML = `<p>${String(t.def || "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])).replace(/`([^`]+)`/g, "<code>$1</code>")}</p><a href="${rel("labs/glossary.html#" + t.id)}">Glossary →</a>`;
+        chip.addEventListener("click", () => {
+          const open = chip.getAttribute("aria-expanded") !== "true";
+          chip.setAttribute("aria-expanded", String(open));
+          def.hidden = !open;
+        });
+        li.appendChild(chip);
+        li.appendChild(def);
         list.appendChild(li);
       });
       const host = $(".ox-complete-host", sec);

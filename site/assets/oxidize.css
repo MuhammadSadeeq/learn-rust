@@ -1082,6 +1082,15 @@ details.ox-think > .ox-think-body > :last-child { margin-bottom: 0; }
 .ox-term-chip[data-kind="error"] { --kind: var(--bad); }
 .ox-term-chip[data-kind="tool"] { --kind: var(--warn); }
 .ox-term-chip:hover { border-color: var(--oxide); color: var(--oxide-ink); }
+button.ox-term-chip { cursor: pointer; }
+button.ox-term-chip[aria-expanded="true"] { border-color: var(--oxide); color: var(--oxide-ink); }
+.ox-terms-chips li:has(> .ox-term-def:not([hidden])) { flex-basis: 100%; }
+.ox-quest-tag { display: inline-block; margin-left: 4px; padding: 0 7px; border: 1px solid var(--line); border-radius: 999px; font: 600 0.72rem/1.6 var(--font-mono); color: var(--muted); white-space: nowrap; }
+.ox-term-def { margin: 6px 0 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); color: var(--ink); font-size: 0.92rem; line-height: 1.5; }
+.ox-term-def p { margin: 0 0 6px; }
+.ox-term-def code { font-family: var(--font-mono); font-size: 0.88em; }
+.ox-term-def a { color: var(--oxide-ink); font-weight: 600; }
+.ox-term-def[hidden] { display: none; }
 .ox-term-chip:focus-visible { outline: 2px solid var(--oxide); outline-offset: 2px; }
 .ox-complete.is-done { border-color: var(--ok); background: color-mix(in srgb, var(--ok-soft) 50%, var(--surface)); }
 .ox-pager { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin-top: 1rem; }

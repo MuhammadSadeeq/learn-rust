@@ -426,6 +426,158 @@ fn main() {
   </ol>
   <div class="ox-why"><p><code>try_send</code> never waits. The buffer holds one message, and nothing has taken the first one out, so the second call returns <code>Err</code> straight away. The program prints the result of <code>is_err()</code>. A plain <code>send</code> in the same spot would block instead.</p></div>
 </div>
+
+<h3 id="worker-pool">One queue, many workers</h3>
+
+<p>A worker pool is a common job. Several threads take jobs from one queue, and each job goes to exactly one worker. It looks like a channel with many receivers. Rust does not let you write that directly, because a <code>Receiver</code> has one owner. There are two obvious ways to share one, and the compiler stops both.</p>
+
+<p>The first is to clone it. A <code>Receiver</code> has no <code>clone</code> method:</p>
+
+<pre class="rs" data-check="E0599">
+use std::sync::mpsc;
+
+fn main() {
+    let (_tx, rx) = mpsc::channel::&lt;u32&gt;();
+    let _second = rx.clone();
+}
+</pre>
+
+<pre class="rustc">
+error[E0599]: no method named `clone` found for struct `std::sync::mpsc::Receiver&lt;T&gt;` in the current scope
+ --&gt; src/main.rs:5:22
+  |
+5 |     let _second = rx.clone();
+  |                      ^^^^^ method not found in `std::sync::mpsc::Receiver&lt;u32&gt;`
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0599`.
+</pre>
+
+<p>The second is to share it through an <code>Arc</code>. That fails for a different reason. An <code>Arc&lt;T&gt;</code> can be sent to another thread only when <code>T</code> is both <code>Send</code> and <code>Sync</code>, and a <code>Receiver</code> is not <code>Sync</code>:</p>
+
+<pre class="rs" data-check="E0277">
+use std::sync::Arc;
+use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (_tx, rx) = mpsc::channel::&lt;u32&gt;();
+    let rx = Arc::new(rx);
+    let worker = thread::spawn(move || rx.recv());
+    let _ = worker.join();
+}
+</pre>
+
+<pre class="rustc">
+error[E0277]: `std::sync::mpsc::Receiver&lt;u32&gt;` cannot be shared between threads safely
+   --&gt; src/main.rs:8:32
+    |
+  8 |     let worker = thread::spawn(move || rx.recv());
+    |                  ------------- ^^^^^^^^^^^^^^^^^ `std::sync::mpsc::Receiver&lt;u32&gt;` cannot be shared between threads safely
+    |                  |
+    |                  required by a bound introduced by this call
+    |
+    = help: the trait `Sync` is not implemented for `std::sync::mpsc::Receiver&lt;u32&gt;`
+    = note: required for `Arc&lt;std::sync::mpsc::Receiver&lt;u32&gt;&gt;` to implement `Send`
+note: required because it's used within this closure
+   --&gt; src/main.rs:8:32
+    |
+  8 |     let worker = thread::spawn(move || rx.recv());
+    |                                ^^^^^^^
+note: required by a bound in `spawn`
+   --&gt; /root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/thread/functions.rs:128:8
+    |
+125 | pub fn spawn&lt;F, T&gt;(f: F) -&gt; JoinHandle&lt;T&gt;
+    |        ----- required by a bound in this function
+...
+128 |     F: Send + 'static,
+    |        ^^^^ required by this bound in `spawn`
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0277`.
+</pre>
+
+<p>The fix is to put the receiver behind a <code>Mutex</code>. A <code>Mutex&lt;T&gt;</code> is <code>Sync</code> when <code>T</code> is <code>Send</code>, so <code>Arc&lt;Mutex&lt;Receiver&lt;Job&gt;&gt;&gt;</code> can be shared. The lock lets one worker at a time call <code>recv</code>. Here a <code>Job</code> is a number, to keep the example short. A real job could be a struct or a closure.</p>
+
+<pre class="rs" data-run data-stdout="1 squared is 1\n2 squared is 4\n3 squared is 9\n4 squared is 16\n5 squared is 25\n6 squared is 36">
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+type Job = u32; // a number to square; a real job could be a struct
+
+fn main() {
+    let (job_tx, job_rx) = mpsc::channel::&lt;Job&gt;();
+    let (done_tx, done_rx) = mpsc::channel::&lt;String&gt;();
+
+    // One receiver, shared by every worker.
+    let job_rx = Arc::new(Mutex::new(job_rx));
+
+    let mut workers = Vec::new();
+    for _ in 0..3 {
+        let job_rx = Arc::clone(&amp;job_rx);
+        let done_tx = done_tx.clone();
+        workers.push(thread::spawn(move || loop {
+            // Lock only long enough to take one job. The guard is a temporary,
+            // so the lock is released at the end of this statement.
+            let job = job_rx.lock().unwrap().recv();
+            match job {
+                Ok(n) =&gt; done_tx.send(format!("{n} squared is {}", n * n)).unwrap(),
+                Err(_) =&gt; break, // every sender is gone: no more jobs
+            }
+        }));
+    }
+    drop(done_tx);
+
+    for n in 1..=6 {
+        job_tx.send(n).unwrap();
+    }
+    drop(job_tx); // no more jobs: each worker's recv returns Err
+
+    // The results arrive in any order, so sort them before printing.
+    let mut results: Vec&lt;String&gt; = done_rx.iter().collect();
+    results.sort();
+    for line in results {
+        println!("{line}");
+    }
+    for worker in workers {
+        worker.join().unwrap();
+    }
+}
+</pre>
+
+<p>Each worker locks the receiver only long enough to take one job. The guard is a temporary. It lives until the end of the <code>let</code> statement, and <code>recv</code> returns a plain <code>Result</code> that does not borrow it. So the lock is free while the worker does the job. If the worker kept the lock during the job, the other workers would wait at the lock, and the pool would run one job at a time.</p>
+
+<p>The same lock can be held much longer by accident. A <code>while let</code> keeps its temporaries alive until the end of the loop body, so <code>while let Ok(job) = job_rx.lock().unwrap().recv()</code> holds the lock while every job runs. The quiz checks it.</p>
+
+<div class="ox-quiz" data-id="18:quiz-worker-guard" data-label="Check yourself">
+  <p class="ox-q">A worker reads its jobs with <code>while let</code>. What does this program print?</p>
+  <pre class="rs" data-stdout="1 true">
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
+
+fn main() {
+    let (tx, rx) = mpsc::channel::&lt;u32&gt;();
+    let rx = Arc::new(Mutex::new(rx));
+    tx.send(1).unwrap();
+    drop(tx);
+    while let Ok(n) = rx.lock().unwrap().recv() {
+        // Is the lock still held here?
+        println!("{n} {}", rx.try_lock().is_err());
+    }
+}
+</pre>
+  <ol class="ox-choices">
+    <li><code>1 false</code>, because the lock is released once <code>recv</code> returns.</li>
+    <li data-correct><code>1 true</code>, because the guard from <code>lock()</code> lives until the end of the loop body, so the lock is still held.</li>
+    <li>It hangs, because <code>try_lock</code> waits for the lock.</li>
+  </ol>
+  <div class="ox-why"><p><code>try_lock</code> never waits. It returns an error at once when the lock is already held, and here this same thread holds it. Write the job on its own <code>let</code> line, as in the pool above, and the lock is free while the job runs.</p></div>
+</div>
+
+<p>The <code>bounded1</code> quest in the Forge builds this pool with a bounded queue, and it counts the jobs waiting in that queue.</p>
 </section>
 
 <section>
@@ -546,7 +698,7 @@ fn main() {
 <section>
 <h2 id="globals">Safe globals</h2>
 
-<p>Some values belong to the whole program: a table of prices, a compiled regex, a connection pool. Every thread should see the same one. A <code>static</code> item is that kind of value. It lives for the whole run of the program and is never freed. A <code>static</code> that threads share must be <code>Sync</code>, and the compiler checks it:</p>
+<p>Some values belong to the whole program: a table of prices, a compiled regex, a connection pool. Every thread should see the same one. A <code>static</code> item is that kind of value. It lives for the whole run of the program and is never freed. A <code>static</code> that threads share must be <code>Sync</code>, which means a shared reference <code>&amp;T</code> can be used from several threads at once (the section Send and Sync explains it). The compiler checks it:</p>
 
 <pre class="rs" data-check="error">
 use std::cell::Cell;
@@ -1021,6 +1173,62 @@ fn main() {
   </ol>
   <div class="ox-why"><p><code>Arc&lt;T&gt;</code> is <code>Send</code> only when <code>T</code> is both <code>Send</code> and <code>Sync</code>. The borrow count inside a <code>RefCell</code> is updated without a lock, so it isn't <code>Sync</code>. Replacing it with <code>Arc&lt;Mutex&lt;i32&gt;&gt;</code> fixes the code, because a <code>Mutex&lt;i32&gt;</code> is both <code>Send</code> and <code>Sync</code>.</p></div>
 </div>
+
+<aside class="ox-callout" data-kind="trap">
+  <p><code>Box&lt;dyn Error&gt;</code> is not <code>Send</code>. A trait object does not carry <code>Send</code> unless you name it, so a result that holds one cannot be returned from a spawned thread:</p>
+<pre class="rs" data-check="E0277">
+use std::error::Error;
+use std::thread;
+
+fn main() {
+    let handle = thread::spawn(|| -&gt; Result&lt;u32, Box&lt;dyn Error&gt;&gt; {
+        Ok("42".parse::&lt;u32&gt;()?)
+    });
+    println!("{}", handle.join().unwrap().unwrap());
+}
+</pre>
+<pre class="rustc">
+error[E0277]: `dyn std::error::Error` cannot be sent between threads safely
+   --&gt; src/main.rs:5:18
+    |
+  5 |       let handle = thread::spawn(|| -&gt; Result&lt;u32, Box&lt;dyn Error&gt;&gt; {
+    |  __________________^
+  6 | |         Ok("42".parse::&lt;u32&gt;()?)
+  7 | |     });
+    | |______^ `dyn std::error::Error` cannot be sent between threads safely
+    |
+    = help: the trait `Send` is not implemented for `dyn std::error::Error`
+    = note: required for `std::ptr::Unique&lt;dyn std::error::Error&gt;` to implement `Send`
+note: required because it appears within the type `Box&lt;dyn std::error::Error&gt;`
+   --&gt; /root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:234:12
+    |
+...
+note: required by a bound in `spawn`
+   --&gt; /root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/thread/functions.rs:129:8
+    |
+125 | pub fn spawn&lt;F, T&gt;(f: F) -&gt; JoinHandle&lt;T&gt;
+    |        ----- required by a bound in this function
+...
+129 |     T: Send + 'static,
+    |        ^^^^ required by this bound in `spawn`
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0277`.
+</pre>
+  <p>Name the marker traits in the box: <code>Box&lt;dyn Error + Send + Sync&gt;</code>. The program then builds and prints the value:</p>
+<pre class="rs" data-stdout="42">
+use std::error::Error;
+use std::thread;
+
+fn main() {
+    let handle = thread::spawn(|| -&gt; Result&lt;u32, Box&lt;dyn Error + Send + Sync&gt;&gt; {
+        Ok("42".parse::&lt;u32&gt;()?)
+    });
+    println!("{}", handle.join().unwrap().unwrap());
+}
+</pre>
+</aside>
 </section>
 
 <section>

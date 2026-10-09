@@ -181,7 +181,7 @@ impl Summary for Tweet {
 <p>PHP 8.3 added <code>#[\Override]</code> for part of this check. Put it on a method, and PHP verifies that a parent or an interface really declares a method with that name. If the method is spelled <code>summarise</code>, the class fails to load. Rust checks every impl at compile time. A misspelled method is error E0407, and a missing required method is E0046.</p>
 <h3>Supertraits: a trait that needs another</h3>
 
-<p>A trait can require another trait. <code>trait Tool: Named</code> means every type that implements <code>Tool</code> must also implement <code>Named</code>. A default method on <code>Tool</code> can then call <code>Named</code>'s methods, because the compiler knows they exist. You can list <code>Send</code> and <code>Sync</code> the same way, as in <code>trait Job: Send + Sync</code>. That means every <code>Job</code> can cross threads.</p>
+<p>A trait can require another trait. <code>trait Tool: Named</code> means every type that implements <code>Tool</code> must also implement <code>Named</code>. A default method on <code>Tool</code> can then call <code>Named</code>'s methods, because the compiler knows they exist. You can list <code>Send</code> and <code>Sync</code> the same way, as in <code>trait Job: Send + Sync</code>. Then every type that implements <code>Job</code> must be both: it can move to another thread, and a shared <code>&amp;Job</code> can be used from several threads. Chapter 18 explains both markers.</p>
 
 <pre class="rs" data-check="ok" data-stdout="running clock">trait Named {
     fn name(&amp;self) -&gt; String;
@@ -253,7 +253,7 @@ fn main() {
 
 <h3>The orphan rule: one side must be yours</h3>
 
-<p>You may implement a trait for a type only when <em>the trait</em> or <em>the type</em> is defined in your crate. This is the orphan rule. Without it, two crates could each implement <code>Display</code> for <code>Vec&lt;i32&gt;</code> in different ways, and nothing would say which one a program should use.</p>
+<p>You may implement a trait for a type only when the trait is defined in your crate, or when a type you define appears in the impl, including as a type parameter of the trait. This is the <strong>orphan rule</strong>. For example, <code>impl From&lt;Local&gt; for Vec&lt;u8&gt;</code> is allowed when <code>Local</code> is yours, because <code>Local</code> appears in the impl. Without it, two crates could each implement <code>Display</code> for <code>Vec&lt;i32&gt;</code> in different ways, and nothing would say which one a program should use.</p>
 
 <details class="ox-think">
   <summary>Predict first: this impl sits in your own crate. Is it allowed?</summary>
@@ -896,9 +896,9 @@ struct Checkout {
 <p>Choose <code>dyn</code> when the set of types is open or mixed: a registry of handlers, a list of plugins, a collection of heterogeneous items. Choose generics on a hot path where the types are known and you want the fastest calls. The iterator adapters from Chapter 13 are generic, which is why the compiler can specialize a whole chain for your types.</p>
 <h3>Trait objects that cross threads</h3>
 
-<p>A trait object that a thread will own needs the marker traits as well. <code>Box&lt;dyn Job + Send + Sync + 'static&gt;</code> is a boxed job that can move to another thread, can be shared between threads, and holds no borrowed data. Leave out <code>Send</code>, and <code>thread::spawn</code> refuses the box with E0277, because the trait object might not be safe to send.</p>
+<p>A trait object that a thread will own needs the marker traits as well. <code>Box&lt;dyn Job + Send + Sync + 'static&gt;</code> is a boxed job that can move to another thread, can be shared between threads, and holds no borrowed data. Leave out <code>Send</code>, and <code>thread::spawn</code> refuses the box with E0277, because the trait object might not be safe to send. If the trait already requires <code>Send</code>, as <code>trait Job: Send + Sync</code> does in the section above, the box is <code>Send</code> without the extra word.</p>
 
-<pre class="rs" data-check="ok" data-stdout="8">trait Job: Send + Sync {
+<pre class="rs" data-check="ok" data-stdout="8">trait Job {
     fn run(&amp;self) -&gt; u32;
 }
 
@@ -912,9 +912,12 @@ impl Job for Double {
 
 fn main() {
     let jobs: Vec&lt;Box&lt;dyn Job + Send + Sync + 'static&gt;&gt; = vec![Box::new(Double(4))];
-    for job in &amp;jobs {
-        println!("{}", job.run());
-    }
+    let handle = std::thread::spawn(move || {
+        for job in &amp;jobs {
+            println!("{}", job.run());
+        }
+    });
+    handle.join().unwrap();
 }</pre>
 
 <h3>Trait upcasting</h3>
@@ -1198,11 +1201,12 @@ fn main() {
   <h3>Capabilities and generics</h3>
   <ul>
     <li>A <strong>trait</strong> is a set of methods a type promises to provide. <code>impl Trait for Type</code> is the promise. Default methods are shared bodies, and they can call the required methods.</li>
-    <li>You may implement a trait for a type only when the trait or the type is defined in your crate. That is the <strong>orphan rule</strong>. A newtype is the usual way around it.</li>
+    <li>You may implement a trait for a type only when the trait is defined in your crate, or when a type you define appears in the impl. That is the <strong>orphan rule</strong>. A newtype is the usual way around it.</li>
     <li><code>impl Trait</code>, <code>&lt;T: Trait&gt;</code> and <code>where</code> all accept any type with the trait. A missing bound fails inside the generic body, with E0599 for a method or E0369 for an operator.</li>
     <li>Generics are <strong>monomorphized</strong>: the compiler makes one specialized copy per concrete type. Calls are direct, and the binary holds more code.</li>
     <li><code>dyn Trait</code> behind a pointer is one copy of the code plus a <strong>fat pointer</strong>, the data pointer and the vtable pointer. Calls go through the vtable. The trait must be dyn compatible, so no method may return <code>Self</code> or take its own type parameters, unless that method is excluded with <code>where Self: Sized</code>.</li>
     <li>Implement <code>Display</code> for <code>{}</code> and <code>From</code> for conversions. <code>Into</code> comes free from <code>From</code>.</li>
+    <li><code>trait Tool: Named</code> makes <code>Named</code> a requirement of <code>Tool</code>. A const generic, such as <code>const N: usize</code> in <code>[i32; N]</code>, takes a number as a parameter.</li>
   </ul>
 </div>
 

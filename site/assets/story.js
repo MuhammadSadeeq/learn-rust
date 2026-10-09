@@ -470,7 +470,10 @@
       st.frames.forEach((f) => f.vars.forEach((v) => {
         const s = v.status || "", t = targetOf(v.val), b = st.heap.concat(st.data || []).find((x) => x.id === t);
         // Cells are always joined with ", " so digit bytes are never read as one number.
-        const what = b ? `${b.cells.join(", ")} ${b.static ? "in the binary" : "on the heap"}` : t !== undefined ? t : "";
+        // An empty block (a Vec with no items yet) gets its own words, so no double space is read.
+        const cells = b ? b.cells.join(", ") : "";
+        const place = b ? (b.static ? "in the binary" : "on the heap") : "";
+        const what = b ? (cells ? `${cells} ${place}` : `an empty block ${place}`) : t !== undefined ? t : "";
         if (s.includes("moved")) parts.push(`${v.name} is moved and can't be used`);
         else if (s.includes("shadowed")) parts.push(`${v.name} is shadowed, so no line can name it`);
         else if (s.includes("ended")) parts.push(`${v.name} is done borrowing`);

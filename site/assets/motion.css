@@ -52,13 +52,11 @@
     linear-gradient(to bottom, var(--bg-grid) 1px, transparent 1px);
   background-size: calc(40 / var(--mo-w) * 100%) calc(40 / var(--mo-h) * 100%);
 }
-/* Phones: a scene is drawn in fixed units, so a stage narrower than about 540 px
-   shrinks its labels below reading size. Below that width the stage keeps 540 px
-   (the widget scrolls sideways instead) and gets a little taller, so the labels
-   under an actor stay inside the stage. */
+/* Phones: the stage always fills the widget, so nothing is cut off and nothing
+   scrolls sideways. Below about 560 px the stage gets a little taller, so the
+   labels under an actor have room. Label sizes keep a floor (see .mo-tag). */
 @container (max-width: 559px) {
-  .mo-main { overflow-x: auto; }
-  .mo-stage { min-width: 540px; aspect-ratio: 8 / 5 !important; }
+  .mo-stage { aspect-ratio: 8 / 5 !important; }
 }
 .mo-actor { position: absolute; line-height: 0; }
 .mo-art { display: block; }
@@ -71,7 +69,7 @@
   top: calc(100% + 4px);
   transform: translateX(-50%);
   white-space: nowrap;
-  font: 600 clamp(0.6rem, 2.1cqw, 0.8rem) var(--font-mono);
+  font: 600 clamp(0.65rem, 2.1cqw, 0.8rem) var(--font-mono);
   line-height: 1.2;
   padding: 1px 6px;
   color: var(--ink);
@@ -80,6 +78,9 @@
   border-radius: 5px;
 }
 .mo-tag:empty { display: none; }
+@container (max-width: 559px) {
+  .mo-tag { padding: 1px 3px; }
+}
 
 .mo-box { border: 1.5px dashed var(--line); border-radius: 14px; background: var(--surface-3); }
 .mo-box.is-stack { background: var(--stack-soft); border-color: color-mix(in srgb, var(--stack) 45%, transparent); }
@@ -91,7 +92,7 @@
   padding: 0;
   border: 0;
   background: none;
-  font: 700 clamp(0.56rem, 1.8cqw, 0.7rem)/1 var(--font-mono);
+  font: 700 clamp(0.65rem, 1.8cqw, 0.75rem)/1 var(--font-mono);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);

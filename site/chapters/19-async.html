@@ -1061,7 +1061,7 @@ async fn main() {
 
 <h3>A parser that survives chunk boundaries</h3>
 
-<p>The network does not deliver events in neat pieces. One read may end in the middle of a line. The parser keeps the bytes it has not finished, and it decodes a line only when its newline arrives. A newline byte never appears inside a UTF-8 character, so a finished line always holds whole characters.</p>
+<p>The network does not deliver events in neat pieces. One read may end in the middle of a line. The parser keeps the bytes it has not finished, and it decodes a line only when its newline arrives. A newline byte never appears inside a UTF-8 character, so a finished line always holds whole characters. <code>String::from_utf8_lossy</code> turns the bytes of a line into text. It replaces any invalid UTF-8 with � (the replacement character) instead of failing.</p>
 
 <pre class="rs" data-run data-stdout="greet: hello + world\n(no name): bye">
 #[derive(Debug)]
@@ -1089,8 +1089,10 @@ impl SseParser {
             let line = String::from_utf8_lossy(&amp;line_bytes[..end]).into_owned();
             if line.is_empty() {
                 // A blank line ends the event.
+                // The name belongs to this event only, so clear it either way.
+                let name = self.name.take();
                 if let Some(data) = self.data.take() {
-                    events.push(Event { name: self.name.take(), data });
+                    events.push(Event { name, data });
                 }
             } else if line.starts_with(':') {
                 // A line starting with a colon is a comment. Ignore it.
@@ -1130,7 +1132,7 @@ fn main() {
 }
 </pre>
 
-<p>The first chunk ends in the middle of the <code>data:</code> line. The parser keeps <code>data: hel</code>, and the next chunk completes it. The comment line is skipped, and the blank line after <code>bye</code> ends the second event. This version ignores <code>id:</code> and does not handle carriage returns.</p>
+<p>The first chunk ends in the middle of the <code>data:</code> line. The parser keeps <code>data: hel</code>, and the next chunk completes it. The comment line is skipped, and the blank line after <code>bye</code> ends the second event. This version ignores <code>id:</code> and does not handle carriage returns. A blank line clears the event name even when the event has no data, so a name never leaks into the next event.</p>
 
 <p>Chapter 20 shows how an HTTP client gives you the chunks of a response, so you can feed them to a parser like this one.</p>
 
@@ -1546,6 +1548,24 @@ fn main() {
 <aside class="ox-callout" data-kind="trap">
   <p>The matches are close, not identical. A JavaScript promise starts running as soon as you create it. A Rust future does nothing until something polls it. Also, <code>Promise.race</code> leaves the losing promises running, while <code>select!</code> drops the losing futures.</p>
 </aside>
+<div class="ox-quiz" data-id="19:quiz-thread-move" data-label="Check yourself">
+  <p class="ox-q">Chapter 13 explained the <code>move</code> keyword. Does this compile?</p>
+  <pre class="rs" data-check="E0373">
+use std::thread;
+
+fn main() {
+    let name = String::from("ana");
+    let handle = thread::spawn(|| println!("{name}"));
+    handle.join().unwrap();
+}
+</pre>
+  <ol class="ox-choices">
+    <li>Yes, and it prints <code>ana</code>.</li>
+    <li data-correct>No, E0373. The closure borrows <code>name</code>, and the thread may outlive <code>main</code>, so the closure has to take it with <code>move</code>.</li>
+    <li>No, E0382, because <code>name</code> is moved twice.</li>
+  </ol>
+  <div class="ox-why"><p>A spawned thread or task can run after the function that made it has returned. A closure that borrows a local cannot promise that the local lives long enough, so it must own the value with <code>move</code>.</p></div>
+</div>
 </section>
 
 <section>

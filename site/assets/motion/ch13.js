@@ -28,7 +28,7 @@
     { id: "copy", prop: "pebble", opts: { type: "i32", value: "5" }, x: 300, y: 165, size: 60, label: "copy of n", hidden: true },
     { id: "log", cast: "fluffy", x: 520, y: 110, size: 96, label: "log", hidden: true },
     { id: "err", prop: "errscroll", opts: { label: "E0502" }, x: 440, y: 205, size: 110, z: 5, hidden: true },
-    { id: "ins", cast: "inspector", x: 580, y: 225, size: 100, label: "Inspector", hidden: true },
+    { id: "ins", cast: "inspector", x: 556, y: 225, size: 100, label: "Inspector", hidden: true },
   ],
   beats: [
     {

@@ -74,6 +74,7 @@ fn main() {
         explain: "The check happens at the call, before anything runs. Note doesn't implement Summary, so the door refuses it.",
       },
       do: [
+        ["art", "door", { prop: "door", opts: { label: "notify" } }, 0],
         ["move", "note", { x: 250, y: 230 }, 600],
         ["pose", "forge", "think", 1200, 200],
       ],

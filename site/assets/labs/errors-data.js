@@ -1625,7 +1625,7 @@ fn main() {
     id: "E0038",
     title: "async fn in a trait used as dyn",
     check: "E0038",
-    chapter: 19,
+    chapter: 20,
     tags: ["traits", "async"],
     rust: `trait Tool {
     async fn call(&self, input: &str) -> String;

@@ -421,7 +421,7 @@ fn main() -&gt; Result&lt;(), ParseIntError&gt; {
     Ok(())
 }</pre>
 
-<p>A program usually has more than one kind of error, and <code>main</code> can't name them all. <code>Box&lt;dyn Error&gt;</code> accepts any error type that implements the <code>Error</code> trait. A <code>Box</code> is a pointer to a value on the heap, and <code>dyn Error</code> hides the exact error type from the compiler, so calls go through a table of functions at run time. You'll meet both properly in Chapters 14 and 17. Here two different error types go through one <code>main</code>:</p>
+<p>A program usually has more than one kind of error, and <code>main</code> can't name them all. <code>Box&lt;dyn Error&gt;</code> accepts any error type that implements the <code>Error</code> trait. A <code>Box</code> is a pointer to a value on the heap, and <code>dyn Error</code> hides the exact error type from the compiler, so calls go through a table of functions at run time. You'll meet both properly in Chapters 14 and 17. Chapter 18 explains the <code>+ Send + Sync</code> that a boxed error needs when it crosses threads. Here two different error types go through one <code>main</code>:</p>
 
 <pre class="rs" data-run data-stdout="42 9.5" data-title="src/main.rs">
 use std::error::Error;
@@ -1280,6 +1280,25 @@ fn main() {
   <p>These pairs are scaffolding, not equivalences. <code>catch</code> can recover from an exception thrown three calls down, while a <code>match</code> only sees the Result of the call in front of it. In Rust, a failure that should reach a caller further up must be passed up by every function in between, with <code>?</code>. That's more typing, and it's why signatures carry the error type.</p>
   <p><code>finally</code> is a block you write at each use. <code>Drop</code> is cleanup written once on a type, and it runs on every path out of the scope, including the early return from <code>?</code>. That's why a file or a lock can release itself even when a step fails.</p>
 </aside>
+<div class="ox-quiz" data-id="11:quiz-option-question" data-label="Check yourself">
+  <p class="ox-q">Chapter 10 taught <code>Option</code>. Does this compile?</p>
+  <pre class="rs" data-check="E0277">
+fn first_char(s: &amp;str) -&gt; Result&lt;char, String&gt; {
+    let c = s.chars().next()?;
+    Ok(c)
+}
+
+fn main() {
+    println!("{:?}", first_char("crab"));
+}
+</pre>
+  <ol class="ox-choices">
+    <li>Yes. The <code>?</code> turns the <code>None</code> into an error string.</li>
+    <li data-correct>No, E0277. <code>?</code> works on an <code>Option</code> only in a function that returns <code>Option</code>. Here the function returns <code>Result</code>, so convert the <code>None</code> yourself or change the return type.</li>
+    <li>Yes, and the function returns <code>Ok(None)</code> for an empty string.</li>
+  </ol>
+  <div class="ox-why"><p>The compiler says the <code>?</code> operator can only be used on <code>Result</code>s here. The <code>?</code> from Chapter 11 leaves early with an error, and an <code>Option</code> has no error to hand over.</p></div>
+</div>
 </section>
 
 <section>

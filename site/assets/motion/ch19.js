@@ -81,7 +81,7 @@
         ["move", "tB", { x: 215, y: 150 }, 500],
         ["cls", "tB", "is-waiting", false, 400],
         ["pose", "waiter", "sleep", 0, 700],
-        ["label", "waiter", "frozen in thread::sleep", 700],
+        ["label", "waiter", "frozen", 700],
         ["pop", "bC", 900],
         ["pulse", "bC", 1000],
         ["shake", "bC", 1200],

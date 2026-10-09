@@ -99,6 +99,30 @@ fn main() {
       },
     },
     {
+      rust: `fn read_text(raw: &str) -> Result<&str, String> {
+    Ok(raw.trim())
+}
+
+fn parse_age(text: &str) -> Result<u32, String> {
+    text.parse::<u32>().map_err(|e| e.to_string())
+}
+
+fn next_year(age: u32) -> Result<u32, String> {
+    Ok(age + 1)
+}
+
+fn run(raw: &str) -> Result<u32, String> {
+    let text = read_text(raw)?;
+    let age = parse_age(text).unwrap();
+    let year = next_year(age)?;
+    Ok(year)
+}
+
+fn main() {
+    println!("{:?}", run(" 41 "));
+    println!("{:?}", run("x"));
+}`,
+      check: "panic",
       say: '<p>Put <code>.unwrap()</code> in place of that <code>?</code>. Nothing switches the car, so it derails and the thread panics: <code>called `Result::unwrap()` on an `Err` value: "invalid digit found in string"</code></p>',
       line: 15,
       do: [

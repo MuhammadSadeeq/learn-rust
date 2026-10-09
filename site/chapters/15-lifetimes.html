@@ -839,6 +839,7 @@ fn main() {
     <li>A struct that holds a reference gets a lifetime parameter, and it can't outlive the value it borrows.</li>
     <li><code>'static</code> means no borrow shorter than the program. Owned data satisfies <code>T: 'static</code>.</li>
     <li>E0106, E0597, E0515 and E0716 each say that a borrow and its owner don't line up. Fix the relationship, or change who owns the data.</li>
+    <li>Write <code>'_</code> when a type has a lifetime parameter and you don't want to name it, as in <code>Formatter&lt;'_&gt;</code>. The compiler works out which lifetime it means.</li>
   </ul>
 </div>
 

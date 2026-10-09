@@ -771,7 +771,7 @@ fn main() {
 }</pre>
 <h3>BinaryHeap: the largest item first</h3>
 
-<p>A <code>BinaryHeap</code> is a priority queue. <code>pop</code> returns the largest item, and each <code>push</code> keeps that true. The heap does not keep the whole list in order, so only the top item is cheap to read. A heap adds and removes an item in <code>O(log n)</code> time. For a min-heap, wrap each item in <code>Reverse</code>. The order flips, and the smallest job comes out first.</p>
+<p>A <code>BinaryHeap</code> is a priority queue. <code>pop</code> returns the largest item, and each <code>push</code> keeps that true. The heap does not keep the whole list in order, so only the top item is cheap to read. A heap adds and removes an item in <code>O(log n)</code> time. For a min-heap, wrap each item in <code>Reverse</code>, which flips the comparison; the sorting section below explains it. The order flips, and the smallest job comes out first.</p>
 
 <pre class="rs" data-check="ok" data-stdout="[1, 3, 5, 8]">use std::cmp::Reverse;
 use std::collections::BinaryHeap;
@@ -1113,6 +1113,7 @@ fn main() {
     <li><code>HashMap::insert</code> moves the key and the value in. Map iteration order is not promised, so sort before you print.</li>
     <li>The entry API counts and groups in one line: <code>*m.entry(k).or_insert(0) += 1</code>.</li>
     <li>PHP's <code>array_find</code> and <code>array_first</code> return a value or <code>null</code>. Rust's <code>find</code> and <code>first</code> return an <code>Option</code>. A <code>Vec</code> is always a list, so there is no <code>array_is_list</code> check.</li>
+    <li>Sort with <code>sort_by_key</code> and <code>Reverse</code> to put the largest first. <code>cmp</code> and <code>then_with</code> break ties. A <code>BinaryHeap</code> pops its largest item first, and wrapping each item in <code>Reverse</code> makes it a min-heap.</li>
   </ul>
 </div>
 

@@ -23,9 +23,9 @@
     { id: "src-rs-name", text: "main.rs", x: 390, y: 200, hidden: true },
     { id: "forge", cast: "forge", x: 500, y: 150, size: 116, pose: "sleep" },
     { id: "ingot", prop: "ingot", opts: { label: "binary" }, x: 500, y: 246, size: 92, hidden: true },
-    { id: "q1", prop: "parcel", opts: { label: "GET /" }, x: 625, y: 246, size: 56, hidden: true },
-    { id: "q2", prop: "parcel", opts: { label: "GET /" }, x: 625, y: 246, size: 56, hidden: true },
-    { id: "q3", prop: "parcel", opts: { label: "GET /" }, x: 625, y: 246, size: 56, hidden: true },
+    { id: "q1", prop: "parcel", opts: { label: "GET /" }, x: 598, y: 246, size: 56, hidden: true },
+    { id: "q2", prop: "parcel", opts: { label: "GET /" }, x: 598, y: 246, size: 56, hidden: true },
+    { id: "q3", prop: "parcel", opts: { label: "GET /" }, x: 598, y: 246, size: 56, hidden: true },
   ],
   beats: [
     {
