@@ -53,7 +53,7 @@ fn main() {
           answer: 1,
           explain: "This is a <strong>move</strong>."
         },
-        say: "<p>The 24 stack bytes are copied into <code>b</code>, and the heap is untouched. Two owners of one buffer would both free it at the end of <code>main</code>, which is a <em>double free</em>. Rust prevents that by declaring <code>a</code> <span class=\"c-ghost\">moved</span>. The ownership travelled to <code>b</code>.</p>",
+        say: "<p>The 24 stack bytes are copied into <code>b</code>, and the heap is untouched. Two owners of one buffer would both free it at the end of <code>main</code>, which is a <em>double free</em>. Rust prevents that by declaring <code>a</code> <span class=\"c-ghost\">moved</span>. The ownership traveled to <code>b</code>.</p>",
         ops: [["move", "a", "b"]]
       },
       {

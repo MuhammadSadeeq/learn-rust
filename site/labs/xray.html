@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Memory X-Ray · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<style>
+  .xl-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
+  @media (min-width: 1000px) { .xl-layout { grid-template-columns: 17rem minmax(0, 1fr); } }
+  .xl-list { display: grid; gap: 14px; }
+  @media (min-width: 1000px) { .xl-list { position: sticky; top: calc(var(--top-h) + 16px); max-height: calc(100vh - var(--top-h) - 32px); overflow-y: auto; padding-right: 4px; } }
+  .xl-group { display: grid; gap: 4px; }
+  .xl-group .ox-label { padding: 0 4px 2px; }
+  .xl-item {
+    text-align: left;
+    padding: 7px 10px;
+    border-radius: var(--radius);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--ink-2);
+    font: 500 0.9rem/1.35 var(--font-body);
+    cursor: pointer;
+  }
+  .xl-item:hover { background: var(--surface); border-color: var(--line); color: var(--ink); }
+  .xl-item[aria-current="true"] { background: var(--surface); border-color: var(--oxide); color: var(--ink); font-weight: 700; }
+  .xl-item small { display: block; font: 600 0.66rem/1.3 var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+  .xl-item small.is-bad { color: var(--bad); }
+  .xl-main .ox-xray, .xl-main .ox-timeline { margin-top: 0; }
+  .xl-meta { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 0 0 12px; font-size: 0.92rem; color: var(--muted); }
+  .xl-legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: 10px; margin: 0 0 1.4rem; }
+  .xl-legend div { padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); font-size: 0.92rem; color: var(--ink-2); }
+  .xl-legend b { display: block; color: var(--ink); margin-bottom: 2px; }
+  .xl-swatch { display: inline-block; width: 22px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px; }
+</style>
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+<script src="../assets/xray.js" defer></script>
+</head>
+<body data-crumb="Lab · Memory X-Ray">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<main class="ox-lab" id="main">
+  <header class="ox-lab-hero">
+    <span class="ox-label">Lab</span>
+    <h1 class="ox-title">Memory X-Ray</h1>
+    <p>Every program from the course that's worth watching, in one place. Step through it line by line and see the stack frames, the heap, who owns what, and what gets freed when.</p>
+  </header>
+
+  <div class="xl-legend">
+    <div><b>Stack</b>One frame per function call. Every variable has a fixed size known at compile time.</div>
+    <div><b>Heap</b>Memory you ask for at runtime: string bytes, vector elements, boxes. Reached through a pointer.</div>
+    <div><b>Arrows</b><span class="xl-swatch" style="background:var(--oxide)"></span>owner&ensp;<span class="xl-swatch" style="background:var(--borrow)"></span>&amp; borrow&ensp;<span class="xl-swatch" style="background:var(--mut)"></span>&amp;mut</div>
+    <div><b>Keys</b><kbd>←</kbd> <kbd>→</kbd> step back and forward once the X-Ray has focus. Prediction steps wait for your answer.</div>
+  </div>
+
+  <div class="xl-layout">
+    <nav class="xl-list" id="xl-list" aria-label="Programs"></nav>
+    <div class="xl-main">
+      <p class="xl-meta" id="xl-meta"></p>
+      <div id="xl-host"></div>
+    </div>
+  </div>
+</main>
+
+<!-- Scenario files load in order; after each one, newly added scenarios are
+     tagged with their chapter so the list can group them. -->
+<script>
+  window.OX_XRAY = window.OX_XRAY || []; window.OX_TIMELINES = window.OX_TIMELINES || [];
+  window.oxTag = function (ch) {
+    [window.OX_XRAY, window.OX_TIMELINES].forEach(function (a) { a.forEach(function (s) { if (s.ch === undefined) s.ch = ch; }); });
+  };
+</script>
+<script src="../assets/scenarios/ch01.js"></script><script>oxTag(1)</script>
+<script src="../assets/scenarios/ch02.js"></script><script>oxTag(2)</script>
+<script src="../assets/scenarios/ch03.js"></script><script>oxTag(3)</script>
+<script src="../assets/scenarios/ch04.js"></script><script>oxTag(4)</script>
+<script src="../assets/scenarios/ch05.js"></script><script>oxTag(5)</script>
+<script src="../assets/scenarios/ch06.js"></script><script>oxTag(6)</script>
+<script src="../assets/scenarios/ch07.js"></script><script>oxTag(7)</script>
+<script src="../assets/scenarios/ch08.js"></script><script>oxTag(8)</script>
+<script src="../assets/scenarios/ch09.js"></script><script>oxTag(9)</script>
+<script src="../assets/scenarios/ch10.js"></script><script>oxTag(10)</script>
+<script src="../assets/scenarios/ch11.js"></script><script>oxTag(11)</script>
+<script src="../assets/scenarios/ch12.js"></script><script>oxTag(12)</script>
+<script src="../assets/scenarios/ch13.js"></script><script>oxTag(13)</script>
+<script src="../assets/scenarios/ch14.js"></script><script>oxTag(14)</script>
+<script src="../assets/scenarios/ch15.js"></script><script>oxTag(15)</script>
+<script src="../assets/scenarios/ch16.js"></script><script>oxTag(16)</script>
+<script src="../assets/scenarios/ch17.js"></script><script>oxTag(17)</script>
+<script src="../assets/scenarios/ch18.js"></script><script>oxTag(18)</script>
+<script src="../assets/scenarios/ch19.js"></script><script>oxTag(19)</script>
+<script src="../assets/scenarios/ch20.js"></script><script>oxTag(20)</script>
+<script src="../assets/scenarios/ch21.js"></script><script>oxTag(21)</script>
+<script>
+(function () {
+  "use strict";
+  function start() {
+    var esc = Ox.esc, C = window.OX_COURSE;
+    var items = [];
+    window.OX_XRAY.forEach(function (s) { items.push({ kind: "xray", s: s }); });
+    window.OX_TIMELINES.forEach(function (s) { items.push({ kind: "timeline", s: s }); });
+    items.sort(function (a, b) { return (a.s.ch - b.s.ch) || (a.kind === b.kind ? 0 : a.kind === "xray" ? -1 : 1); });
+    var list = document.getElementById("xl-list"), host = document.getElementById("xl-host"), meta = document.getElementById("xl-meta");
+    if (!items.length) { host.innerHTML = "<p>No programs loaded.</p>"; return; }
+
+    var html = "", lastCh = null;
+    items.forEach(function (it, i) {
+      if (it.s.ch !== lastCh) {
+        if (lastCh !== null) html += "</div>";
+        lastCh = it.s.ch;
+        var ch = Ox.chapterByNum(it.s.ch);
+        html += '<div class="xl-group"><span class="ox-label">' + String(it.s.ch).padStart(2, "0") + " · " + esc(ch ? ch.title : "") + "</span>";
+      }
+      var bad = it.s.check && it.s.check !== "ok";
+      html += '<button type="button" class="xl-item" data-i="' + i + '">' + esc(it.s.title || it.s.id) +
+        '<small class="' + (bad ? "is-bad" : "") + '">' + (it.kind === "xray" ? "x-ray" : "lifetime timeline") + (bad ? " · won't compile" : "") + "</small></button>";
+    });
+    list.innerHTML = html + "</div>";
+
+    function show(i, focus) {
+      var it = items[i];
+      list.querySelectorAll(".xl-item").forEach(function (b) { b.setAttribute("aria-current", String(+b.dataset.i === i)); });
+      var ch = Ox.chapterByNum(it.s.ch);
+      meta.innerHTML = ch ? 'From <a href="' + Ox.chapterUrl(ch) + '">Chapter ' + String(ch.n).padStart(2, "0") + " · " + esc(ch.title) + "</a>" : "";
+      host.innerHTML = "";
+      var el = document.createElement("div");
+      el.className = it.kind === "xray" ? "ox-xray" : "ox-timeline";
+      el.dataset.scenario = it.s.id;
+      host.appendChild(el);
+      if (it.kind === "xray") window.OxXray.mount(el); else window.OxTimeline.mount(el);
+      try { history.replaceState(null, "", "#" + it.s.id); } catch (e) {}
+      if (focus) el.focus({ preventScroll: true });
+    }
+    list.addEventListener("click", function (e) {
+      var b = e.target.closest(".xl-item");
+      if (b) { show(+b.dataset.i, true); if (innerWidth < 1000) host.scrollIntoView({ behavior: "smooth", block: "start" }); }
+    });
+    var want = decodeURIComponent((location.hash || "").slice(1));
+    var start = items.findIndex(function (it) { return it.s.id === want; });
+    show(start >= 0 ? start : 0, false);
+  }
+  // Needs both oxidize.js and xray.js, which are deferred: wait for both.
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+  else start();
+})();
+</script>
+</body>
+</html>

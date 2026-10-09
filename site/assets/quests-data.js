@@ -229,7 +229,7 @@ window.OX_QUESTS = [
   "chapter": 8,
   "path": "08_strings_slices/boss2_text_stats.rs",
   "title": "Text statistics",
-  "summary": "Act II boss: analyse text without a single unnecessary clone.",
+  "summary": "Act II boss: analyze text without a single unnecessary clone.",
   "boss": true
  },
  {
@@ -405,7 +405,7 @@ window.OX_QUESTS = [
   "chapter": 14,
   "path": "14_traits_generics/traits2.rs",
   "title": "Default methods and impl Trait",
-  "summary": "Share behaviour and accept anything that can do it.",
+  "summary": "Share behavior and accept anything that can do it.",
   "boss": false
  },
  {

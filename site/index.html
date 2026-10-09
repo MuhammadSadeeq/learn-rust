@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Oxidize Rust Course</title>
+<meta name="description" content="An interactive, visual Rust course for PHP and Laravel developers: from zero to expert, with a Memory X-Ray, compiler-checked quests and labs.">
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="assets/oxidize.css">
+<style>
+  /* Home: a workshop wall. Big stamped headline, the live X-Ray as the
+     opening exhibit, then the route map down the page. */
+  .h-hero { padding-block: 3.2rem 1.2rem; display: grid; gap: 1.2rem; }
+  .h-kicker { font: 600 0.78rem/1.2 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 16px; }
+  .h-kicker b { color: var(--oxide-ink); font-weight: 600; }
+  .h-title {
+    margin: 0;
+    font: 900 var(--step-5)/0.86 var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: 0.005em;
+    max-width: 14ch;
+  }
+  .h-title span { color: var(--oxide); }
+  .h-lede { margin: 0; max-width: 44rem; font-size: var(--step-1); line-height: 1.5; color: var(--ink-2); }
+  .h-cta { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .h-cta .ox-btn { min-height: 46px; padding-inline: 20px; font-size: 1rem; }
+  .h-facts { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 0; padding: 0; list-style: none; font: 600 0.82rem/1.3 var(--font-mono); color: var(--muted); }
+  .h-facts li { margin: 0; }
+  .h-facts b { color: var(--ink); font-size: 1rem; }
+  .h-demo-note { margin: 0.4rem 0 0; font-size: 0.92rem; color: var(--muted); max-width: 52rem; }
+
+  .h-section { padding-block: 3.4rem 0; scroll-margin-top: calc(var(--top-h) + 12px); }
+  .h-section > h2 { margin: 0 0 0.4rem; font-size: clamp(2.2rem, 4.5vw, 3.2rem); text-transform: uppercase; font-weight: 900; }
+  .h-section > p.h-sub { margin: 0 0 1.6rem; max-width: 46rem; color: var(--ink-2); font-size: 1.08rem; }
+
+  /* method */
+  .h-method { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: 12px; }
+  .h-method article { padding: 18px 18px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); display: grid; gap: 6px; align-content: start; }
+  .h-method h3 { margin: 0; font-size: 1.08rem; }
+  .h-method p { margin: 0; font-size: 0.95rem; color: var(--ink-2); }
+  .h-method .ox-label { color: var(--oxide-ink); }
+
+  /* the route map */
+  .h-acts { display: grid; gap: 28px; }
+  .h-act { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  @media (min-width: 900px) { .h-act { grid-template-columns: 15rem minmax(0, 1fr); gap: 24px; } }
+  .h-act-head { display: grid; gap: 4px; align-content: start; }
+  .h-act-head .h-act-n { font: 900 3.4rem/0.9 var(--font-display); color: var(--oxide); }
+  .h-act-head h3 { margin: 0; font: 900 1.9rem/1 var(--font-display); text-transform: uppercase; }
+  .h-act-head small { font: 600 0.75rem/1.3 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .h-act-head p { margin: 4px 0 0; font-size: 0.92rem; color: var(--ink-2); }
+  .h-route { list-style: none; margin: 0; padding: 0 0 0 22px; position: relative; display: grid; gap: 8px; }
+  .h-route::before { content: ""; position: absolute; left: 7px; top: 14px; bottom: 14px; width: 2px; background: repeating-linear-gradient(var(--line) 0 6px, transparent 6px 10px); }
+  .h-stop { position: relative; margin: 0; }
+  .h-stop::before {
+    content: "";
+    position: absolute;
+    left: -22px;
+    top: 50%;
+    width: 16px;
+    height: 16px;
+    margin-top: -8px;
+    border-radius: 50%;
+    border: 2px solid var(--line);
+    background: var(--bg);
+    box-sizing: border-box;
+  }
+  .h-stop.is-done::before { background: var(--oxide); border-color: var(--oxide); }
+  .h-stop.is-next::before { border-color: var(--oxide); box-shadow: 0 0 0 4px var(--oxide-soft); }
+  .h-stop a {
+    display: grid;
+    grid-template-columns: 3.2rem minmax(0, 1fr) auto;
+    gap: 4px 14px;
+    align-items: center;
+    padding: 12px 14px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    text-decoration: none;
+    color: var(--ink);
+    transition: border-color 0.15s, transform 0.15s;
+  }
+  .h-stop a:hover { border-color: var(--oxide); transform: translateX(2px); }
+  .h-stop.is-next a { border-color: var(--oxide); box-shadow: var(--shadow); }
+  .h-stop-n { font: 900 1.9rem/1 var(--font-display); color: var(--muted); }
+  .h-stop.is-done .h-stop-n, .h-stop.is-next .h-stop-n { color: var(--oxide); }
+  .h-stop-t { min-width: 0; display: grid; gap: 2px; }
+  .h-stop-t b { font-size: 1.04rem; }
+  .h-stop-t span { font-size: 0.9rem; color: var(--muted); line-height: 1.4; }
+  .h-stop-meta { display: grid; justify-items: end; gap: 4px; font: 600 0.72rem/1.2 var(--font-mono); color: var(--muted); white-space: nowrap; }
+  .h-stop-meta .ox-chip { font-size: 0.68rem; }
+  @media (max-width: 560px) {
+    .h-stop a { grid-template-columns: 2.4rem minmax(0, 1fr); }
+    .h-stop-meta { grid-column: 2; justify-items: start; grid-auto-flow: column; justify-content: start; }
+  }
+  .h-boss { font: 600 0.72rem/1.4 var(--font-mono); color: var(--oxide-ink); padding-left: 2px; }
+
+  /* labs */
+  .h-labs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: 12px; }
+  .h-lab { display: grid; gap: 8px; align-content: start; padding: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); text-decoration: none; color: var(--ink); transition: border-color 0.15s, box-shadow 0.15s; }
+  .h-lab:hover { border-color: var(--oxide); box-shadow: var(--shadow-lift); color: var(--ink); }
+  .h-lab h3 { margin: 0; font: 900 1.6rem/1 var(--font-display); text-transform: uppercase; }
+  .h-lab p { margin: 0; font-size: 0.95rem; color: var(--ink-2); }
+  .h-lab .ox-label { color: var(--oxide-ink); }
+
+  /* forge */
+  .h-forge { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
+  @media (min-width: 960px) { .h-forge { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); } }
+  .h-term { margin: 0; border-radius: var(--radius-lg); background: var(--code-bg); border: 1px solid var(--code-line); box-shadow: var(--shadow-lift); overflow: hidden; min-width: 0; }
+  .h-term-bar { display: flex; gap: 6px; padding: 10px 14px; background: var(--code-bg-2); border-bottom: 1px solid var(--code-line); }
+  .h-term-bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--code-line); }
+  .h-term pre { margin: 0; padding: 14px 16px; overflow-x: auto; font: 400 0.8rem/1.6 var(--font-mono); color: var(--code-ink); }
+  .h-term .k { color: var(--c-kw); font-weight: 600; }
+  .h-term .g { color: #86e3ac; font-weight: 700; }
+  .h-term .d { color: var(--code-dim); }
+  .h-term .r { color: #ff6b6b; font-weight: 700; }
+  .h-term .b { color: #7cc7f5; }
+
+  /* progress */
+  .h-progress { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); gap: 12px; }
+  .h-progress .ox-panel { display: grid; gap: 8px; }
+  .h-level { font: 900 1.7rem/1 var(--font-display); text-transform: uppercase; color: var(--oxide-ink); }
+  .h-bar { height: 8px; border-radius: 4px; background: var(--surface-3); overflow: hidden; }
+  .h-bar i { display: block; height: 100%; background: var(--oxide); width: 0; transition: width 0.6s ease; }
+  .h-reset { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 0.9rem; color: var(--muted); }
+
+  .h-foot { margin-top: 4rem; padding-top: 1.4rem; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; font-size: 0.88rem; color: var(--muted); }
+</style>
+<script src="assets/course-data.js" defer></script>
+<script src="assets/quests-data.js" defer></script>
+<script src="assets/scenarios/ch06.js" defer></script>
+<script src="assets/oxidize.js" defer></script>
+<script src="assets/xray.js" defer></script>
+</head>
+<body data-crumb="From PHP to Rust, made visible">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<main class="ox-home" id="main">
+
+<section class="h-hero" aria-labelledby="h-title">
+  <div class="h-kicker"><span><b>Oxidize</b> · a Rust course</span><span>for PHP &amp; Laravel developers</span><span>zero to expert</span></div>
+  <h1 class="h-title" id="h-title">Rust, made <span>visible</span>.</h1>
+  <p class="h-lede">Rust is hard because its rules are about things you can't see: who owns memory, who may change it, and for how long. This course draws them. Step through programs in a memory X-ray, predict what the compiler will say, then write real code against it.</p>
+  <div class="h-cta">
+    <a class="ox-btn is-primary" id="h-start" href="chapters/01-hello-crab.html">Start with Chapter 01</a>
+    <a class="ox-btn" href="#map">See the route</a>
+  </div>
+  <ul class="h-facts">
+    <li><b>21</b> chapters in 5 acts</li>
+    <li><b>77</b> Forge quests</li>
+    <li><b>6</b> labs</li>
+    <li>every snippet compiled with <b>rustc</b></li>
+  </ul>
+</section>
+
+<div class="ox-xray" data-scenario="move-error"></div>
+<p class="h-demo-note">This is the idea that makes Rust different, in four steps. Press <strong>Step</strong> and answer the prediction before you look. Chapter 06 explains it in full; by then it will feel obvious.</p>
+
+<section class="h-section" id="method" aria-labelledby="method-h">
+  <h2 id="method-h">How it teaches</h2>
+  <p class="h-sub">Every chapter follows the same rhythm, because it's the rhythm that makes hard ideas stick.</p>
+  <div class="h-method">
+    <article><span class="ox-label">See the invisible</span><h3>Memory you can watch</h3><p>Stack frames, heap blocks, owners, borrows and drops, animated line by line. Lifetimes drawn as bars you can step through.</p></article>
+    <article><span class="ox-label">Predict first</span><h3>Guess, then look</h3><p>Before each surprising step you commit to an answer. Being wrong first is how the right answer sticks.</p></article>
+    <article><span class="ox-label">Become the compiler</span><h3>Know what rustc will say</h3><p>"Does this compile?" checks everywhere, real compiler errors decoded, and a borrow-checker game. Once you can predict rustc, Rust stops being a fight.</p></article>
+    <article><span class="ox-label">Start from PHP</span><h3>Bridges, with limits</h3><p>Every concept starts next to the PHP or Laravel you know, and then shows exactly where that comparison stops being true.</p></article>
+    <article><span class="ox-label">Write real code</span><h3>The Forge</h3><p>77 quests and 5 boss projects in your own editor, checked by the real compiler every time you save.</p></article>
+    <article><span class="ox-label">Agent era</span><h3>Review what AI writes</h3><p>Agents write plenty of Rust now. Each chapter shows how its idea shows up in agent-written code, and the Dojo trains you to review it.</p></article>
+  </div>
+</section>
+
+<section class="h-section" id="map" aria-labelledby="map-h">
+  <h2 id="map-h">The route</h2>
+  <p class="h-sub">Five acts, named after how iron becomes steel. Your progress lights the route as you go. It's saved in this browser.</p>
+  <div class="h-acts" id="h-acts"></div>
+</section>
+
+<section class="h-section" id="labs" aria-labelledby="labs-h">
+  <h2 id="labs-h">Labs</h2>
+  <p class="h-sub">Practice spaces you can return to at any point in the course.</p>
+  <div class="h-labs" id="h-labs"></div>
+</section>
+
+<section class="h-section" id="forge" aria-labelledby="forge-h">
+  <h2 id="forge-h">The Forge</h2>
+  <p class="h-sub">Reading builds recognition; writing builds skill. The Forge runs in your terminal next to your editor.</p>
+  <div class="h-forge">
+    <figure class="h-term" aria-label="Example Forge session">
+      <div class="h-term-bar"><i></i><i></i><i></i></div>
+<pre><span class="k">⚒  OXIDIZE FORGE</span>  ▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱  <span class="d">16/77 passed</span>
+<span class="d">────────────────────────────────────────────────────</span>
+<b>Quest 17 · Use after move</b> <span class="d">(move1)</span>
+<span class="d">Chapter 06 · One Owner</span>
+Edit <span class="b">quests/06_ownership/move1.rs</span>
+
+<span class="r">✗ Doesn't compile yet.</span>
+
+<span class="r">error[E0382]</span>: borrow of moved value: `names`
+  <span class="b">--&gt;</span> quests/06_ownership/move1.rs:16:17
+<span class="b">15 |</span>     let all = names;
+<span class="b">   |</span>               <span class="b">----- value moved here</span>
+<span class="b">16 |</span>     let count = names.len();
+<span class="b">   |</span>                 <span class="r">^^^^^ value borrowed here after move</span>
+
+<span class="d">  … you swap two lines and save …</span>
+
+<span class="g">✓ Quest passed. 2 tests green.</span>
+<span class="g">Press Enter for the next quest.</span></pre>
+    </figure>
+    <div>
+      <ol class="ox-steps">
+        <li><div><strong>Install Rust</strong> with rustup: one command on macOS and Linux, one installer on Windows. Chapter 01 walks you through it.</div></li>
+        <li><div><strong>Clone this repository</strong> and open it in VS Code with rust-analyzer (or RustRover).</div></li>
+        <li><div><strong>Run <code>cargo forge</code></strong> in the repo. It finds your next quest, recompiles on every save, and moves on when the tests pass. Stuck? <code>cargo forge hint</code>.</div></li>
+      </ol>
+      <p style="color:var(--muted);font-size:.95rem">Each chapter ends with its quests. Mark them passed on the chapter page to light up the route here.</p>
+    </div>
+  </div>
+</section>
+
+<section class="h-section" id="progress" aria-labelledby="progress-h">
+  <h2 id="progress-h">Your progress</h2>
+  <p class="h-sub">Saved in this browser only. Nothing is sent anywhere.</p>
+  <div class="h-progress" id="h-progress"></div>
+  <div class="h-reset" id="h-reset"></div>
+</section>
+
+<footer class="h-foot">
+  <span>Oxidize · every code sample is compiled with rustc 1.97, edition 2024, before it ships.</span>
+  <span><a href="https://doc.rust-lang.org/book/" target="_blank" rel="noopener">The Rust Book</a> · <a href="https://play.rust-lang.org" target="_blank" rel="noopener">Rust Playground</a> · <a href="https://docs.rs" target="_blank" rel="noopener">docs.rs</a></span>
+</footer>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  function start() {
+    var C = window.OX_COURSE, Q = window.OX_QUESTS || [], st = Ox.state(), esc = Ox.esc;
+    var ROMAN = ["", "I", "II", "III", "IV", "V"];
+    var done = function (n) { return !!st.chapters[n]; };
+    var next = C.chapters.find(function (c) { return !done(c.n); });
+
+    // continue button
+    var startBtn = document.getElementById("h-start");
+    if (next && C.chapters.some(function (c) { return done(c.n); })) {
+      startBtn.textContent = "Continue: Chapter " + String(next.n).padStart(2, "0") + " · " + next.title;
+      startBtn.href = "chapters/" + next.slug + ".html";
+    } else if (!next) {
+      startBtn.textContent = "Course complete. Revisit the labs";
+      startBtn.href = "#labs";
+    }
+
+    // route map
+    var acts = document.getElementById("h-acts");
+    acts.innerHTML = C.acts.map(function (a) {
+      var chs = C.chapters.filter(function (c) { return c.act === a.id; });
+      var bosses = Q.filter(function (q) { return q.boss && chs.some(function (c) { return c.n === q.chapter; }); });
+      var stops = chs.map(function (c) {
+        var cls = done(c.n) ? "is-done" : (next && next.n === c.n ? "is-next" : "");
+        var qn = Q.filter(function (q) { return q.chapter === c.n; }).length;
+        var passed = Q.filter(function (q) { return q.chapter === c.n && st.quests[q.name]; }).length;
+        return '<li class="h-stop ' + cls + '"><a href="chapters/' + c.slug + '.html">' +
+          '<span class="h-stop-n">' + String(c.n).padStart(2, "0") + '</span>' +
+          '<span class="h-stop-t"><b>' + esc(c.title) + '</b><span>' + esc(c.idea) + '</span></span>' +
+          '<span class="h-stop-meta">' + (done(c.n) ? '<span class="ox-chip is-ok">done</span>' : (cls === "is-next" ? '<span class="ox-chip is-own">up next</span>' : '<span>' + c.mins + ' min</span>')) +
+          '<span>' + passed + '/' + qn + ' quests</span></span></a></li>';
+      }).join("");
+      var boss = bosses.map(function (b) { return '<div class="h-boss">Boss · ' + esc(b.title) + (st.quests[b.name] ? " ✓" : "") + '</div>'; }).join("");
+      return '<div class="h-act"><div class="h-act-head"><span class="h-act-n">' + ROMAN[a.id] + '</span><h3>' + esc(a.name) + '</h3><small>' + esc(a.subtitle) + '</small><p>' + esc(a.blurb) + '</p>' + boss + '</div><ol class="h-route">' + stops + '</ol></div>';
+    }).join("");
+
+    // labs
+    document.getElementById("h-labs").innerHTML = C.labs.map(function (l) {
+      return '<a class="h-lab" href="labs/' + l.slug + '.html"><span class="ox-label">Lab</span><h3>' + esc(l.title) + '</h3><p>' + esc(l.blurb) + '</p></a>';
+    }).join("");
+
+    // progress
+    function renderProgress() {
+      st = Ox.state();
+      var lv = Ox.levelFor(st.xp);
+      var chDone = C.chapters.filter(function (c) { return done(c.n); }).length;
+      var qDone = Q.filter(function (q) { return st.quests[q.name]; }).length;
+      var quizzes = Object.keys(st.quiz).length;
+      var cards = Object.keys(st.cards || {}).length;
+      document.getElementById("h-progress").innerHTML =
+        '<div class="ox-panel"><span class="ox-label">Level</span><span class="h-level">' + esc(lv.name) + '</span><div class="h-bar"><i style="width:' + Math.round(lv.pct * 100) + '%"></i></div><span style="font-size:.85rem;color:var(--muted)">' + st.xp + ' XP' + (lv.next ? ' · ' + (lv.next.xp - st.xp) + ' to ' + esc(lv.next.name) : '') + '</span></div>' +
+        '<div class="ox-panel ox-stat"><b>' + chDone + '<small style="font-size:1rem;color:var(--muted)">/' + C.chapters.length + '</small></b><span>chapters complete</span></div>' +
+        '<div class="ox-panel ox-stat"><b>' + qDone + '<small style="font-size:1rem;color:var(--muted)">/' + Q.length + '</small></b><span>quests passed</span></div>' +
+        '<div class="ox-panel ox-stat"><b>' + quizzes + '</b><span>checks answered</span></div>' +
+        '<div class="ox-panel ox-stat"><b>' + cards + '</b><span>cards in review</span></div>';
+    }
+    renderProgress();
+    var reset = document.getElementById("h-reset");
+    function resetIdle() {
+      reset.innerHTML = '<button type="button" class="ox-btn is-small" id="h-reset-btn">Reset progress</button><span>Clears XP, quiz answers and completed chapters in this browser.</span>';
+      document.getElementById("h-reset-btn").addEventListener("click", function () {
+        reset.innerHTML = '<span><strong>Erase all progress?</strong> This can\'t be undone.</span><button type="button" class="ox-btn is-small" id="h-reset-yes" style="border-color:var(--bad);color:var(--bad)">Erase it</button><button type="button" class="ox-btn is-small" id="h-reset-no">Keep it</button>';
+        document.getElementById("h-reset-yes").addEventListener("click", function () { Ox.reset(); });
+        document.getElementById("h-reset-no").addEventListener("click", resetIdle);
+      });
+    }
+    resetIdle();
+  }
+  if (window.Ox && window.Ox.ready) start();
+  else document.addEventListener("ox:ready", start);
+})();
+</script>
+</body>
+</html>

@@ -17,7 +17,7 @@ window.OX_COURSE = {
     { n: 6,  act: 2, slug: "06-ownership",        title: "One Owner",                 idea: "Every heap value has exactly one owner. When the owner goes away, the value is freed.", mins: 45 },
     { n: 7,  act: 2, slug: "07-borrowing",        title: "Borrowing",                 idea: "Many readers or one writer, never both at the same time.", mins: 45 },
     { n: 8,  act: 2, slug: "08-strings-slices",   title: "Strings & Slices",          idea: "String owns text; &str views text. A slice is a pointer plus a length.", mins: 40 },
-    { n: 9,  act: 3, slug: "09-structs",          title: "Structs & Methods",         idea: "Data and behaviour, without inheritance.", mins: 35 },
+    { n: 9,  act: 3, slug: "09-structs",          title: "Structs & Methods",         idea: "Data and behavior, without inheritance.", mins: 35 },
     { n: 10, act: 3, slug: "10-enums-match",      title: "Enums & Pattern Matching",  idea: "A value that is exactly one of several shapes, and a match that must handle them all.", mins: 45 },
     { n: 11, act: 3, slug: "11-errors",           title: "Errors Are Values",         idea: "No exceptions. Failure is a Result you must look at.", mins: 40 },
     { n: 12, act: 3, slug: "12-collections",      title: "Collections",               idea: "PHP's array is five data structures in a trench coat. Rust gives each one its own name.", mins: 40 },

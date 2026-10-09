@@ -238,12 +238,12 @@ For more information about this error, try `rustc --explain E0382`.</pre>
     <li><strong>Arrays and strings</strong> act like copies (copy-on-write: they share memory until one side changes, then PHP copies quietly).</li>
     <li><strong>Objects</strong> are handles: <code>$b</code> and <code>$a</code> point at the <em>same</em> object, and a change through one is visible through the other.</li>
   </ul>
-  <p>Rust's <code>let b = a;</code> is neither. It is a <strong>transfer</strong>. After it, there is still one value and still one owner; only the owner's name has changed. If you want PHP-array behaviour, you write <code>.clone()</code>. If you want PHP-object behaviour (shared handles), you use <code>Rc</code>, covered in Chapter 17.</p>
+  <p>Rust's <code>let b = a;</code> is neither. It is a <strong>transfer</strong>. After it, there is still one value and still one owner; only the owner's name has changed. If you want PHP-array behavior, you write <code>.clone()</code>. If you want PHP-object behavior (shared handles), you use <code>Rc</code>, covered in Chapter 17.</p>
 </aside>
 
 <details class="ox-callout" data-kind="deep">
   <summary>What does a move compile to?</summary>
-  <p>A move is a plain copy of the stack bytes (for a <code>String</code>, 24 bytes on a 64-bit machine), and the optimiser usually removes even that. The old slot isn't zeroed or flagged. The compiler simply refuses to compile any later use of it.</p>
+  <p>A move is a plain copy of the stack bytes (for a <code>String</code>, 24 bytes on a 64-bit machine), and the optimizer usually removes even that. The old slot isn't zeroed or flagged. The compiler simply refuses to compile any later use of it.</p>
   <p>When a move happens only on some paths, for example inside an <code>if</code>, Rust keeps a hidden one-byte "drop flag" so that the value is freed exactly once whichever path runs. That is the only runtime trace ownership ever leaves.</p>
 </details>
 </section>
@@ -379,7 +379,7 @@ fn main() {
 
 <aside class="ox-callout" data-kind="ai">
   <p>AI coding agents love option 2. When an agent hits a borrow-checker error, the fastest way to make the error disappear is to sprinkle <code>.clone()</code> until it compiles. The code works, but it allocates on every call and hides the real ownership design.</p>
-  <p>When you review agent-written Rust, treat every <code>.clone()</code> as a question: <em>does this code need its own copy, or does it only need to look?</em> If it only looks, the fix is a borrow. You'll practise this in the <a href="../labs/ai-dojo.html">Agent Code Review Dojo</a>.</p>
+  <p>When you review agent-written Rust, treat every <code>.clone()</code> as a question: <em>does this code need its own copy, or does it only need to look?</em> If it only looks, the fix is a borrow. You'll practice this in the <a href="../labs/ai-dojo.html">Agent Code Review Dojo</a>.</p>
 </aside>
 </section>
 

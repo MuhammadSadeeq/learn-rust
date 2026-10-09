@@ -3,7 +3,7 @@
    Layout: a workshop manual. One reading column (~68ch) with a sticky
    table-of-contents rail on wide screens; "bench" figures break out wider.
    Material: blued steel neutrals, iron-oxide accent, stamped condensed labels.
-   Semantic colours are fixed across every diagram in the course:
+   Semantic colors are fixed across every diagram in the course:
      oxide = owner / owned value      borrow = shared reference (&T)
      mut   = exclusive reference (&mut T)   ghost = moved / invalid
    ========================================================================== */
@@ -238,7 +238,7 @@ kbd {
 .ox-skip { position: absolute; left: -999px; top: 0; }
 .ox-skip:focus { left: 16px; top: 8px; z-index: 100; background: var(--surface); padding: 8px 12px; }
 
-/* concept colour helpers usable inline in prose */
+/* concept color helpers usable inline in prose */
 .c-own { color: var(--oxide-ink); font-weight: 700; }
 .c-ref { color: var(--borrow); font-weight: 700; }
 .c-mut { color: var(--mut); font-weight: 700; }
@@ -605,7 +605,7 @@ kbd {
 .t-va { color: var(--c-va); }
 .t-pu { color: #9aa7b5; }
 .t-self { color: var(--c-kw); font-style: italic; }
-/* rustc diagnostic colouring */
+/* rustc diagnostic coloring */
 .r-err { color: #ff6b6b; font-weight: 700; }
 .r-warn { color: #f2c46d; font-weight: 700; }
 .r-note { color: #7cc7f5; font-weight: 700; }
