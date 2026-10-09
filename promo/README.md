@@ -51,7 +51,7 @@ python3 promo/music.py --stems                    # per-group stems in promo/out
 
 | File | What |
 |---|---|
-| `out/oxidize.mp4` | The full film: 64.0 s, 1920×1080, 60 fps, H.264 (CRF 23, capped at 3.5 Mb/s), AAC 192k. About 20 MB. |
+| `out/oxidize.mp4` | The full film: 64.0 s, 1920×1080, 60 fps, H.264 (CRF 19, capped at 10 Mb/s), AAC 256k. About 80 MB. |
 | `out/oxidize-teaser.mp4` | A 16 s cut (14–30 s): the wall of errors, the forge, the borrow checker. |
 | `out/oxidize-poster.jpg` | The end card at 61.6 s, for thumbnails. |
 | `out/music.wav` | The score: 48 kHz, stereo, 16-bit. |
