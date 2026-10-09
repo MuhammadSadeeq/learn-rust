@@ -460,6 +460,7 @@ kbd {
 .ox-btn[disabled] { opacity: 0.5; cursor: not-allowed; }
 .ox-btn.is-primary { background: var(--oxide); border-color: var(--oxide); color: #fff; }
 .ox-btn.is-primary:hover { background: var(--oxide-ink); border-color: var(--oxide-ink); color: #fff; }
+.ox-btn.is-primary kbd { background: transparent; border-color: currentColor; color: inherit; }
 .ox-btn.is-small { min-height: 30px; padding: 4px 10px; font-size: 0.82rem; }
 .ox-chip {
   display: inline-flex;

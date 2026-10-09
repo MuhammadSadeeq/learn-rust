@@ -96,7 +96,7 @@ For more information about this error, try \`rustc --explain E0382\`.`,
     |                    ^^^^^ value borrowed here after move
     |
 note: \`into_iter\` takes ownership of the receiver \`self\`, which moves \`names\`
-   --> /root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/iter/traits/collect.rs:312:18
+   --> /rustc/library/core/src/iter/traits/collect.rs:312:18
     |
 312 |     fn into_iter(self) -> Self::IntoIter;
     |                  ^^^^
@@ -1196,7 +1196,7 @@ note: required because it's used within this closure
   6 |     let handle = thread::spawn(move || {
     |                                ^^^^^^^
 note: required by a bound in \`spawn\`
-   --> /root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/thread/functions.rs:128:8
+   --> /rustc/library/std/src/thread/functions.rs:128:8
     |
 125 | pub fn spawn<F, T>(f: F) -> JoinHandle<T>
     |        ----- required by a bound in this function
