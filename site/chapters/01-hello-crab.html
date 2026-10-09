@@ -248,7 +248,7 @@ Hello, world!
     <tr><td><code>Cargo.toml</code></td><td>The manifest: name, version, edition and dependencies.</td><td><code>composer.json</code></td></tr>
     <tr><td><code>Cargo.lock</code></td><td>The exact versions Cargo resolved. Created by the first build. Commit it for applications.</td><td><code>composer.lock</code></td></tr>
     <tr><td><code>src/main.rs</code></td><td>The entry point of a binary program.</td><td><code>index.php</code>, as the file your program starts from</td></tr>
-    <tr><td><code>target/</code></td><td>Build output. Never edit it and never commit it. <code>cargo new</code> adds it to <code>.gitignore</code>.</td><td><code>vendor/</code>, which you also never edit</td></tr>
+    <tr><td><code>target/</code></td><td>Build output. Never edit it and never commit it. <code>cargo new</code> adds it to <code>.gitignore</code> when it creates a new git repository. Inside an existing repository, add <code>/target</code> to <code>.gitignore</code> yourself.</td><td><code>vendor/</code>, which you also never edit</td></tr>
   </tbody>
 </table>
 </div>
@@ -311,7 +311,7 @@ php artisan serve</pre>
 </table>
 </div>
 
-<p>The table is not a perfect match. <code>php -l</code> only parses the file. <code>cargo check</code> goes much further, because it type-checks and borrow-checks the whole project, which is why it catches real bugs.</p>
+<p>The table is not a perfect match. <code>php -l</code> only parses the file. <code>cargo check</code> goes much further, because it type-checks and borrow-checks the whole project, which is why it catches real bugs. The borrow checker is the part of the compiler that checks ownership; Chapter 06 explains it.</p>
 
 <div class="ox-match" data-id="01:match-cargo" data-left-label="Composer / Artisan" data-right-label="Cargo">
   <ul>
@@ -393,6 +393,8 @@ fn main() {
 
 <p><code>println!</code> takes a format string. Each <code>{}</code> placeholder is filled by the next argument, and the compiler checks the placeholders against the arguments before the program runs.</p>
 
+<p>The examples below use <code>let</code> to give values names. <code>let name = value;</code> gives a value a name. Chapter 02 explains it, and why a plain <code>let</code> cannot be changed.</p>
+
 <pre class="rs" data-run data-stdout="Ferris has 10 legs\nFerris has 10 legs\n[  Ferris] [Ferris  ] [ Ferris ]\nprice: 3.50\n(&quot;Ferris&quot;, 10)">
 fn main() {
     let name = "Ferris";
@@ -433,6 +435,8 @@ fn main() {
   <p>Use <code>{:?}</code> for a tuple.</p>
 </aside>
 
+<p><code>println!</code> prints the text. <code>format!</code> takes the same format string and gives the text back as a <code>String</code>, so you can keep it in a variable or return it from a function. Chapter 08 covers <code>String</code>. The placeholder <code>{:02}</code> pads a number with leading zeros to two digits, so <code>format!("{:02}", 7)</code> is <code>07</code>.</p>
+
 <p>Comments use the same forms as PHP's <code>//</code> and <code>/* */</code>. A <code>///</code> comment is a doc comment. It documents the item below it, the way PHPDoc sits above a method.</p>
 
 <pre class="rs" data-run data-stdout="comments cost nothing at run time">
@@ -443,7 +447,7 @@ fn main() {
     println!("comments cost nothing at run time");
 }</pre>
 
-<p><code>cargo doc --open</code> turns your <code>///</code> comments into a browsable HTML site. Code blocks inside them are compiled and run by <code>cargo test</code>, so the examples in your docs stay correct.</p>
+<p><code>cargo doc --open</code> turns your <code>///</code> comments into a browsable HTML site. In a library crate, code blocks inside them are compiled and run by <code>cargo test</code>, so the examples in your docs stay correct. A binary project like this one does not run them.</p>
 
 <div class="ox-quiz" data-id="01:fmt">
   <p class="ox-q">What does this print?</p>
@@ -566,7 +570,7 @@ fn main() {
 
 <div class="ox-figure ox-wide" id="feed-forge">
   <p class="ox-label">Feed the Forge</p>
-  <p class="ff-intro">Each card is a whole program. Before you feed it, predict what the Forge does. <b>Accept</b> means it builds to an ingot. <b>Reject</b> means it hands back an error scroll.</p>
+  <p class="ff-intro">Each card is a whole program. Before you feed it, predict what the Forge does. <b>Accept</b> means it builds to an ingot. <b>Reject</b> means it hands back an error scroll. You have not met this syntax yet. Predict from the shapes, and read the reason after each card.</p>
   <div class="ff-bench">
     <div class="ff-forge" aria-hidden="true"></div>
     <p class="ff-status" aria-live="polite">Predict the first program. Then the Forge takes it.</p>
@@ -594,7 +598,7 @@ fn main() {
   var countBox = root.querySelector(".ff-count");
   var reset = root.querySelector("[data-ff-reset]");
   var reduced = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
-  var fed = 0, awarded = false, timers = [], forgeNode = null;
+  var fed = 0, awarded = false, timers = [], forgeNode = null, round = 0;
 
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
   function later(fn, ms) { timers.push(setTimeout(fn, ms)); }
@@ -637,6 +641,7 @@ fn main() {
     var to = forgeBox.getBoundingClientRect();
     var x0 = from.left + from.width / 2 - b.left, y0 = from.top + from.height / 2 - b.top;
     var dx = to.left + to.width / 2 - b.left - x0, dy = to.top + to.height / 2 - b.top - y0;
+    var r = round;
     var chip = document.createElement("span");
     chip.className = "ff-chip";
     chip.setAttribute("aria-hidden", "true");
@@ -648,7 +653,7 @@ fn main() {
       { transform: "translate(-50%, -50%)", opacity: 1 },
       { transform: "translate(calc(-50% + " + dx + "px), calc(-50% + " + dy + "px)) scale(0.3)", opacity: 0 },
     ], { duration: 650, easing: "cubic-bezier(.45,.05,.25,1)" });
-    a.addEventListener("finish", function () { chip.remove(); done(); });
+    a.addEventListener("finish", function () { chip.remove(); if (r === round) done(); });
   }
 
   function land(i) {
@@ -695,6 +700,7 @@ fn main() {
   }
 
   function restart() {
+    round++;
     timers.forEach(clearTimeout);
     timers = [];
     bench.querySelectorAll(".ff-chip").forEach(function (c) { c.remove(); });
@@ -719,18 +725,55 @@ fn main() {
 </section>
 
 <section>
+<h2 id="toolbox">Your toolbox for the first chapters</h2>
+
+<p>The quests and examples in Act I use a few things before their own chapter arrives. Here is enough to use each one. Each will get a full explanation later; until then, treat them as tools.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Tool</th><th>What it is for now</th><th>Full story</th></tr></thead>
+  <tbody>
+    <tr><td><code>let name = value;</code></td><td>Gives a value a name. Add <code>mut</code> if it will change.</td><td>Chapter 02</td></tr>
+    <tr><td><code>fn add(a: i32, b: i32) -&gt; i32 { a + b }</code></td><td>A function: inputs with their types, then <code>-&gt;</code> and the output type. The last line without <code>;</code> is the result.</td><td>Chapter 04</td></tr>
+    <tr><td><code>"hello"</code></td><td>Text written in quotes. Its type is <code>&amp;str</code> (often <code>&amp;'static str</code>).</td><td>Chapter 08</td></tr>
+    <tr><td><code>String::from("hi")</code>, <code>format!("{a} {b}")</code>, <code>n.to_string()</code></td><td>Text you build and own. <code>format!</code> works like <code>println!</code> but gives the text back instead of printing it.</td><td>Chapter 08</td></tr>
+    <tr><td><code>vec![1, 2, 3]</code>, <code>Vec::new()</code>, <code>v.push(x)</code>, <code>v.len()</code>, <code>for x in &amp;v { … }</code></td><td>A list that can grow.</td><td>Chapter 12</td></tr>
+    <tr><td><code>&amp;[T]</code> and <code>&amp;str</code> parameters</td><td>A function that only reads a list or text borrows it. Loop over a <code>&amp;[T]</code> with <code>for x in list</code>.</td><td>Chapters 07 and 08</td></tr>
+    <tr><td><code>todo!()</code></td><td>A placeholder that compiles and panics if it runs. Quests use it to mark where your code goes.</td><td>—</td></tr>
+    <tr><td><code>#[cfg(test)] mod tests { … }</code> at the bottom of a quest</td><td>The checks <code>cargo forge</code> runs. Read them to see what is expected; don't edit them.</td><td>Chapter 16</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>If the compiler complains about a <code>&amp;</code> you didn't expect inside a loop, write <code>*x</code> to read the value behind it; Chapter 07 explains why.</p>
+
+<div class="ox-fill" data-id="01:fill-toolbox" data-label="Fill the blank">
+  <p class="ox-q">Complete the program so it prints <code>7</code>. Pick the macro that builds the text and gives it back.</p>
+  <pre class="rs" data-stdout="7">
+fn main() {
+    let name = "Ana";
+    let greeting = [[format!|println!]]("Hi, {name}");
+    println!("{}", greeting.len());
+}</pre>
+  <div class="ox-why"><p><code>format!</code> builds a <code>String</code> and returns it, so <code>greeting</code> holds <code>Hi, Ana</code>, and its length is 7. <code>println!</code> prints the text and gives back nothing, so <code>greeting</code> would be <code>()</code>, and <code>greeting.len()</code> would not compile.</p></div>
+</div>
+</section>
+
+<section>
 <h2 id="course">How to use this course</h2>
 
-<p>Each chapter works the same way. You read and interact in the browser, then you write code in your editor, and the Forge checks it with the real compiler.</p>
+<p>Each chapter works the same way. You read and interact in the browser, then you write code in your editor, and <code>cargo forge</code> checks it with the real compiler, <code>rustc</code>.</p>
 
 <ol class="ox-steps">
   <li><div><p><strong>Clone the repo.</strong></p><pre class="sh">git clone https://github.com/MuhammadSadeeq/learn-rust.git
 cd learn-rust</pre></div></li>
   <li><div><p><strong>Open the course.</strong> Serve the site folder and visit it in your browser, or open <code>site/index.html</code> directly.</p><pre class="sh">python3 -m http.server -d site 8000</pre></div></li>
-  <li><div><p><strong>Start the Forge.</strong> In a second terminal, from the repo root. It opens your next quest and rechecks it on every save. When the tests pass, press Enter to move on.</p><pre class="sh">cargo forge            # watch mode: your next quest, rechecked on every save
+  <li><div><p><strong>Start <code>cargo forge</code>.</strong> In a second terminal, from the repo root. It opens your next quest and rechecks it on every save. When the tests pass, press Enter to move on.</p><pre class="sh">cargo forge            # watch mode: your next quest, rechecked on every save
 cargo forge hint       # a hint for the current quest
 cargo forge list       # every quest, with your progress</pre></div></li>
 </ol>
+
+<p>A note on names: the Forge, the character, stands for the Rust compiler, <code>rustc</code>. <code>cargo forge</code> is this course's practice tool; it runs the real compiler and the tests for you.</p>
 
 <p>Each chapter lists its quests near the end. Tick <em>passed in forge</em> next to a quest to record it on the site.</p>
 
@@ -752,7 +795,8 @@ cargo forge list       # every quest, with your progress</pre></div></li>
 
 <section>
 <h2 id="quests">Forge quests</h2>
-<p>Reading builds recognition. Writing code builds the skill. These quests run locally against the real compiler.</p>
+<p>Reading builds recognition. Writing code builds the skill. These quests run locally against the real compiler, through <code>cargo forge</code>.</p>
+<p>Each quest is one Rust file, such as <code>quests/01_hello/hello1.rs</code>, and it has the same three parts. The header comment at the top says what the program should do and what you may change. The body is the starter code: some quests begin with a <code>todo!()</code> placeholder, and some begin with a line that does not compile yet. At the bottom, a <code>#[cfg(test)] mod tests</code> block holds the checks. Don't edit the tests. Read them, because they say exactly what the program must return. Chapter 16 explains the test module.</p>
 <div class="ox-quests" data-chapter="1"></div>
 </section>
 
@@ -796,7 +840,7 @@ cargo forge list       # every quest, with your progress</pre></div></li>
   var notes = {
     fn: ["fn", "declares a function", "The name comes next, then the parameter list in parentheses, then the body in braces. Every function in Rust is written this way."],
     main: ["main", "the entry point", "Every program starts running at a function called <code>main</code>. Rust files have no top-level code, so nothing in a file runs on its own the way a PHP script does."],
-    parens: ["()", "the parameter list", "The parentheses hold the parameters, the values a function receives. <code>main</code> takes none, so the list is empty. The parentheses are still required."],
+    parens: ["()", "the parameter list", "The parentheses hold the parameters, the values a function receives. <code>main</code> takes none, so the list is empty. The parentheses are still required. Chapter 04 explains parameters and return types."],
     body: ["{ }", "the body", "The braces wrap the block of code that belongs to <code>main</code>. A block also defines a scope, the region where variables live and are dropped. Chapter 06 covers scope in detail."],
     macro: ["println!", "a macro", "The <code>!</code> marks a macro, which is code that writes code. The compiler expands <code>println!</code> before the program is built, and it checks the format string against the arguments, so a mismatch is a compile error."],
     literal: ["\"Hello, world!\"", "a string literal", "This is a string literal. Its type is <code>&amp;str</code>, a borrowed view of text stored in the binary. Chapter 08 explains that type properly."],

@@ -139,9 +139,9 @@
 
 <p>The stack needs every size fixed before the program runs. A lot of data has no fixed size. The text a user typed, or the rows a database query returns, are as large as the input happens to be. For those values the program asks for room at runtime, from the <strong>heap</strong>.</p>
 
-<p>Think of the heap as a warehouse with numbered shelves. You tell the warehouse how much space you need, and it hands you a shelf number. That number is a pointer. You keep the pointer in a variable, usually on the stack, and reach the shelf through it. When you are finished, you have to give the shelf back. If you don't, it stays occupied, and nobody else can use it.</p>
+<p>Think of the heap as a field of numbered plots. You tell the allocator how much room you need, and it hands you the number of a plot. That number is a pointer. You keep the pointer in a variable, usually on the stack, and reach the plot through it. When you are finished, you have to give the plot back. If you don't, it stays occupied, and nobody else can use it.</p>
 
-<div class="ox-meet" data-cast="fluffy" data-say="We are the bytes of your Strings and the items of your Vecs. We live on the sandbank, and we leave when our owner does."></div>
+<div class="ox-meet" data-cast="fluffy" data-say="We are the bytes of your Strings and the items of your Vecs. We live in the plots, and we leave when our owner does."></div>
 <div class="ox-meet" data-cast="alloc" data-say="I hand out the plots. When a Vec outgrows its plot, I move it to a bigger one and give the old plot back."></div>
 
 <details class="ox-think">
@@ -184,7 +184,9 @@
 <section>
 <h2 id="string-layout">What a String really is</h2>
 
-<p>A <code>String</code> is two things. The part on the stack is three words: a <strong>pointer</strong> to the text bytes, the <strong>length</strong> (how many bytes are in use) and the <strong>capacity</strong> (how many bytes the block can hold). On a 64-bit machine that is 24 bytes, and it stays 24 bytes however long the text is. The text itself lives on the heap. A <code>Vec&lt;T&gt;</code> has the same shape: three words on the stack, and the elements on the heap.</p>
+<p>A <code>String</code> is two things. The part on the stack is three words: a <strong>pointer</strong> to the text bytes, the <strong>length</strong> (how many bytes are in use) and the <strong>capacity</strong> (how many bytes the block can hold). On a 64-bit machine that is 24 bytes, and it stays 24 bytes however long the text is. The text itself lives on the heap. A <code>Vec&lt;T&gt;</code> has the same shape: three words on the stack, and the elements on the heap. In <code>Vec&lt;T&gt;</code>, the <code>&lt;T&gt;</code> stands for a type you choose, so <code>Vec&lt;u64&gt;</code> is a list of <code>u64</code>. Chapter 14 covers generics.</p>
+
+<p>The next examples use <code>use std::mem::size_of;</code>. <code>use</code> brings a name into scope, like PHP's <code>use</code>, so you can write <code>size_of</code> instead of <code>std::mem::size_of</code>. Chapter 16 covers <code>use</code>. The <code>::&lt;String&gt;</code> part passes a type to <code>size_of</code>, which measures that type.</p>
 
 <div class="ox-quiz" data-id="05:size" data-label="Predict first">
   <p class="ox-q">What does this print on a 64-bit machine?</p>
@@ -362,7 +364,7 @@ For more information about this error, try `rustc --explain E0502`.</pre>
     <li data-correct>No. The old block has been freed, so anything that points into it now dangles.</li>
     <li>Only if the new capacity is at least twice the old one.</li>
   </ol>
-  <div class="ox-why"><p>After a reallocation the old block is gone. Reading through a pointer to it reads memory the allocator may already have handed to something else. The borrow checker refuses programs that could do this, as you just saw.</p></div>
+  <div class="ox-why"><p>After a reallocation the old block is gone. Reading through a pointer to it reads memory the allocator may already have handed to something else. The borrow checker (the part of the compiler that checks ownership; Chapter 06) refuses programs that could do this, as you just saw.</p></div>
 </div>
 
 <div class="ox-fill" data-id="05:fill-cap">
@@ -439,11 +441,11 @@ fn main() {
 <section>
 <h2 id="box">Box: one value on the heap</h2>
 
-<p>A <code>Box&lt;T&gt;</code> is the simplest way to put one value on the heap. <code>Box::new(5)</code> asks for room for an <code>i32</code>, stores 5 in it and returns a pointer. The <code>Box</code> that lives in your variable is only that pointer. It takes 8 bytes on a 64-bit machine, whatever the type inside the box is.</p>
+<p>A <code>Box&lt;T&gt;</code> is the simplest way to put one value on the heap. <code>Box::new(5)</code> asks for room for an <code>i32</code>, stores 5 in it and returns a pointer. The <code>Box</code> that lives in your variable is only that pointer. It takes 8 bytes on a 64-bit machine for any type of known size. A box of a slice or a trait object also stores a length or a vtable pointer, so it takes 16 bytes.</p>
 
 <div class="ox-xray ox-wide" data-scenario="box-basic"></div>
 
-<p>The <code>Box</code> has exactly one owner, the variable <code>b</code>. When <code>b</code> goes out of scope, the heap bytes are freed. This is the ownership rule from Chapter 06, applied to a single heap value. Chapter 17 uses boxes for recursive data, where the size of a value would otherwise be unknown.</p>
+<p>The <code>Box</code> has exactly one owner, the variable <code>b</code>. When <code>b</code> goes out of scope, the heap bytes are freed. This is the ownership rule that Chapter 06 covers, applied to a single heap value. Chapter 17 uses boxes for recursive data, where the size of a value would otherwise be unknown.</p>
 </section>
 
 <section>
@@ -519,7 +521,7 @@ fn tags(names: &amp;[String]) -&gt; Vec&lt;String&gt; {
 </section>
 
 <section>
-<h2 id="owner">Somebody has to give the shelf back</h2>
+<h2 id="owner">Somebody has to give the plot back</h2>
 
 <p>Every heap block has to be given back exactly once, at the right moment. Get the timing wrong, and it can fail in one of three ways.</p>
 

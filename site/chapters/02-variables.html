@@ -46,7 +46,7 @@
 <section>
 <h2 id="let"><code>let</code> makes a promise</h2>
 
-<p>In PHP a variable is a name you can refill on any line. Assign it, reassign it, and nothing complains. Rust starts from the other end. A name made with <code>let</code> keeps the value it was given, and the compiler checks every later line against that promise.</p>
+<p>In PHP a variable is a name you can refill on any line. Assign it, reassign it, and nothing complains. Rust starts from the other end. A name made with <code>let</code> keeps the value it was given, and the compiler checks every later line against that promise. Rust calls that name and value pair a <strong>binding</strong>: a name bound to a value by <code>let</code>.</p>
 
 <div class="ox-meet" data-cast="crab" data-say="Each of us holds one value in our claw, with our name on a tag. Say mut if you want me to swap what I hold."></div>
 
@@ -118,7 +118,7 @@ fn main() {
     println!("{count}");
 }</pre>
 
-<p>Each <code>+=</code> assigns to the same variable. It is still one box, and <code>mut</code> is what allows the refills.</p>
+<p>Each <code>+=</code> assigns to the same variable. It is still one slot, and <code>mut</code> is what allows the refills.</p>
 
 <p class="ox-pull">In Rust a value stays the same unless you ask for a change.</p>
 
@@ -135,6 +135,8 @@ fn main() {
 <h3>PHP checks immutable properties at runtime</h3>
 
 <p>PHP has the same idea for object properties, and it enforces it at a different time. PHP 8.1 added <code>readonly</code> properties. A readonly property is set once, usually in the constructor, and a later write throws an <code>Error</code>. PHP 8.2 added <code>readonly class</code>, which makes every property readonly.</p>
+
+<p>The Rust version below uses a <code>struct</code>, a record with named fields. Chapter 09 covers structs.</p>
 
 <div class="ox-bridge">
   <pre class="php">
@@ -162,6 +164,8 @@ fn main() {
 </div>
 
 <p>PHP 8.4 added asymmetric visibility. A property can be readable from anywhere and writable only inside its class: <code>public private(set) array $items = [];</code>. A write from outside throws <code>Error: Cannot modify private(set) property</code>, again at runtime. Rust can get a similar effect with a private field and a method that reads it. Chapter 09 covers methods, and Chapter 16 covers the module rules that decide who can see a field.</p>
+
+<p>The next program uses a <code>for</code> loop over the range <code>1..=3</code>. Chapter 04 covers loops and ranges. For now, read it as: run the block once for 1, once for 2 and once for 3.</p>
 
 <div class="ox-quiz" data-id="02:mut">
   <p class="ox-q">Does this compile?</p>
@@ -269,7 +273,7 @@ fn main() {
 
 <div class="ox-motion" data-scene="ch02-shadow"></div>
 
-<p>Two programs follow, and each one shows a different way to change a value. Step through both. The first keeps one box, and the second makes a new box each time.</p>
+<p>Two programs follow, and each one shows a different way to change a value. Step through both. The first keeps one slot, and the second makes a new slot each time. The narration mentions stack frames, the block of memory that holds one function call's local variables. Chapter 05 explains the stack and the heap, the two places a value can live.</p>
 
 <div class="ox-xray ox-wide" data-scenario="mut-same-box,shadow-new-box"></div>
 
@@ -552,7 +556,7 @@ For more information about this error, try `rustc --explain E0425`.</pre>
   <p>PHP creates a new scope only for a function or a closure. An <code>if</code>, a <code>for</code> or a bare <code>{ }</code> leaves its variables in the surrounding function. Rust treats every block as a scope, so code that works in PHP fails here.</p>
 </aside>
 
-<p>The same rule produces a common bug. Shadowing inside a loop looks like a running total, but the inner <code>let</code> is a new variable, and it disappears at the end of each pass:</p>
+<p>The same rule produces a common bug. Shadowing inside a loop looks like a running total, but the inner <code>let</code> is a new variable, and it disappears at the end of each pass. Chapter 04 covers <code>for</code> loops. The bug looks like this:</p>
 
 <pre class="rs" data-run data-stdout="0">
 fn main() {
@@ -696,7 +700,7 @@ fn main() {
   <div class="ox-rule"><div><p>The name is SCREAMING_SNAKE_CASE.</p><p>This is a convention, but rustc warns when you break it. A constant can sit at the top of a file or inside a function.</p></div></div>
 </div>
 
-<p>Here is the second rule in action. <code>compute</code> is an ordinary function, so the compiler can't run it while it builds the constant:</p>
+<p>Here is the second rule in action. <code>compute</code> is an ordinary function, so the compiler can't run it while it builds the constant. Chapter 04 explains the function signature, the line that starts with <code>fn</code>:</p>
 
 <pre class="rs" data-check="E0015">
 const MAX: u32 = compute();
@@ -729,7 +733,7 @@ For more information about this error, try `rustc --explain E0015`.</pre>
 
 <h3><code>static</code>, briefly</h3>
 
-<p>A <code>const</code> is a value the compiler places wherever you use it. A <code>static</code> is one location in memory that exists for the whole program. You will rarely need one.</p>
+<p>A <code>const</code> is a value the compiler places wherever you use it. A <code>static</code> is one location in memory that exists for the whole program. You will rarely need one. Do not confuse it with the <code>'static</code> in <code>&amp;'static str</code>. Chapter 08 explains that type, and Chapter 15 explains lifetimes.</p>
 
 <pre class="rs" data-run data-stdout="Oxidize">
 static APP_NAME: &amp;str = "Oxidize";
@@ -863,7 +867,7 @@ fn main() {
 <h2 id="recap">Recap</h2>
 
 <div class="ox-recap">
-  <h3>Promises, boxes and names</h3>
+  <h3>Promises, slots and names</h3>
   <ul>
     <li>A name made with <code>let</code> is immutable by default. Assigning to it again is error <strong>E0384</strong>. Add <code>mut</code> only when the value really must change.</li>
     <li><code>mut</code> lets one variable take new values, and its type stays the same for its whole life.</li>
