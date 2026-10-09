@@ -97,7 +97,7 @@ with an HP bar: one hit point per failing test, a knockout when the last one
 turns green. `NO_COLOR=1` or `FORGE_NO_ANIMATION=1` keeps the output plain.
 
 Your progress is stored in `.forge-progress` at the repo root, so you can
-commit it with your work. The Forge is about 1,700 lines of std-only Rust (tests included) in
+commit it with your work. The Forge is about 1,850 lines of std-only Rust (tests included) in
 `forge/src`; Chapter 21 invites you to read it.
 
 ## What's in the repo
