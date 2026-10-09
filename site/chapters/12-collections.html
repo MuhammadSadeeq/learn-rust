@@ -899,9 +899,9 @@ fn main() {
 
 <h3>Floats have no full order</h3>
 
-<p><code>f64</code> and <code>f32</code> have <code>partial_cmp</code>, which returns an <code>Option&lt;Ordering&gt;</code>. They don't have <code>Ord</code>, so they have no <code>cmp</code> that sorts them. The reason is <code>NaN</code>: it is not equal to anything, not even itself, so no rule can place it in a single order. That is why <code>sort()</code> refuses a list of floats.</p>
+<p><code>f64</code> and <code>f32</code> have <code>partial_cmp</code>, which returns an <code>Option&lt;Ordering&gt;</code>. They don't implement <code>Ord</code>, so <code>cmp</code> and <code>sort</code> are not available to them. The reason is <code>NaN</code>: it is not equal to anything, not even itself, so no rule can place it in a single order. That is why <code>sort()</code> refuses a list of floats.</p>
 
-<p>The fix is <code>total_cmp</code>, which has been in the standard library since Rust 1.62. It puts every <code>f64</code> in one order: <code>-0.0</code> sorts just below <code>0.0</code>, and a <code>NaN</code> from <code>f64::NAN</code> sorts last. You will also see <code>a.partial_cmp(b).unwrap()</code> in older code. It works until a <code>NaN</code> arrives, and then the <code>unwrap</code> panics.</p>
+<p>The fix is <code>total_cmp</code>, which has been in the standard library since Rust 1.62. It puts every <code>f64</code> in one order: <code>-0.0</code> sorts just below <code>0.0</code>, and a <code>NaN</code> from <code>f64::NAN</code> sorts last. You will also see <code>a.partial_cmp(b).unwrap()</code>. It works until a <code>NaN</code> arrives, and then the <code>unwrap</code> panics.</p>
 
 <pre class="rs" data-run data-stdout="[-1.0, 0.0, 2.5, NaN]">
 fn main() {

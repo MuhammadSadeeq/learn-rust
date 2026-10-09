@@ -56,7 +56,7 @@
 <p>You have been using smart pointers since the early chapters. <code>String</code> and <code>Vec&lt;T&gt;</code> each own heap memory, dereference to a view of their contents, and free that memory when they are dropped. The types in this chapter differ in one question: who owns the value, and who may change it?</p>
 
 <aside class="ox-callout" data-kind="insight">
-  <p>Keep the parcel picture from Chapter 06. <strong>Box</strong> is a parcel stored on the heap, with one name on its label. <strong>Rc</strong> is a shared parcel with an owner counter printed on the label. <strong>RefCell</strong> is a borrow desk that checks the rules every time someone asks for the parcel, and panics when the rules are broken.</p>
+  <p>Keep the leash picture from Chapter 06. A <strong>Box</strong> is one fluffy on the heap with one leash: one owner. An <strong>Rc</strong> is a fluffy on several leashes, with a counter that shows how many owners hold one. A <strong>RefCell</strong> is the Night Guard: it checks the borrow rules while the program runs, every time someone asks for the value, and panics when a rule is broken.</p>
 </aside>
 
 <details class="ox-think">

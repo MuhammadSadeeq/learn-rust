@@ -228,7 +228,7 @@ window.OX_ROSETTA = [
       `,
     check: "ok",
     note: `<code>len()</code> counts bytes, like <code>strlen()</code>. For characters, use <code>chars().count()</code>, which does the job of <code>mb_strlen()</code>. The method names say which one you get, and there is no mode that picks one by accident.`,
-    chapter: 8
+    chapter: 13
   },
   {
     id: "string-substring",
@@ -297,7 +297,7 @@ window.OX_ROSETTA = [
       println!("{}", names.join(", "));
       `,
     check: "ok",
-    note: `<code>split</code> returns an iterator over pieces that point into <code>csv</code>. Nothing is copied until <code>collect</code>. The <code>Vec&lt;&amp;str&gt;</code> borrows from <code>csv</code>, so <code>csv</code> must live at least as long as <code>names</code>.`,
+    note: `<code>split</code> is lazy: it yields views into <code>csv</code>. <code>collect</code> only builds the <code>Vec</code> of those views, and the text itself is never copied. The <code>Vec&lt;&amp;str&gt;</code> borrows from <code>csv</code>, so <code>csv</code> must live at least as long as <code>names</code>.`,
     chapter: 8
   },
   {
@@ -381,7 +381,7 @@ window.OX_ROSETTA = [
       }
       `,
     check: "ok",
-    note: `<code>nums[5]</code> panics here. Indexing past the end is a crash, not a null. <code>get</code> returns an <code>Option</code>, so the missing case is part of the type. Without the <code>??</code>, PHP's <code>$nums[5]</code> warns and carries on with null.`,
+    note: `<code>nums[5]</code> crashes at run time when <code>nums</code> is a <code>Vec</code> or a slice. On a fixed array with a constant index, as here, rustc refuses to build the program at all. Either way it is not a null. <code>get</code> returns an <code>Option</code>, so the missing case is part of the type. Without the <code>??</code>, PHP's <code>$nums[5]</code> warns and carries on with null.`,
     chapter: 12
   },
   {
@@ -462,10 +462,9 @@ window.OX_ROSETTA = [
       sort($nums); // in place
       `,
     rust: `
-      let nums = vec![3, 1, 2];
-      let mut sorted = nums.clone();
-      sorted.sort();
-      println!("{sorted:?} from {nums:?}");
+      let mut nums = vec![3, 1, 2];
+      nums.sort();
+      println!("{nums:?}");
       `,
     check: "ok",
     note: `<code>sort</code> works in place, needs <code>mut</code>, and exists only for types that implement <code>Ord</code>. Floats do not implement <code>Ord</code> because of NaN, so use <code>sort_by(|a, b| a.total_cmp(b))</code> for them. <code>clone</code> is for when you really need two copies.`,
@@ -704,7 +703,7 @@ window.OX_ROSETTA = [
       `,
     check: "ok",
     note: `<code>isset</code> is false for a null value, while <code>array_key_exists</code> is true. Rust separates the two questions: <code>contains_key</code> checks the key, and the <code>Option</code> inside the map says whether there is a value.`,
-    chapter: 10
+    chapter: 12
   },
   {
     id: "map-sorted",
@@ -1056,7 +1055,7 @@ window.OX_ROSETTA = [
       `,
     check: "ok",
     note: `Ordinary Rust functions have no variadic parameters. Take a slice instead. An array, a <code>Vec</code> or a sub-range all become a <code>&amp;[T]</code> without copying. <code>println!</code> is a macro, which is why it can take any number of arguments.`,
-    chapter: 8
+    chapter: 13
   },
   {
     id: "fn-multi-return",
@@ -1083,7 +1082,7 @@ window.OX_ROSETTA = [
       `,
     check: "ok",
     note: `The tuple is the multi-value return. An empty input has no minimum, so the function returns an <code>Option</code>. PHP's <code>min()</code> throws a <code>ValueError</code> on an empty array, so the PHP side checks for an empty array first.`,
-    chapter: 4
+    chapter: 13
   },
   {
     id: "fn-closure",
@@ -1423,7 +1422,7 @@ window.OX_ROSETTA = [
       `,
     check: "ok",
     note: `<code>Display</code> is the trait behind <code>{}</code>, and Rust never converts to a string for you. You write the impl once. <code>Debug</code>, from <code>#[derive(Debug)]</code>, is the developer view that <code>{:?}</code> uses.`,
-    chapter: 9
+    chapter: 11
   },
   {
     id: "enum-variants",
@@ -1436,6 +1435,7 @@ window.OX_ROSETTA = [
       }
       `,
     rust: `
+      #[allow(dead_code)]
       enum Payment {
           Paid { amount: u32 },
           Pending,
@@ -1483,6 +1483,7 @@ window.OX_ROSETTA = [
       let origin = Point { x: 0, y: 0 };
       let moved = Point { x: 5, ..origin };
       println!("{origin:?} {moved:?}");
+      println!("{} {}", origin.x, moved.y);
       `,
     check: "ok",
     note: `PHP 8.5's clone-with copies the object, then sets the named properties on the copy. Outside the class, that fails for readonly properties and throws an <code>Error</code> at runtime. Rust's struct update syntax sits inside the struct literal, so the compiler checks every field name and type. Fields you leave out come from <code>origin</code>. If one of them is not <code>Copy</code>, it moves out of <code>origin</code>. These fields are all <code>Copy</code>, so <code>origin</code> still works.`,
@@ -1568,7 +1569,7 @@ window.OX_ROSETTA = [
       `,
     check: "ok",
     note: `<code>public private(set)</code> lets any code read <code>paid</code>, and only the class can write it. The rule is enforced at runtime: a write from outside throws an <code>Error</code> when that line runs. Rust gets the same shape from a private field and a <code>pub</code> getter. A write from outside the module is a build error, and the compiler reports it before the program runs.`,
-    chapter: 9
+    chapter: 16
   },
   {
     id: "readonly-class",
@@ -1594,7 +1595,7 @@ window.OX_ROSETTA = [
       println!("{} {}", price.cents, price.currency);
       `,
     check: "ok",
-    note: `A <code>readonly class</code> lets each property be set once, from inside the class, and any later write throws an <code>Error</code> at runtime. Rust makes the same choice with no keyword: a binding without <code>mut</code> cannot change any field. Writing <code>price.cents = 1</code> is error E0594, and the program does not build. Add <code>mut</code> only where the value really changes.`,
+    note: `A <code>readonly class</code> lets each property be set once, from inside the class, and any later write throws an <code>Error</code> at runtime. Rust has no readonly type. Immutability belongs to the binding: <code>price</code> cannot change, but <code>let mut price</code> could. Writing <code>price.cents = 1</code> on a binding without <code>mut</code> is error E0594, and the program does not build. To make a type immutable everywhere, keep its fields private and offer no <code>&amp;mut self</code> methods.`,
     chapter: 9
   },
 
@@ -1624,7 +1625,7 @@ window.OX_ROSETTA = [
       fn parse_port(raw: &str) -> Result<u16, String> {
           let port: u16 = raw
               .parse()
-              .map_err(|_| format!("not a number: {raw}"))?;
+              .map_err(|e| format!("{raw}: {e}"))?;
           if port == 0 {
               return Err(String::from("port must be at least 1"));
           }
@@ -1675,6 +1676,7 @@ window.OX_ROSETTA = [
 
       let err = PortError::OutOfRange(0);
       println!("{err}");
+      println!("{}", PortError::NotANumber(String::from("abc")));
       `,
     check: "ok",
     note: `The enum's variants are the error kinds. A caller can match on them, and the compiler makes it handle each one, which a catch block cannot promise. Add a variant and every match on the enum stops compiling until it handles the new case. Add a subclass in PHP and the existing catch blocks still compile. <code>Display</code> gives the message, and <code>Error</code> lets the error travel as a <code>Box&lt;dyn Error&gt;</code>.`,
@@ -1811,7 +1813,7 @@ window.OX_ROSETTA = [
       `,
     check: "ok",
     note: `There is no <code>finally</code>. <code>Drop</code> runs when the owner goes out of scope: on the normal path, on an early return and during a panic. Name the binding <code>_guard</code>, because a bare <code>_</code> drops the value at once. A <code>File</code> closes itself the same way.`,
-    chapter: 6
+    chapter: 9
   },
   {
     id: "error-source",
@@ -1854,7 +1856,7 @@ window.OX_ROSETTA = [
       `,
     check: "ok",
     note: `PHP links errors with <code>getPrevious()</code>. Rust's <code>Error</code> trait has a <code>source()</code> method that walks the same chain. Each layer should say what it was doing, and the cause should come from <code>source</code>. The <code>anyhow</code> crate adds context for you.`,
-    chapter: 11
+    chapter: 15
   },
   {
     id: "assert-check",
@@ -1895,7 +1897,7 @@ window.OX_ROSETTA = [
           User { name: "Linus".into(), role: "dev".into() },
       ];
       let names: Vec<&str> = users.iter().map(|u| u.name.as_str()).collect();
-      println!("{names:?}");
+      println!("{names:?} {}", users[0].role);
       `,
     check: "ok",
     note: `<code>pluck</code> reads a key by name at runtime. In Rust, <code>u.name</code> is checked when the program compiles, so a typo is a build error and not a null in the output. The <code>Vec&lt;&amp;str&gt;</code> borrows from <code>users</code>.`,
@@ -2049,7 +2051,7 @@ window.OX_ROSETTA = [
       `,
     check: "ok",
     note: `A <code>HashSet</code> drops duplicates and has no order. Laravel's <code>unique()</code> keeps the first occurrence in its original order. For first-seen order in Rust, use an <code>IndexSet</code> from the <code>indexmap</code> crate.`,
-    chapter: 12
+    chapter: 13
   },
   {
     id: "collect-key-by",
@@ -2076,7 +2078,7 @@ window.OX_ROSETTA = [
       `,
     check: "ok",
     note: `A duplicate key keeps the last item, and <code>keyBy</code> does the same. A <code>HashMap</code> has no order, so use a <code>BTreeMap</code> when you need the entries sorted by id.`,
-    chapter: 12
+    chapter: 13
   },
   {
     id: "collect-take",
@@ -2128,6 +2130,7 @@ window.OX_ROSETTA = [
       use std::fs::OpenOptions;
       use std::io::Write;
 
+      #[allow(dead_code)]
       fn log_line(line: &str) -> std::io::Result<()> {
           let mut file = OpenOptions::new().create(true).append(true).open("app.log")?;
           writeln!(file, "{line}")?;
@@ -2136,7 +2139,8 @@ window.OX_ROSETTA = [
       `,
     check: "ok",
     note: `The file closes itself when <code>file</code> is dropped, so there is no <code>fclose</code> to forget. Writes can fail too, so they return a <code>Result</code>. <code>writeln!</code> needs the <code>Write</code> trait in scope, which is why it is imported.`,
-    chapter: 11
+    chapter: null,
+    std: "std::fs::OpenOptions"
   },
   {
     id: "io-stdin",
@@ -2155,7 +2159,8 @@ window.OX_ROSETTA = [
       `,
     check: "ok",
     note: `<code>read_line</code> keeps the trailing newline, the same as <code>fgets</code>. Trim it before you compare or store the text. The buffer is a <code>String</code> that you own, and you choose whether to clear it between reads.`,
-    chapter: 11
+    chapter: null,
+    std: "std::io::stdin"
   },
   {
     id: "io-args",
@@ -2171,8 +2176,9 @@ window.OX_ROSETTA = [
       println!("hello {name}");
       `,
     check: "ok",
-    note: `<code>args()[0]</code> is the program name, like <code>$argv[0]</code>. <code>args()</code> panics if an argument is not valid Unicode, so use <code>args_os()</code> when a path or other raw bytes can arrive.`,
-    chapter: 1
+    note: `The first item of <code>args()</code> is the program name, like <code>$argv[0]</code>. <code>args()</code> panics if an argument is not valid Unicode, so use <code>args_os()</code> when a path or other raw bytes can arrive.`,
+    chapter: null,
+    std: "std::env::args"
   },
   {
     id: "io-env",
@@ -2183,12 +2189,12 @@ window.OX_ROSETTA = [
       `,
     rust: `
       let debug = std::env::var("APP_DEBUG")
-          .map(|v| v == "true")
+          .map(|v| matches!(v.as_str(), "1" | "true"))
           .unwrap_or(false);
       println!("debug: {debug}");
       `,
     check: "ok",
-    note: `A missing variable is an <code>Err</code>, not null. The PHP side reads <code>config('app.debug')</code>, which the default <code>config/app.php</code> fills from <code>APP_DEBUG</code>. Call <code>env()</code> only in config files, because after <code>config:cache</code> the <code>.env</code> file is no longer read. <code>unwrap_or(false)</code> puts the default where you can read it.`,
+    note: `A missing variable is an <code>Err</code>, not null. Laravel's <code>env()</code> also reads values such as <code>1</code> and <code>yes</code> as true, but this check accepts only <code>1</code> and <code>true</code>, so decide which spellings you want and write them down. The PHP side reads <code>config('app.debug')</code>, which the default <code>config/app.php</code> fills from <code>APP_DEBUG</code>. Call <code>env()</code> only in config files, because after <code>config:cache</code> the <code>.env</code> file is no longer read. <code>unwrap_or(false)</code> puts the default where you can read it.`,
     chapter: 20
   },
   {
@@ -2203,7 +2209,8 @@ window.OX_ROSETTA = [
       `,
     check: "ok",
     note: `<code>eprintln!</code> is <code>println!</code> for stderr, so warnings do not mix into the output that a pipe or a log collector reads. It panics if writing to stderr fails, which is rare.`,
-    chapter: 1
+    chapter: null,
+    std: "std::io::stderr"
   },
   {
     id: "io-read-dir",
@@ -2228,8 +2235,9 @@ window.OX_ROSETTA = [
       }
       `,
     check: "ok",
-    note: `Each step can fail: opening the directory, and reading each entry. Both return a <code>Result</code>. <code>display()</code> prints a path, and it may show replacement characters for names that are not valid Unicode.`,
-    chapter: 11
+    note: `Each step can fail: opening the directory, and reading each entry. Both return a <code>Result</code>. <code>glob</code> in PHP returns sorted names, but <code>read_dir</code> returns entries in no promised order. Collect the paths and <code>sort()</code> them when the order matters. <code>display()</code> prints a path, and it may show replacement characters for names that are not valid Unicode.`,
+    chapter: null,
+    std: "std::fs::read_dir"
   },
   /* ---------------------------------------------------------------- web */
   {
@@ -2426,12 +2434,13 @@ window.OX_ROSETTA = [
     rust: `
       fn fetch_status() -> Result<serde_json::Value, Box<dyn std::error::Error>> {
           let body = reqwest::blocking::get("https://example.com/api/status")?
+              .error_for_status()?
               .json::<serde_json::Value>()?;
           Ok(body)
       }
       `,
     check: "skip",
-    note: `The connection, the status check and the body parse can each fail, so every step returns a <code>Result</code>. <code>blocking</code> suits scripts. Inside an async server, use reqwest's async client, so a slow request does not hold a thread.`,
+    note: `The connection, the status check and the body parse can each fail, so every step returns a <code>Result</code>. <code>get</code> succeeds on a 404, so <code>error_for_status()</code> is the call that matches <code>-&gt;throw()</code>: it turns a 4xx or 5xx status into an error. The snippet needs <code>reqwest = { version = "0.12", features = ["blocking", "json"] }</code> and <code>serde_json = "1"</code> in <code>Cargo.toml</code>, because reqwest leaves both features off by default. <code>blocking</code> suits scripts. Inside an async server, use reqwest's async client, so a slow request does not hold a thread.`,
     chapter: 20
   },
   {
@@ -2572,7 +2581,7 @@ window.OX_ROSETTA = [
       `,
     rust: `
       fn parse_port(raw: &str) -> Result<u16, String> {
-          let port: u16 = raw.parse().map_err(|_| format!("not a number: {raw}"))?;
+          let port: u16 = raw.parse().map_err(|e| format!("{raw}: {e}"))?;
           if port == 0 {
               return Err(String::from("port must be at least 1"));
           }
@@ -2595,7 +2604,7 @@ window.OX_ROSETTA = [
       `,
     check: "ok",
     note: `<code>expectException</code> checks that code throws. A Rust test can check for an <code>Err</code> directly, which is the idiomatic way. <code>#[should_panic]</code> exists for code that panics, but a function that returns a <code>Result</code> is easier to test.`,
-    chapter: 11
+    chapter: 16
   },
   {
     id: "test-setup",
@@ -2629,7 +2638,8 @@ window.OX_ROSETTA = [
       }
 
       fn main() {
-          println!("{}", sample_admin().name);
+          let user = sample_admin();
+          println!("{} admin: {}", user.name, user.admin);
       }
 
       #[cfg(test)]
@@ -2705,9 +2715,11 @@ window.OX_ROSETTA = [
       pub fn double(n: i32) -> i32 {
           n * 2
       }
+
+      println!("{}", double(4));
       `,
     check: "ok",
-    note: `A fenced block inside a <code>///</code> comment runs under <code>cargo test</code> as a separate program, so it imports your crate by name, as a user of the crate would. The example cannot drift from the code without a failing test. A PHPDoc <code>@example</code> is only text.`,
+    note: `A fenced block inside a <code>///</code> comment runs under <code>cargo test</code> as a separate program, so it imports your crate by name, as a user of the crate would. The example cannot drift from the code without a failing test. Doc tests exist only for library crates (<code>src/lib.rs</code>); a binary-only package has none. A PHPDoc <code>@example</code> is only text.`,
     chapter: 16
   },
   {
@@ -2747,7 +2759,7 @@ window.OX_ROSETTA = [
       }
 
       let user = User::builder().admin().build();
-      println!("{user:?}");
+      println!("{} {}", user.name, user.admin);
       `,
     check: "ok",
     note: `A builder chains defaults the way a factory does. Each method takes <code>self</code> by value and returns it, so the half-built value is consumed as you go. Test helpers like this can sit under <code>#[cfg(test)]</code> when they should not ship.`,
@@ -2772,11 +2784,12 @@ window.OX_ROSETTA = [
 
       let user = User { name: String::from("Ada"), admin: true };
       println!("{user:#?}");
+      println!("admin: {}", user.admin);
       let len = dbg!(user.name.len()) + 1;
       println!("{len}");
       `,
     check: "ok",
-    note: `<code>{:#?}</code> is <code>print_r</code> with line breaks. <code>dbg!</code> prints the file, the line and the value to stderr, then returns the value. It takes ownership of what you pass, so write <code>dbg!(&amp;user)</code> to keep the value. Clippy can flag leftovers with its <code>dbg_macro</code> lint.`,
+    note: `<code>{:#?}</code> is the pretty-printed Debug form, close to <code>print_r</code> and <code>var_dump</code>. <code>{:?}</code> is the compact one-line form. <code>dbg!</code> prints the file, the line and the value to stderr, then returns the value. It takes ownership of what you pass, so write <code>dbg!(&amp;user)</code> to keep the value. Clippy can flag leftovers with its <code>dbg_macro</code> lint.`,
     chapter: 16
   },
   {
@@ -2826,6 +2839,7 @@ window.OX_ROSETTA = [
       echo total(5);
       `,
     rust: `
+      #[allow(dead_code)]
       #[deprecated(since = "1.2.0", note = "use \`total_cents\` instead")]
       fn total(cents: u32) -> u32 {
           cents
@@ -2874,6 +2888,7 @@ window.OX_ROSETTA = [
       }
       `,
     rust: `
+      #[allow(dead_code)]
       fn send_invoice(id: u32) -> bool {
           todo!("wire up the billing API for invoice {id}")
       }

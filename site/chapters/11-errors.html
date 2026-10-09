@@ -71,7 +71,7 @@ thread 'main' (27578) panicked at src/main.rs:3:24:
 index out of bounds: the len is 3 but the index is 3
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace</pre>
 
-<p>Read the message from the top. The first line names the thread and the place: line 3 of <code>src/main.rs</code>. The second line says what went wrong. The number in parentheses is the operating system's id for the thread that panicked, so yours will differ. Set <code>RUST_BACKTRACE=1</code> and the same panic also prints a stack trace, the chain of calls that led to that line. Reach for it when a panic shows up somewhere you didn't expect.</p>
+<p>Read the message from the top. The first line names the thread and the place: line 3 of <code>src/main.rs</code>. The second line says what went wrong. The number in parentheses is the thread id: the operating system's number for the thread that panicked, so yours will differ. Set <code>RUST_BACKTRACE=1</code> and the same panic also prints a stack trace, the chain of calls that led to that line. Reach for it when a panic shows up somewhere you didn't expect.</p>
 
 <div class="ox-quiz" data-id="11:panic-or-result" data-label="Check yourself">
   <p class="ox-q">Your app reads <code>config.toml</code> when it starts. Someone forgot to deploy the file. What should the code do?</p>
