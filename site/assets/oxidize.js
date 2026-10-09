@@ -579,7 +579,7 @@
     const msg = h("p", { class: "ox-fill-msg", style: "margin:10px 0 0" }, "Pick one tile on each side.");
     el.appendChild(msg);
     let pickL = null, pickR = null, done = 0;
-    const lt = pairs.map((p, i) => { const b = h("button", { type: "button", class: "ox-tile", "data-i": i }, p.l); L.appendChild(b); return b; });
+    const lt = pairs.map((p, i) => { const b = h("button", { type: "button", class: "ox-tile", "data-i": i }, esc(p.l)); L.appendChild(b); return b; });
     const order = shuffle(pairs.map((_, i) => i), pairs.length * 31 + 3);
     const rt = order.map((i) => { const b = h("button", { type: "button", class: "ox-tile", "data-i": i }, pairs[i].r); R.appendChild(b); return b; });
     const finish = (fresh) => {
