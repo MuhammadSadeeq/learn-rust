@@ -1,7 +1,9 @@
 /* Motion explainers for Chapter 16: Modules and Cargo.
    ch16-fetch: Cargo fetches crates, the Forge builds them, Cargo.lock keeps the
    exact versions. ch16-doors: pub opens a door, a private item stays shut, and
-   the Forge stamps E0603. The door program is checked by tools/check-snippets.mjs. */
+   the Forge stamps E0603. The door program is checked by tools/check-snippets.mjs.
+   The caller stays in main.rs: it never walks into a module. Its call travels
+   as a label, across the gap, to the door it reaches for. */
 (window.OX_MOTION = window.OX_MOTION || []).push({
   id: "ch16-fetch",
   title: "Cargo fetches the crates",
@@ -9,7 +11,8 @@
   h: 300,
   actors: [
     { id: "oxi", cast: "oxi", x: 58, y: 230, size: 84 },
-    { id: "toml", prop: "scroll", x: 130, y: 76, size: 118, opts: { label: "Cargo.toml" } },
+    { id: "toml", prop: "scroll", x: 130, y: 76, size: 118, opts: { label: " " } },
+    { id: "tomlName", text: "Cargo.toml", x: 130, y: 22 },
     { id: "harbor", box: true, x: 560, y: 150, w: 150, h: 250, label: "crates.io" },
     { id: "c1", prop: "crate", x: 560, y: 92, size: 84, opts: { label: "serde" } },
     { id: "c2", prop: "crate", x: 560, y: 190, size: 84, opts: { label: "serde_derive" } },
@@ -37,8 +40,9 @@
       ],
     },
     {
-      say: "<p><code>cargo build</code> gives the project and every crate to the Forge. The Forge checks them all before anything runs.</p>",
+      say: "<p><code>cargo build</code> gives the project and every crate to the Forge, the compiler. The Forge checks them all before anything runs.</p>",
       do: [
+        ["hide", "tomlName", 0],
         ["move", "cargo", { x: 400, y: 258 }, 800],
         ["arc", "toml", { x: 330, y: 150, scale: 0.3 }, 800, 0, 40],
         ["fade", "toml", 0, 250, 700],
@@ -72,7 +76,7 @@
 
 (window.OX_MOTION = window.OX_MOTION || []).push({
   id: "ch16-doors",
-  title: "pub opens a door",
+  title: "pub opens a door, a private fn stays shut",
   w: 640,
   h: 300,
   rust: 'mod billing {\n    pub fn total(cents: u32) -> u32 {\n        cents + fee()\n    }\n\n    fn fee() -> u32 {\n        50\n    }\n}\n\nfn main() {\n    println!("{}", billing::total(100));\n    println!("{}", billing::fee());\n}',
@@ -84,7 +88,9 @@
     { id: "forge", cast: "forge", x: 320, y: 150, size: 96 },
     { id: "total", prop: "door", x: 470, y: 150, size: 56, opts: { open: true }, label: "total()" },
     { id: "fee", prop: "door", x: 570, y: 150, size: 56, label: "fee()" },
-    { id: "err", prop: "errscroll", x: 320, y: 150, size: 90, opts: { label: "E0603" }, hidden: true, z: 6 },
+    { id: "callT", text: "total(100)", x: 150, y: 150, hidden: true },
+    { id: "callF", text: "fee()", x: 150, y: 150, hidden: true },
+    { id: "err", prop: "errscroll", x: 320, y: 240, size: 96, opts: { label: "E0603" }, hidden: true, z: 6 },
   ],
   beats: [
     {
@@ -93,18 +99,23 @@
       do: [["pose", "caller", "talk", 1200]],
     },
     {
-      say: "<p><code>main</code> calls <code>billing::total</code>. Its door is open, so the call goes through and the answer comes back.</p>",
+      say: "<p><code>main</code> calls <code>billing::total</code>. Its door is open, so the call goes through and the answer comes back to <code>main</code>.</p>",
       line: 12,
       do: [
-        ["move", "caller", { x: 470, y: 240 }, 800],
+        ["pop", "callT", 0],
+        ["arc", "callT", { x: 470, y: 150, scale: 1 }, 800, 0, 60],
+        ["arc", "callT", { x: 150, y: 150, scale: 1 }, 800, 1000, 60],
+        ["hide", "callT", 1900],
         ["pose", "caller", "happy", 1000, 800],
       ],
     },
     {
-      say: "<p>The crab knocks on <code>fee</code>, and the door stays shut. <code>fee</code> is private, so the Forge is asked to decide.</p>",
+      say: "<p>The call reaches for <code>fee</code>, and the door stays shut. <code>fee</code> is private, so the Forge is asked to decide.</p>",
       line: 13,
       do: [
-        ["move", "caller", { x: 570, y: 240 }, 800],
+        ["pop", "callF", 0],
+        ["arc", "callF", { x: 570, y: 150, scale: 1 }, 800, 0, 60],
+        ["shake", "fee", 700],
         ["pose", "caller", "think", 900, 500],
       ],
       ask: {
@@ -121,8 +132,8 @@
         ["pose", "forge", "chomp", 700, 400],
         ["pose", "forge", "oops", 1400, 400],
         ["pose", "caller", "oops", 1400, 400],
+        ["hide", "callF", 1500],
         ["show", "err", 1500],
-        ["arc", "err", { x: 570, y: 235, scale: 0.5 }, 800, 1600, 40],
       ],
     },
   ],

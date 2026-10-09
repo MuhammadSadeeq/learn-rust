@@ -1,6 +1,7 @@
 /* Chapter 09 (Structs) motion: the Mold, and what a struct update moves.
    Scene ch09-pour: pour two values, then a literal without age, which the Forge
-   stops with E0063. The rust field is the program that compiles (checked).
+   stops with E0063. The scene's rust is the program that compiles; the beat
+   that shows the literal without age carries its own rust (checked).
    Scene ch09-update: ..ana takes email from ana, so email moves to bo.
    Verified with rustc 1.97: ana.name and ana.age stay usable, and reading
    ana.email is E0382 (the field that moved is email, not name). */
@@ -54,8 +55,8 @@
         ],
       },
       {
-        say: "<p>The Forge stops the literal with <b>E0063</b>: <code>age</code> is missing, so nothing is poured.</p>",
-        line: 7,
+        say: "<p>Imagine <code>bo</code>'s literal without <code>age</code>. The Forge stops it with <b>E0063</b>, and the next panel shows that literal.</p>",
+        line: 8,
         ask: {
           q: "A literal sets only name and leaves out age. Will rustc accept it?",
           choices: ["Yes, age defaults to 0", "No, every field must be set"],
@@ -73,8 +74,39 @@
         ],
       },
       {
-        say: "<p>Add <code>age</code> and the literal pours. <code>bo</code> comes out with both fields.</p>",
+        say: "<p>The panel shows the literal for <code>bo</code>. It leaves out <code>age</code>, so the struct literal does not compile: <b>E0063</b>. Nothing is poured.</p>",
         line: 8,
+        rust: [
+          "struct User {",
+          "    name: String,",
+          "    age: u8,",
+          "}",
+          "",
+          "fn main() {",
+          '    let ana = User { name: String::from("Ana"), age: 31 };',
+          '    let bo = User { name: String::from("Bo") };',
+          '    println!("{} {}", ana.name, bo.age);',
+          "}",
+        ].join("\n"),
+        check: "E0063",
+        do: [["pulse", "err", 0]],
+      },
+      {
+        say: "<p>Add <code>age: 27</code> to the literal, and it pours. <code>bo</code> comes out with both fields.</p>",
+        line: 8,
+        rust: [
+          "struct User {",
+          "    name: String,",
+          "    age: u8,",
+          "}",
+          "",
+          "fn main() {",
+          '    let ana = User { name: String::from("Ana"), age: 31 };',
+          '    let bo = User { name: String::from("Bo"), age: 27 };',
+          '    println!("{} {}", ana.name, bo.age);',
+          "}",
+        ].join("\n"),
+        check: "ok",
         do: [
           ["poof", "err", 0],
           ["pop", "bo_n", 0],
@@ -88,7 +120,7 @@
 
   (window.OX_MOTION = window.OX_MOTION || []).push({
     id: "ch09-update",
-    title: "What ..ana moves",
+    title: "What the struct update ..ana moves",
     w: 640,
     h: 300,
     rust: [
@@ -134,7 +166,7 @@
         ],
       },
       {
-        say: "<p>The update takes <code>email</code> from <code>ana</code>. The String moves, so its leash now belongs to <code>bo</code>.</p>",
+        say: "<p>The struct update <code>..ana</code> takes <code>email</code> from <code>ana</code>. The String moves, so its leash now belongs to <code>bo</code>.</p>",
         line: 15,
         ask: {
           q: "After bo is made with ..ana, can ana.email still be used?",

@@ -19,7 +19,8 @@
     { id: "r2", prop: "parcel", opts: { label: "GET /" }, x: 30, y: 96, size: 56, hidden: true },
     { id: "r3", prop: "parcel", opts: { label: "GET /" }, x: 30, y: 96, size: 56, hidden: true },
     { id: "build", text: "cargo build", x: 500, y: 66, hidden: true },
-    { id: "src-rs", prop: "scroll", opts: { label: "main.rs" }, x: 390, y: 246, size: 84, hidden: true },
+    { id: "src-rs", prop: "scroll", opts: { label: " " }, x: 390, y: 246, size: 84, hidden: true },
+    { id: "src-rs-name", text: "main.rs", x: 390, y: 200, hidden: true },
     { id: "forge", cast: "forge", x: 500, y: 150, size: 116, pose: "sleep" },
     { id: "ingot", prop: "ingot", opts: { label: "binary" }, x: 500, y: 246, size: 92, hidden: true },
     { id: "q1", prop: "parcel", opts: { label: "GET /" }, x: 625, y: 246, size: 56, hidden: true },
@@ -32,6 +33,7 @@
       do: [
         ["pop", "src-php", 0],
         ["pop", "src-rs", 250],
+        ["pop", "src-rs-name", 250],
       ],
     },
     {
@@ -68,7 +70,7 @@
       ],
     },
     {
-      say: "<p>Now the Rust side. <code>cargo build</code> hands <code>main.rs</code> to the Forge once, before any request arrives.</p>",
+      say: "<p>Now the Rust side. <code>cargo build</code> hands <code>main.rs</code> to the Forge, the compiler, once, before any request arrives.</p>",
       ask: {
         q: "When does Rust find a type error in a function that no request calls yet?",
         choices: ["When the first request calls that function", "At build time, before any request arrives"],
@@ -77,7 +79,8 @@
       },
       do: [
         ["show", "build", 0],
-        ["arc", "src-rs", { x: 500, y: 150, scale: 0.35 }, 700, 0, 40],
+        ["hide", "src-rs-name", 0],
+        ["arc", "src-rs", { x: 500, y: 150, scale: 0.6 }, 700, 0, 40],
         ["fade", "src-rs", 0, 250, 550],
         ["pose", "forge", "chomp", 800, 650],
         ["pop", "ingot", 1500],

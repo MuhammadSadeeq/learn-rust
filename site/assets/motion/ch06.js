@@ -19,7 +19,6 @@
     { id: "block", box: true, x: 220, y: 150, w: 360, h: 230, label: "block" },
     { id: "s", cast: "crab", x: 110, y: 150, size: 84, label: "s", hidden: true },
     { id: "f", cast: "fluffy", x: 260, y: 150, size: 84, label: "String", hidden: true },
-    { id: "door", prop: "door", opts: { open: true, label: "room" }, x: 400, y: 150, size: 46 },
   ],
   beats: [
     {
@@ -44,17 +43,16 @@
         answer: 1,
         explain: "<code>s</code> owns the fluffy, and <code>s</code> goes out of scope at the brace. Its drop frees the bytes.",
       },
-      say: "<p>The <code>}</code> ends the block. <code>s</code> waves, walks out through the door, and the door shuts behind it.</p>",
+      say: "<p>The <code>}</code> ends the block. <code>s</code> waves, walks out of the block, and its scope ends there.</p>",
       do: [
         ["pose", "s", "happy", 900, 0],
         ["move", "s", { x: 520, y: 150 }, 700, 900],
         ["fade", "s", 0, 400, 1500],
-        ["art", "door", { prop: "door", opts: { open: false, label: "room" } }, 1900],
       ],
     },
     {
       line: 5,
-      say: "<p>The fluffy poofs, and its leash goes with it. Drop runs at a line you can point to: the <code>}</code> on line 5.</p>",
+      say: "<p>The drop frees the fluffy, and its leash goes with it. The bytes are handed back, not wiped. Drop runs at a line you can point to: the <code>}</code> on line 5.</p>",
       do: [
         ["poof", "f", 0],
         ["unlink", "lk", 0],
@@ -104,7 +102,7 @@ fn main() {
         answer: 1,
         explain: "Passing <code>s</code> by value moves it. <code>takes</code> owns the String now, and drops it when <code>takes</code> returns.",
       },
-      say: "<p><code>takes(s)</code> hands the leash to the parameter, a new crab inside the function. The caller's crab turns grey.</p>",
+      say: "<p><code>takes(s)</code> moves the String: the leash passes to the parameter, a new crab inside the function. The caller's crab turns grey.</p>",
       do: [
         ["unlink", "lk", 0],
         ["pop", "p", 0],
@@ -120,7 +118,7 @@ fn main() {
     },
     {
       line: 3,
-      say: "<p>The function's <code>}</code> drops its parameter. The fluffy poofs, and the caller's crab is a ghost with nothing left to use.</p>",
+      say: "<p>The function's <code>}</code> drops its parameter. The String is freed, and the caller's crab is a ghost with nothing left to use.</p>",
       do: [
         ["poof", "f", 0],
         ["unlink", "lk", 0],
@@ -129,12 +127,24 @@ fn main() {
     },
     {
       line: 7,
-      say: "<p>Preview for Chapter 7. A function that took <code>&amp;s</code> would only look, through glasses. The leash would stay with the caller, and nothing would move.</p>",
+      rust: `fn takes(s: &String) {
+    println!("{s}");
+}
+
+fn main() {
+    let s = String::from("hi");
+    takes(&s);
+}`,
+      check: "ok",
+      say: "<p>Preview for Chapter 7. <code>takes(&amp;s)</code> lends the String instead: a shared borrow, seen through glasses. The leash stays with the caller, and nothing moves.</p>",
       do: [
-        ["kind", "s", "ref", 0],
         ["pop", "f", 0],
-        ["link", "lk2", "s", "f", "ref", 400],
-        ["art", "s", { cast: "crab", opts: { gear: ["glasses"] } }, 300],
+        ["kind", "s", "", 0],
+        ["link", "lk", "s", "f", "own", 300],
+        ["pop", "p", 0],
+        ["art", "p", { cast: "crab", opts: { gear: ["glasses"] } }, 0],
+        ["kind", "p", "ref", 0],
+        ["link", "lk2", "p", "f", "ref", 400],
       ],
     },
   ],

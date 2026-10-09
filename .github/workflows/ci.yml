@@ -42,11 +42,25 @@ jobs:
           cargo clippy -p forge --all-targets -- -D warnings
           cargo test -p forge
 
+      - name: Cache the snippet crates (tools/snippet-crates)
+        uses: actions/cache@v4
+        with:
+          path: target/snippet-crates/target
+          key: snippet-crates-${{ runner.os }}-${{ hashFiles('tools/snippet-crates/Cargo.lock') }}
+          restore-keys: snippet-crates-${{ runner.os }}-
+
       - name: Every snippet on the site compiles (or fails exactly as documented)
-        run: node tools/check-snippets.mjs
+        run: node tools/check-snippets.mjs --crates
 
       - name: Every PHP sample parses on PHP 8.5 and uses modern idioms
         run: node tools/check-php.mjs
+
+      - name: Cache the cargo quests' builds (target/forge-pkgs)
+        uses: actions/cache@v4
+        with:
+          path: target/forge-pkgs
+          key: forge-pkgs-${{ runner.os }}-${{ hashFiles('quests/pkgs/**/Cargo.lock') }}
+          restore-keys: forge-pkgs-${{ runner.os }}-
 
       - name: Every quest fails as shipped and passes with its solution
         run: node tools/check-quests.mjs
@@ -54,3 +68,15 @@ jobs:
       - name: Companion project (notes-api) builds and passes its tests
         if: hashFiles('projects/notes-api/Cargo.toml') != ''
         run: cargo test --manifest-path projects/notes-api/Cargo.toml
+
+      - name: Agent harness (projects/tool-runner) is formatted
+        if: hashFiles('projects/tool-runner/Cargo.toml') != ''
+        run: cargo fmt --manifest-path projects/tool-runner/Cargo.toml -- --check
+
+      - name: Agent harness (projects/tool-runner) is clippy-clean
+        if: hashFiles('projects/tool-runner/Cargo.toml') != ''
+        run: cargo clippy --manifest-path projects/tool-runner/Cargo.toml --all-targets -- -D warnings
+
+      - name: Agent harness (projects/tool-runner) passes its tests
+        if: hashFiles('projects/tool-runner/Cargo.toml') != ''
+        run: cargo test --manifest-path projects/tool-runner/Cargo.toml

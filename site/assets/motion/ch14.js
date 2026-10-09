@@ -2,7 +2,7 @@
    plates. The rust fields are compiled by tools/check-snippets.mjs. */
 (window.OX_MOTION = window.OX_MOTION || []).push({
   id: "ch14-badges",
-  title: "Only badged crabs pass the door",
+  title: "Only types that implement Summary pass the bound",
   w: 640,
   h: 300,
   rust: `trait Summary {
@@ -44,17 +44,17 @@ fn main() {
   ],
   beats: [
     {
-      say: "<p><code>notify</code> is a door. It takes any <code>&amp;impl Summary</code>, so only a type with a <code>Summary</code> badge gets through.</p>",
+      say: "<p><code>notify</code> has a <b>trait bound</b>: <code>&amp;impl Summary</code> lets through only a type that implements <code>Summary</code>, shown here as a badge.</p>",
       line: 19,
       do: [["pop", "post", 0], ["pop", "note", 300]],
     },
     {
-      say: "<p><code>impl Summary for Post</code> gives Post the badge. Note has no impl, so it has no badge.</p>",
+      say: "<p><code>impl Summary for Post</code> makes <code>Post</code> implement the <b>trait</b> <code>Summary</code>. That trait is the badge. Note has no impl, so it has no badge.</p>",
       line: 13,
       do: [["pop", "badge", 0], ["pulse", "post", 400]],
     },
     {
-      say: "<p><code>notify(&amp;post)</code>: Post wears the badge, so the door opens and lets it through.</p>",
+      say: "<p><code>notify(&amp;post)</code>: Post implements <code>Summary</code>, so the bound holds and the door opens.</p>",
       line: 25,
       do: [
         ["art", "door", { prop: "door", opts: { label: "notify", open: true } }, 0],
@@ -79,7 +79,7 @@ fn main() {
       ],
     },
     {
-      say: "<p>The Forge checks the call before anything runs, and hands back an error scroll: E0277, <code>Note: Summary</code> is not satisfied. Note never gets through.</p>",
+      say: "<p>The Forge checks the trait bound before anything runs, and hands back an error scroll: <b>E0277</b>, <code>Note: Summary</code> is not satisfied. Note never gets through.</p>",
       line: 27,
       do: [
         ["pose", "forge", "oops", 900],
@@ -93,7 +93,7 @@ fn main() {
 
 (window.OX_MOTION = window.OX_MOTION || []).push({
   id: "ch14-stamp",
-  title: "The Press stamps one plate per type",
+  title: "The Press stamps one plate per type (monomorphization)",
   w: 640,
   h: 300,
   rust: `fn largest<T: PartialOrd + Copy>(list: &[T]) -> T {
@@ -127,17 +127,17 @@ fn main() {
       do: [["pose", "press", "think", 1200]],
     },
     {
-      say: "<p><code>largest::&lt;i32&gt;</code> makes the Press stamp one plate for <code>i32</code>. The stamp is made when the program is built.</p>",
+      say: "<p><code>largest::&lt;i32&gt;</code> makes the Press stamp one copy of the <b>generic</b> function for <code>i32</code>. This is <b>monomorphization</b>, done when the program is built.</p>",
       line: 14,
       do: [["pose", "press", "stamp", 700], ["pop", "p32", 350]],
     },
     {
-      say: "<p><code>largest::&lt;f64&gt;</code> stamps a second plate from the same template, for <code>f64</code>.</p>",
+      say: "<p><code>largest::&lt;f64&gt;</code> stamps a second copy from the same generic template, for <code>f64</code>.</p>",
       line: 15,
       do: [["pose", "press", "stamp", 700], ["pop", "p64", 350]],
     },
     {
-      say: "<p>Each call goes straight to its plate. No lookup happens at runtime, and the program prints 100 and 9.75.</p>",
+      say: "<p>Each call goes straight to its own copy. No lookup happens at runtime, and the program prints 100 and 9.75.</p>",
       line: 15,
       do: [["pulse", "p32", 0], ["pulse", "p64", 250]],
     },

@@ -1,7 +1,7 @@
 /* Chapter 15 (Lifetimes): the sand timer scene (a reference outlives its owner)
-   and the longest scene (the result is tied to both inputs). The rust fields
-   are compiled by tools/check-snippets.mjs; the fixed programs in the chapter
-   are checked there too. */
+   and the longest scene (the result is tied to both inputs). The rust fields,
+   the beats' own rust (the fixed programs), are compiled by
+   tools/check-snippets.mjs. */
 (window.OX_MOTION = window.OX_MOTION || []).push({
   id: "ch15-sand",
   title: "The sand runs out before the reference is used",
@@ -26,22 +26,22 @@
   ],
   beats: [
     {
-      say: "<p><code>let r;</code> declares a reference with no value yet. The outer Tick is the scope of all of <code>main</code>.</p>",
+      say: "<p><code>let r;</code> declares a reference with no value yet. The outer Tick is the lifetime of everything in <code>main</code>: the region of code where a reference must stay valid.</p>",
       line: 2,
       do: [["pose", "outer", "think", 1200]],
     },
     {
-      say: "<p>Inside the block, <code>let x = 5;</code> makes a value. The block's Tick is shorter, because the block ends sooner than <code>main</code>.</p>",
+      say: "<p>Inside the block, <code>let x = 5;</code> makes a value. Its Tick is a shorter lifetime, because the block ends before <code>main</code> does.</p>",
       line: 4,
       do: [["pop", "inner", 0], ["pop", "x", 350]],
     },
     {
-      say: "<p><code>r = &amp;x;</code> ties a reference to <code>x</code>. The glasses link <code>r</code> to the value, and <code>r</code> itself lives in <code>main</code>.</p>",
+      say: "<p><code>r = &amp;x;</code> borrows <code>x</code>, so the lifetime of <code>r</code> must fit inside the lifetime of <code>x</code>. The glasses link <code>r</code> to the value, and <code>r</code> itself lives in <code>main</code>.</p>",
       line: 5,
       do: [["pop", "r", 0], ["link", "rx", "r", "x", "ref", 350]],
     },
     {
-      say: "<p>The block is about to close. Its <code>}</code> drops <code>x</code>, and the sand in its Tick runs out.</p>",
+      say: "<p>The block is about to close. Its <code>}</code> drops <code>x</code>, and the sand in its Tick runs out: the lifetime of <code>x</code> ends here.</p>",
       line: 6,
       ask: {
         q: "Line 7 still reads <code>r</code> after the <code>}</code>. Is <code>r</code> still valid there?",
@@ -65,8 +65,17 @@
       ],
     },
     {
-      say: "<p>Fix it by using <code>r</code> before the <code>}</code>, while the sand still runs. The fixed program is below, and it compiles.</p>",
-      line: 5,
+      say: "<p>Fix it by using <code>r</code> before the <code>}</code>, while the sand still runs. The panel shows the fixed program, and it compiles.</p>",
+      line: 6,
+      rust: `fn main() {
+    let r;
+    {
+        let x = 5;
+        r = &x;
+        println!("{r}");
+    }
+}`,
+      check: "ok",
       do: [["unlink", "rx", 0], ["poof", "err", 0], ["hide", "insp", 0]],
     },
   ],
@@ -74,7 +83,7 @@
 
 (window.OX_MOTION = window.OX_MOTION || []).push({
   id: "ch15-longest",
-  title: "The result is tied to both inputs",
+  title: "The result's lifetime is tied to both inputs",
   w: 640,
   h: 300,
   rust: `fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
@@ -102,17 +111,17 @@ fn main() {
   ],
   beats: [
     {
-      say: "<p><code>let x</code> lives for all of <code>main</code>, so its String sits under the long outer Tick.</p>",
+      say: "<p><code>let x</code> lives for all of <code>main</code>, so its lifetime is the long outer Tick.</p>",
       line: 6,
       do: [["pop", "x", 0], ["pose", "outer", "think", 1200]],
     },
     {
-      say: "<p>The block opens, and <code>let y</code> makes a second String. The block's Tick is shorter, because the block ends sooner.</p>",
+      say: "<p>The block opens, and <code>let y</code> makes a second String. Its Tick is a shorter lifetime, because the block ends sooner.</p>",
       line: 9,
       do: [["pop", "inner", 0], ["pop", "y", 350]],
     },
     {
-      say: "<p><code>longest(x, y)</code> ties <code>result</code> to both inputs. So <code>result</code> can't outlive the shorter of the two, and that is <code>y</code>.</p>",
+      say: "<p><code>longest(x, y)</code> ties the lifetime of <code>result</code> to both inputs. So <code>result</code> can't outlive the shorter of the two, and that is <code>y</code>.</p>",
       line: 10,
       do: [
         ["pop", "result", 0],
@@ -145,8 +154,22 @@ fn main() {
       ],
     },
     {
-      say: "<p>Fix it by printing <code>result</code> inside the block, while <code>y</code> still exists. The fixed version is below, and it compiles.</p>",
-      line: 12,
+      say: "<p>Fix it by printing <code>result</code> inside the block, while <code>y</code> still exists. The panel shows the fixed version, and it compiles.</p>",
+      line: 11,
+      rust: `fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
+    if x.len() > y.len() { x } else { y }
+}
+
+fn main() {
+    let x = String::from("long string");
+    let result;
+    {
+        let y = String::from("xyz");
+        result = longest(x.as_str(), y.as_str());
+        println!("The longest string is {result}");
+    }
+}`,
+      check: "ok",
       do: [["unlink", "ry", 0], ["poof", "err", 0], ["hide", "insp", 0]],
     },
   ],

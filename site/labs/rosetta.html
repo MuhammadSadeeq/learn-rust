@@ -156,7 +156,7 @@
       : '<span class="ro-badge">needs a crate</span>';
     var ch = Ox.chapterByNum(e.chapter);
     var chapter = ch
-      ? '<a href="' + Ox.chapterUrl(ch) + '">Chapter ' + String(ch.n).padStart(2, "0") + " · " + Ox.esc(ch.title) + "</a>"
+      ? '<a href="' + Ox.chapterUrl(ch) + (e.anchor ? "#" + e.anchor : "") + '">Chapter ' + String(ch.n).padStart(2, "0") + " · " + Ox.esc(ch.title) + "</a>"
       : e.std ? "Rust std docs: " + Ox.esc(e.std) : "";
     art.innerHTML =
       '<header class="ro-head">' +

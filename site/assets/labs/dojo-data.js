@@ -1214,7 +1214,7 @@ fn main() {
     task: "Write the upload handler: read the file, compute a checksum and reply, and add a status handler.",
     chapter: 19,
     check: "ok",
-    idiomaticCheck: "skip", // needs tokio: checked with cargo, not by the snippet checker
+    idiomaticCrates: ["tokio"], // needs tokio: built with --crates in tools/snippet-crates
     rust: String.raw`use std::fs;
 use std::thread;
 use std::time::Duration;

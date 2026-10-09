@@ -38,7 +38,8 @@ window.OX_COURSE = {
     { slug: "rosetta",        title: "PHP → Rust Rosetta",      blurb: "A searchable phrasebook from the PHP and Laravel you know to the Rust you need." },
     { slug: "ai-dojo",        title: "Agent Code Review Dojo",  blurb: "Spot the smells in AI-written Rust before they reach production." },
     { slug: "review",         title: "Recall Deck",             blurb: "Spaced-repetition flashcards from every chapter you have read." },
-    { slug: "cast",           title: "Field Guide",             blurb: "Every character of Rustopia you have met, and the Rust idea each one stands for." }
+    { slug: "cast",           title: "Field Guide",             blurb: "Every character of Rustopia you have met, and the Rust idea each one stands for." },
+    { slug: "glossary",       title: "Glossary & keyword index", blurb: "Every keyword, core term, std type, cargo tool and error code, with a checked example and a keyword drill." }
   ],
   levels: [
     { xp: 0,    name: "Hatchling" },

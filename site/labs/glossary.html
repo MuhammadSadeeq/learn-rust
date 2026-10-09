@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Glossary · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<style>
+  [hidden] { display: none !important; }
+  .ox-lab h2 { font-size: var(--step-3); margin: 2.4rem 0 0.8rem; }
+  .ox-lab p { max-width: 44rem; }
+
+  /* search, filters, A-Z */
+  .gl-tools { display: grid; gap: 12px; margin: 0 0 1rem; }
+  .gl-search { display: grid; gap: 6px; }
+  .gl-filter-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .gl-filter-label { min-width: 4.6rem; font: 600 0.72rem/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .gl-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 3px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink-2); font: 600 0.8rem/1.3 var(--font-mono); cursor: pointer; }
+  .gl-chip:hover { border-color: var(--ink-2); color: var(--ink); }
+  .gl-chip span { color: var(--muted); font-weight: 400; }
+  .gl-chip[aria-pressed="true"] { background: var(--oxide-soft); border-color: var(--oxide); color: var(--oxide-ink); }
+  .gl-chip[aria-pressed="true"] span { color: var(--oxide-ink); }
+  .gl-az { display: flex; flex-wrap: wrap; gap: 4px; }
+  .gl-az a { display: inline-grid; place-items: center; min-width: 32px; height: 32px; padding: 0 6px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); font: 700 0.85rem/1 var(--font-mono); text-decoration: none; }
+  .gl-az a:hover { border-color: var(--oxide); color: var(--oxide-ink); }
+  .gl-az a[aria-disabled="true"] { opacity: 0.35; pointer-events: none; }
+  .gl-count { margin: 0.8rem 0 0; font-size: 0.92rem; color: var(--muted); }
+  .gl-empty { padding: 1.4rem 0; color: var(--muted); }
+
+  /* drill */
+  .gl-drill { margin: 1.6rem 0 0.4rem; padding: 18px 20px; background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--ok); border-radius: var(--radius-lg); box-shadow: var(--shadow); }
+  .gl-drill h2 { margin: 0 0 6px; font-size: var(--step-2); }
+  .gl-drill-intro { margin: 0; color: var(--ink-2); }
+  .gl-drill-scope { margin: 6px 0 0; font-size: 0.9rem; color: var(--muted); }
+  .gl-q { display: grid; gap: 14px; margin-top: 14px; }
+  .gl-q-label { margin: 0; font: 600 0.74rem/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ok); }
+  .gl-q-def { margin: 0; font-size: var(--step-0); color: var(--ink); }
+  .gl-choices { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); }
+  .gl-choice { min-height: 44px; padding: 8px 12px; text-align: left; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); color: var(--ink); font: 600 0.95rem/1.3 var(--font-mono); cursor: pointer; overflow-wrap: anywhere; }
+  .gl-choice:hover:not(:disabled) { border-color: var(--ink-2); }
+  .gl-choice:disabled { cursor: default; }
+  .gl-choice.is-right { background: var(--ok-soft); border-color: var(--ok); }
+  .gl-choice.is-wrong { background: var(--bad-soft); border-color: var(--bad); }
+  .gl-feedback { min-height: 1.4em; margin: 0; font-size: 0.98rem; color: var(--ink-2); }
+  .gl-feedback.is-right { color: var(--ok); }
+  .gl-feedback.is-wrong { color: var(--bad); }
+  .gl-drill-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+  /* entries */
+  .gl-letter { margin: 2.2rem 0 0.2rem; padding-bottom: 6px; border-bottom: 1px solid var(--line); font-size: var(--step-3); }
+  .gl-group { scroll-margin-top: 72px; }
+  .gl-entry { padding: 16px 0 18px; border-bottom: 1px solid var(--line-2); scroll-margin-top: 72px; }
+  .gl-entry:target { box-shadow: inset 4px 0 0 var(--oxide); padding-left: 12px; }
+  .gl-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; }
+  .gl-term { margin: 0; font: 700 1.25rem/1.25 var(--font-mono); overflow-wrap: anywhere; }
+  .gl-term a { color: var(--ink); text-decoration: none; }
+  .gl-term a:hover { color: var(--oxide-ink); text-decoration: underline; }
+  .gl-kind { font: 700 0.68rem/1 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 7px; border-radius: 4px; background: var(--surface-3); color: var(--ink-2); }
+  .gl-kind[data-kind="keyword"] { background: var(--oxide-soft); color: var(--oxide-ink); }
+  .gl-kind[data-kind="concept"] { background: var(--borrow-soft); color: var(--borrow); }
+  .gl-kind[data-kind="type"] { background: var(--stack-soft); color: var(--stack); }
+  .gl-kind[data-kind="trait"] { background: var(--php-soft); color: var(--php); }
+  .gl-kind[data-kind="syntax"] { background: var(--ai-soft); color: var(--ai); }
+  .gl-kind[data-kind="error"] { background: var(--bad-soft); color: var(--bad); }
+  .gl-kind[data-kind="tool"] { background: var(--warn-soft); color: var(--warn); }
+  .gl-intro { font-size: 0.88rem; color: var(--muted); }
+  .gl-intro a { color: var(--oxide-ink); }
+  .gl-def { margin: 8px 0 10px; font-size: var(--step-0); color: var(--ink); max-width: 46rem; }
+  .gl-entry .ox-code { margin: 8px 0; }
+  .gl-aka, .gl-rel { margin: 6px 0 0; font-size: 0.9rem; color: var(--muted); max-width: 46rem; }
+  .gl-rel { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+  .gl-rel a { color: var(--oxide-ink); }
+  .gl-code { font: 700 0.8rem/1 var(--font-mono); padding: 4px 7px; border-radius: 4px; background: var(--bad-soft); color: var(--bad); text-decoration: none; }
+  .gl-code:hover { text-decoration: underline; }
+</style>
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/glossary-data.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+</head>
+<body data-crumb="Lab · Glossary">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<main class="ox-lab" id="main">
+  <header class="ox-lab-hero">
+    <span class="ox-label">Lab</span>
+    <h1 class="ox-title">Glossary &amp; keyword index</h1>
+    <p>Every keyword, core term, std type, cargo tool and error code the course uses. Each entry gives a plain definition and a checked example, and says the chapter where the term is introduced.</p>
+    <p class="ox-label">Best after: any chapter. Use the drill to test what you have read.</p>
+  </header>
+
+  <section class="gl-drill" aria-labelledby="drill-h">
+    <h2 id="drill-h">Keyword drill</h2>
+    <p class="gl-drill-intro">You see a definition and pick its term from four. A right answer earns 2 XP, once per term. A wrong answer comes back later in this session.</p>
+    <p class="gl-drill-scope" id="drill-scope"></p>
+    <div id="drill-body">
+      <div class="gl-drill-actions"><button type="button" class="ox-btn is-primary" id="drill-start">Start the drill</button></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="entries-h">
+    <h2 id="entries-h">The entries</h2>
+    <div class="gl-tools">
+      <label class="gl-search">
+        <span class="ox-label">Search</span>
+        <input type="search" class="ox-input" id="gl-q" placeholder="Try borrow, E0382, Vec or cargo test" autocomplete="off" spellcheck="false">
+      </label>
+      <div class="gl-filter-row" id="gl-kinds" role="group" aria-label="Filter by kind"><span class="gl-filter-label">Kind</span></div>
+      <div class="gl-filter-row" id="gl-acts" role="group" aria-label="Filter by act"><span class="gl-filter-label">Act</span></div>
+      <nav class="gl-az" id="gl-az" aria-label="Jump to a letter"></nav>
+    </div>
+    <p class="gl-count" id="gl-count" aria-live="polite"></p>
+    <p class="gl-empty" id="gl-empty" hidden>No entry matches. Clear the search, or choose All.</p>
+    <div id="gl-list"></div>
+  </section>
+</main>
+<script>
+(function () {
+  "use strict";
+  function start() {
+    var Ox = window.Ox;
+    var G = window.OX_GLOSSARY || [];
+    var COURSE = window.OX_COURSE || { chapters: [], acts: [] };
+    var main = document.getElementById("main");
+    if (!Ox || !G.length) {
+      main.insertAdjacentHTML("beforeend", '<p class="gl-empty">The glossary data did not load. Reload the page.</p>');
+      return;
+    }
+    var KIND_ORDER = ["keyword", "syntax", "concept", "type", "trait", "error", "tool"];
+    var ROMAN = ["", "I", "II", "III", "IV", "V"];
+
+    function el(tag, attrs, text) {
+      var n = document.createElement(tag);
+      Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]); });
+      if (text !== undefined) n.textContent = text;
+      return n;
+    }
+    function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+    function inline(s) { return esc(s).replace(/`([^`]+)`/g, "<code>$1</code>"); }
+    function chapterOf(n) { return COURSE.chapters.filter(function (c) { return c.n === n; })[0]; }
+    function actOf(n) { var c = chapterOf(n); return c ? c.act : 0; }
+    function sortKey(t) { return t.replace(/^[^A-Za-z0-9]+/, "").toLowerCase(); }
+    function letterOf(t) { var c = sortKey(t).charAt(0).toUpperCase(); return /[A-Z]/.test(c) ? c : "#"; }
+    function shuffle(a) {
+      var b = a.slice();
+      for (var i = b.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = b[i]; b[i] = b[j]; b[j] = t; }
+      return b;
+    }
+
+    /* ------------------------------------------------------------ entries */
+    var sorted = G.slice().sort(function (a, b) {
+      return sortKey(a.term).localeCompare(sortKey(b.term)) || a.term.localeCompare(b.term);
+    });
+    var byId = {};
+    G.forEach(function (e) { byId[e.id] = e; });
+    var list = document.getElementById("gl-list");
+    var items = [];
+    var groups = {};
+    var letters = [];
+
+    function entryNode(e) {
+      var ch = chapterOf(e.ch);
+      var art = el("article", { class: "gl-entry", id: e.id, "data-kind": e.kind });
+      var head = el("div", { class: "gl-head" });
+      var t = el("h3", { class: "gl-term" });
+      t.innerHTML = '<a href="#' + e.id + '">' + esc(e.term) + "</a>";
+      head.appendChild(t);
+      head.appendChild(el("span", { class: "gl-kind", "data-kind": e.kind }, e.kind));
+      if (ch) {
+        var intro = el("span", { class: "gl-intro" });
+        intro.innerHTML = 'Introduced in <a href="' + Ox.chapterUrl(ch) + '">Chapter ' + ch.n + ": " + esc(ch.title) + "</a>";
+        head.appendChild(intro);
+      }
+      art.appendChild(head);
+      art.appendChild(el("p", { class: "gl-def" })).innerHTML = inline(e.def);
+      if (e.rust) {
+        var fails = !!e.check && /^E\d{4}/.test(e.check);
+        var code = el("pre", { class: "rs", "data-gl": "1", "data-badge": fails ? "error" : "ok" });
+        code.textContent = e.rust;
+        art.appendChild(code);
+        if (e.stdout !== undefined) {
+          var out = el("pre", { class: "text", "data-gl": "1", "data-title": e.check === "panic" ? "Output, then a panic" : "Output" });
+          out.textContent = e.stdout;
+          art.appendChild(out);
+        }
+      }
+      if (e.aka) art.appendChild(el("p", { class: "gl-aka" }, "In the course: " + e.aka));
+      var rel = [];
+      (e.codes || []).forEach(function (c) {
+        if (c.toLowerCase() !== e.id && byId[c.toLowerCase()]) rel.push('<a class="gl-code" href="#' + c.toLowerCase() + '">' + esc(c) + "</a>");
+      });
+      if (e.see && e.see.length) {
+        var links = e.see.filter(function (s) { return byId[s]; }).map(function (s) {
+          return '<a href="#' + s + '">' + esc(byId[s].term) + "</a>";
+        });
+        if (links.length) rel.push('<span>See also</span> <span>' + links.join(", ") + "</span>");
+      }
+      if (rel.length) {
+        var p = el("p", { class: "gl-rel" });
+        p.innerHTML = rel.join(" ");
+        art.appendChild(p);
+      }
+      return art;
+    }
+
+    sorted.forEach(function (e) {
+      var L = letterOf(e.term);
+      if (!groups[L]) { groups[L] = []; letters.push(L); }
+      groups[L].push(e);
+    });
+    letters.sort(function (a, b) { return a === "#" ? -1 : b === "#" ? 1 : a.localeCompare(b); });
+    var groupEls = [];
+    letters.forEach(function (L) {
+      var sec = el("section", { class: "gl-group", id: "gl-letter-" + (L === "#" ? "symbols" : L), "aria-label": L === "#" ? "Symbols" : L });
+      sec.appendChild(el("h2", { class: "gl-letter" }, L === "#" ? "Symbols" : L));
+      groups[L].forEach(function (e) {
+        var art = entryNode(e);
+        sec.appendChild(art);
+        items.push({ e: e, art: art, letter: L, act: actOf(e.ch), hay: [e.term, e.id, e.kind, e.def, e.aka || "", (e.codes || []).join(" "), e.ch ? (chapterOf(e.ch) || {}).title || "" : ""].join(" ").toLowerCase() });
+      });
+      list.appendChild(sec);
+      groupEls.push({ sec: sec, letter: L });
+    });
+    Array.prototype.forEach.call(list.querySelectorAll("pre[data-gl]"), function (p) { Ox.enhancePre(p); });
+
+    /* ------------------------------------------------------------ filters */
+    var kindSel = "all", actSel = "all", query = "";
+    var counts = { kind: {}, act: {} };
+    G.forEach(function (e) {
+      counts.kind[e.kind] = (counts.kind[e.kind] || 0) + 1;
+      var a = actOf(e.ch); counts.act[a] = (counts.act[a] || 0) + 1;
+    });
+    var kindWrap = document.getElementById("gl-kinds");
+    var actWrap = document.getElementById("gl-acts");
+    function chip(wrap, label, count, title, onPick) {
+      var b = el("button", { type: "button", class: "gl-chip", "aria-pressed": "false" });
+      if (title) b.setAttribute("title", title);
+      b.innerHTML = esc(label) + ' <span>' + count + "</span>";
+      b.addEventListener("click", function () { onPick(b); });
+      wrap.appendChild(b);
+      return b;
+    }
+    function press(wrap, btn) {
+      Array.prototype.forEach.call(wrap.querySelectorAll(".gl-chip"), function (c) { c.setAttribute("aria-pressed", c === btn ? "true" : "false"); });
+    }
+    var kindAll = chip(kindWrap, "All", G.length, "", function (b) { kindSel = "all"; press(kindWrap, b); applyFilters(); });
+    KIND_ORDER.forEach(function (k) {
+      if (!counts.kind[k]) return;
+      chip(kindWrap, k, counts.kind[k], "", function (b) { kindSel = k; press(kindWrap, b); applyFilters(); });
+    });
+    var actAll = chip(actWrap, "All", G.length, "", function (b) { actSel = "all"; press(actWrap, b); applyFilters(); });
+    COURSE.acts.forEach(function (a) {
+      if (!counts.act[a.id]) return;
+      chip(actWrap, "Act " + ROMAN[a.id], counts.act[a.id], a.name + ": " + a.subtitle, function (b) { actSel = a.id; press(actWrap, b); applyFilters(); });
+    });
+    press(kindWrap, kindAll);
+    press(actWrap, actAll);
+
+    var azWrap = document.getElementById("gl-az");
+    letters.forEach(function (L) {
+      var a = el("a", { href: "#gl-letter-" + (L === "#" ? "symbols" : L), "data-letter": L }, L === "#" ? "#" : L);
+      azWrap.appendChild(a);
+    });
+
+    var countEl = document.getElementById("gl-count");
+    var emptyEl = document.getElementById("gl-empty");
+    function visible(it) {
+      if (kindSel !== "all" && it.e.kind !== kindSel) return false;
+      if (actSel !== "all" && it.act !== actSel) return false;
+      if (query && it.hay.indexOf(query) === -1) return false;
+      return true;
+    }
+    function applyFilters() {
+      var shownLetters = {}, shown = 0;
+      items.forEach(function (it) {
+        var v = visible(it);
+        it.art.hidden = !v;
+        if (v) { shown++; shownLetters[it.letter] = true; }
+      });
+      groupEls.forEach(function (g) { g.sec.hidden = !shownLetters[g.letter]; });
+      Array.prototype.forEach.call(azWrap.querySelectorAll("a"), function (a) {
+        a.setAttribute("aria-disabled", shownLetters[a.getAttribute("data-letter")] ? "false" : "true");
+      });
+      countEl.textContent = "Showing " + shown + " of " + G.length + " entries.";
+      emptyEl.hidden = shown > 0;
+    }
+    document.getElementById("gl-q").addEventListener("input", function (ev) {
+      query = ev.target.value.trim().toLowerCase();
+      applyFilters();
+    });
+
+    /* ------------------------------------------------------------ keyword drill */
+    var body = document.getElementById("drill-body");
+    var scopeEl = document.getElementById("drill-scope");
+    var drill = { queue: [], asked: 0, recent: [], current: null, answered: false, right: 0, wrong: 0 };
+
+    function store() {
+      var st = Ox.state();
+      st.glossary = st.glossary || {};
+      st.glossary.known = st.glossary.known || {};
+      st.glossary.right = st.glossary.right || 0;
+      st.glossary.wrong = st.glossary.wrong || 0;
+      return st.glossary;
+    }
+    function pool() {
+      var st = Ox.state();
+      var done = Object.keys(st.chapters || {}).map(Number).filter(function (n) { return st.chapters[n]; });
+      var narrow = G.filter(function (e) { return done.indexOf(e.ch) !== -1; });
+      if (narrow.length >= 4) {
+        scopeEl.textContent = "Drawing from the " + done.length + " chapter" + (done.length === 1 ? "" : "s") + " you have completed, " + narrow.length + " terms.";
+        return narrow;
+      }
+      scopeEl.textContent = "Drawing from all " + G.length + " entries. Complete a chapter to narrow the drill.";
+      return G;
+    }
+    function mask(e) {
+      var s = e.def;
+      var names = [e.term];
+      var base = e.term.split(/[\s<(]/)[0];
+      if (base && base !== e.term) names.push(base);
+      names.forEach(function (t) {
+        if (!/[A-Za-z0-9]/.test(t)) { s = s.split(t).join("____"); return; }
+        var re = new RegExp("(?<![A-Za-z0-9_])" + t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![A-Za-z0-9_])", "gi");
+        s = s.replace(re, "____");
+      });
+      return s;
+    }
+    function options(e) {
+      var same = shuffle(G.filter(function (x) { return x.kind === e.kind && x.term !== e.term; }));
+      var other = shuffle(G.filter(function (x) { return x.kind !== e.kind && x.term !== e.term; }));
+      var picks = same.concat(other).slice(0, 3);
+      return shuffle([e].concat(picks));
+    }
+    function pick(p) {
+      var store0 = store();
+      for (var i = 0; i < drill.queue.length; i++) {
+        if (drill.queue[i].due <= drill.asked) {
+          var q = drill.queue.splice(i, 1)[0];
+          return byId[q.id];
+        }
+      }
+      var fresh = p.filter(function (e) { return !store0.known[e.id] && drill.recent.indexOf(e.id) === -1; });
+      var rest = p.filter(function (e) { return drill.recent.indexOf(e.id) === -1; });
+      var from = fresh.length ? fresh : (rest.length ? rest : p);
+      return from[Math.floor(Math.random() * from.length)];
+    }
+    function statsLine() {
+      var s = store();
+      return "Known " + Object.keys(s.known).length + " of " + G.length + " terms. This session: " + drill.right + " right, " + drill.wrong + " wrong.";
+    }
+    function renderIdle() {
+      body.innerHTML = "";
+      var p = el("p", { class: "gl-drill-scope" }, statsLine());
+      var row = el("div", { class: "gl-drill-actions" });
+      var b = el("button", { type: "button", class: "ox-btn is-primary", id: "drill-start" }, Object.keys(store().known).length ? "Continue the drill" : "Start the drill");
+      b.addEventListener("click", renderQuestion);
+      row.appendChild(b);
+      body.appendChild(row);
+      body.appendChild(p);
+    }
+    function renderQuestion() {
+      var p = pool();
+      var e = pick(p);
+      drill.current = e;
+      drill.answered = false;
+      drill.asked++;
+      drill.recent.push(e.id);
+      if (drill.recent.length > 6) drill.recent.shift();
+      var opts = options(e);
+      body.innerHTML = "";
+      var box = el("div", { class: "gl-q" });
+      box.appendChild(el("p", { class: "gl-q-label" }, "Which term is this?"));
+      var def = el("p", { class: "gl-q-def" });
+      def.innerHTML = inline(mask(e));
+      box.appendChild(def);
+      var choices = el("div", { class: "gl-choices", role: "group", "aria-label": "Choose the term" });
+      var feedback = el("p", { class: "gl-feedback", "aria-live": "polite" });
+      var next = el("button", { type: "button", class: "ox-btn is-primary", id: "drill-next", hidden: "" }, "Next term");
+      opts.forEach(function (o) {
+        var b = el("button", { type: "button", class: "gl-choice", "data-id": o.id }, o.term);
+        b.addEventListener("click", function () { answer(o, b, choices, feedback, next); });
+        choices.appendChild(b);
+      });
+      box.appendChild(choices);
+      box.appendChild(feedback);
+      var actions = el("div", { class: "gl-drill-actions" });
+      next.addEventListener("click", renderQuestion);
+      var stop = el("button", { type: "button", class: "ox-btn is-small" }, "Stop");
+      stop.addEventListener("click", function () { drill.queue = []; renderIdle(); });
+      actions.appendChild(next);
+      actions.appendChild(stop);
+      box.appendChild(actions);
+      body.appendChild(box);
+      var first = choices.querySelector(".gl-choice");
+      if (first) first.focus({ preventScroll: true });
+    }
+    function answer(o, btn, choices, feedback, next) {
+      if (drill.answered) return;
+      drill.answered = true;
+      var e = drill.current;
+      var s = store();
+      Array.prototype.forEach.call(choices.querySelectorAll(".gl-choice"), function (c) {
+        c.disabled = true;
+        if (c.getAttribute("data-id") === e.id) c.classList.add("is-right");
+      });
+      if (o.id === e.id) {
+        btn.classList.add("is-right");
+        drill.right++;
+        s.right++;
+        s.known[e.id] = true;
+        Ox.save();
+        var fresh = Ox.award(2, "drill: " + e.term, "gloss:" + e.id);
+        feedback.className = "gl-feedback is-right";
+        feedback.textContent = "Right. " + e.term + (fresh ? ", +2 XP." : ".");
+      } else {
+        btn.classList.add("is-wrong");
+        drill.wrong++;
+        s.wrong++;
+        Ox.save();
+        drill.queue.push({ id: e.id, due: drill.asked + 3 });
+        feedback.className = "gl-feedback is-wrong";
+        feedback.textContent = "Not quite. It is " + e.term + ". It comes back later in this session.";
+      }
+      next.hidden = false;
+      next.focus({ preventScroll: true });
+    }
+    pool();
+    renderIdle();
+
+    /* ------------------------------------------------------------ deep links */
+    function reveal(id) {
+      var it = items.filter(function (x) { return x.e.id === id; })[0];
+      if (!it) return;
+      if (it.art.hidden) {
+        kindSel = "all"; actSel = "all"; query = "";
+        document.getElementById("gl-q").value = "";
+        press(kindWrap, kindAll);
+        press(actWrap, actAll);
+        applyFilters();
+      }
+      var node = document.getElementById(id);
+      if (node) node.scrollIntoView({ block: "start" });
+    }
+    window.addEventListener("hashchange", function () { reveal(decodeURIComponent(location.hash.slice(1))); });
+    applyFilters();
+    if (location.hash.length > 1) reveal(decodeURIComponent(location.hash.slice(1)));
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+  else start();
+})();
+</script>
+</body>
+</html>

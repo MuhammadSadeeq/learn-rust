@@ -1,0 +1,35 @@
+# The shared crate project for course snippets that need crates.
+#
+# A snippet on a page with data-crates="tokio,serde" (or with a `crates` field
+# in site data) is compiled here. tools/check-snippets.mjs copies this manifest
+# and lockfile into target/snippet-crates, writes each snippet as one bin, and
+# builds them all with a single cargo build. Nothing here is ever run.
+#
+# To add a crate: add a line below, run
+#   cargo fetch --manifest-path tools/snippet-crates/Cargo.toml
+# so Cargo.lock picks it up, and commit both files.
+[package]
+name = "snippet-crates"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+tokio = { version = "1.53", features = ["full"] }
+axum = "0.8.9"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12.28", default-features = false, features = ["json", "stream", "rustls-tls", "blocking"] }
+clap = { version = "4.6", features = ["derive"] }
+anyhow = "1"
+thiserror = "2"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+futures = "0.3.34"
+tokio-util = "0.7.20"
+tower = { version = "0.5.3", features = ["util"] }
+http-body-util = "0.1.5"
+rayon = "1.12"
+proptest = "1"

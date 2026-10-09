@@ -1,6 +1,8 @@
 /* Motion explainers for Chapter 04: Expressions. The semicolon eats a block's
    value, and an if produces the value of the branch that runs. Each rust field
-   is compiled by tools/check-snippets.mjs. */
+   is compiled by tools/check-snippets.mjs, beat rust included. The semicolon
+   scene changes its code in the beat after each question, so the panel never
+   shows an edit before the learner has answered. */
 (window.OX_MOTION = window.OX_MOTION || []).push({
   id: "ch04-semicolon",
   title: "The semicolon eats the value",
@@ -26,16 +28,16 @@
   ],
   beats: [
     {
-      line: 4,
       say: "<p>A block is an expression. Its last line, <code>a + 1</code>, has no semicolon, so the block's value is 4.</p>",
+      line: 4,
       do: [
         ["pop", "y", 0],
         ["pop", "pb", 250],
       ],
     },
     {
-      line: 2,
       say: "<p>The value floats out of the block and lands in <code>y</code>. Now <code>y</code> holds 4.</p>",
+      line: 2,
       do: [
         ["arc", "pb", { x: 530, y: 130, scale: 0.6 }, 700, 0, 50],
         ["hide", "pb", 700],
@@ -51,7 +53,7 @@
         answer: 1,
         explain: "The semicolon turns <code>a + 1</code> into a statement. The block then ends with nothing, so its value is <code>()</code>.",
       },
-      say: "<p>Now add the <code>;</code>. <b>Semi</b> hops in, chomps the 4, and leaves the empty box <code>()</code>.</p>",
+      say: "<p>Imagine the <code>;</code> after <code>a + 1</code>. <b>Semi</b> hops in, chomps the 4, and leaves the empty box <code>()</code>.</p>",
       do: [
         ["label", "y", "y", 0],
         ["move", "pb", { x: 200, y: 130 }, 0, 0],
@@ -69,8 +71,16 @@
       ],
     },
     {
-      line: 2,
-      say: "<p>The Forge checks types before the program runs. A <code>()</code> does not fit <code>y: i32</code>, so it hands back error <code>E0308</code>.</p>",
+      line: 4,
+      rust: `fn main() {
+    let y: i32 = {
+        let a = 3;
+        a + 1;
+    };
+    println!("{y}");
+}`,
+      check: "E0308",
+      say: "<p>Now the program has that <code>;</code>. The Forge checks types before anything runs: the block's value is <code>()</code>, which does not fit <code>y: i32</code>, so it hands back <b>E0308</b>.</p>",
       do: [
         ["pop", "forge", 0],
         ["pose", "forge", "oops", 1400, 0],
@@ -79,7 +89,15 @@
       ],
     },
     {
-      line: 2,
+      line: 4,
+      rust: `fn main() {
+    let y: i32 = {
+        let a = 3;
+        a + 1
+    };
+    println!("{y}");
+}`,
+      check: "ok",
       say: "<p>Delete the <code>;</code>. The block's value is 4 again, and <code>y</code> accepts it.</p>",
       do: [
         ["poof", "err", 0],
@@ -140,13 +158,13 @@ fn main() {
     },
     {
       line: 2,
+      say: "<p>With <code>n</code> at -2, <code>-2 &gt; 0</code> is false, so the <code>else</code> branch runs instead.</p>",
       ask: {
         q: "Now <code>n</code> is -2. Which value reaches <code>label</code>?",
         choices: ['"positive"', '"zero or less"'],
         answer: 1,
         explain: "<code>-2 &gt; 0</code> is false, so the <code>else</code> branch runs, and its value is the result.",
       },
-      say: "<p>With <code>n</code> at -2, <code>-2 &gt; 0</code> is false, so the <code>else</code> branch runs instead.</p>",
       do: [
         ["art", "n", { prop: "pebble", opts: { type: "i32", value: "-2" } }, 0],
         ["fade", "yes", 0.4, 400],

@@ -5,7 +5,7 @@
    them go. The cycle program is checked by tools/check-snippets.mjs. */
 (window.OX_MOTION = window.OX_MOTION || []).push({
   id: "ch17-guard",
-  title: "The Night Guard checks the borrows",
+  title: "The Night Guard checks the borrows at runtime",
   w: 640,
   h: 300,
   rust: 'use std::cell::RefCell;\n\nfn main() {\n    let case = RefCell::new(String::from("fluffy"));\n    let r1 = case.borrow();\n    let r2 = case.borrow();\n    println!("{r1} {r2}");\n    case.borrow_mut().push(\'!\');\n}',
@@ -20,7 +20,7 @@
   ],
   beats: [
     {
-      say: "<p>A <code>RefCell</code> keeps its value in a glass case. The Night Guard checks each borrow while the program runs.</p>",
+      say: "<p>A <code>RefCell</code> keeps its value in a glass case and lends it through a shared handle. That is interior mutability. The Night Guard checks each borrow while the program runs.</p>",
       line: 4,
       do: [["pose", "guard", "talk", 1200]],
     },
@@ -43,18 +43,18 @@
       ],
     },
     {
-      say: "<p><code>case.borrow_mut()</code> needs the only key. Two readers are still looking, so the rule is broken at this line.</p>",
+      say: "<p><code>case.borrow_mut()</code> asks for a mutable borrow. Two readers are still looking, so the rule is broken at this line.</p>",
       line: 8,
       do: [["pop", "w", 0]],
       ask: {
-        q: "<b>w</b> asks for the lock while two readers are still looking. What does the Night Guard do?",
+        q: "<b>w</b> asks for a mutable borrow while two readers are still looking. What does the Night Guard do?",
         choices: ["Make <b>w</b> wait in line, like a Mutex.", "Sound the alarm and panic."],
         answer: 1,
         explain: "RefCell has no queue. It checks the rule at the call, and a broken rule panics.",
       },
     },
     {
-      say: "<p>The alarm sounds, and the program panics with <code>RefCell already borrowed</code>. The writer never gets the lock.</p>",
+      say: "<p>The alarm sounds, and the program panics with <code>RefCell already borrowed</code>. The writer never gets its borrow.</p>",
       line: 8,
       do: [
         ["pose", "w", "ouch", 1800],
@@ -65,8 +65,10 @@
       ],
     },
     {
-      say: "<p>Second run. <code>drop(r1)</code> and <code>drop(r2)</code> come before the call, so the count falls back to 0.</p>",
-      line: 8,
+      say: "<p>Second run. <code>drop(r1)</code> and <code>drop(r2)</code> come before the call, so the count falls back to 0. The panel shows the second program.</p>",
+      line: 9,
+      rust: 'use std::cell::RefCell;\n\nfn main() {\n    let case = RefCell::new(String::from("fluffy"));\n    let r1 = case.borrow();\n    let r2 = case.borrow();\n    println!("{r1} {r2}");\n    drop(r1);\n    drop(r2);\n    case.borrow_mut().push(\'!\');\n}',
+      check: "ok",
       do: [
         ["unlink", "l1", 0],
         ["unlink", "l2", 0],
@@ -76,8 +78,8 @@
       ],
     },
     {
-      say: "<p>Now the mutable borrow passes. <b>w</b> takes the one key, and the guard stays quiet. The same call that panicked now works.</p>",
-      line: 8,
+      say: "<p>Now the mutable borrow passes. <b>w</b> takes it, and the guard stays quiet. The same call that panicked now works.</p>",
+      line: 10,
       do: [
         ["pose", "w", "happy", 1200],
         ["pose", "guard", "happy", 1200],
@@ -90,7 +92,7 @@
 
 (window.OX_MOTION = window.OX_MOTION || []).push({
   id: "ch17-cycle",
-  title: "Two Rc handles that hold each other",
+  title: "Two Rc fluffies that hold each other (a cycle)",
   w: 640,
   h: 300,
   rust: [
@@ -130,7 +132,7 @@
   ],
   beats: [
     {
-      say: "<p>Block one has two <code>Rc</code> fluffies, <code>a</code> and <code>b</code>. Each crab holds one, and each count is 1.</p>",
+      say: "<p>Block one has two <code>Rc</code> fluffies, <code>a</code> and <code>b</code>. Each crab holds one, and each count is 1. <code>Rc</code> is the exception to one owner: a value may have several leashes, and its count says how many.</p>",
       line: 11,
       do: [
         ["pop", "ca", 0],
@@ -172,7 +174,7 @@
       },
     },
     {
-      say: "<p>Neither fluffy is freed, so the memory leaks. Rust treats a leak as safe, so the compiler stays quiet.</p>",
+      say: "<p>Neither fluffy is freed. This reference cycle leaks the memory, and Rust treats a leak as safe, so the compiler stays quiet.</p>",
       line: 15,
       do: [
         ["pulse", "fa", 0],

@@ -857,6 +857,45 @@
     links.forEach((l, i) => { if (state.sections[key][heads[i].id]) l.classList.add("is-read"); });
   }
 
+  /* ================================================================ terms you now know */
+  // The glossary loads on demand. A chapter fetches it only to draw this box,
+  // and a failed load just leaves the box out.
+  let glossaryLoad = null;
+  function loadGlossary() {
+    if (window.OX_GLOSSARY) return Promise.resolve(window.OX_GLOSSARY);
+    if (!glossaryLoad) {
+      glossaryLoad = new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = rel("assets/glossary-data.js");
+        s.onload = () => resolve(window.OX_GLOSSARY || []);
+        s.onerror = () => reject(new Error("glossary-data.js did not load"));
+        document.head.appendChild(s);
+      });
+    }
+    return glossaryLoad;
+  }
+  function buildTerms() {
+    const n = parseInt(document.body.dataset.chapter || "0", 10);
+    const recap = $("#recap");
+    if (!n || !recap) return;
+    const sec = recap.closest("section") || recap.parentElement;
+    loadGlossary().then((all) => {
+      const items = (all || []).filter((t) => t.ch === n);
+      if (!items.length) return;
+      const box = h("section", { class: "ox-terms", "aria-labelledby": "ox-terms-title" });
+      box.innerHTML = `<h3 id="ox-terms-title">Terms you now know</h3><p class="ox-terms-note">Each term opens its entry in the <a href="${rel("labs/glossary.html")}">Glossary</a>, with a checked example.</p><ul class="ox-terms-chips"></ul>`;
+      const list = $(".ox-terms-chips", box);
+      items.forEach((t) => {
+        const li = h("li");
+        li.appendChild(h("a", { class: "ox-term-chip", "data-kind": t.kind, href: rel("labs/glossary.html#" + t.id) }, esc(t.term)));
+        list.appendChild(li);
+      });
+      const host = $(".ox-complete-host", sec);
+      if (host) host.before(box);
+      else sec.appendChild(box);
+    }).catch(() => { /* no glossary: the recap stands on its own */ });
+  }
+
   function buildComplete() {
     const host = $(".ox-complete-host");
     const n = parseInt(document.body.dataset.chapter || "0", 10);
@@ -935,6 +974,7 @@
     $$(".ox-deck").forEach(enhanceDeck);
     $$(".ox-quests").forEach(enhanceQuests);
     buildToc();
+    buildTerms();
     buildComplete();
     Ox.ready = true;
     document.dispatchEvent(new CustomEvent("ox:ready"));

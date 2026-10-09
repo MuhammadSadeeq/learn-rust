@@ -380,6 +380,52 @@ fn main() {
 </pre>
   <div class="ox-bridge-note"><p>The shape is the same: one side hands off a job, and one consumer takes jobs in order. The differences matter. A Laravel queue is stored in Redis or a database, so jobs survive a crash and the workers can run on other machines. A channel lives in one process's memory and disappears with it. Use the queue for durable work between processes, and channels for coordination inside one program. The Rust worker above has no retries. A job that fails is gone unless your loop puts it back. In Laravel, <code>Tries</code> and <code>Backoff</code> handle that part for you.</p></div>
 </div>
+
+<h3>Bounded and unbounded channels</h3>
+
+<p><code>mpsc::channel()</code> has no limit. The standard library calls it an "infinitely buffered" channel. A sender never waits, so a fast producer can fill memory long before a slow receiver catches up. For a short job that is fine. For a long-running program it is a quiet risk.</p>
+
+<p><code>mpsc::sync_channel(n)</code> sets a limit. Its buffer holds at most <code>n</code> messages. When the buffer is full, <code>send</code> blocks the sending thread until the receiver takes a message. The slow side pushes back on the fast side. That push-back is called <strong>backpressure</strong>: work waits at the edge of the program instead of piling up in memory.</p>
+
+<pre class="rs" data-run data-stdout="queued 1\nqueued 2\nfull, rejected 3\nfirst received: 1">
+use std::sync::mpsc::{self, TrySendError};
+
+fn main() {
+    // A bounded channel with room for two messages.
+    let (tx, rx) = mpsc::sync_channel::&lt;u32&gt;(2);
+    for n in 1..=3 {
+        match tx.try_send(n) {
+            Ok(()) =&gt; println!("queued {n}"),
+            Err(TrySendError::Full(v)) =&gt; println!("full, rejected {v}"),
+            Err(TrySendError::Disconnected(v)) =&gt; println!("closed, rejected {v}"),
+        }
+    }
+    println!("first received: {}", rx.recv().unwrap());
+}
+</pre>
+
+<p><code>try_send</code> never waits. When there is no room, it gives the value back inside <code>TrySendError::Full</code>, and the caller decides what to do with it. <code>send</code> is the version that waits. A bound of <code>0</code> is allowed too. It makes a <em>rendezvous</em> channel, where every <code>send</code> waits until a <code>recv</code> takes the value.</p>
+
+<div class="ox-quiz" data-id="18:quiz-bounded" data-label="Check yourself">
+  <p class="ox-q">What does this program print? Nothing has been received yet.</p>
+  <pre class="rs" data-stdout="true">
+use std::sync::mpsc;
+
+fn main() {
+    let (tx, _rx) = mpsc::sync_channel::&lt;&amp;str&gt;(1);
+    let _ = tx.try_send("a");
+    let second = tx.try_send("b");
+    println!("{}", second.is_err());
+}
+</pre>
+  <ol class="ox-choices">
+    <li><code>false</code>, because the second message waits in the sender.</li>
+    <li data-correct><code>true</code>, because the one slot is taken by the first message, so the second <code>try_send</code> fails at once.</li>
+    <li>It hangs, because the second send blocks.</li>
+    <li>It prints nothing, because <code>_rx</code> is never used.</li>
+  </ol>
+  <div class="ox-why"><p><code>try_send</code> never waits. The buffer holds one message, and nothing has taken the first one out, so the second call returns <code>Err</code> straight away. The program prints the result of <code>is_err()</code>. A plain <code>send</code> in the same spot would block instead.</p></div>
+</div>
 </section>
 
 <section>
@@ -495,6 +541,182 @@ fn main() {
 <p>The <code>Ordering</code> argument says how this operation is ordered relative to other memory accesses. <code>Relaxed</code> is enough for a standalone counter, where nothing else depends on the order. Once an atomic is used to publish other data, you need stronger orderings. <em>Rust Atomics and Locks</em> by Mara Bos covers them in depth.</p>
 
 <p>One more detail. If a thread panics while it holds a guard, the mutex is <em>poisoned</em>. Later calls to <code>lock()</code> return <code>Err</code>, because the data may be half-updated. <code>lock().unwrap()</code> turns that into a panic, which is the usual choice.</p>
+</section>
+
+<section>
+<h2 id="globals">Safe globals</h2>
+
+<p>Some values belong to the whole program: a table of prices, a compiled regex, a connection pool. Every thread should see the same one. A <code>static</code> item is that kind of value. It lives for the whole run of the program and is never freed. A <code>static</code> that threads share must be <code>Sync</code>, and the compiler checks it:</p>
+
+<pre class="rs" data-check="error">
+use std::cell::Cell;
+
+static COUNT: Cell&lt;u32&gt; = Cell::new(0);
+
+fn main() {
+    COUNT.set(COUNT.get() + 1);
+    println!("{}", COUNT.get());
+}
+</pre>
+
+<pre class="rustc">
+error[E0277]: `Cell&lt;u32&gt;` cannot be shared between threads safely
+ --&gt; src/main.rs:3:15
+  |
+3 | static COUNT: Cell&lt;u32&gt; = Cell::new(0);
+  |               ^^^^^^^^^ `Cell&lt;u32&gt;` cannot be shared between threads safely
+  |
+  = help: the trait `Sync` is not implemented for `Cell&lt;u32&gt;`
+  = note: if you want to do aliasing and mutation between multiple threads, use `std::sync::RwLock` or `std::sync::atomic::AtomicU32` instead
+  = note: shared static variables must have a type that implements `Sync`
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0277`.
+</pre>
+
+<p>A <code>Cell</code> changes its value through a shared reference. Two threads must not do that at the same time without a lock or an atomic. The next two types are the usual answer for a value that is set up once and then read.</p>
+
+<p>The initializer of a <code>static</code> has to be computed when the program is compiled. A value that needs work at run time uses one of two standard library types. <code>LazyLock</code> runs its setup code the first time something reads it. <code>OnceLock</code> is an empty slot that the program fills at most once. Both are safe to share between threads. <code>LazyLock</code> is stable since Rust 1.80, and <code>OnceLock</code> since 1.70.</p>
+
+<pre class="rs" data-run data-stdout="start\nbuilding the table once\ntea costs 300\ncake costs 450\nErr(&quot;again&quot;)\noxide">
+use std::collections::HashMap;
+use std::sync::{LazyLock, OnceLock};
+
+static PRICES: LazyLock&lt;HashMap&lt;&amp;'static str, u32&gt;&gt; = LazyLock::new(|| {
+    println!("building the table once");
+    HashMap::from([("tea", 300), ("cake", 450)])
+});
+
+static NAME: OnceLock&lt;String&gt; = OnceLock::new();
+
+fn main() {
+    println!("start");
+    println!("tea costs {}", PRICES["tea"]);
+    println!("cake costs {}", PRICES["cake"]);
+    NAME.set("oxide".to_string()).unwrap();
+    println!("{:?}", NAME.set("again".to_string()));
+    println!("{}", NAME.get().unwrap());
+}
+</pre>
+
+<p>The table is built at the first read, which is why the message comes after <code>start</code>. <code>NAME.set</code> returns <code>Err</code> with the value you tried to store, because the slot is already full. <code>get</code> returns an <code>Option</code>, so you handle the empty case. If two threads read <code>PRICES</code> at the same time, one builds the table and the other waits. The documentation says a read blocks while another initialization is running.</p>
+
+<h3><code>thread_local!</code>: one copy per thread</h3>
+
+<p>Some state belongs to one thread, such as a counter of the calls that thread has made. <code>thread_local!</code> gives every thread its own copy, which starts from the initial value. You reach it with <code>with</code>, which lends you the value for the length of a closure.</p>
+
+<pre class="rs" data-run data-stdout="main thread: 3\nnew thread: 1">
+use std::cell::Cell;
+use std::thread;
+
+thread_local! {
+    static CALLS: Cell&lt;u32&gt; = Cell::new(0);
+}
+
+fn tick() -&gt; u32 {
+    CALLS.with(|c| {
+        c.set(c.get() + 1);
+        c.get()
+    })
+}
+
+fn main() {
+    tick();
+    tick();
+    println!("main thread: {}", tick());
+    let other = thread::spawn(tick).join().unwrap();
+    println!("new thread: {other}");
+}
+</pre>
+
+<p>The main thread made three calls, so it sees 3. The new thread starts from the initial value, makes one call, and sees 1.</p>
+
+<h3>Why not <code>static mut</code></h3>
+
+<p>Chapter 02 said that <code>static mut</code> exists and that you should use <code>const</code> until later. You will still meet it in older code, and agents write it. Every access to a <code>static mut</code> needs <code>unsafe</code>, and nothing stops two threads from using it at once. Edition 2024 goes further. It refuses to create a reference to a mutable static, even when you only want to read it:</p>
+
+<pre class="rs" data-check="error">
+static mut COUNTER: u32 = 0;
+
+fn main() {
+    unsafe {
+        COUNTER += 1;
+        let r = &amp;COUNTER;
+        println!("{r}");
+    }
+}
+</pre>
+
+<pre class="rustc">
+error: creating a shared reference to mutable static
+ --&gt; src/main.rs:6:17
+  |
+6 |         let r = &amp;COUNTER;
+  |                 ^^^^^^^^ shared reference to mutable static
+  |
+  = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+  = note: for more information, see &lt;https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html&gt;
+  = note: `#[deny(static_mut_refs)]` (part of `#[deny(rust_2024_compatibility)]`) on by default
+help: use `&amp;raw const` instead to create a raw pointer
+  |
+6 |         let r = &amp;raw const COUNTER;
+  |                  +++++++++
+</pre>
+
+<p>The write on line 5 is allowed. The reference on line 6 is not. Edition 2021 reports the same line as a warning, and edition 2024 makes it an error. Chapter 21 covers <code>unsafe</code> and raw pointers. For shared state that a program sets up and reads, use <code>LazyLock</code>, <code>OnceLock</code> or an atomic instead.</p>
+
+<h3>Pass the value when you can</h3>
+
+<p>Most of the time the best global is no global. Pass the value to the code that needs it. A function that takes a <code>&amp;PriceTable</code> says what it depends on, and a test can give it a different table. A global hides that dependency, so a test has to work with the real value or change the code.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+class AppServiceProvider extends ServiceProvider
+{
+    public function register(): void
+    {
+        $this-&gt;app-&gt;singleton(PriceTable::class, fn () =&gt; new PriceTable(['tea' =&gt; 300]));
+    }
+}</pre>
+  <pre class="rs" data-run data-stdout="tea costs 300">
+use std::collections::HashMap;
+use std::sync::LazyLock;
+
+static PRICES: LazyLock&lt;HashMap&lt;&amp;'static str, u32&gt;&gt; =
+    LazyLock::new(|| HashMap::from([("tea", 300)]));
+
+fn main() {
+    println!("tea costs {}", PRICES["tea"]);
+}
+</pre>
+  <div class="ox-bridge-note"><p>Laravel's container plays the part of a global. A <code>singleton</code> is built once, and later calls return the same object, as the container docs say. The container is still a registry you can change: a test can bind a fake for the same class. A Rust static is fixed for the life of the program. In Rust, pass the table into the function that needs it, the way Laravel injects a dependency into a constructor.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="18:quiz-lazy-init" data-label="Check yourself">
+  <p class="ox-q">What does this program print? Two threads read the same <code>LazyLock</code> at about the same time.</p>
+  <pre class="rs" data-stdout="init\n3 3">
+use std::sync::LazyLock;
+
+static TABLE: LazyLock&lt;Vec&lt;u32&gt;&gt; = LazyLock::new(|| {
+    println!("init");
+    vec![1, 2, 3]
+});
+
+fn main() {
+    let a = std::thread::spawn(|| TABLE.len());
+    let b = std::thread::spawn(|| TABLE.len());
+    println!("{} {}", a.join().unwrap(), b.join().unwrap());
+}
+</pre>
+  <ol class="ox-choices">
+    <li><code>init</code> prints twice, once from each thread.</li>
+    <li data-correct><code>init</code> prints once, and then both threads print their length, <code>3</code>.</li>
+    <li>It doesn't compile, because a <code>static</code> can't hold a <code>Vec</code>.</li>
+    <li><code>init</code> can print after <code>3 3</code>, because the threads race.</li>
+  </ol>
+  <div class="ox-why"><p>The first thread that reads <code>TABLE</code> runs the setup closure. The second thread waits for that to finish and then reuses the value, so <code>init</code> runs once. Both lengths are known before <code>main</code> prints.</p></div>
+</div>
 </section>
 
 <section>
@@ -804,7 +1026,7 @@ fn main() {
 <section>
 <h2 id="limits">What Rust doesn't prevent</h2>
 
-<p>The compiler rules out data races. It does not rule out every concurrency bug, and several of the most common ones compile cleanly. Here are three.</p>
+<p>The compiler rules out data races. It does not rule out every concurrency bug, and several of the most common ones compile cleanly. Here are three, and then two gotchas about locks.</p>
 
 <h3>Deadlock: two locks, two orders</h3>
 
@@ -870,6 +1092,106 @@ fn main() {
 <h3>Leaks are safe</h3>
 
 <p>Leaking memory is not undefined behavior, so the compiler doesn't stop it. <code>std::mem::forget</code> leaks a value on purpose, and an <code>Rc</code> cycle leaks without anyone noticing (Chapter 17 covers <code>Rc</code>). A leak is a waste rather than a memory-safety bug, and it is still a bug to fix.</p>
+
+<h3>A lock held by a match or if let</h3>
+
+<p>A <code>match</code> keeps the value it was given until its last arm has finished. Suppose that value is a temporary <code>MutexGuard</code>. The lock then stays held for the whole <code>match</code>, not just for the line where you called <code>lock()</code>:</p>
+
+<pre class="rs" data-run data-stdout="match arm: got 1, lock held: true\nelse: lock held: false\nafter let: None, lock held: false">
+use std::sync::Mutex;
+
+fn main() {
+    let jobs = Mutex::new(vec![1]);
+    match jobs.lock().unwrap().pop() {
+        Some(n) =&gt; println!("match arm: got {n}, lock held: {}", jobs.try_lock().is_err()),
+        None =&gt; println!("match arm: no job"),
+    }
+
+    let empty: Mutex&lt;Vec&lt;i32&gt;&gt; = Mutex::new(Vec::new());
+    if let Some(n) = empty.lock().unwrap().pop() {
+        println!("body: got {n}");
+    } else {
+        println!("else: lock held: {}", empty.try_lock().is_err());
+    }
+
+    let next = jobs.lock().unwrap().pop();
+    println!("after let: {:?}, lock held: {}", next, jobs.try_lock().is_err());
+}
+</pre>
+
+<p>A temporary lives until the end of the statement that made it. A <code>match</code> is one statement, so the lock lasts for all of it. Edition 2024 changed one row of the table below. The <code>else</code> block of an <code>if let</code> no longer sees the lock held. The <code>match</code> arms still see it in both editions.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Where the code runs</th><th>Edition 2021</th><th>Edition 2024</th></tr></thead>
+  <tbody>
+    <tr><td>Inside a <code>match</code> arm</td><td>Lock held</td><td>Lock held</td></tr>
+    <tr><td>Inside the <code>else</code> block of an <code>if let</code></td><td>Lock held</td><td>Lock released</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Compile the program above with <code>--edition 2021</code>, and the <code>else</code> line prints <code>else: lock held: true</code>. The fix is the same in both editions: give the value a name with <code>let</code>. The guard is then dropped at the end of that line, and the last line of the output shows the lock free.</p>
+
+<div class="ox-quiz" data-id="18:quiz-guard-arm" data-label="Check yourself">
+  <p class="ox-q">Is the lock still held inside the arm? Predict first.</p>
+  <pre class="rs" data-stdout="job 7\nlock free: false">
+use std::sync::Mutex;
+
+fn main() {
+    let queue = Mutex::new(vec![7]);
+    match queue.lock().unwrap().pop() {
+        Some(job) =&gt; {
+            println!("job {job}");
+            let lock_free = queue.try_lock().is_ok();
+            println!("lock free: {lock_free}");
+        }
+        None =&gt; {}
+    }
+}
+</pre>
+  <ol class="ox-choices">
+    <li><code>true</code>, because <code>pop</code> has finished, so the guard was dropped.</li>
+    <li data-correct><code>false</code>, because the guard lives until the end of the <code>match</code>.</li>
+    <li>It deadlocks, because <code>try_lock</code> waits for the lock.</li>
+    <li><code>true</code> in edition 2024 and <code>false</code> in edition 2021.</li>
+  </ol>
+  <div class="ox-why"><p><code>try_lock</code> never waits. It returns an error when another guard holds the lock. The guard from <code>lock()</code> is the scrutinee of the <code>match</code>, so it is still alive inside the arm. The fix is to take the value with <code>let</code> before the <code>match</code>.</p></div>
+</div>
+
+<h3>Poisoned locks: recover or panic</h3>
+
+<p>If a thread panics while it holds a guard, Rust marks the mutex as <em>poisoned</em>. The data may be half-updated, so later calls to <code>lock()</code> return an <code>Err</code>. Most code calls <code>lock().unwrap()</code>, which turns the poison into a second panic. When the data is still usable, such as a counter or a cache, you can take the guard out of the error with <code>into_inner</code>:</p>
+
+<pre class="rs" data-run data-stdout="thread panicked: true\npoisoned: true\nrecovered: [1, 2, 3]\npoisoned after clear: false">
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+fn main() {
+    let data = Arc::new(Mutex::new(vec![1, 2]));
+
+    let writer = Arc::clone(&amp;data);
+    let result = thread::spawn(move || {
+        let mut guard = writer.lock().unwrap();
+        guard.push(3);
+        panic!("oops while holding the lock");
+    })
+    .join();
+    println!("thread panicked: {}", result.is_err());
+
+    println!("poisoned: {}", data.is_poisoned());
+    let values: Vec&lt;i32&gt; = match data.lock() {
+        Ok(guard) =&gt; guard.clone(),
+        Err(poisoned) =&gt; poisoned.into_inner().clone(),
+    };
+    println!("recovered: {values:?}");
+
+    data.clear_poison();
+    println!("poisoned after clear: {}", data.is_poisoned());
+}
+</pre>
+
+<p><code>clear_poison</code> removes the flag. It has been stable since Rust 1.77. Clear the flag only after you have checked the data. Until you do, every later <code>lock()</code> still reports the poison.</p>
 
 <h3>The easy button: rayon</h3>
 
@@ -1064,7 +1386,7 @@ fn main() {
 
 <section>
 <h2 id="quests">Forge quests</h2>
-<p>Four quests cover this chapter: spawn and join, message passing, a shared counter, and scoped threads. They run locally against the real compiler.</p>
+<p>Five quests cover this chapter: spawn and join, message passing, a shared counter, scoped threads, and a worker pool whose job queue has a bound. They run locally against the real compiler.</p>
 <div class="ox-quests" data-chapter="18"></div>
 </section>
 
@@ -1080,6 +1402,9 @@ fn main() {
     <li><code>Arc&lt;Mutex&lt;T&gt;&gt;</code> shares one value safely. The lock is released when the guard is dropped, so keep the critical section short.</li>
     <li><code>RwLock</code> allows many readers or one writer. Atomics such as <code>AtomicUsize::fetch_add</code> make a single counter update indivisible.</li>
     <li><code>Send</code> means a type can move to another thread. <code>Sync</code> means <code>&amp;T</code> can be shared between threads. <code>Rc</code> is neither, and <code>Cell</code> and <code>RefCell</code> are not <code>Sync</code>.</li>
+    <li>A bounded channel, <code>sync_channel(n)</code>, makes a full sender wait. That wait is <strong>backpressure</strong>. <code>try_send</code> reports a full channel instead of waiting.</li>
+    <li><code>static</code> items hold values for the whole program. <code>LazyLock</code> builds one on first use, <code>OnceLock</code> is filled once, and <code>thread_local!</code> gives each thread its own copy. Edition 2024 refuses references to a <code>static mut</code>.</li>
+    <li>A temporary guard in a <code>match</code> or <code>if let</code> keeps the lock until the construct ends. A poisoned mutex stays poisoned until you check the data and call <code>clear_poison</code>.</li>
     <li>The compiler prevents data races. It does not prevent deadlocks, logic races or leaks.</li>
   </ul>
 </div>

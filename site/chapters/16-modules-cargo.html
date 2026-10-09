@@ -660,6 +660,142 @@ resolver = "3"</pre>
 </section>
 
 <section>
+<h2 id="clap">A real CLI with clap</h2>
+
+<p>Chapter 11 read the arguments by hand. That works for a flag or two. A real tool also needs help text, flags that take values, subcommands, and error messages that show what to type. Many Rust command-line tools use <strong>clap</strong> for this. You describe the arguments with a struct and attributes, and clap reads the command line into that struct. A Laravel artisan command describes its arguments in a signature, so the idea is familiar. Here the types do the work.</p>
+
+<p>Add clap with its <code>derive</code> feature, which turns on the attributes used below. "Cargo for real projects", later in this chapter, explains feature switches.</p>
+
+<pre class="toml" data-title="Cargo.toml">
+[dependencies]
+clap = { version = "4.6", features = ["derive"] }</pre>
+
+<p>The program below is a small notes tool. It has one flag, <code>--verbose</code>, and two subcommands, <code>add</code> and <code>list</code>. Each doc comment (<code>///</code>) becomes help text.</p>
+
+<pre class="rs" data-crates="clap" data-title="src/main.rs">
+use clap::{Parser, Subcommand};
+
+/// Keep notes in a file, from the command line.
+#[derive(Parser, Debug)]
+#[command(version, about)]
+struct Cli {
+    /// Print more detail.
+    #[arg(short, long)]
+    verbose: bool,
+
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand, Debug)]
+enum Command {
+    /// Add a note.
+    Add {
+        /// The text of the note.
+        text: String,
+    },
+    /// List notes, newest first.
+    List {
+        /// Show at most this many notes.
+        #[arg(short, long, default_value_t = 10)]
+        limit: usize,
+    },
+}
+
+fn main() {
+    let cli = Cli::parse();
+    match cli.command {
+        Command::Add { text } =&gt; println!("added: {text}"),
+        Command::List { limit } =&gt; {
+            println!("listing up to {limit} notes (verbose: {})", cli.verbose)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_add_with_text() {
+        let cli = Cli::try_parse_from(["notes", "add", "buy milk"]).unwrap();
+        assert!(matches!(cli.command, Command::Add { text } if text == "buy milk"));
+    }
+
+    #[test]
+    fn rejects_add_without_text() {
+        assert!(Cli::try_parse_from(["notes", "add"]).is_err());
+    }
+
+    #[test]
+    fn list_defaults_to_ten() {
+        let cli = Cli::try_parse_from(["notes", "list"]).unwrap();
+        assert!(matches!(cli.command, Command::List { limit: 10 }));
+    }
+}</pre>
+
+<p>Run <code>cargo run -- --help</code>. The two dashes separate Cargo's own options from the arguments for your program. clap prints this:</p>
+
+<pre class="text">Keep notes in a file, from the command line.
+
+Usage: notes [OPTIONS] &lt;COMMAND&gt;
+
+Commands:
+  add   Add a note
+  list  List notes, newest first
+  help  Print this message or the help of the given subcommand(s)
+
+Options:
+  -v, --verbose  Print more detail
+  -h, --help     Print help
+  -V, --version  Print version</pre>
+
+<ul>
+  <li><code>#[derive(Parser)]</code> turns the struct into a command-line parser.</li>
+  <li><code>#[command(version, about)]</code> reads the version from <code>Cargo.toml</code>, and it uses the doc comment at the top as the description.</li>
+  <li><code>#[arg(short, long)]</code> gives <code>verbose</code> the short flag <code>-v</code> and the long flag <code>--verbose</code>.</li>
+  <li><code>#[command(subcommand)]</code> marks the field that holds the subcommand.</li>
+  <li><code>#[derive(Subcommand)]</code> turns each variant of the enum into a subcommand. <code>Add</code> becomes <code>add</code>.</li>
+  <li><code>default_value_t = 10</code> gives <code>--limit</code> a default, and the help shows it.</li>
+</ul>
+
+<p>Global flags come before the subcommand. <code>notes -v list</code> works. <code>notes list -v</code> fails, because <code>verbose</code> belongs to the top-level command, not to <code>list</code>:</p>
+
+<pre class="text">error: unexpected argument '-v' found
+
+Usage: notes list [OPTIONS]
+
+For more information, try '--help'.</pre>
+
+<p>Wrong input gets a short message and a usage line. Run <code>cargo run -- add</code> with no text:</p>
+
+<pre class="text">error: the following required arguments were not provided:
+  &lt;TEXT&gt;
+
+Usage: notes add &lt;TEXT&gt;
+
+For more information, try '--help'.</pre>
+
+<p>Clap prints the message to stderr and exits with status 2. Your own failures can use another code, such as 1, so a script can tell bad arguments from a failed task.</p>
+
+<p>The tests at the bottom of the file call <code>Cli::try_parse_from</code>. It takes the arguments as a list, with the program name first, and it returns a <code>Result</code>. A bad command line becomes an <code>Err</code> that the test can check. No process starts, so the tests are fast. The <code>#[test]</code> attribute is explained in "Testing is built in" below.</p>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Agent-written command-line code often parses <code>env::args()</code> by hand, and it calls <code>unwrap()</code> on the second argument. Ask for clap's derive, and ask for a test that feeds a bad command line through <code>try_parse_from</code>. That test is the cheapest proof that the error path works.</p>
+</aside>
+
+<div class="ox-quiz" data-id="16:clap-exit" data-label="Check yourself">
+  <p class="ox-q">A user runs <code>notes add</code> with no text. What exit code does the program return?</p>
+  <ol class="ox-choices">
+    <li>0, because clap printed help</li>
+    <li data-correct>2, because the arguments were wrong</li>
+    <li data-feedback="Clap uses 2 for bad arguments. Your own failures can use 1.">1, the usual failure code</li>
+  </ol>
+  <div class="ox-why"><p>Two. Clap prints the error to stderr and exits with 2. Run <code>echo $?</code> after the command to see the code. Chapter 11 used the same code for a bad command line.</p></div>
+</div>
+</section>
+
+<section>
 <h2 id="testing">Testing is built in</h2>
 
 <p>Cargo runs three kinds of tests with one command, <code>cargo test</code>. Unit tests live in the same file as the code they test, inside a <code>#[cfg(test)]</code> module. Integration tests live in a <code>tests/</code> folder. Doc tests live in the <code>///</code> comments. Start with unit tests.</p>
@@ -851,6 +987,73 @@ fn main() {
 <aside class="ox-callout" data-kind="ai">
   <p>An agent asked to make a failing test pass has an easy shortcut. It can weaken the assertion, add <code>#[ignore]</code>, or delete the test. The test then passes, and the bug is still there. When an agent reports green tests, check the diff of the test files as well as the code. Treat a change to an assertion as a change to the requirement.</p>
 </aside>
+
+<h3 id="test-tools">When plain asserts are not enough</h3>
+
+<p>Plain <code>assert_eq!</code> covers most tests. These four cases need more. Add the tool as a <code>[dev-dependencies]</code> entry, so it never ships in your binary.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>When</th><th>Tool</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td>A rule must hold for many inputs</td><td><strong>proptest</strong></td><td>Generates inputs. When a check fails, it shrinks the input to the smallest one that still fails.</td></tr>
+    <tr><td>The output is too long to write out by hand</td><td><strong>insta</strong></td><td>Stores the output in a snapshot file, and fails when it changes. <code>cargo insta review</code> lets you accept or reject each change.</td></tr>
+    <tr><td>The code writes files</td><td><strong>tempfile</strong></td><td>Creates a temporary file or folder that is deleted when its value is dropped.</td></tr>
+    <tr><td>You test a command-line program</td><td><strong>assert_cmd</strong></td><td>Runs your binary, and checks its exit status and its output.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>A property test checks a rule against many generated inputs, where an example test checks one input you chose. Add proptest to the dev dependencies:</p>
+
+<pre class="toml">
+[dev-dependencies]
+proptest = "1"</pre>
+
+<p>The property below says that reversing a list twice gives back the original list. proptest runs it on 256 random lists, by default, each with up to 99 numbers.</p>
+
+<pre class="rs" data-crates="proptest" data-stdout="[3, 2, 1]" data-title="src/main.rs">
+fn reversed(items: &amp;[i32]) -&gt; Vec&lt;i32&gt; {
+    items.iter().rev().copied().collect()
+}
+
+fn main() {
+    println!("{:?}", reversed(&amp;[1, 2, 3]));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn reversing_twice_gives_the_original(items in prop::collection::vec(any::&lt;i32&gt;(), 0..100)) {
+            prop_assert_eq!(reversed(&amp;reversed(&amp;items)), items);
+        }
+    }
+}</pre>
+
+<p>Suppose a change breaks <code>reversed</code> for lists longer than two items. proptest then tries smaller lists, and it reports the smallest one that still fails. Here that is three zeros:</p>
+
+<pre class="text">Test failed: assertion failed: `(left == right)`
+  left: `[0, 0]`,
+ right: `[0, 0, 0]`
+minimal failing input: items = [
+    0,
+    0,
+    0,
+]</pre>
+
+<p>A mock replaces a dependency during a test, such as a mailer that would send real email. Climb this ladder only as far as you need:</p>
+
+<ol>
+  <li><strong>A hand-written fake.</strong> A struct that records the calls and returns what the test sets. Chapter 17 builds one.</li>
+  <li><strong>A trait with two implementations.</strong> The real one and a test one. The code takes the trait, so a test can pass the fake. Chapter 14 explains traits.</li>
+  <li><strong>mockall.</strong> <code>#[automock]</code> on the trait generates the fake for you. Each test says what it expects, such as one call with a given argument.</li>
+</ol>
+
+<p>Start at the first step. Move up when the fake grows too big to keep up with.</p>
 </section>
 
 <section>
@@ -902,6 +1105,205 @@ cargo clippy --all-targets -- -D warnings
 cargo test</pre>
   <p>A rule like this turns "it compiles on my side" into a result you can check. Read the tool output, not the agent's summary of it.</p>
 </aside>
+</section>
+
+<section>
+<h2 id="cargo-real">Cargo for real projects</h2>
+
+<p>A small project needs only a <code>[dependencies]</code> table. A real one adds feature switches, a minimum Rust version, lint settings, versions shared across a workspace, and build profiles. This section covers the settings that serious repositories use.</p>
+
+<h3>Features are switches that only turn things on</h3>
+
+<p>A feature is an optional part of a crate. clap's <code>derive</code> is one. reqwest's <code>json</code> is another. Features are <strong>additive</strong>: turning one on adds code, and it never removes any. Cargo builds one copy of each dependency for the whole build, with the features that any package in the build asks for.</p>
+
+<p>Many crates turn a default set of features on. <code>default-features = false</code> turns that set off, and then you list the features you want. reqwest's defaults include a TLS stack. This line keeps the HTTP client and uses rustls for TLS instead:</p>
+
+<pre class="toml">
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }</pre>
+
+<p>With those settings, <code>cargo tree -i native-tls</code> reports that no such package is in the build, so the native TLS stack is not compiled.</p>
+
+<p>Features also decide what exists. A module can be missing until you turn on its feature. This file says <code>use reqwest::blocking;</code>, and the dependency line has no <code>blocking</code> feature. This is the real error:</p>
+
+<pre class="rustc">error[E0432]: unresolved import `reqwest::blocking`
+   --&gt; src/main.rs:1:5
+    |
+  1 | use reqwest::blocking;
+    |     ^^^^^^^^^^^^^^^^^ no `blocking` in the root
+    |
+note: found an item that was configured out
+   --&gt; ~/.cargo/registry/.../reqwest-0.12.28/src/lib.rs:372:13
+    |
+371 |     #[cfg(feature = "blocking")]
+    |           -------------------- the item is gated behind the `blocking` feature
+372 |     pub mod blocking;
+    |             ^^^^^^^^
+
+For more information about this error, try `rustc --explain E0432`.</pre>
+
+<p>The fix is a switch in <code>Cargo.toml</code>. The code stays the same:</p>
+
+<pre class="toml">
+reqwest = { version = "0.12", features = ["blocking"] }</pre>
+
+<p>Your own crate uses the same switches. Declare the feature in <code>[features]</code>, then guard code with <code>cfg(feature = "...")</code>. This program prints a metric only when the feature is on:</p>
+
+<pre class="rs" data-stdout="done" data-title="src/main.rs">
+#[cfg(feature = "metrics")]
+fn record(name: &amp;str) {
+    println!("metric: {name}");
+}
+
+#[cfg(not(feature = "metrics"))]
+fn record(_name: &amp;str) {}
+
+fn main() {
+    record("notes.added");
+    println!("done");
+}</pre>
+
+<p>With <code>metrics = []</code> declared under <code>[features]</code>, <code>cargo run</code> prints <code>done</code>. <code>cargo run --features metrics</code> also prints <code>metric: notes.added</code>. If <code>metrics</code> is not declared, rustc warns that the <code>cfg</code> value is unexpected, and Cargo refuses <code>--features metrics</code>, because the package does not contain that feature.</p>
+
+<h3>Pin the oldest Rust you support</h3>
+
+<p><code>rust-version</code> names the oldest Rust release that your package is tested with. Cargo checks it before it compiles anything:</p>
+
+<pre class="toml" data-title="Cargo.toml">
+[package]
+name = "notes"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"</pre>
+
+<p>On an older compiler, the build stops with a message. The output below is real. It comes from a package that asks for 1.99, on a machine with rustc 1.97:</p>
+
+<pre class="rustc">error: rustc 1.97.0 is not supported by the following package:
+  notes@0.1.0 requires rustc 1.99</pre>
+
+<h3>Lints for the whole package</h3>
+
+<p>The <code>[lints]</code> table sets lint levels for the whole package, so every file follows the same rules:</p>
+
+<pre class="toml" data-title="Cargo.toml">
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+unwrap_used = "warn"</pre>
+
+<p><code>forbid</code> is the strongest level. An <code>#[allow]</code> in the code cannot undo it. This is the real error when a function tries:</p>
+
+<pre class="rustc">error[E0453]: allow(unsafe_code) incompatible with previous forbid
+ --&gt; src/main.rs:1:9
+  |
+1 | #[allow(unsafe_code)]
+  |         ^^^^^^^^^^^ overruled by previous forbid
+  |
+  = note: `forbid` lint level was set on command line (`-F unsafe_code`)</pre>
+
+<p><code>unwrap_used</code> is off by default. The table turns it on, and <code>cargo clippy</code> then warns about each <code>unwrap()</code>. This is the real output for one of them:</p>
+
+<pre class="rustc">warning: used `unwrap()` on a `Result` value
+ --&gt; src/main.rs:2:17
+  |
+2 |     let value = "41".parse::&lt;u8&gt;().unwrap();
+  |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: if this value is an `Err`, it will panic
+  = help: consider using `expect()` to provide a better panic message
+  = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unwrap_used
+  = note: requested on the command line with `-W clippy::unwrap-used`</pre>
+
+<h3>Expect the warnings you expect</h3>
+
+<p><code>#[allow(dead_code)]</code> hides a warning for good, even after the code changes. <code>#[expect(dead_code)]</code> says that the lint should fire here. When it stops firing, rustc warns that the expectation is unfulfilled, so the exception cannot outlive its reason. Add a <code>reason</code> so the next reader knows why.</p>
+
+<pre class="rs" data-stdout="49" data-title="src/main.rs">
+#[expect(dead_code, reason = "the parser lands in the next chapter")]
+fn unused_helper() -&gt; u32 {
+    7
+}
+
+#[expect(dead_code, reason = "called from main below")]
+fn used_helper() -&gt; u32 {
+    8
+}
+
+fn main() {
+    println!("{}", used_helper() + 41);
+}</pre>
+
+<p><code>unused_helper</code> really is unused, so its expectation is met, and rustc is silent about it. <code>used_helper</code> is called, so <code>dead_code</code> never fires. rustc reports that second expectation:</p>
+
+<pre class="rustc">warning: this lint expectation is unfulfilled
+ --&gt; src/main.rs:6:10
+  |
+6 | #[expect(dead_code, reason = "called from main below")]
+  |          ^^^^^^^^^
+  |
+  = note: called from main below
+  = note: `#[warn(unfulfilled_lint_expectations)]` on by default</pre>
+
+<h3>Share versions across a workspace</h3>
+
+<p>In a workspace, declare a dependency once at the root. Each member then says <code>workspace = true</code>, so a version bump changes every member at once.</p>
+
+<pre class="toml" data-title="Cargo.toml (workspace root)">
+[workspace]
+members = ["app", "model"]
+resolver = "3"
+
+[workspace.dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1"</pre>
+
+<pre class="toml" data-title="model/Cargo.toml">
+[dependencies]
+serde = { workspace = true }</pre>
+
+<h3>Install a tool, or publish a crate</h3>
+
+<p><code>cargo install --path .</code> builds the package in release mode and copies the binary into Cargo's bin folder, <code>~/.cargo/bin</code> by default. Add <code>--root</code> to choose another folder. Publishing to crates.io takes a few steps. Fill in <code>description</code> and <code>license</code> in <code>[package]</code> first.</p>
+
+<pre class="sh">cargo login               # once per machine, with a token from crates.io
+cargo publish --dry-run   # packages the crate the way crates.io sees it, and uploads nothing
+cargo publish             # uploads this version. A published version cannot be deleted, only yanked.</pre>
+
+<h3>A release profile for command-line tools</h3>
+
+<p>Command-line tools are shipped as release builds. These settings often make the binary smaller and faster, and they make the build slower:</p>
+
+<pre class="toml" data-title="Cargo.toml">
+[profile.release]
+lto = true          # optimize across crate boundaries
+codegen-units = 1   # optimize one unit at a time: slower build, often faster code
+strip = true        # remove symbols, so the binary is smaller</pre>
+
+<p>On Linux, <code>file target/release/notes</code> then reports the binary as stripped. <code>cargo install</code> uses the release profile too.</p>
+
+<h3>Build-time tips</h3>
+
+<ul>
+  <li><code>cargo check</code> type-checks and borrow-checks without producing a binary. It is the quick loop to run while you edit.</li>
+  <li><code>cargo build --timings</code> writes an HTML report to <code>target/cargo-timings/</code>. It shows how long each crate took, so you can see which dependency is slow.</li>
+  <li>A debug build can still run slowly when a dependency is heavy. This profile optimizes the dependencies in debug builds:</li>
+</ul>
+
+<pre class="toml">
+[profile.dev.package."*"]
+opt-level = 3</pre>
+
+<p>The first build of each dependency takes longer with that setting. Your own code keeps its quick debug build.</p>
+
+<div class="ox-quiz" data-id="16:features-fix" data-label="Check yourself">
+  <p class="ox-q">Your code says <code>use reqwest::blocking;</code>. rustc reports that <code>blocking</code> is missing, and the note says it is "gated behind the <code>blocking</code> feature". What do you change first?</p>
+  <ol class="ox-choices">
+    <li data-correct>Add <code>"blocking"</code> to the <code>features</code> list for reqwest in <code>Cargo.toml</code>.</li>
+    <li data-feedback="Cargo update moves versions inside their ranges. It does not add features.">Run <code>cargo update</code> to get a newer reqwest.</li>
+    <li data-feedback="The module exists, but Cargo did not build it. Fix the feature list first.">Rename the import to <code>reqwest::sync</code>.</li>
+  </ol>
+  <div class="ox-why"><p>A gated item exists only when its feature is on. The fix is a switch in <code>Cargo.toml</code>, and the code stays the same.</p></div>
+</div>
 </section>
 
 <section>
@@ -1021,6 +1423,8 @@ fn main() {
     <li>In <code>Cargo.toml</code>, <code>"1.2"</code> means <code>^1.2</code>: a range with a floor. <code>Cargo.lock</code> pins exact versions, and you commit it for applications.</li>
     <li>Unit tests sit in <code>#[cfg(test)]</code> modules, integration tests in <code>tests/</code>, and doc tests in <code>///</code> comments. <code>cargo test</code> runs all three.</li>
     <li>Run <code>cargo fmt --check</code>, <code>cargo clippy --all-targets -- -D warnings</code> and <code>cargo test</code> before you accept any change, human or agent.</li>
+    <li>clap's derive turns a struct into a parser, with help text and exit code 2 for bad input. Features are additive switches, so a missing item often means a feature is off.</li>
+    <li><code>rust-version</code> names the oldest compiler you support. <code>[lints]</code> sets lint levels for the package, and <code>#[expect]</code> warns when its exception is no longer needed.</li>
   </ul>
 </div>
 

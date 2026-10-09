@@ -35,7 +35,7 @@
         answer: 1,
         explain: "A release build skips the overflow check, so 255 + 1 wraps to 0 in a u8.",
       },
-      say: "<p>The debug build checks the addition and panics. The release build skips the check, and the value reads <b>0</b>.</p>",
+      say: "<p>The debug build checks the addition for integer overflow and panics. The release build skips the check, and the value reads <b>0</b>.</p>",
       do: [
         ["pose", "dbg", "ouch"],
         ["shake", "dbg", 300],
@@ -47,7 +47,7 @@
     },
     {
       line: 3,
-      say: "<p>A debug panic stops the program. A release build keeps going with the wrong number. Pick the method that says what you mean, such as <code>checked_add</code>.</p>",
+      say: "<p>A debug panic stops the program. A release build keeps going with the wrong number. For a value you must not overflow, pick the method that says what you mean, such as <code>checked_add</code>.</p>",
     },
   ],
 });

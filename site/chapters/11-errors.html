@@ -767,6 +767,200 @@ Error: ParseIntError { kind: InvalidDigit }</pre>
 </section>
 
 <section>
+<h2 id="io">Programs that talk to the world</h2>
+
+<p>So far, every function in this chapter took values and returned values. A command-line tool also reads its arguments and its input, and it reads and writes files. The standard library covers each of those. Each call can fail, so each one returns a <code>Result</code>, and the <code>?</code> you just learned works on all of them.</p>
+
+<p>Arguments come from <code>std::env::args()</code>. The first item is the program name, the same as <code>$argv[0]</code> in PHP, so skip it. Everything else arrives as text. The function below turns that text into a <code>Config</code>, and it returns an error message when a flag is unknown or the file name is missing.</p>
+
+<pre class="rs" data-title="src/main.rs">
+use std::env;
+use std::process::ExitCode;
+
+struct Config {
+    verbose: bool,
+    file: String,
+}
+
+fn parse_args(args: &amp;[String]) -&gt; Result&lt;Config, String&gt; {
+    let mut verbose = false;
+    let mut file = None;
+    for arg in args {
+        match arg.as_str() {
+            "-v" | "--verbose" =&gt; verbose = true,
+            other if other.starts_with('-') =&gt; return Err(format!("unknown flag {other}")),
+            other =&gt; file = Some(other.to_string()),
+        }
+    }
+    let file = file.ok_or("missing file name")?;
+    Ok(Config { verbose, file })
+}
+
+fn main() -&gt; ExitCode {
+    let args: Vec&lt;String&gt; = env::args().skip(1).collect();
+    match parse_args(&amp;args) {
+        Ok(config) =&gt; {
+            println!("file: {}, verbose: {}", config.file, config.verbose);
+            ExitCode::SUCCESS
+        }
+        Err(message) =&gt; {
+            eprintln!("error: {message}");
+            eprintln!("usage: notes [-v] &lt;file&gt;");
+            ExitCode::from(2)
+        }
+    }
+}</pre>
+
+<p>Run it the way a shell user would. Each <code># exit</code> line shows the status the process returned.</p>
+
+<pre class="text">$ notes -v notes.txt
+file: notes.txt, verbose: true
+# exit 0
+$ notes --bogus notes.txt
+error: unknown flag --bogus
+usage: notes [-v] &lt;file&gt;
+# exit 2
+$ notes
+error: missing file name
+usage: notes [-v] &lt;file&gt;
+# exit 2</pre>
+
+<p><code>main</code> returns an <code>ExitCode</code>, so it sets the exit status without calling <code>process::exit</code>. <code>ExitCode::SUCCESS</code> is 0, <code>ExitCode::FAILURE</code> is 1, and <code>ExitCode::from(2)</code> gives any other value. Chapter 16 uses 2 for bad arguments too, because clap does.</p>
+
+<p>The usage lines use <code>eprintln!</code>, not <code>println!</code>. <code>println!</code> writes to stdout, the stream a pipe reads, as in <code>notes | sort</code>. <code>eprintln!</code> writes to stderr, a second stream. The terminal shows it, and a script can read or hide it on its own. This program prints one line to each stream.</p>
+
+<pre class="rs" data-title="src/main.rs" data-stdout="results: 3 files">
+fn main() {
+    println!("results: 3 files");
+    eprintln!("warning: 1 file skipped");
+}</pre>
+
+<p>Standard input works the same way. <code>io::stdin().lines()</code> gives you an iterator over the lines that you type or pipe in. Each item is a <code>Result</code>, because reading can fail, so the loop calls <code>?</code> on every line. Each line comes without its newline.</p>
+
+<pre class="rs" data-title="src/main.rs">
+use std::io;
+
+fn main() -&gt; io::Result&lt;()&gt; {
+    let mut count = 0;
+    for line in io::stdin().lines() {
+        let line = line?;
+        count += 1;
+        println!("{count}: {line}");
+    }
+    println!("{count} lines");
+    Ok(())
+}</pre>
+
+<pre class="text">$ printf 'alpha\nbeta\n' | notes
+1: alpha
+2: beta
+2 lines</pre>
+
+<p>Files use <code>std::fs</code>. <code>fs::read_to_string</code> reads a whole file into a <code>String</code>, and <code>fs::write</code> replaces a file's contents in one call. To write in pieces, open the file with <code>File::create</code>, wrap it in a <code>BufWriter</code>, and call <code>writeln!</code> as often as you need. The buffer collects the small writes and sends them to the disk in larger blocks. The program below writes three lines, reads them back, and removes the file.</p>
+
+<pre class="rs" data-title="src/main.rs" data-stdout="read 21 bytes\nline 1\nline 2\nline 3">
+use std::error::Error;
+use std::fs::{self, File};
+use std::io::{BufWriter, Write};
+use std::path::PathBuf;
+
+fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
+    let path: PathBuf = std::env::temp_dir().join("oxidize-ch11-files.txt");
+
+    let file = File::create(&amp;path)?;
+    let mut out = BufWriter::new(file);
+    for n in 1..=3 {
+        writeln!(out, "line {n}")?;
+    }
+    out.flush()?;
+
+    let text = fs::read_to_string(&amp;path)?;
+    println!("read {} bytes", text.len());
+    print!("{text}");
+    fs::remove_file(&amp;path)?;
+    Ok(())
+}</pre>
+
+<p>The <code>flush()</code> call is there on purpose. A <code>BufWriter</code> also flushes when it is dropped, but a drop has nowhere to send an error, so it ignores a failed flush. Call <code>flush()</code> yourself when the write has to succeed.</p>
+
+<p><code>Path</code> is the borrowed form of a path, like <code>&amp;str</code>. <code>PathBuf</code> is the owned form, like <code>String</code>. <code>join</code> adds a segment with the separator that the platform uses, so you never type a slash by hand. This program prints a path, then its extension and its file name. On Windows the separator is a backslash, so the first line looks different there.</p>
+
+<pre class="rs" data-title="src/main.rs" data-stdout="notes/2026/todo.md\nSome(&quot;md&quot;)\nSome(&quot;todo.md&quot;)">
+use std::path::{Path, PathBuf};
+
+fn main() {
+    let dir = Path::new("notes");
+    let file: PathBuf = dir.join("2026").join("todo.md");
+    println!("{}", file.display());
+    println!("{:?}", file.extension());
+    println!("{:?}", file.file_name());
+}</pre>
+
+<p><code>fs::read_dir</code> lists the entries of a folder. Opening the folder returns a <code>Result</code>, and so does each entry. The order of the entries is not promised, so sort the paths when the order matters.</p>
+
+<p>If <code>main</code> returns an <code>Err</code>, Rust prints <code>Error:</code> and the <code>Debug</code> form of the error, then exits with status 1. A missing file looks like this: <code>Error: Os { code: 2, kind: NotFound, message: "No such file or directory" }</code>. Users deserve a sentence of their own, so a tool catches these errors and prints a message the way <code>parse_args</code> does.</p>
+
+<p>Environment variables come from <code>std::env::var</code>. It returns a <code>Result</code>. A variable that is not set is <code>Err(VarError::NotPresent)</code>, not an empty string, so decide what the default should be. Chapter 20 reads its configuration this way.</p>
+
+<p>Laravel's closest equivalent is an artisan command. Here is the part of one that handles the file argument, next to the Rust version of the same check:</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+// app/Console/Commands/CountNotes.php, the handle() method
+public function handle(): int
+{
+    $file = $this-&gt;argument('file');
+
+    if (! is_file($file)) {
+        $this-&gt;error("missing file: {$file}");
+        return 2;
+    }
+
+    $this-&gt;line("reading {$file}");
+    return 0;
+}</pre>
+  <pre class="rs" data-title="src/main.rs">
+use std::env;
+use std::path::Path;
+use std::process::ExitCode;
+
+fn main() -&gt; ExitCode {
+    let Some(file) = env::args().nth(1) else {
+        eprintln!("usage: notes &lt;file&gt;");
+        return ExitCode::from(2);
+    };
+    if !Path::new(&amp;file).is_file() {
+        eprintln!("missing file: {file}");
+        return ExitCode::from(2);
+    }
+    println!("reading {file}");
+    ExitCode::SUCCESS
+}</pre>
+  <div class="ox-bridge-note"><p>The artisan command returns its code from <code>handle()</code>, and <code>$this-&gt;error()</code> prints the message. Rust does both jobs in <code>main</code>. Two things differ. <code>$this-&gt;argument()</code> gives you values that the console has already checked against the command's signature. <code>env::args()</code> gives you raw text, which is why chapter 16 adds clap. And PHP's <code>exit()</code> can run from any function, as can Rust's <code>process::exit</code>. Rust's version skips destructors, as the callout below shows, so return from <code>main</code> when you can.</p></div>
+</div>
+
+<aside class="ox-callout" data-kind="ai" data-label="AI reviewer checklist">
+  <p>Agent-written command-line code fails in the same few places. Check these in review:</p>
+  <ul>
+    <li><strong><code>unwrap()</code> on an argument.</strong> <code>env::args().nth(1).unwrap()</code> panics when the user passes nothing. The panic exits with status 101. The user needs a usage message and status 2.</li>
+    <li><strong>A panic where an exit code belongs.</strong> A bad flag or a missing file is an expected failure, so it returns an <code>ExitCode</code> or a <code>Result</code>. A panic says "this is a bug".</li>
+    <li><strong><code>process::exit</code> in the middle of a program.</strong> It ends the process without running destructors, so a <code>BufWriter</code> may never flush. In a quick test, the file was empty after <code>process::exit</code>. After a normal return from <code>main</code>, it held all 15 bytes.</li>
+    <li><strong>Reading a whole huge file.</strong> <code>fs::read_to_string</code> loads the entire file into memory. For big input, read it line by line.</li>
+  </ul>
+</aside>
+
+<div class="ox-quiz" data-id="11:io-exit" data-label="Check yourself">
+  <p class="ox-q">You run <code>notes</code> with no arguments. Where does the error text go, and what exit code does the process return?</p>
+  <ol class="ox-choices">
+    <li>stdout, exit code 0</li>
+    <li data-correct>stderr, exit code 2</li>
+    <li data-feedback="The error is printed with eprintln!, so it does not go to stdout. Try again.">stdout, exit code 1</li>
+  </ol>
+  <div class="ox-why"><p>The error and the usage line use <code>eprintln!</code>, so they go to stderr. The <code>Err</code> branch returns <code>ExitCode::from(2)</code>. Only the <code>Ok</code> branch prints to stdout.</p></div>
+</div>
+</section>
+
+<section>
 <h2 id="custom">Your own error type</h2>
 
 <p>A function that can fail in several ways needs an error type that says which way. A <code>String</code> can hold any message, but the caller can't match on it. An enum gives each failure its own variant, so the caller can react to each one differently.</p>
@@ -1104,6 +1298,7 @@ fn main() {
     <li><code>match</code>, <code>map</code>, <code>map_err</code>, <code>and_then</code>, <code>unwrap_or</code> and <code>ok_or</code> handle a Result or Option in one expression.</li>
     <li><code>?</code> returns early on <code>Err</code>, after converting the error with <code>From</code>. The function must have a return type that can carry that error.</li>
     <li>Write your own error enum with <code>Display</code>, <code>Error</code> and <code>From</code>, or derive them with <code>thiserror</code>. Applications can use <code>anyhow</code> at the top.</li>
+    <li>Command-line programs read <code>env::args</code>, stdin and files through <code>std</code>. Each call returns a <code>Result</code>, so <code>?</code> works on each one. Return an <code>ExitCode</code> from <code>main</code> to choose the exit status.</li>
   </ul>
 </div>
 

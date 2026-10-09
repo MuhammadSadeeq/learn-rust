@@ -60,22 +60,33 @@ spend a lot of time *reviewing Rust written by AI agents*.
 
 | Concept | Metaphor used everywhere |
 |---|---|
-| Ownership | A value is a **parcel with exactly one name on its label**. Move = the label is rewritten. Clone = a photocopy, a new parcel. Drop = the owner disposes of it when leaving the room (scope). |
-| Borrowing | **Many readers or one writer.** `&T` is a read-only pass; any number can exist. `&mut T` is the one key to the editing room; while it exists nobody else may even look. |
-| Lifetimes | The **span of lines** where a borrow must stay valid. Annotations describe *relationships* between borrows, never durations. |
+| Ownership | Ownership is the **leash**: a value has exactly one owner, and the owner crab holds the leash to it (owner crab → fluffy). Move = the leash passes to another crab, and the old crab turns grey. Clone = a second fluffy on its own leash. Drop = the owner leaves its scope, and the fluffy is freed. |
+| Borrowing | **Many readers or one writer.** `&T` is a shared borrow, glasses: any number can exist. `&mut T` is an exclusive borrow, the compile-time lock: while it exists nobody else may even look. `&mut` is checked when you compile, and no lock exists at runtime. |
+| Lifetimes | The **span of lines** where a borrow must stay valid. Annotations describe *relationships* between borrows, never durations. Tick (an hourglass) shows that region of code, never a clock. |
 | `Option<T>` | A **box that may be empty**; you must open it before you use what's inside. |
 | `Result<T, E>` | A **two-track railway** (Ok track, Err track). `?` is an **exit ramp** onto the error track. |
 | Traits | **Capabilities / contracts** like PHP interfaces, but you can attach them to types you didn't write. |
 | Generics | **Stamps**: the compiler stamps out a concrete copy per type (monomorphization). |
 | Iterators | A **lazy conveyor belt**: nothing moves until a consumer (`collect`, `sum`, `for`) pulls. |
-| `Box` / `Rc` / `RefCell` | Box: a parcel stored on the heap, one owner. Rc: a shared parcel with an **owner counter** on the label. RefCell: a **borrow desk** that checks the rules at runtime and panics on violation. |
-| `Mutex` | The **single key** to a room; whoever holds the key may enter. |
-| Futures | A **paused recipe**. An executor is the cook who resumes whichever recipe is ready. `.await` = "pause here, let others work". |
+| `Box` / `Rc` / `RefCell` | Box: **one fluffy on one leash**, stored on the heap. Rc: **one fluffy on several leashes**, with a count. RefCell: the **Night Guard**, who checks borrows at runtime with a flashlight and panics on a violation. |
+| `Mutex` | The Keeper's real **key**: whoever holds the lock may enter the shared value; the others wait for it. |
+| Futures | A **paused order**: a future. The executor (the Waiter) polls whichever order is ready. The bell is the **waker**. `.await` = "pause here, let others work". |
 
 Semantic colors are fixed across the whole course: **oxide (orange) = owner**,
 **blue = shared borrow `&`**, **magenta = `&mut`**, **grey dashed = moved /
 invalid**. In prose use `<span class="c-own">`, `c-ref`, `c-mut`, `c-ghost`,
 `c-ok`, `c-bad`.
+
+**Two names, two jobs.** The Forge is the compiler as a whole (`rustc`). The
+Inspector is the borrow checker, the part that checks moves, borrows,
+mutability and lifetimes. The quest runner is `cargo forge`, and the word "the
+Forge" never means the runner. The prop `door` is a gate that lets in only what
+passes its check: a `pub` item, a Bouncer's set, a trait bound.
+
+**Motion captions name the real term.** Every scene says the chapter's key term
+(trait, trait bound, monomorphization, capture, lifetime, future, waker,
+exhaustive, extractor, an error code) at least once, in a caption or the title.
+The metaphor goes beside the term, never instead of it.
 
 ## 3. Rust accuracy
 
@@ -298,7 +309,7 @@ chapter's cards from `site/assets/cards/ch07.js`:
   …
 );
 ```
-8–12 cards per chapter. Questions must require recall (not recognition).
+8–18 cards per chapter; every new term, keyword and error code gets one. The decks are larger on purpose. Questions must require recall (not recognition).
 
 **Forge quests.** `<div class="ox-quests" data-chapter="7"></div>` lists the
 chapter's quests from `quests/quests.toml` automatically.

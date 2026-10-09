@@ -5,7 +5,7 @@
    `marked` a simplified expansion. The characters ⟦ and ⟧ bracket the tokens
             that came from the macro's arguments; the viewer highlights them.
    `rust`   the expansion with the brackets removed. The snippet checker
-            compiles this field. `check: "skip"` means it needs a crate.
+            compiles this field. `crates` lists the crates it needs.
    `note`   plain text shown under the viewer. */
 (function () {
   function item(o) {
@@ -75,7 +75,8 @@ async fn main() {
         .expect("Failed building the Runtime")
         .block_on(body)
 }`,
-      check: "skip",
+      check: "ok",
+      crates: ["tokio"],
       note: "Simplified from tokio-macros 2.7. The real expansion also adds lint allowances and a check on the body's type. Building the runtime and calling block_on are the same. To run the original, add tokio = { version = \"1\", features = [\"full\"] } to Cargo.toml."
     })
   ];

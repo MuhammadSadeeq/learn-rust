@@ -1704,7 +1704,7 @@ window.OX_ROSETTA = [
           OutOfRange(u16),
       }
       `,
-    check: "skip",
+    check: "ok", crates: ["thiserror"],
     note: `<code>thiserror</code> writes the <code>Display</code> and <code>Error</code> impls from the <code>#[error]</code> attributes. Libraries use it so that callers can match on the variants. Applications usually reach for <code>anyhow</code> instead.`,
     chapter: 11
   },
@@ -2117,7 +2117,8 @@ window.OX_ROSETTA = [
       `,
     check: "ok",
     note: `A missing file is an <code>Err</code> value, and <code>?</code> passes it to the caller. PHP's <code>file_get_contents</code> returns <code>false</code> with a warning, which is easy to miss. <code>read_to_string</code> also fails on bytes that are not valid UTF-8.`,
-    chapter: 11
+    chapter: 11,
+    anchor: "io"
   },
   {
     id: "io-write-file",
@@ -2139,8 +2140,8 @@ window.OX_ROSETTA = [
       `,
     check: "ok",
     note: `The file closes itself when <code>file</code> is dropped, so there is no <code>fclose</code> to forget. Writes can fail too, so they return a <code>Result</code>. <code>writeln!</code> needs the <code>Write</code> trait in scope, which is why it is imported.`,
-    chapter: null,
-    std: "std::fs::OpenOptions"
+    chapter: 11,
+    anchor: "io"
   },
   {
     id: "io-stdin",
@@ -2159,8 +2160,8 @@ window.OX_ROSETTA = [
       `,
     check: "ok",
     note: `<code>read_line</code> keeps the trailing newline, the same as <code>fgets</code>. Trim it before you compare or store the text. The buffer is a <code>String</code> that you own, and you choose whether to clear it between reads.`,
-    chapter: null,
-    std: "std::io::stdin"
+    chapter: 11,
+    anchor: "io"
   },
   {
     id: "io-args",
@@ -2177,8 +2178,8 @@ window.OX_ROSETTA = [
       `,
     check: "ok",
     note: `The first item of <code>args()</code> is the program name, like <code>$argv[0]</code>. <code>args()</code> panics if an argument is not valid Unicode, so use <code>args_os()</code> when a path or other raw bytes can arrive.`,
-    chapter: null,
-    std: "std::env::args"
+    chapter: 11,
+    anchor: "io"
   },
   {
     id: "io-env",
@@ -2195,7 +2196,8 @@ window.OX_ROSETTA = [
       `,
     check: "ok",
     note: `A missing variable is an <code>Err</code>, not null. Laravel's <code>env()</code> also reads values such as <code>1</code> and <code>yes</code> as true, but this check accepts only <code>1</code> and <code>true</code>, so decide which spellings you want and write them down. The PHP side reads <code>config('app.debug')</code>, which the default <code>config/app.php</code> fills from <code>APP_DEBUG</code>. Call <code>env()</code> only in config files, because after <code>config:cache</code> the <code>.env</code> file is no longer read. <code>unwrap_or(false)</code> puts the default where you can read it.`,
-    chapter: 20
+    chapter: 11,
+    anchor: "io"
   },
   {
     id: "io-stderr",
@@ -2209,8 +2211,8 @@ window.OX_ROSETTA = [
       `,
     check: "ok",
     note: `<code>eprintln!</code> is <code>println!</code> for stderr, so warnings do not mix into the output that a pipe or a log collector reads. It panics if writing to stderr fails, which is rare.`,
-    chapter: null,
-    std: "std::io::stderr"
+    chapter: 11,
+    anchor: "io"
   },
   {
     id: "io-read-dir",
@@ -2236,8 +2238,8 @@ window.OX_ROSETTA = [
       `,
     check: "ok",
     note: `Each step can fail: opening the directory, and reading each entry. Both return a <code>Result</code>. <code>glob</code> in PHP returns sorted names, but <code>read_dir</code> returns entries in no promised order. Collect the paths and <code>sort()</code> them when the order matters. <code>display()</code> prints a path, and it may show replacement characters for names that are not valid Unicode.`,
-    chapter: null,
-    std: "std::fs::read_dir"
+    chapter: 11,
+    anchor: "io"
   },
   /* ---------------------------------------------------------------- web */
   {
@@ -2280,7 +2282,7 @@ window.OX_ROSETTA = [
           Router::new().route("/users/{id}", get(show_user))
       }
       `,
-    check: "skip",
+    check: "ok", crates: ["axum", "tokio"],
     note: `axum matches the path and parses <code>{id}</code> into a <code>u32</code> before your handler runs. If the segment is not a number, the request is rejected with a 400 and the handler never runs. The types are written once, in the handler's signature.`,
     chapter: 20
   },
@@ -2298,7 +2300,7 @@ window.OX_ROSETTA = [
           json!({ "id": id, "name": "Ada" })
       }
       `,
-    check: "skip",
+    check: "ok", crates: ["serde_json"],
     note: `<code>json!</code> builds a value from a literal shaped like JSON. For your own types, derive <code>Serialize</code>, and serde writes the JSON from the struct, so the shape lives in one place.`,
     chapter: 20
   },
@@ -2439,7 +2441,7 @@ window.OX_ROSETTA = [
           Ok(body)
       }
       `,
-    check: "skip",
+    check: "ok", crates: ["reqwest", "serde_json"],
     note: `The connection, the status check and the body parse can each fail, so every step returns a <code>Result</code>. <code>get</code> succeeds on a 404, so <code>error_for_status()</code> is the call that matches <code>-&gt;throw()</code>: it turns a 4xx or 5xx status into an error. The snippet needs <code>reqwest = { version = "0.12", features = ["blocking", "json"] }</code> and <code>serde_json = "1"</code> in <code>Cargo.toml</code>, because reqwest leaves both features off by default. <code>blocking</code> suits scripts. Inside an async server, use reqwest's async client, so a slow request does not hold a thread.`,
     chapter: 20
   },
@@ -2475,7 +2477,7 @@ window.OX_ROSETTA = [
       println!("accepted: {}", accepted.title);
       println!("{}", serde_json::from_str::<StoreNote>(extra).is_err());
       `,
-    check: "skip",
+    check: "ok", crates: ["serde", "serde_json"],
     note: `Laravel's <code>FailOnUnknownFields</code> rejects any input key that no rule defines. Rust's serde reads the input while it deserializes, and <code>deny_unknown_fields</code> makes an extra key an error with no other code. The accepted fields are listed once, in the struct. serde is a crate, not part of the language, so this entry needs <code>serde</code> and <code>serde_json</code> in <code>Cargo.toml</code>.`,
     chapter: 20
   },

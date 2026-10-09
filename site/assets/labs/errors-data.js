@@ -1620,5 +1620,139 @@ fn main() {
         note: `When the result is a part of the input, return a borrow of the input. The lifetime then comes from the argument, which is valid for the whole call.`
       }
     ]
+  },
+  {
+    id: "E0038",
+    title: "async fn in a trait used as dyn",
+    check: "E0038",
+    chapter: 19,
+    tags: ["traits", "async"],
+    rust: `trait Tool {
+    async fn call(&self, input: &str) -> String;
+}
+
+struct Echo;
+
+impl Tool for Echo {
+    async fn call(&self, input: &str) -> String {
+        input.to_string()
+    }
+}
+
+fn main() {
+    let tools: Vec<Box<dyn Tool>> = vec![Box::new(Echo)];
+    println!("{}", tools.len());
+}`,
+    error: `error[E0038]: the trait \`Tool\` is not dyn compatible
+  --> src/main.rs:14:28
+   |
+14 |     let tools: Vec<Box<dyn Tool>> = vec![Box::new(Echo)];
+   |                            ^^^^ \`Tool\` is not dyn compatible
+   |
+note: for a trait to be dyn compatible it needs to allow building a vtable
+      for more information, visit <https://doc.rust-lang.org/reference/items/traits.html#dyn-compatibility>
+  --> src/main.rs:2:14
+   |
+ 1 | trait Tool {
+   |       ---- this trait is not dyn compatible...
+ 2 |     async fn call(&self, input: &str) -> String;
+   |              ^^^^ ...because method \`call\` is \`async\`
+   = help: consider moving \`call\` to another trait
+   = help: only type \`Echo\` implements \`Tool\`; consider using it directly instead.
+
+error: aborting due to 1 previous error
+
+For more information about this error, try \`rustc --explain E0038\`.`,
+    plain: `An \`async fn\` in a trait gives each implementation its own return type. A \`dyn Tool\` needs one method table that works for every implementation, so rustc refuses to make the trait into a \`dyn\` type.`,
+    phpNote: `In PHP, \`$tool->call('hi')\` works for any object that has the method, and nothing is fixed until the call runs. Rust builds the method table for \`dyn Tool\` when the program compiles. An \`async\` method returns a different future type in each implementation, so the table has no single type to store.`,
+    fixes: [
+      {
+        title: "Return a boxed future",
+        rust: `use std::future::Future;
+use std::pin::Pin;
+
+trait Tool {
+    fn call<'a>(&'a self, input: &'a str) -> Pin<Box<dyn Future<Output = String> + Send + 'a>>;
+}
+
+struct Echo;
+
+impl Tool for Echo {
+    fn call<'a>(&'a self, input: &'a str) -> Pin<Box<dyn Future<Output = String> + Send + 'a>> {
+        Box::pin(async move { input.to_string() })
+    }
+}
+
+fn main() {
+    let tools: Vec<Box<dyn Tool>> = vec![Box::new(Echo)];
+    let pending = tools[0].call("hello");
+    drop(pending); // a future does nothing until it is polled
+    println!("{}", tools.len());
+}`,
+        note: `Each call returns a boxed future, and the trait has no \`async fn\`. The return type is now the same for every implementation, so \`dyn Tool\` is allowed. Chapter 20 builds a tool registry on this pattern.`
+      }
+    ]
+  },
+  {
+    id: "async-send",
+    title: "future cannot be sent between threads safely",
+    check: "error",
+    chapter: 19,
+    tags: ["async", "threads"],
+    crates: ["tokio"],
+    rust: `use std::rc::Rc;
+use std::time::Duration;
+
+#[tokio::main]
+async fn main() {
+    let hits = Rc::new(3);
+    let task = async move {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        println!("hits {hits}");
+    };
+    tokio::spawn(task).await.unwrap();
+}`,
+    error: `error: future cannot be sent between threads safely
+   --> src/main.rs:11:5
+    |
+ 11 |     tokio::spawn(task).await.unwrap();
+    |     ^^^^^^^^^^^^^^^^^^ future created by async block is not \`Send\`
+    |
+    = help: within \`{async block@src/main.rs:7:16: 7:26}\`, the trait \`Send\` is not implemented for \`Rc<i32>\`
+note: captured value is not \`Send\`
+   --> src/main.rs:9:25
+    |
+  9 |         println!("hits {hits}");
+    |                         ^^^^ has type \`Rc<i32>\` which is not \`Send\`
+note: required by a bound in \`tokio::spawn\`
+   --> …/tokio-1.53.2/src/task/spawn.rs:176:21
+    |
+174 |     pub fn spawn<F>(future: F) -> JoinHandle<F::Output>
+    |            ----- required by a bound in this function
+175 |     where
+176 |         F: Future + Send + 'static,
+    |                     ^^^^ required by this bound in \`spawn\`
+
+error: aborting due to 1 previous error`,
+    plain: `\`tokio::spawn\` may run the task on any worker thread, so the future must be \`Send\`. \`Rc\` changes its count without atomic operations, so it is not \`Send\`. The future that holds it is not \`Send\` either, and \`spawn\` refuses it.`,
+    phpNote: `PHP runs a request in one process and never hands a running value to another thread, so this rule never comes up in PHP. In Rust, \`tokio::spawn\` makes it visible: the compiler checks the task before it runs.`,
+    fixes: [
+      {
+        title: "Use Arc",
+        rust: `use std::sync::Arc;
+use std::time::Duration;
+
+#[tokio::main]
+async fn main() {
+    let hits = Arc::new(3);
+    let task = async move {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        println!("hits {hits}");
+    };
+    tokio::spawn(task).await.unwrap();
+}`,
+        note: `\`Arc\` changes its count with atomic operations, so it can be moved to another thread. Use \`Rc\` only when every owner stays on one thread.`
+      }
+    ]
   }
 ];

@@ -40,24 +40,24 @@ library.
 | 2 | **Crabs** (`crab`) | Variables | Hold one value in the claw, name tag below. `mut` crabs may swap what they hold. Shadowing: a new crab with the same name steps in front. |
 | 3 | **Pebbles** (prop `pebbles`, `pebble`) | Scalar types | Each type has a shape: `i32` round stone, `u8` small stone, `f64` smooth oval, `bool` coin, `char` tile. A value only fits a slot of its shape. |
 | 4 | **Semi** (`semi`) | The semicolon | Eats an expression's value (`chomp`) and leaves the empty box `()` (prop `unit`). |
-| 5 | **Fluffies** (`fluffy`) | Heap data | Live on the sandbank (heap). Exactly as long as their owner. They poof at drop. |
+| 5 | **Fluffies** (`fluffy`) | Heap data | Live on the heap, in the plots Alloc hands out. Exactly as long as their owner. A drop frees them: the bytes are handed back, not wiped. |
 | 5 | **Alloc** (`alloc`) | The allocator | Hermit crab with a clipboard. Hands out heap plots, carries a growing Vec to a bigger plot (realloc), takes plots back. |
 | 6 | **The Leash** (prop `leash`) | Ownership | Rope from owner crab to fluffy. One holder. A move hands it over; the old crab becomes a grey ghost. |
-| 6 | **The Inspector** (`inspector`) | The borrow checker | Checks every leash (and, from Chapter 7, every borrow) before the program runs. Stamps an error code on the crab that breaks a rule. Other compile errors belong to the Forge. |
-| 7 | **Glasses and the Lock** (prop `borrows`) | `&` and `&mut` | Glasses: any number of crabs may look. The lock: exactly one crab may change it, and nobody else may look meanwhile. |
+| 6 | **The Inspector** (`inspector`) | The borrow checker | Checks every leash (and, from Chapter 7, every borrow and mutability rule, such as E0384) before the program runs. Stamps an error code on the crab that breaks a rule. Other compile errors belong to the Forge. |
+| 7 | **Glasses and the Lock** (prop `borrows`) | `&` and `&mut` | Glasses: a shared borrow, any number of crabs may look. The lock: an exclusive borrow (`&mut`), exactly one crab may change it, and nobody else may look meanwhile. It is checked when you compile; no lock exists at runtime. |
 | 8 | **Glyph** (`glyph`) | A UTF-8 string | Caterpillar, one segment per byte; a multi-byte char is several segments of one color. Cutting inside a char: `ouch` (panic). |
 | 9 | **The Mold** (`mold`) | A struct definition | Casting mold with one cavity per field. Every value poured from it has exactly those fields. |
-| 10 | **Octo** (`octo`) | `match` | One arm per pattern. A variant with no arm: Octo refuses to start (E0004). |
+| 10 | **Octo** (`octo`) | `match` and exhaustive patterns | One arm per pattern. A match that is not exhaustive (a variant with no arm) makes Octo refuse to start (E0004). |
 | 11 | **The Switchman** (`switchman`) | `Result` and `?` | Railway: Ok cars roll on, Err cars are switched back to the caller at `?`. A panic is a derailment. Props `car`, `lever`. |
 | 12 | **The Bouncer** (`bouncer`) | `HashSet` | Lets each value in once; a duplicate is turned away. |
-| 13 | **Clo** (`clo`) | Closures | Backpack crab. Packs what it captures: a look (`&`), a handle it may change (`&mut`), or the value itself (`move`). |
-| 14 | **The Press** (`press`) | Generics | Stamps one specialized copy per concrete type, at compile time (`stamp`). Traits are **badges** (prop `badge`) a type earns with `impl`. |
-| 15 | **Tick** (`tick`) | Lifetimes | An hourglass per scope (`level` 0–1). A reference tied to Tick must be finished before the sand runs out. |
-| 16 | **Cargo** (`cargo`) | Cargo and crates | Tugboat bringing crates (prop `crate`) from the crates.io harbor. Modules are houses; `pub` is an open door (prop `door`). |
-| 17 | **The Night Guard** (`guard`) | `RefCell` | Checks borrows at runtime with a flashlight. Break a rule and the alarm sounds: a panic. `Box` is a fluffy in a box, `Rc` a fluffy on several leashes with a count. |
-| 18 | **The Keeper** (`keeper`) | `Mutex` | Holds the one key (prop `key`) to a shared room. One thread inside at a time. Threads are worker crabs; channels are tubes. |
-| 19 | **The Waiter** (`waiter`) | The async executor | Juggles orders (prop `ticket`); returns to one only when its bell (prop `bell`) rings: the waker. |
-| 20 | **Postie** (`postie`) | A request through middleware | Carries a request parcel (prop `parcel`) through each layer and back. |
+| 13 | **Clo** (`clo`) | Closures and captures | Backpack crab. Captures what its body uses: a shared borrow (`&`), an exclusive one (`&mut`), or the value itself (`move`). |
+| 14 | **The Press** (`press`) | Generics and monomorphization | Stamps one specialized copy per concrete type, at compile time (`stamp`). Traits are **badges** (prop `badge`) a type earns with `impl`; a trait bound asks for one. |
+| 15 | **Tick** (`tick`) | Lifetimes | A lifetime: the region of code where a reference must stay valid. The hourglass (`level` 0–1) shows that region, not a clock. A reference tied to Tick must be used before the sand runs out. |
+| 16 | **Cargo** (`cargo`) | Cargo and crates | Tugboat bringing crates (prop `crate`) from the crates.io harbor. Modules are houses; `pub` is an open door (prop `door`). The door prop is always a gate that lets in only what passes its check: a `pub` item here, the Bouncer's set (row 12), a trait bound (row 14). |
+| 17 | **The Night Guard** (`guard`) | `RefCell` and interior mutability | Checks borrows at runtime with a flashlight. Break a rule and the alarm sounds: a panic. `Box` is one fluffy on one leash, `Rc` one fluffy on several leashes with a count. |
+| 18 | **The Keeper** (`keeper`) | `Mutex` | Holds the one key (prop `key`) to a shared value. One thread holds the lock at a time. Threads are worker crabs; channels are tubes. |
+| 19 | **The Waiter** (`waiter`) | The async executor, futures and wakers | The executor. Juggles tasks (prop `ticket`, a future to poll); it polls one again only when its bell (prop `bell`) rings: the waker. |
+| 20 | **Postie** (`postie`) | Extractors | Carries a request parcel (prop `parcel`) to its handler, where the `Json` extractor reads the body. |
 | 21 | **Rustacean Oxi** (`graduate`) | You | Oxi after the last molt. The whole cast returns for the finale. |
 
 Poses (any character): `happy`, `oops`, `think`, `wow`, `talk`, `sleep`,

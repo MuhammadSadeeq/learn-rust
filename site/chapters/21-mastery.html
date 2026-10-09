@@ -862,7 +862,7 @@ For more information about this error, try `rustc --explain E0004`.</pre>
 
 <p>With <code>thiserror = "2"</code> in <code>Cargo.toml</code>, a library error looks like this:</p>
 
-<pre class="rs" data-check="skip">
+<pre class="rs" data-crates="thiserror">
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
     #[error("missing key `{0}`")]
@@ -888,7 +888,7 @@ fn main() {
 
 <p>An application with <code>anyhow = "1"</code> can skip the enum. It adds context at each step, and <code>main</code> reports the whole chain:</p>
 
-<pre class="rs" data-check="skip">
+<pre class="rs" data-crates="anyhow">
 use anyhow::Context;
 
 fn load_port(raw: &amp;str) -&gt; anyhow::Result&lt;u16&gt; {

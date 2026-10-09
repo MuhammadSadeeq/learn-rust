@@ -5,7 +5,7 @@
    compiled and run by tools/check-snippets.mjs. */
 (window.OX_MOTION = window.OX_MOTION || []).push({
   id: "ch18-key",
-  title: "One key, one worker at a time",
+  title: "One Mutex key, one worker at a time",
   w: 640,
   h: 300,
   rust: [
@@ -41,12 +41,12 @@
   ],
   beats: [
     {
-      say: "<p>Three worker threads want to add to one counter. Each one waits at the door. The Keeper holds the only key to the room.</p>",
+      say: "<p>Three worker threads want to add to one counter. The counter sits behind a <b>Mutex</b>: the Keeper holds the only key to the room, and the threads wait for it.</p>",
       line: 8,
       do: [["pose", "keeper", "talk", 1200]],
     },
     {
-      say: "<p><code>lock()</code> takes the key. The Keeper hands it to <b>w1</b>, and only the key holder may go in.</p>",
+      say: "<p><code>lock()</code> takes the key. The Keeper hands the Mutex's key to <b>w1</b>, and only the key holder may go in.</p>",
       line: 10,
       do: [
         ["arc", "key", { x: 160, y: 72, scale: 0.8 }, 800, 0, 50],
@@ -181,7 +181,7 @@
       },
     },
     {
-      say: "<p>If thread 1 used <code>report</code> after the send, the Inspector would stamp <code>E0382</code> on that line. The compiler stops the build before any thread runs.</p>",
+      say: "<p>If thread 1 used <code>report</code> after the send, the borrow checker (the Inspector) would stamp <code>E0382</code> on that line. The compiler stops the build before any thread runs.</p>",
       line: 10,
       do: [
         ["pop", "insp", 0],

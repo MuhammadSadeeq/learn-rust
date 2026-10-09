@@ -12,7 +12,7 @@
 
   (window.OX_MOTION = window.OX_MOTION || []).push({
     id: "ch08-boundary",
-    title: "Where a slice may cut",
+    title: "Where a &str slice may cut",
     w: 640,
     h: 300,
     rust: [
@@ -33,7 +33,7 @@
     ],
     beats: [
       {
-        say: "<p>Glyph spells <code>café</code>. Each byte is one segment, and the <code>é</code> takes two.</p>",
+        say: "<p>Glyph spells the <code>&amp;str</code> <code>café</code> in UTF-8. Each byte is one segment, and the <code>é</code> takes two.</p>",
         line: 2,
         do: [
           ["pop", "g", 0],

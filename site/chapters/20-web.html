@@ -39,6 +39,7 @@
     <li>Build JSON endpoints with routing, extractors, shared state and typed errors.</li>
     <li>Validate input and turn errors into HTTP responses.</li>
     <li>Test HTTP handlers without starting a server.</li>
+    <li>Call other APIs with reqwest, and read logs and config you can trust.</li>
   </ul>
 </header>
 
@@ -57,14 +58,14 @@
     <tr><td>Form Request and <code>$request-&gt;validate()</code></td><td>Extractors such as <code>Json&lt;T&gt;</code> and <code>Path&lt;T&gt;</code>, with serde, plus your own checks</td><td>The arguments do the validation. If an extractor fails, the function body never runs.</td></tr>
     <tr><td>Middleware</td><td>tower layers, such as <code>TraceLayer</code> and <code>TimeoutLayer</code></td><td>Same idea, with one catch: where the layer runs is different. Section 2 shows where.</td></tr>
     <tr><td>Service container and <code>app()</code></td><td><code>State&lt;AppState&gt;</code></td><td>Shared state is passed in explicitly. Nothing is resolved by name.</td></tr>
-    <tr><td>Eloquent</td><td>sqlx, SeaORM or Diesel</td><td>Rust has no built-in ORM, so you choose a library. Section 7 introduces sqlx.</td></tr>
+    <tr><td>Eloquent</td><td>sqlx, SeaORM or Diesel</td><td>Rust has no built-in ORM, so you choose a library. The database section introduces sqlx.</td></tr>
     <tr><td>Migrations</td><td><code>sqlx migrate</code></td><td>Versioned SQL files, applied in order.</td></tr>
     <tr><td>Blade</td><td>askama, maud or minijinja</td><td>askama and maud compile templates into Rust code. minijinja renders templates at runtime.</td></tr>
     <tr><td>Queues and Horizon</td><td>tokio tasks, or the apalis crate</td><td>Background work runs on the same async runtime that serves requests.</td></tr>
     <tr><td>Artisan commands</td><td>clap</td><td>A struct with derive attributes describes the arguments, and clap parses them.</td></tr>
     <tr><td><code>.env</code> and <code>config/</code></td><td>dotenvy and a typed config struct</td><td>Values are parsed once, at startup. A wrong type fails there, not on the first request that needs it.</td></tr>
     <tr><td>The <code>Log</code> facade and Monolog</td><td>tracing</td><td>Events and spans with levels. <code>RUST_LOG</code> filters them.</td></tr>
-    <tr><td><code>$this-&gt;postJson()</code> in a feature test</td><td><code>tower::ServiceExt::oneshot</code></td><td>Send one request into the router. No port, no server. Section 6 shows it.</td></tr>
+    <tr><td><code>$this-&gt;postJson()</code> in a feature test</td><td><code>tower::ServiceExt::oneshot</code></td><td>Send one request into the router. No port, no server. The testing section shows it.</td></tr>
     <tr><td>Deploying behind PHP-FPM and nginx</td><td>One compiled binary</td><td>Copy the binary into a small container image, often with a multi-stage Docker build. No interpreter is needed at runtime.</td></tr>
   </tbody>
 </table>
@@ -111,7 +112,7 @@ pub async fn show(
 <details class="ox-think">
   <summary>Which row in the table has no counterpart in axum at all?</summary>
   <div class="ox-think-body">
-    <p>Eloquent. Routes, controllers, the container and middleware all have direct counterparts. axum does not ship a database layer, so you pick a library such as sqlx. Section 7 covers that choice.</p>
+    <p>Eloquent. Routes, controllers, the container and middleware all have direct counterparts. axum does not ship a database layer, so you pick a library such as sqlx. The database section covers that choice.</p>
   </div>
 </details>
 </section>
@@ -821,7 +822,7 @@ pub async fn destroy(
     Ok(StatusCode::NO_CONTENT)
 }</pre>
 
-<p>Each handler is an ordinary async function. Its parameters are extractors, and axum runs them in order before the body starts. Put the extractor that reads the request body last, because it consumes the body. The return type is what the client receives. <code>store</code> returns a status code and JSON, so the client gets a 201. <code>show</code> returns a <code>Result</code>. When <code>ok_or(...)</code> finds no note, the <code>?</code> sends the error down the error track, and <code>AppError</code> turns it into a 404.</p>
+<p>Each handler is an ordinary async function. Its parameters are extractors, and axum runs them in order before the body starts. Put the extractor that reads the request body last, because it consumes the body. The return type is what the client receives. <code>store</code> returns a status code and JSON, so the client gets a 201. <code>show</code> returns a <code>Result</code>. When <code>ok_or(...)</code> finds no note, the <code>?</code> sends the error down the error track, and <code>AppError</code> turns it into a 404. The <code>tracing::info!</code> call in <code>store</code> writes a log line. The section on logs, after this one, explains it.</p>
 
 <p>The order rule is easy to break, so here is what the compiler says when you break it. In this version the body extractor comes first:</p>
 
@@ -1106,6 +1107,180 @@ content-type: application/json
 </section>
 
 <section>
+<h2 id="observe" data-toc="Logs and config">Logs you can search, config you can trust</h2>
+
+<p>The notes API already writes log lines and reads <code>APP_ADDR</code> at startup. This section explains both. Logs tell you what a running service did. Settings decide whether it starts at all. A bad setting is one of the most common reasons a deploy fails, so it should fail early, and it should say which setting is wrong.</p>
+
+<h3 id="events-spans">Events and spans</h3>
+
+<p>An <strong>event</strong> is one log line at one moment. <code>tracing::info!(id = note.id, "note created")</code> writes an event with one field, <code>id</code>. A <strong>span</strong> covers a period of work. It has a name and fields of its own. Every event inside the span carries those fields, so a line deep in a handler still says which request it belongs to.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+Log::info('note created', ['id' => $note-&gt;id]);</pre>
+  <pre class="rs" data-check="skip" data-crates="tracing">tracing::info!(id = note.id, "note created");</pre>
+  <div class="ox-bridge-note"><p>The Log facade attaches a context array to one line. A tracing field is typed, so <code>id = note.id</code> records a number, not text. A span is shared context with a start and an end. Because it has an end, it can also time the work it covers.</p></div>
+</div>
+
+<h3 id="levels">Levels and filters</h3>
+
+<p>Every event has a level. From most to least severe, the levels are <code>error</code>, <code>warn</code>, <code>info</code>, <code>debug</code> and <code>trace</code>. Choosing a level also shows every level before it in that list, so <code>debug</code> shows <code>info</code>, <code>warn</code> and <code>error</code> as well. The <code>RUST_LOG</code> variable chooses the level. <code>EnvFilter</code> reads it, and the notes API uses a default when it is not set.</p>
+
+<h3 id="config">Typed config</h3>
+
+<p>Laravel's <code>config/</code> files read <code>env()</code> values and hand them out by key. The Rust version gives each setting a type. <code>Config::from_env()</code> reads every setting when the program starts. It returns a <code>Config</code>, or a <code>ConfigError</code> that names the variable at fault. Nothing is left to fail later, on the first request that needs the value.</p>
+
+<p>A plain <code>unwrap()</code> on a bad value panics with a message like <code>ParseIntError { kind: InvalidDigit }</code>. That message does not say which variable was wrong. The error type does.</p>
+
+<p>This small program reads its settings, logs what it does, and then shows what a bad setting looks like:</p>
+
+<pre class="rs" data-check="skip" data-crates="tracing,tracing-subscriber" data-title="src/main.rs">use std::env;
+use std::fmt;
+use std::net::SocketAddr;
+use std::str::FromStr;
+use std::time::Duration;
+
+use tracing_subscriber::EnvFilter;
+
+/// Settings for the service. They are read once, at startup.
+#[derive(Debug)]
+pub struct Config {
+    pub addr: SocketAddr,
+    pub database_url: String,
+    pub request_timeout: Duration,
+}
+
+#[derive(Debug)]
+pub enum ConfigError {
+    /// A required variable is not set.
+    Missing(&amp;'static str),
+    /// The variable is set, but its value does not parse.
+    Invalid {
+        key: &amp;'static str,
+        value: String,
+        reason: String,
+    },
+}
+
+impl fmt::Display for ConfigError {
+    fn fmt(&amp;self, f: &amp;mut fmt::Formatter&lt;'_&gt;) -&gt; fmt::Result {
+        match self {
+            ConfigError::Missing(key) =&gt; write!(f, "{key} is not set"),
+            ConfigError::Invalid { key, value, reason } =&gt; {
+                write!(f, "{key}={value:?} is invalid: {reason}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ConfigError {}
+
+/// Reads `key` and parses it, or uses `default` when the variable is not set.
+fn read_or&lt;T&gt;(key: &amp;'static str, default: &amp;str) -&gt; Result&lt;T, ConfigError&gt;
+where
+    T: FromStr,
+    T::Err: fmt::Display,
+{
+    let raw = match env::var(key) {
+        Ok(value) =&gt; value,
+        Err(env::VarError::NotPresent) =&gt; default.to_string(),
+        Err(env::VarError::NotUnicode(_)) =&gt; {
+            return Err(ConfigError::Invalid {
+                key,
+                value: String::new(),
+                reason: "not valid Unicode".to_string(),
+            });
+        }
+    };
+    raw.parse::&lt;T&gt;().map_err(|err| ConfigError::Invalid {
+        key,
+        value: raw.clone(),
+        reason: err.to_string(),
+    })
+}
+
+impl Config {
+    pub fn from_env() -&gt; Result&lt;Config, ConfigError&gt; {
+        tracing::debug!("reading settings from the environment");
+        let database_url =
+            env::var("DATABASE_URL").map_err(|_| ConfigError::Missing("DATABASE_URL"))?;
+        let timeout_secs: u64 = read_or("REQUEST_TIMEOUT_SECS", "10")?;
+        Ok(Config {
+            addr: read_or("APP_ADDR", "127.0.0.1:3000")?,
+            database_url,
+            request_timeout: Duration::from_secs(timeout_secs),
+        })
+    }
+}
+
+/// `#[instrument]` opens a span named after the function. Its arguments
+/// become fields, and every event inside the function carries them.
+#[tracing::instrument]
+fn load_note(id: u64) {
+    tracing::info!("loading the note");
+}
+
+fn main() {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
+        .with_target(false)
+        .without_time()
+        .with_ansi(false)
+        .init();
+
+    match Config::from_env() {
+        Ok(config) =&gt; {
+            // `%` formats a value with Display, `?` with Debug.
+            tracing::info!(addr = %config.addr, timeout = ?config.request_timeout, "config loaded");
+            load_note(1);
+        }
+        Err(err) =&gt; tracing::error!(%err, "could not start"),
+    }
+}</pre>
+
+<p>Run it three ways. The first run uses the defaults. The second turns on debug logging. The third sets a timeout that is not a number.</p>
+
+<pre class="sh">DATABASE_URL=sqlite::memory: cargo run</pre>
+<pre class="text" data-title="output"> INFO config loaded addr=127.0.0.1:3000 timeout=10s
+ INFO load_note{id=1}: loading the note</pre>
+
+<pre class="sh">RUST_LOG=debug DATABASE_URL=sqlite::memory: cargo run</pre>
+<pre class="text" data-title="output">DEBUG reading settings from the environment
+ INFO config loaded addr=127.0.0.1:3000 timeout=10s
+ INFO load_note{id=1}: loading the note</pre>
+
+<pre class="sh">REQUEST_TIMEOUT_SECS=soon DATABASE_URL=sqlite::memory: cargo run</pre>
+<pre class="text" data-title="output">ERROR could not start err=REQUEST_TIMEOUT_SECS="soon" is invalid: invalid digit found in string</pre>
+
+<p>The prefix <code>load_note{id=1}:</code> is a span. <code>#[instrument]</code> opened it around <code>load_note</code>, and it recorded the argument as the field <code>id</code>. Use <code>#[instrument(skip(...))]</code> for an argument that is large or secret, such as a database pool or a token.</p>
+
+<p>In the first run, <code>addr = %config.addr</code> prints <code>127.0.0.1:3000</code>, which is the text <code>Display</code> gives. <code>timeout = ?config.request_timeout</code> prints <code>10s</code>, which is the <code>Debug</code> form. The <code>%</code> sigil uses <code>Display</code>, and <code>?</code> uses <code>Debug</code>. The error in the third run is logged with <code>%err</code>, so the line shows the error's own message, not its <code>Debug</code> form.</p>
+
+<p>This program logs the error and returns. A real service should also exit with a non-zero code. Chapter 11 shows how to return one with <code>ExitCode</code>.</p>
+
+<aside class="ox-callout" data-kind="insight">
+  <p>The <code>dotenvy</code> crate reads a <code>.env</code> file into the environment. You can call it before <code>Config::from_env()</code>, so local settings do not have to be exported in the shell. It is optional. The config code uses only the standard library, so you can skip dotenvy and still run it.</p>
+</aside>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Agents write services with <code>println!</code> for logs and <code>unwrap()</code> for settings. Both compile, and both look finished. In review, check two things. Are the logs tracing events with fields, so a search can filter them? Does every setting come through a <code>Result</code> that names the variable?</p>
+</aside>
+
+<div class="ox-quiz" data-id="20:quiz-rust-log" data-label="Check yourself">
+  <p class="ox-q">Your service runs with <code>RUST_LOG=warn</code>. Which lines print?</p>
+  <ol class="ox-choices">
+    <li>Only <code>warn</code> lines.</li>
+    <li data-correct><code>error</code> and <code>warn</code> lines.</li>
+    <li>Every line, from <code>trace</code> up.</li>
+    <li>Only the lines that sit inside a span.</li>
+  </ol>
+  <div class="ox-why"><p>A level includes every level before it in the list, so <code>warn</code> shows <code>error</code> too. <code>info</code>, <code>debug</code> and <code>trace</code> are quieter than <code>warn</code>, so they stay hidden. Spans do not change the level.</p></div>
+</div>
+</section>
+
+<section>
 <h2 id="serde">serde: JSON in, JSON out</h2>
 
 <p>serde converts in both directions. <code>#[derive(Serialize)]</code> writes the code that turns a Rust value into JSON. <code>#[derive(Deserialize)]</code> writes the code that reads JSON back into a Rust value. Attributes adjust the result. The struct below is not part of the project. Its field names are longer than one word, which is where the attributes start to matter.</p>
@@ -1217,6 +1392,626 @@ pub struct CreateNote {
   </ol>
   <div class="ox-why"><p><code>rename_all</code> applies one naming rule to every field. <code>camelCase</code> turns <code>created_at</code> into <code>createdAt</code>. The Rust field keeps its name, so your code does not change.</p></div>
 </div>
+<h3 id="json-enums">Enums as JSON</h3>
+
+<p>Model APIs send a message as a list of blocks. Each block has a <code>type</code>, and the fields that go with that type. An enum fits that shape: each variant is one kind of block. serde can read the variant from the <code>type</code> key, and it writes the same key back when you serialize.</p>
+
+<pre class="rs" data-check="skip" data-crates="serde,serde_json" data-title="src/main.rs">use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+
+/// One block of a message. The `type` key picks the variant.
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum Block {
+    Text {
+        text: String,
+    },
+    ToolUse {
+        id: String,
+        name: String,
+        input: Value,
+    },
+    ToolResult {
+        tool_use_id: String,
+        content: String,
+        #[serde(default)]
+        is_error: bool,
+    },
+}
+
+/// Either a plain string or a list of blocks. `untagged` tries each variant in order.
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+enum Content {
+    Plain(String),
+    Blocks(Vec&lt;Block&gt;),
+}
+
+/// A tool definition. A missing description is left out of the JSON, not written as null.
+#[derive(Debug, Serialize, Deserialize)]
+struct ToolDef {
+    name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option&lt;String&gt;,
+    input_schema: Value,
+}
+
+#[derive(Debug, Deserialize)]
+struct AddArgs {
+    a: i64,
+    b: i64,
+}
+
+fn main() {
+    // Serialize: the tag comes first, and the variant name is snake_case.
+    let call = Block::ToolUse {
+        id: "toolu_1".into(),
+        name: "add".into(),
+        input: json!({ "a": 2, "b": 3 }),
+    };
+    println!("{}", serde_json::to_string(&amp;call).unwrap());
+
+    // Deserialize: the "type" key picks the variant.
+    let incoming = r#"{"type":"tool_use","id":"toolu_2","name":"add","input":{"a":40,"b":2}}"#;
+    let block: Block = serde_json::from_str(incoming).unwrap();
+    println!("{block:?}");
+
+    // An unknown tag is an error that lists the tags you accept.
+    let unknown = serde_json::from_str::&lt;Block&gt;(r#"{"type":"image"}"#);
+    println!("{}", unknown.unwrap_err());
+
+    // untagged: a string, or a list of blocks.
+    let plain: Content = serde_json::from_str(r#""hello""#).unwrap();
+    let blocks: Content = serde_json::from_str(r#"[{"type":"text","text":"hi"}]"#).unwrap();
+    println!("{plain:?} / {blocks:?}");
+    let neither = serde_json::from_str::&lt;Content&gt;("42");
+    println!("{}", neither.unwrap_err());
+
+    // Value holds any JSON. from_value turns it into a typed struct when a tool runs.
+    let input: Value = json!({ "a": 2, "b": 3 });
+    let args: AddArgs = serde_json::from_value(input).unwrap();
+    println!("sum = {}", args.a + args.b);
+    println!("{}", serde_json::to_value(&amp;call).unwrap());
+
+    // The optional description is left out when it is None.
+    let def = ToolDef {
+        name: "add".into(),
+        description: None,
+        input_schema: json!({ "type": "object" }),
+    };
+    println!("{}", serde_json::to_string(&amp;def).unwrap());
+
+    // A missing bool falls back to its default.
+    let result: Block = serde_json::from_str(
+        r#"{"type":"tool_result","tool_use_id":"toolu_1","content":"5"}"#,
+    )
+    .unwrap();
+    println!("{result:?}");
+}</pre>
+
+<pre class="text" data-title="output">{"type":"tool_use","id":"toolu_1","name":"add","input":{"a":2,"b":3}}
+ToolUse { id: "toolu_2", name: "add", input: Object {"a": Number(40), "b": Number(2)} }
+unknown variant `image`, expected one of `text`, `tool_use`, `tool_result` at line 1 column 15
+Plain("hello") / Blocks([Text { text: "hi" }])
+data did not match any variant of untagged enum Content
+sum = 5
+{"id":"toolu_1","input":{"a":2,"b":3},"name":"add","type":"tool_use"}
+{"name":"add","input_schema":{"type":"object"}}
+ToolResult { tool_use_id: "toolu_1", content: "5", is_error: false }</pre>
+
+<ul>
+  <li><code>tag = "type"</code> makes the <code>type</code> key pick the variant. The other keys are that variant's fields.</li>
+  <li><code>rename_all = "snake_case"</code> writes <code>ToolUse</code> as <code>tool_use</code>, both when it reads and when it writes.</li>
+  <li><code>untagged</code> has no key at all. serde tries each variant in order, and the first one that fits wins. Use it for a value with two shapes, such as a string or a list. When nothing fits, the error says so, and it does not name a variant.</li>
+  <li><code>Value</code> holds any JSON. Tool inputs arrive as a <code>Value</code>, because each tool has its own shape. A tool turns its input into a typed struct with <code>serde_json::from_value</code> when it runs. <code>to_value</code> goes the other way.</li>
+  <li><code>#[serde(default)]</code> fills a missing field with its default. <code>skip_serializing_if</code> leaves a field out of the output when its check is true. <code>Option::is_none</code> leaves out a <code>None</code>, instead of writing <code>null</code>.</li>
+</ul>
+
+<p>The keys in the <code>to_value</code> line come out sorted. A <code>Value</code> keeps its keys in a sorted map, unless serde_json's <code>preserve_order</code> feature is on. Do not depend on key order when you read a <code>Value</code>.</p>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>A model can send a block type you do not know, or a tool input that does not fit the tool. Both come from outside your program, so both should become errors you can read. Never <code>unwrap()</code> a value that came from a model. The registry below returns an error for both.</p>
+</aside>
+
+<div class="ox-quiz" data-id="20:quiz-rename-variant" data-label="Check yourself">
+  <p class="ox-q">Your enum has a variant <code>ToolUse</code>, and the JSON key is <code>tool_use</code>. Which attribute makes them match?</p>
+  <ol class="ox-choices">
+    <li><code>#[serde(untagged)]</code></li>
+    <li data-correct><code>#[serde(rename_all = "snake_case")]</code></li>
+    <li><code>#[serde(default)]</code></li>
+    <li><code>#[serde(skip_serializing_if = "Option::is_none")]</code></li>
+  </ol>
+  <div class="ox-why"><p><code>rename_all</code> applies one naming rule to every variant. <code>untagged</code> removes the key altogether. <code>default</code> and <code>skip_serializing_if</code> work on fields, not on variant names.</p></div>
+</div>
+
+<h3 id="tool-registry">A registry of tools</h3>
+
+<p>A tool registry looks up a tool by name and calls it. The first version most people write is a trait with an <code>async fn</code>. It compiles, until you store the tools as <code>Box&lt;dyn Tool&gt;</code>, which is what a registry needs:</p>
+
+<pre class="rs" data-check="E0038" data-badge="error" data-title="src/main.rs">trait Tool {
+    async fn run(&amp;self, input: &amp;str) -&gt; String;
+}
+
+struct Echo;
+
+impl Tool for Echo {
+    async fn run(&amp;self, input: &amp;str) -&gt; String {
+        input.to_string()
+    }
+}
+
+fn main() {
+    let tools: Vec&lt;Box&lt;dyn Tool&gt;&gt; = vec![Box::new(Echo)];
+    println!("{}", tools.len());
+}</pre>
+
+<pre class="rustc">error[E0038]: the trait `Tool` is not dyn compatible
+  --&gt; src/main.rs:14:28
+   |
+14 |     let tools: Vec&lt;Box&lt;dyn Tool&gt;&gt; = vec![Box::new(Echo)];
+   |                            ^^^^ `Tool` is not dyn compatible
+   |
+note: for a trait to be dyn compatible it needs to allow building a vtable
+      for more information, visit &lt;https://doc.rust-lang.org/reference/items/traits.html#dyn-compatibility&gt;
+  --&gt; src/main.rs:2:14
+   |
+ 1 | trait Tool {
+   |       ---- this trait is not dyn compatible...
+ 2 |     async fn run(&amp;self, input: &amp;str) -&gt; String;
+   |              ^^^ ...because method `run` is `async`
+   = help: consider moving `run` to another trait
+   = help: only type `Echo` implements `Tool`; consider using it directly instead.
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0038`.</pre>
+
+<p>A <code>dyn</code> value calls each trait method through a table of function pointers. That table needs one return type for each method. Every <code>async fn</code> returns its own anonymous future type, so there is no single type to put in the table. The fix is one boxed future type, <code>Pin&lt;Box&lt;dyn Future&lt;Output = ...&gt; + Send + 'a&gt;&gt;</code>. Each tool boxes its own future, and the registry only ever sees that one type.</p>
+
+<pre class="rs" data-check="skip" data-crates="serde,serde_json,tokio" data-title="src/main.rs">use std::collections::HashMap;
+use std::fmt;
+use std::future::Future;
+use std::pin::Pin;
+
+use serde::Deserialize;
+use serde_json::{Value, json};
+
+#[derive(Debug)]
+pub enum ToolError {
+    UnknownTool(String),
+    BadInput(String),
+}
+
+impl fmt::Display for ToolError {
+    fn fmt(&amp;self, f: &amp;mut fmt::Formatter&lt;'_&gt;) -&gt; fmt::Result {
+        match self {
+            ToolError::UnknownTool(name) =&gt; write!(f, "unknown tool: {name}"),
+            ToolError::BadInput(reason) =&gt; write!(f, "bad input: {reason}"),
+        }
+    }
+}
+
+/// A tool takes JSON and returns JSON. `call` returns a boxed future, so the
+/// trait has no `async fn` and stays dyn compatible.
+pub trait Tool: Send + Sync {
+    fn name(&amp;self) -&gt; &amp;str;
+
+    fn call&lt;'a&gt;(
+        &amp;'a self,
+        input: Value,
+    ) -&gt; Pin&lt;Box&lt;dyn Future&lt;Output = Result&lt;Value, ToolError&gt;&gt; + Send + 'a&gt;&gt;;
+}
+
+#[derive(Deserialize)]
+struct AddArgs {
+    a: i64,
+    b: i64,
+}
+
+async fn add(input: Value) -&gt; Result&lt;Value, ToolError&gt; {
+    let args: AddArgs =
+        serde_json::from_value(input).map_err(|err| ToolError::BadInput(err.to_string()))?;
+    Ok(json!({ "sum": args.a + args.b }))
+}
+
+pub struct Add;
+
+impl Tool for Add {
+    fn name(&amp;self) -&gt; &amp;str {
+        "add"
+    }
+
+    fn call&lt;'a&gt;(
+        &amp;'a self,
+        input: Value,
+    ) -&gt; Pin&lt;Box&lt;dyn Future&lt;Output = Result&lt;Value, ToolError&gt;&gt; + Send + 'a&gt;&gt; {
+        Box::pin(add(input))
+    }
+}
+
+pub struct Echo;
+
+impl Tool for Echo {
+    fn name(&amp;self) -&gt; &amp;str {
+        "echo"
+    }
+
+    fn call&lt;'a&gt;(
+        &amp;'a self,
+        input: Value,
+    ) -&gt; Pin&lt;Box&lt;dyn Future&lt;Output = Result&lt;Value, ToolError&gt;&gt; + Send + 'a&gt;&gt; {
+        Box::pin(async move { Ok(input) })
+    }
+}
+
+/// The registry owns one boxed tool per name.
+#[derive(Default)]
+pub struct Registry {
+    tools: HashMap&lt;String, Box&lt;dyn Tool&gt;&gt;,
+}
+
+impl Registry {
+    pub fn add(&amp;mut self, tool: Box&lt;dyn Tool&gt;) {
+        self.tools.insert(tool.name().to_string(), tool);
+    }
+
+    pub async fn run(&amp;self, name: &amp;str, input: Value) -&gt; Result&lt;Value, ToolError&gt; {
+        let tool = self
+            .tools
+            .get(name)
+            .ok_or_else(|| ToolError::UnknownTool(name.to_string()))?;
+        tool.call(input).await
+    }
+}
+
+/// The enum alternative. Nothing is a trait object here, so `async fn` is fine.
+pub enum Builtin {
+    Add,
+    Echo,
+}
+
+impl Builtin {
+    pub async fn run(&amp;self, input: Value) -&gt; Result&lt;Value, ToolError&gt; {
+        match self {
+            Builtin::Add =&gt; add(input).await,
+            Builtin::Echo =&gt; Ok(input),
+        }
+    }
+}
+
+#[tokio::main]
+async fn main() {
+    let mut registry = Registry::default();
+    registry.add(Box::new(Add));
+    registry.add(Box::new(Echo));
+
+    let calls = [
+        ("add", json!({ "a": 40, "b": 2 })),
+        ("echo", json!({ "text": "hi" })),
+        ("add", json!({ "a": "x" })),
+        ("sleep", json!({})),
+    ];
+    for (name, input) in calls {
+        match registry.run(name, input).await {
+            Ok(output) =&gt; println!("{name} -&gt; {output}"),
+            Err(err) =&gt; println!("{name} failed: {err}"),
+        }
+    }
+
+    let direct = Builtin::Add.run(json!({ "a": 1, "b": 2 })).await.unwrap();
+    println!("builtin add -&gt; {direct}");
+    let echoed = Builtin::Echo.run(json!([1, 2])).await.unwrap();
+    println!("builtin echo -&gt; {echoed}");
+}</pre>
+
+<pre class="text" data-title="output">add -&gt; {"sum":42}
+echo -&gt; {"text":"hi"}
+add failed: bad input: invalid type: string "x", expected i64
+sleep failed: unknown tool: sleep
+builtin add -&gt; {"sum":3}
+builtin echo -&gt; [1,2]</pre>
+
+<p>The trait takes a <code>Value</code> and returns a <code>Result</code> that holds a <code>Value</code>, so every tool speaks the same JSON. <code>Add</code> hands its work to a plain <code>async fn</code>, and <code>Box::pin</code> turns that future into the boxed form. The registry owns one <code>Box&lt;dyn Tool&gt;</code> for each name. <code>run</code> looks the name up, and returns <code>UnknownTool</code> when nothing matches.</p>
+
+<p>When the set of tools is fixed at compile time, an enum is simpler. Nothing is a trait object, so <code>async fn</code> works directly, and nothing is boxed. You add a tool by adding a variant. The <code>Builtin</code> type at the end of the file shows that shape. The <code>async-trait</code> crate writes the boxed-future version for you, so you can also let it do the work.</p>
+
+<div class="ox-quiz" data-id="20:quiz-dyn-async" data-label="Check yourself">
+  <p class="ox-q">Why can't a trait with <code>async fn call(&amp;self, input: Value) -&gt; Result&lt;Value, ToolError&gt;</code> be used as <code>Box&lt;dyn Tool&gt;</code>?</p>
+  <ol class="ox-choices">
+    <li>An <code>async fn</code> cannot take <code>&amp;self</code>.</li>
+    <li data-correct>Each implementation returns its own future type, so a trait object has no single return type to call.</li>
+    <li><code>Value</code> is not <code>Send</code>, so the trait cannot be boxed.</li>
+    <li>Trait objects can hold only functions, not methods.</li>
+  </ol>
+  <div class="ox-why"><p>A trait object needs one return type for each method. A boxed future, <code>Pin&lt;Box&lt;dyn Future&lt;...&gt; + Send + 'a&gt;&gt;</code>, is that one type. Methods can take <code>&amp;self</code>, and <code>Value</code> is <code>Send</code>, so neither is the problem.</p></div>
+</div>
+
+</section>
+
+<section>
+<h2 id="client">Calling other APIs</h2>
+
+<p>Your Laravel app calls other services with the <code>Http</code> facade. In Rust, the usual client is the reqwest crate. A call is ordinary async code. You send the request, await the response, check its status, and only then read the body. Each step can fail, and the types show where.</p>
+
+<pre class="toml" data-title="Cargo.toml">[dependencies]
+axum = "0.8.9"
+futures = "0.3.34"
+reqwest = { version = "0.12.28", default-features = false, features = ["json", "stream", "rustls-tls"] }
+serde = { version = "1.0.229", features = ["derive"] }
+tokio = { version = "1.53.2", features = ["full"] }</pre>
+
+<p>The features on the reqwest line matter. reqwest turns off JSON and streaming by default, so <code>.json()</code> and <code>bytes_stream()</code> do not exist until you list <code>json</code> and <code>stream</code>. <code>default-features = false</code> turns off the default TLS library, and <code>rustls-tls</code> picks rustls for HTTPS. Chapter 16 explains features. The axum line is for the local mock in the example below.</p>
+
+<h3 id="one-client">One client, reused</h3>
+
+<p>Build a <code>reqwest::Client</code> once, when the program starts, and keep it. The client holds a connection pool, so a reused client can send the next request over a connection that is already open. A new client for each call throws that pool away. The reqwest docs say to create one and reuse it. Cloning a client is cheap, because the clones share one pool, so you do not need an <code>Arc</code> around it.</p>
+
+<p>reqwest also sets no request timeout by default. A server that never answers keeps the call open. Laravel's HTTP client waits 30 seconds by default. Set a timeout on the builder for every client, and override it on one request when a call needs a different limit.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+$note = Http::withToken($token)
+    -&gt;timeout(3)
+    -&gt;retry(3, 100)
+    -&gt;post('https://notes.example.com/api/notes', ['title' => 'Call an API'])
+    -&gt;throw()
+    -&gt;json();</pre>
+  <pre class="rs" data-check="skip" data-crates="reqwest,serde">let note = client
+    .post("https://notes.example.com/api/notes")
+    .bearer_auth(token)
+    .timeout(Duration::from_secs(3))
+    .json(&amp;NewNote { title: "Call an API".to_string() })
+    .send()
+    .await?
+    .error_for_status()?
+    .json::&lt;Note&gt;()
+    .await?;</pre>
+  <div class="ox-bridge-note"><p><code>withToken</code>, <code>timeout</code> and <code>throw</code> have direct counterparts: <code>bearer_auth</code>, <code>timeout</code> and <code>error_for_status</code>. Laravel's <code>retry(3, 100)</code> repeats the request after an error status as well. reqwest's default retry covers only low-level failures that are safe to repeat, so the loop is yours to write. <code>json()</code> becomes <code>json::&lt;Note&gt;()</code>, because Rust needs the shape of the body at compile time.</p></div>
+</div>
+
+<h3 id="status-errors">Status codes and typed errors</h3>
+
+<p>A 404 is a normal HTTP response, so reqwest does not treat it as an error. <code>error_for_status()</code> turns a 4xx or 5xx response into an error. Without it, the call returns the response, and <code>.json::&lt;Note&gt;()</code> reads the body as if the call had worked. The error keeps the status, so <code>err.status()</code> tells you which code it was.</p>
+
+<p>The example keeps every failure in one enum. Each variant is a case your caller can act on. <code>From</code> lets <code>?</code> turn a <code>reqwest::Error</code> into the enum. The <code>map_err</code> after <code>error_for_status()</code> turns a 404 into <code>NotFound</code>, and leaves every other status as <code>Status</code>.</p>
+
+<pre class="rs" data-check="skip" data-crates="reqwest,serde" data-title="src/client.rs">//! A small client for the notes API. Laravel counterpart: a service class
+//! that wraps `Http::withToken(...)` and turns failures into exceptions.
+
+use std::fmt;
+use std::time::Duration;
+
+use reqwest::{Client, StatusCode};
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Note {
+    pub id: u64,
+    pub title: String,
+    pub pinned: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NewNote {
+    pub title: String,
+}
+
+/// Every way a call to the notes API can fail, in one type.
+#[derive(Debug)]
+pub enum ApiError {
+    /// The server answered 404 for this id.
+    NotFound(u64),
+    /// The server answered with another error status, such as 401.
+    Status(StatusCode),
+    /// The request did not finish within its timeout.
+    Timeout,
+    /// Anything else: no connection, or a body that is not the JSON we expect.
+    Transport(reqwest::Error),
+}
+
+impl fmt::Display for ApiError {
+    fn fmt(&amp;self, f: &amp;mut fmt::Formatter&lt;'_&gt;) -&gt; fmt::Result {
+        match self {
+            ApiError::NotFound(id) =&gt; write!(f, "note {id} was not found"),
+            ApiError::Status(code) =&gt; write!(f, "the server answered {code}"),
+            ApiError::Timeout =&gt; write!(f, "the request timed out"),
+            ApiError::Transport(err) =&gt; write!(f, "request failed: {err}"),
+        }
+    }
+}
+
+impl std::error::Error for ApiError {}
+
+/// Lets `?` turn a reqwest error into an ApiError.
+impl From&lt;reqwest::Error&gt; for ApiError {
+    fn from(err: reqwest::Error) -&gt; Self {
+        if err.is_timeout() {
+            ApiError::Timeout
+        } else if let Some(status) = err.status() {
+            ApiError::Status(status)
+        } else {
+            ApiError::Transport(err)
+        }
+    }
+}
+
+/// GET /api/notes/{id}. The client is built once and passed in.
+pub async fn fetch_note(
+    client: &amp;Client,
+    base: &amp;str,
+    id: u64,
+    token: &amp;str,
+) -&gt; Result&lt;Note, ApiError&gt; {
+    let note = client
+        .get(format!("{base}/api/notes/{id}"))
+        .bearer_auth(token)
+        .timeout(Duration::from_secs(2))
+        .send()
+        .await?
+        .error_for_status()
+        .map_err(|err| match err.status() {
+            Some(StatusCode::NOT_FOUND) =&gt; ApiError::NotFound(id),
+            _ =&gt; ApiError::from(err),
+        })?
+        .json::&lt;Note&gt;()
+        .await?;
+    Ok(note)
+}
+
+/// POST /api/notes with a JSON body.
+pub async fn create_note(
+    client: &amp;Client,
+    base: &amp;str,
+    token: &amp;str,
+    title: &amp;str,
+) -&gt; Result&lt;Note, ApiError&gt; {
+    let note = client
+        .post(format!("{base}/api/notes"))
+        .bearer_auth(token)
+        .json(&amp;NewNote {
+            title: title.to_string(),
+        })
+        .send()
+        .await?
+        .error_for_status()?
+        .json::&lt;Note&gt;()
+        .await?;
+    Ok(note)
+}</pre>
+
+<p>The program below starts a local axum server as a mock. It answers the way the real API would, and it listens on a free port that the OS picks. The client then makes four calls and one slow call:</p>
+
+<pre class="rs" data-check="skip" data-crates="axum,reqwest,serde,tokio" data-title="src/main.rs">//! Runs the client against a local axum mock. The mock listens on a free
+//! port that the OS picks, so this example never leaves your machine.
+
+mod client;
+
+use std::error::Error;
+use std::time::Duration;
+
+use axum::extract::Path;
+use axum::http::{HeaderMap, StatusCode};
+use axum::routing::{get, post};
+use axum::{Json, Router};
+use tokio::net::TcpListener;
+
+use client::{ApiError, NewNote, Note};
+
+async fn show(headers: HeaderMap, Path(id): Path&lt;u64&gt;) -&gt; Result&lt;Json&lt;Note&gt;, StatusCode&gt; {
+    let authorized =
+        headers.get("authorization").and_then(|value| value.to_str().ok()) == Some("Bearer secret");
+    if !authorized {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    if id == 1 {
+        Ok(Json(Note {
+            id,
+            title: "Learn reqwest".to_string(),
+            pinned: false,
+        }))
+    } else {
+        Err(StatusCode::NOT_FOUND)
+    }
+}
+
+async fn create(Json(input): Json&lt;NewNote&gt;) -&gt; (StatusCode, Json&lt;Note&gt;) {
+    let note = Note {
+        id: 2,
+        title: input.title,
+        pinned: false,
+    };
+    (StatusCode::CREATED, Json(note))
+}
+
+async fn slow() -&gt; &amp;'static str {
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    "late"
+}
+
+fn mock_api() -&gt; Router {
+    Router::new()
+        .route("/api/notes", post(create))
+        .route("/api/notes/{id}", get(show))
+        .route("/slow", get(slow))
+}
+
+#[tokio::main]
+async fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let base = format!("http://{}", listener.local_addr()?);
+    tokio::spawn(async move { axum::serve(listener, mock_api()).await.unwrap() });
+
+    // One client for the whole program. It holds the connection pool.
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()?;
+
+    match client::fetch_note(&amp;client, &amp;base, 1, "secret").await {
+        Ok(note) =&gt; println!("note 1: {}", note.title),
+        Err(err) =&gt; println!("note 1 failed: {err}"),
+    }
+    match client::fetch_note(&amp;client, &amp;base, 9, "secret").await {
+        Ok(note) =&gt; println!("note 9: {}", note.title),
+        Err(err) =&gt; println!("note 9: {err}"),
+    }
+    match client::fetch_note(&amp;client, &amp;base, 1, "wrong").await {
+        Ok(note) =&gt; println!("note 1: {}", note.title),
+        Err(err) =&gt; println!("with a wrong token: {err}"),
+    }
+
+    let created = client::create_note(&amp;client, &amp;base, "secret", "Call an API").await?;
+    println!("created note {}: {}", created.id, created.title);
+
+    let slow_result = client
+        .get(format!("{base}/slow"))
+        .timeout(Duration::from_millis(100))
+        .send()
+        .await;
+    if let Err(err) = slow_result {
+        println!("slow endpoint: {}", ApiError::from(err));
+    }
+    Ok(())
+}</pre>
+
+<pre class="text" data-title="output">note 1: Learn reqwest
+note 9: note 9 was not found
+with a wrong token: the server answered 401 Unauthorized
+created note 2: Call an API
+slow endpoint: the request timed out</pre>
+
+<h3 id="client-streams">Streams</h3>
+
+<p>A model API often answers with server-sent events, which arrive in pieces over one long response. <code>bytes_stream()</code> hands you the body as chunks, with the <code>stream</code> feature on. A chunk can end in the middle of a line. Feed each chunk to the SSE parser from Chapter 19, which keeps the partial line until the rest arrives. The loop uses <code>StreamExt::next</code> from the futures crate:</p>
+
+<pre class="rs" data-check="skip" data-crates="reqwest,futures" data-title="src/main.rs">use futures::StreamExt;
+
+async fn read_events(client: &amp;reqwest::Client, url: &amp;str, parser: &amp;mut SseParser) -&gt; Result&lt;Vec&lt;Event&gt;, reqwest::Error&gt; {
+    let response = client.get(url).send().await?.error_for_status()?;
+    let mut stream = response.bytes_stream();
+    let mut events = Vec::new();
+    while let Some(chunk) = stream.next().await {
+        let bytes = chunk?;
+        events.extend(parser.push(&amp;bytes)); // SseParser and Event are from Chapter 19
+    }
+    Ok(events)
+}</pre>
+
+<p>When the body ends, <code>read_events</code> returns every event it finished. A failed chunk ends the loop with an error, the same way a failed response does. The <code>?</code> returns that error to the caller.</p>
+
+<h3 id="retry">Retry with care</h3>
+
+<p>Retry only what is safe to repeat. A GET that reads a note can run twice with no harm. A POST that creates a note may create two. Chapter 19 writes a retry loop with a longer wait after each attempt, and the same loop fits here.</p>
+
+<div class="ox-quiz" data-id="20:quiz-blocking-reqwest" data-label="Check yourself">
+  <p class="ox-q">A tutorial calls <code>reqwest::blocking::get(url)</code>. Your Cargo.toml says <code>reqwest = "0.12"</code> and nothing else. Why does the compiler say it cannot find <code>blocking</code>?</p>
+  <ol class="ox-choices">
+    <li data-correct>The <code>blocking</code> module is behind the <code>blocking</code> feature, and reqwest does not turn that feature on by default.</li>
+    <li>reqwest 0.12 removed the blocking client, so the tutorial is out of date.</li>
+    <li>The blocking client works only inside <code>#[tokio::main]</code>, so the compiler hides it.</li>
+    <li>The module is named <code>sync</code> in reqwest, not <code>blocking</code>.</li>
+  </ol>
+  <div class="ox-why"><p>Features are switches. Each one adds code and dependencies, and most are off by default. To use the blocking client, add <code>features = ["blocking"]</code> to the reqwest line. This chapter uses the async client, which is the default one.</p></div>
+</div>
 </section>
 
 <section>
@@ -1297,6 +2092,39 @@ $this->postJson('/api/notes', ['title' => 'Learn axum'])
 
 <p>Each test calls <code>app(AppState::default())</code>, so each test starts with an empty table. Inside one test, the helper sends every request through <code>app.clone()</code>. Cloning a router is cheap, and the clones share one <code>AppState</code>. That is why a note created by one request can be read back by the next.</p>
 
+<aside class="ox-callout" data-kind="insight">
+  <p><strong>Mocking HTTP you call.</strong> The same idea works for a client. Start a small axum server inside the test, on <code>127.0.0.1:0</code>. Port 0 asks the OS for a free port, so tests that run at the same time never clash. Point the real client at that address, and assert on what comes back. Laravel's <code>Http::fake()</code> returns canned responses without calling anything. This mock is a real server, so reqwest's status check, its timeouts and its parsing all run.</p>
+</aside>
+
+<pre class="rs" data-check="skip" data-crates="axum,reqwest,tokio" data-title="tests/mock_http.rs">use axum::Router;
+use axum::http::StatusCode;
+use axum::routing::get;
+use tokio::net::TcpListener;
+
+#[tokio::test]
+async fn a_missing_note_becomes_a_404_error() {
+    // The mock answers 404 for every request. Port 0 asks the OS for a free port.
+    let app = Router::new().route(
+        "/api/notes/{id}",
+        get(|| async { StatusCode::NOT_FOUND }),
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+
+    // Point the real client at the mock, and check what it returns.
+    let client = reqwest::Client::new();
+    let err = client
+        .get(format!("{base}/api/notes/7"))
+        .send()
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap_err();
+    assert_eq!(err.status(), Some(StatusCode::NOT_FOUND));
+}</pre>
+
+
 <div class="ox-quiz" data-id="20:testing-state" data-label="Check yourself">
   <p class="ox-q">Two tests run at the same time, and each one calls <code>app(AppState::default())</code>. Can one test see the other test's notes?</p>
   <ol class="ox-choices">
@@ -1312,19 +2140,30 @@ $this->postJson('/api/notes', ['title' => 'Learn axum'])
 <section>
 <h2 id="database">Where Eloquent would go</h2>
 
-<p>The project keeps notes in a <code>BTreeMap</code>, so a restart clears them. A real API stores its data in a database. The usual choices in Rust are sqlx, which lets you write the SQL yourself, and the ORMs SeaORM and Diesel. The code below is a teaser for sqlx. It is separate from the project, and it uses a SQLite file. It needs these dependencies:</p>
+<p>The project keeps notes in a <code>BTreeMap</code>, so a restart clears them. A real API stores its data in a database. The usual choices in Rust are sqlx, which lets you write the SQL yourself, and the ORMs SeaORM and Diesel. The example below is a working sqlx program. It uses an in-memory SQLite database, so it needs no database server.</p>
 
 <pre class="toml" data-title="Cargo.toml">[dependencies]
-sqlx = { version = "0.9", features = ["runtime-tokio", "sqlite"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tokio = { version = "1", features = ["full"] }</pre>
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+sqlx = { version = "0.9.0", features = ["runtime-tokio", "sqlite"] }
+tokio = { version = "1.53.2", features = ["full"] }</pre>
 
-<p>Cargo features are switches. <code>runtime-tokio</code> picks the async runtime, and <code>sqlite</code> turns on the SQLite driver. Without <code>sqlite</code>, the import <code>sqlx::sqlite</code> does not compile. Without a runtime feature, the program compiles and then panics at startup. sqlx 0.9 declares <code>rust-version = "1.94.0"</code>, so it needs Rust 1.94 or newer. That is later than the 1.88 this course asks for, so run <code>rustup update</code> first.</p>
+<p>Two features do the work. <code>runtime-tokio</code> picks tokio as the async runtime, and <code>sqlite</code> turns on the SQLite driver. Without <code>sqlite</code>, the import <code>sqlx::sqlite</code> does not compile. Chapter 16 explains features.</p>
 
-<pre class="rs" data-check="skip" data-title="src/main.rs">use serde::Serialize;
+<p><strong>The MSRV note.</strong> sqlx 0.9 declares <code>rust-version = "1.94.0"</code>, so it needs Rust 1.94 or newer. This course asks for Rust 1.88 in most chapters. Run <code>rustup update</code> first. If you must stay on 1.88 to 1.93, pin an older sqlx release and read the docs for that version. The code on this page was checked with sqlx 0.9 on rustc 1.97.</p>
+
+<p>The table comes from a migration: a SQL file in <code>migrations/</code>. <code>sqlx::migrate!</code> embeds those files in the program when it compiles, and runs each migration that has not run yet.</p>
+
+<pre class="text" data-title="migrations/0001_create_notes.sql">CREATE TABLE notes (
+    id INTEGER PRIMARY KEY,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL DEFAULT '',
+    pinned INTEGER NOT NULL DEFAULT 0
+);</pre>
+
+<pre class="rs" data-check="skip" data-crates="sqlx,serde,serde_json,tokio" data-title="src/main.rs">use serde::Serialize;
 use sqlx::FromRow;
-use sqlx::sqlite::SqlitePool;
+use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
 
 #[derive(Debug, Serialize, FromRow)]
 struct Note {
@@ -1339,6 +2178,21 @@ struct AppState {
     pool: SqlitePool,
 }
 
+/// Opens the database and runs the migrations in `migrations/`.
+async fn connect() -&gt; Result&lt;SqlitePool, sqlx::Error&gt; {
+    // An in-memory database lives inside one connection. A second connection
+    // would open a new, empty database, so the pool gets exactly one. The idle
+    // and lifetime limits are off, so that connection is never closed.
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .idle_timeout(None)
+        .max_lifetime(None)
+        .connect("sqlite::memory:")
+        .await?;
+    sqlx::migrate!("./migrations").run(&amp;pool).await?;
+    Ok(pool)
+}
+
 async fn find(state: &amp;AppState, id: i64) -&gt; Result&lt;Option&lt;Note&gt;, sqlx::Error&gt; {
     sqlx::query_as::&lt;_, Note&gt;("SELECT id, title, body, pinned FROM notes WHERE id = ?")
         .bind(id)
@@ -1346,43 +2200,67 @@ async fn find(state: &amp;AppState, id: i64) -&gt; Result&lt;Option&lt;Note&gt;,
         .await
 }
 
+/// Inserts two notes in one transaction. If the second insert fails, the
+/// function returns early, the transaction is dropped without a commit, and
+/// the first insert is rolled back.
+async fn add_pair(state: &amp;AppState, first: &amp;str, second: Option&lt;&amp;str&gt;) -&gt; Result&lt;(), sqlx::Error&gt; {
+    let mut tx = state.pool.begin().await?;
+    sqlx::query("INSERT INTO notes (title) VALUES (?)")
+        .bind(first)
+        .execute(&amp;mut *tx)
+        .await?;
+    sqlx::query("INSERT INTO notes (title) VALUES (?)")
+        .bind(second)
+        .execute(&amp;mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -&gt; Result&lt;(), sqlx::Error&gt; {
-    let pool = SqlitePool::connect("sqlite://notes.db?mode=rwc").await?;
-    sqlx::migrate!("./migrations").run(&amp;pool).await?;
-    sqlx::query("INSERT INTO notes (title, body, pinned) VALUES (?, ?, ?)")
+    let state = AppState {
+        pool: connect().await?,
+    };
+
+    sqlx::query("INSERT INTO notes (title) VALUES (?)")
         .bind("Learn sqlx")
-        .bind("")
-        .bind(false)
-        .execute(&amp;pool)
+        .execute(&amp;state.pool)
         .await?;
-    let state = AppState { pool };
     println!("{}", serde_json::to_string(&amp;find(&amp;state, 1).await?).unwrap());
     println!("{}", serde_json::to_string(&amp;find(&amp;state, 999).await?).unwrap());
+
+    add_pair(&amp;state, "Write a transaction", Some("Commit it")).await?;
+
+    // The second title is NULL, which breaks NOT NULL. The first insert is undone.
+    let failed = add_pair(&amp;state, "Never saved", None).await;
+    println!("second pair failed: {}", failed.is_err());
+
+    let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM notes")
+        .fetch_one(&amp;state.pool)
+        .await?;
+    println!("notes in the table: {count}");
     Ok(())
 }</pre>
 
-<p>The migration that creates the table is a SQL file:</p>
-
-<pre class="text" data-title="migrations/0001_create_notes.sql">CREATE TABLE notes (
-    id INTEGER PRIMARY KEY,
-    title TEXT NOT NULL,
-    body TEXT NOT NULL,
-    pinned INTEGER NOT NULL DEFAULT 0
-);</pre>
-
-<p>Running the program prints:</p>
-
 <pre class="text" data-title="output">{"id":1,"title":"Learn sqlx","body":"","pinned":false}
-null</pre>
+null
+second pair failed: true
+notes in the table: 3</pre>
 
 <ul>
-  <li><strong>The pool lives in the state.</strong> <code>SqlitePool</code> manages the connections. Cloning it is cheap, because the pool shares its inner data, just as the <code>Arc</code> does in our table.</li>
-  <li><strong>Rows become structs.</strong> <code>query_as::&lt;_, Note&gt;</code> maps each row to a <code>Note</code> by column name, using <code>FromRow</code>.</li>
+  <li><strong>The pool lives in the state.</strong> <code>SqlitePool</code> manages the connections. Cloning it is cheap, because the clones share one pool, just as the <code>Arc</code> in our table shares the notes.</li>
+  <li><strong>Rows become structs.</strong> <code>query_as::&lt;_, Note&gt;</code> maps each row to a <code>Note</code> by column name, using <code>FromRow</code>. A tuple such as <code>(i64,)</code> works for a query that returns one column.</li>
   <li><strong>Not found is <code>None</code>.</strong> <code>fetch_optional</code> returns an <code>Option&lt;Note&gt;</code>. A missing row is not an error. A handler turns the <code>None</code> into <code>AppError::NotFound</code>.</li>
-  <li><strong>Migrations are SQL files.</strong> <code>sqlx migrate add</code> scaffolds a new version-prefixed file. <code>sqlx::migrate!</code> embeds those files in the binary and runs the ones that have not been applied yet.</li>
-  <li><strong>Compile-time checks need a database.</strong> <code>query_as!</code> checks the SQL against a real database while your code compiles. Without <code>DATABASE_URL</code> set, the build stops and asks you to set it, or to run <code>cargo sqlx prepare</code> to save the query cache.</li>
+  <li><strong>A transaction is all or nothing.</strong> <code>begin()</code> starts one, and <code>commit()</code> saves it. If the function returns early with <code>?</code>, the transaction is dropped without a commit, and sqlx rolls it back. You never write that rollback yourself. It is the drop rule from Chapter 6: a value cleans up when its owner goes out of scope.</li>
+  <li><strong>Do not hold a lock across a query.</strong> A <code>Mutex</code> or <code>RwLock</code> guard blocks other tasks until it is dropped. If you keep one while you wait on a query, every request that needs the lock waits for the database too. Read what you need, drop the guard, and then query.</li>
+  <li><strong>Compile-time checks need a database.</strong> <code>query_as!</code> checks the SQL against a real database while your code compiles. Without <code>DATABASE_URL</code> set, the build stops and asks you to set it, or to run <code>cargo sqlx prepare</code> to save the query cache. The example uses the plain functions, so it needs neither.</li>
 </ul>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Agents write axum code from whichever version they saw most often. You will meet <code>axum::Server::bind</code>, which was removed in 0.7. You will meet <code>/:id</code> routes, which panic in 0.8. You will meet <code>#[async_trait]</code> on every trait. Native <code>async fn</code> in traits made it unnecessary for generic code. A <code>dyn</code> trait object still needs a boxed future, and the registry above shows the fix. You will also meet blocking database drivers called from async handlers.</p>
+  <p>Pin the versions in <code>Cargo.toml</code>, and paste them into your prompt. Then let the compiler and the tests decide whether the code is right. A test that sends a real request fails at once on stale route syntax, because the router panics when it is built.</p>
+</aside>
 
 <div class="ox-quiz" data-id="20:quiz-blocking" data-label="Check yourself">
   <p class="ox-q">A handler calls a synchronous database driver, and that call waits for the query to finish. What happens to the other requests on the same worker thread?</p>
@@ -1395,52 +2273,16 @@ null</pre>
   <div class="ox-why"><p>Tokio runs many tasks on a few worker threads. A blocking call holds its thread, so the other tasks on that thread wait. Use an async driver such as sqlx. If you must call blocking code, move it to <code>tokio::task::spawn_blocking</code>.</p></div>
 </div>
 
-<aside class="ox-callout" data-kind="ai">
-  <p>Agents write axum code from whichever version they saw most often. You will meet <code>axum::Server::bind</code>, which was removed in 0.7. You will meet <code>/:id</code> routes, which panic in 0.8. You will meet <code>#[async_trait]</code> on every trait. Native <code>async fn</code> in traits made it unnecessary for generic code. It is still needed for a <code>dyn</code> trait object, because a trait with an <code>async fn</code> is not dyn compatible. You will also meet blocking database drivers called from async handlers.</p>
-  <p>Pin the versions in <code>Cargo.toml</code>, and paste them into your prompt. Then let the compiler and the tests decide whether the code is right. A test that sends a real request fails at once on stale route syntax, because the router panics when it is built.</p>
-</aside>
-
-<p>Here is the trait-object case with std only. A registry of tools wants a <code>Vec&lt;Box&lt;dyn Tool&gt;&gt;</code>, and rustc refuses the trait:</p>
-
-<pre class="rs" data-check="E0038" data-badge="error" data-title="src/main.rs">trait Tool {
-    async fn run(&amp;self, input: &amp;str) -&gt; String;
-}
-
-struct Echo;
-
-impl Tool for Echo {
-    async fn run(&amp;self, input: &amp;str) -&gt; String {
-        input.to_string()
-    }
-}
-
-fn main() {
-    let tools: Vec&lt;Box&lt;dyn Tool&gt;&gt; = vec![Box::new(Echo)];
-    println!("{}", tools.len());
-}</pre>
-
-<pre class="rustc">error[E0038]: the trait `Tool` is not dyn compatible
-  --&gt; src/main.rs:14:28
-   |
-14 |     let tools: Vec&lt;Box&lt;dyn Tool&gt;&gt; = vec![Box::new(Echo)];
-   |                            ^^^^ `Tool` is not dyn compatible
-   |
-note: for a trait to be dyn compatible it needs to allow building a vtable
-      for more information, visit &lt;https://doc.rust-lang.org/reference/items/traits.html#dyn-compatibility&gt;
-  --&gt; src/main.rs:2:14
-   |
- 1 | trait Tool {
-   |       ---- this trait is not dyn compatible...
- 2 |     async fn run(&amp;self, input: &amp;str) -&gt; String;
-   |              ^^^ ...because method `run` is `async`
-   = help: consider moving `run` to another trait
-   = help: only type `Echo` implements `Tool`; consider using it directly instead.
-
-error: aborting due to 1 previous error
-
-For more information about this error, try `rustc --explain E0038`.</pre>
-
-<p>There are two ways out. Keep the trait generic, and take <code>T: Tool</code> where you use it. Or return a boxed future, <code>Pin&lt;Box&lt;dyn Future&lt;Output = String&gt; + Send + '_&gt;&gt;</code>, which is the kind of rewrite the <code>async-trait</code> crate does for you.</p>
+<div class="ox-quiz" data-id="20:quiz-transaction" data-label="Check yourself">
+  <p class="ox-q">A handler calls <code>begin()</code>, inserts a row, and then returns early with <code>?</code> before <code>commit()</code>. What happens to the row?</p>
+  <ol class="ox-choices">
+    <li>It is saved, because the insert already ran.</li>
+    <li data-correct>It is rolled back, because the transaction was dropped without a commit.</li>
+    <li>It stays in the table until the next migration.</li>
+    <li>It is saved only if the handler returns <code>Ok</code>.</li>
+  </ol>
+  <div class="ox-why"><p>Only <code>commit()</code> saves a transaction. Dropping it before then rolls back everything it did. The early return is what drops it, so the error path needs no rollback call of its own.</p></div>
+</div>
 </section>
 
 <section>
@@ -1587,6 +2429,11 @@ fn main() {
     <li><code>AppError</code> implements <code>IntoResponse</code>, so <code>?</code> can return a JSON 404 or 422 from anywhere in a handler.</li>
     <li>serde maps JSON keys to fields. <code>rename_all</code> sets the naming rule. A body that does not fit the type becomes a 422.</li>
     <li><code>oneshot</code> tests the router without a server. The tests are fast, and they run the real layers and handlers.</li>
+    <li>reqwest::Client is built once and reused. Each call returns a Result, and error_for_status() makes a 404 or a 500 an error.</li>
+    <li>serde enums use a tag, such as type, to pick the variant. A Value holds any JSON until a tool turns it into a typed struct.</li>
+    <li>A dyn trait cannot have an async fn. Return a boxed future, or use an enum when the set of tools is fixed.</li>
+    <li>Events are log lines. Spans carry their fields into the events inside them. RUST_LOG chooses the level, and a bad setting fails at startup with the name of the variable.</li>
+    <li>A sqlx transaction rolls back when it is dropped without commit().</li>
     <li>A Rust API ships as one binary.</li>
   </ul>
 </div>

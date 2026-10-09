@@ -4,7 +4,7 @@
    blocks next to it (check: "skip" would label the panel "error skip"). */
 (window.OX_MOTION = window.OX_MOTION || []).push({
   id: "ch19-blocking",
-  title: "One Waiter, one blocked thread",
+  title: "One executor, one blocked thread",
   w: 640,
   h: 300,
   actors: [
@@ -14,13 +14,14 @@
     { id: "tA", prop: "ticket", opts: { label: "A" }, x: 330, y: 70, size: 96, hidden: true },
     { id: "tB", prop: "ticket", opts: { label: "B" }, x: 330, y: 150, size: 96, hidden: true },
     { id: "tC", prop: "ticket", opts: { label: "C" }, x: 330, y: 230, size: 96, hidden: true },
+    { id: "legend", text: "ticket = task, bell = waker", x: 330, y: 290 },
     { id: "bA", prop: "bell", x: 590, y: 70, size: 48, hidden: true },
     { id: "bB", prop: "bell", x: 590, y: 150, size: 48, hidden: true },
     { id: "bC", prop: "bell", x: 590, y: 230, size: 48, hidden: true },
   ],
   beats: [
     {
-      say: "<p>The Waiter has three orders in the rack. Each order is a task, and a task may wait on a timer, a socket or a database.</p>",
+      say: "<p>The Waiter, the async executor, has three orders in the rack. Each order is a task: a future the executor polls. A task may wait on a timer, a socket or a database.</p>",
       do: [
         ["pop", "tA", 0],
         ["pop", "tB", 200],
@@ -29,7 +30,7 @@
       ],
     },
     {
-      say: "<p>The Waiter takes ticket A and starts it. A reaches an <code>.await</code> and has to wait for its timer, so A is parked.</p>",
+      say: "<p>The executor polls ticket A. It reaches an <code>.await</code> and has to wait for its timer, so the future is parked.</p>",
       do: [
         ["move", "tA", { x: 215, y: 150 }, 500],
         ["move", "tA", { x: 500, y: 70 }, 500, 700],
@@ -37,7 +38,7 @@
       ],
     },
     {
-      say: "<p>Ticket B does the same. It reaches an <code>.await</code>, so the Waiter is free to take the next order.</p>",
+      say: "<p>Ticket B does the same. It reaches an <code>.await</code>, so the executor is free to poll the next task.</p>",
       do: [
         ["move", "tB", { x: 215, y: 150 }, 500],
         ["move", "tB", { x: 500, y: 150 }, 500, 700],
@@ -45,7 +46,7 @@
       ],
     },
     {
-      say: "<p>Ticket C parks too. Every order is waiting now, so the Waiter has nothing to do.</p>",
+      say: "<p>Ticket C parks too. Every task is waiting now, so the executor has nothing to poll.</p>",
       do: [
         ["move", "tC", { x: 215, y: 150 }, 500],
         ["move", "tC", { x: 500, y: 230 }, 500, 700],
@@ -54,7 +55,7 @@
       ],
     },
     {
-      say: "<p>The timer for A fires and bell A rings. The Waiter goes back to ticket A, finishes it, and sends it out.</p>",
+      say: "<p>The timer for A fires, and its waker rings bell A: the waker calls <code>wake()</code>. The executor polls ticket A again, finishes it, and sends it out.</p>",
       do: [
         ["pop", "bA", 0],
         ["pulse", "bA", 0],
@@ -66,7 +67,7 @@
       ],
     },
     {
-      say: "<p>Ticket B now calls <code>std::thread::sleep</code> instead of <code>.await</code>. It blocks the whole thread, so the Waiter stands frozen holding B, and bell C rings unanswered.</p>",
+      say: "<p>Ticket B now calls <code>std::thread::sleep</code> instead of <code>.await</code>. It blocks the whole thread, so the executor stands frozen holding B, and bell C rings unanswered.</p>",
       ask: {
         q: "While ticket B runs std::thread::sleep, can the Waiter answer bell C?",
         choices: [

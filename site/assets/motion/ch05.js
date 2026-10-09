@@ -5,7 +5,7 @@
    are the ones rustc 1.97 prints for Vec<i32>. */
 (window.OX_MOTION = window.OX_MOTION || []).push({
   id: "ch05-grow",
-  title: "A Vec moves to a bigger plot",
+  title: "A Vec moves to a bigger plot (realloc)",
   w: 640,
   h: 300,
   rust: `fn main() {
@@ -31,7 +31,7 @@
   beats: [
     {
       line: 2,
-      say: "<p><code>vec![1, 2, 3, 4]</code> asks Alloc for a plot with four slots. Alloc hands it to <code>v</code>, with fluffies 1 to 4 in it.</p>",
+      say: "<p><code>vec![1, 2, 3, 4]</code> asks Alloc, the allocator, for a plot with four slots. Alloc hands it to <code>v</code>, with fluffies 1 to 4 in it.</p>",
       do: [
         ["pose", "alloc", "talk", 1000, 0],
         ["cls", "plotA", "is-shown", true, 0],
@@ -51,7 +51,7 @@
         answer: 1,
         explain: "<code>push(5)</code> can move the whole buffer to a bigger plot and free the old one. A reference into the old plot would then point at freed memory, so the compiler refuses that program.",
       },
-      say: "<p>The plot is full. Alloc fetches a bigger plot with room for eight, and carries the four fluffies across.</p>",
+      say: "<p>The plot is full. Alloc fetches a bigger plot with room for eight and carries the four fluffies across. This is a realloc, and it happens when the block cannot grow where it sits.</p>",
       do: [
         ["cls", "plotB", "is-shown", true, 0],
         ["pose", "alloc", "wow", 900, 0],
@@ -66,7 +66,7 @@
     },
     {
       line: 3,
-      say: "<p>The old plot is given back. A reference taken before the push would still hold the old address, which now points at freed memory.</p>",
+      say: "<p>The old plot is freed, and its bytes are not wiped. A reference taken before the push would still hold the old address, which now points at freed memory.</p>",
       do: [["pose", "v", "happy", 900, 0]],
     },
     {

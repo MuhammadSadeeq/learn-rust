@@ -40,16 +40,16 @@ fn main() {
     { id: "st1", box: true, x: 170, y: 180, w: 130, h: 64, label: "read_text" },
     { id: "st2", box: true, x: 320, y: 180, w: 130, h: 64, label: "parse_age" },
     { id: "st3", box: true, x: 470, y: 180, w: 130, h: 64, label: "next_year" },
-    { id: "lev1", prop: "lever", opts: { on: false }, x: 170, y: 116, size: 30 },
-    { id: "lev2", prop: "lever", opts: { on: false }, x: 320, y: 116, size: 30 },
-    { id: "lev3", prop: "lever", opts: { on: false }, x: 470, y: 116, size: 30 },
-    { id: "car1", prop: "car", opts: { kind: "ok", label: "41" }, x: 40, y: 180, size: 72, hidden: true },
-    { id: "car2", prop: "car", opts: { kind: "ok", label: "x" }, x: 40, y: 180, size: 72, hidden: true },
-    { id: "car3", prop: "car", opts: { kind: "ok", label: "x" }, x: 40, y: 180, size: 72, hidden: true },
+    { id: "lev1", prop: "lever", opts: { on: false }, x: 170, y: 116, size: 40 },
+    { id: "lev2", prop: "lever", opts: { on: false }, x: 320, y: 116, size: 40 },
+    { id: "lev3", prop: "lever", opts: { on: false }, x: 470, y: 116, size: 40 },
+    { id: "car1", prop: "car", opts: { kind: "ok", label: "41" }, x: 62, y: 180, size: 92, hidden: true },
+    { id: "car2", prop: "car", opts: { kind: "ok", label: "x" }, x: 62, y: 180, size: 92, hidden: true },
+    { id: "car3", prop: "car", opts: { kind: "ok", label: "x" }, x: 62, y: 180, size: 92, hidden: true },
   ],
   beats: [
     {
-      say: "<p>Each <code>?</code> is a station on the line. An <b>Ok</b> car rolls through every one of them.</p>",
+      say: "<p>Each <code>?</code> is a station on the line. An <b>Ok</b> car, a <code>Result</code> holding a value, rolls through every one of them.</p>",
       line: 14,
       do: [
         ["pose", "oxi", "talk", 1200],
@@ -79,7 +79,7 @@ fn main() {
       ],
     },
     {
-      say: "<p>The second <code>?</code> sees <code>Err</code>. The lever is thrown, the car goes back to <code>main</code>, and <code>next_year</code> never runs.</p>",
+      say: "<p>The second <code>?</code> sees <code>Err</code> and returns it early. The lever is thrown, the car goes back to <code>main</code>, and <code>next_year</code> never runs.</p>",
       line: 15,
       do: [
         ["show", "car2", 0],

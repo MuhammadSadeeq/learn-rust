@@ -3,7 +3,7 @@
    is described in the captions and shown in the chapter's own blocks. */
 (window.OX_MOTION = window.OX_MOTION || []).push({
   id: "ch20-extract",
-  title: "The Mold reads the parcel",
+  title: "The Json extractor reads the parcel",
   w: 640,
   h: 300,
   rust: [
@@ -53,7 +53,7 @@
       ],
     },
     {
-      say: "<p>The parcel opens. The body is read with serde, and each key is poured into the field with the same name.</p>",
+      say: "<p>The parcel opens. The <code>Json&lt;CreateNote&gt;</code> extractor reads the body with serde, and each key is poured into the field with the same name.</p>",
       line: 9,
       do: [
         ["poof", "parcel", 0],

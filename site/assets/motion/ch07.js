@@ -1,8 +1,8 @@
 /* Chapter 07 (Borrowing) motion: many readers or one writer.
    Scene ch07-readers-writer. The rust field is the program as written. Line 8
    reads the readers after the lock on line 6, so rustc rejects it with E0502
-   (checked by tools/check-snippets.mjs). The last beat is the fix: move line 8
-   above line 6, so the readers finish first. */
+   (checked by tools/check-snippets.mjs). The last beat is the fix: the readers'
+   line moves above the lock, and the panel shows that program. */
 (function () {
   "use strict";
   const LOOK = { cast: "crab", opts: { gear: ["glasses"] } };   // glasses: a shared borrow
@@ -54,15 +54,15 @@
     ],
     beats: [
       {
-        say: "<p>Three crabs put on glasses to look at <code>v</code>. Any number of readers may look at once.</p>",
+        say: "<p>Three crabs put on glasses: three shared borrows (<code>&amp;v</code>) of <code>v</code>. Any number of shared borrows may exist at once.</p>",
         line: 3,
         do: readerOps,
       },
       {
-        say: "<p><code>w</code> asks for the lock on line 6, while the readers still look at <code>v</code>.</p>",
+        say: "<p><code>w</code> asks for an exclusive borrow (<code>&amp;mut</code>) on line 6, the compile-time lock, while the readers still look at <code>v</code>.</p>",
         line: 6,
         ask: {
-          q: "Can w take the lock on line 6 while the readers are still used?",
+          q: "Can w take an exclusive borrow on line 6 while the readers are still used?",
           choices: ["Yes, the readers are done with v", "No, the readers are still used on line 8"],
           answer: 1,
           explain: "A &amp;mut borrow can't exist while a shared borrow is still used later. Line 8 still reads the readers.",
@@ -75,7 +75,7 @@
         ],
       },
       {
-        say: "<p>The Inspector stamps <b>E0502</b> on <code>w</code>. Line 8 still reads the readers, so the lock is refused.</p>",
+        say: "<p>The Inspector, the borrow checker, stamps <b>E0502</b> on <code>w</code>. Line 8 still reads the readers, so the exclusive borrow is refused.</p>",
         line: 8,
         do: [
           ["pop", "ins", 0],
@@ -88,8 +88,20 @@
         ],
       },
       {
-        say: "<p>Move line 8 above line 6, so the readers finish first. Their glasses come off, and the lock is allowed.</p>",
-        line: 8,
+        say: "<p>Move the readers' line above the lock, so the readers finish first. Their glasses come off, and the exclusive borrow is allowed. The panel shows the moved program.</p>",
+        line: 6,
+        rust: [
+          "fn main() {",
+          "    let mut v = vec![1, 2, 3];",
+          "    let r1 = &v;",
+          "    let r2 = &v;",
+          "    let r3 = &v;",
+          '    println!("{r1:?} {r2:?} {r3:?}");',
+          "    let w = &mut v;",
+          "    w.push(4);",
+          "}",
+        ].join("\n"),
+        check: "ok",
         do: [
           ["poof", "ins", 0],
           ["unlink", "w2", 0],

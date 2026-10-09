@@ -166,7 +166,7 @@ $a = new Noisy("a");
 $cache = [$a];
 unset($a);     // no drop yet: $cache still holds the object
 $cache = [];   // the last reference is gone, so __destruct runs now</pre>
-  <pre class="rs" data-check="skip">
+  <pre class="rs">
 struct Noisy(&amp;'static str);
 
 impl Drop for Noisy {

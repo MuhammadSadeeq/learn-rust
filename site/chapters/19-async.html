@@ -632,6 +632,521 @@ async fn main() {
 </section>
 
 <section>
+<h2 id="cancel">Cancel safely, shut down cleanly</h2>
+
+<p>Dropping a future cancels it, as the tokio section showed. The harder question is what the dropped future had already done. A task that has read part of a message, or taken a step toward a result, loses that progress when it is dropped. Whether that matters has a name: <strong>cancellation safety</strong>.</p>
+
+<p>The examples in the next three sections use these crates. Add them to <code>Cargo.toml</code>, and you will need all three for the streams section:</p>
+
+<pre class="toml">[dependencies]
+tokio = { version = "1.53", features = ["full"] }
+tokio-util = "0.7.20"
+futures = "0.3.34"</pre>
+
+<h3>select! drops the losers</h3>
+
+<p>Each round of <code>select!</code> runs one winning branch and drops the other branches where they are waiting. In a loop, the losing futures are built again on the next round, so they start over. Here a 4-byte read is half done when the timer wins:</p>
+
+<pre class="rs" data-crates="tokio" data-stdout="timer won\nnext frame: cdef">
+use std::time::Duration;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+#[tokio::main]
+async fn main() {
+    let (mut writer, mut reader) = tokio::io::duplex(64);
+    writer.write_all(b"ab").await.unwrap(); // only 2 of the 4 bytes so far
+
+    let mut frame = [0u8; 4];
+    tokio::select! {
+        result = reader.read_exact(&amp;mut frame) =&gt; println!("frame: {result:?}"),
+        _ = tokio::time::sleep(Duration::from_millis(50)) =&gt; println!("timer won"),
+    }
+
+    writer.write_all(b"cdef").await.unwrap();
+    let mut next = [0u8; 4];
+    reader.read_exact(&amp;mut next).await.unwrap();
+    println!("next frame: {}", std::str::from_utf8(&amp;next).unwrap());
+}
+</pre>
+
+<p>The first read took <code>ab</code> from the stream and then waited for two more bytes. The timer won, so the read was dropped, and its progress went with it. The next read starts at the next byte the stream has, so it returns <code>cdef</code>, not <code>abcd</code>. Nothing panicked and nothing printed an error. The bytes were simply gone.</p>
+
+<h3>Cancel safe and not cancel safe</h3>
+
+<p>tokio documents cancellation safety for many of its methods. Its rule is this: if a future has not completed, dropping it must be a no-op, and building it again must be fine. A future can be cancelled only at an <code>.await</code>, so ask what the method has already done at each one. The table lists the methods you will meet most often. Check the docs for any other method you use.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Method</th><th>If it is dropped while it waits</th></tr></thead>
+  <tbody>
+    <tr><td><code>mpsc::Receiver::recv</code></td><td>Safe. The docs guarantee that no message was received.</td></tr>
+    <tr><td><code>AsyncReadExt::read_exact</code></td><td>Not safe. Bytes it has already read are lost.</td></tr>
+    <tr><td><code>AsyncWriteExt::write_all</code></td><td>Not safe. The docs warn that data can be lost.</td></tr>
+    <tr><td><code>mpsc::Sender::send</code></td><td>The message you passed in is dropped. Use <code>reserve</code> to keep it.</td></tr>
+    <tr><td><code>Mutex::lock</code>, <code>Semaphore::acquire</code></td><td>Not safe. You lose your place in the queue.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>The rule of thumb is to find the <code>.await</code> points in a future. If the code still does the right thing when it is started again at each one, it is cancel safe.</p>
+
+<h3>A shutdown branch</h3>
+
+<p>A worker loop should watch for shutdown as one of its branches. The usual signal is a <code>CancellationToken</code> from <code>tokio-util</code>. Cancelling a token wakes every task that waits on it. A child token made with <code>child_token</code> is cancelled when its parent is, so one call can stop a whole tree of tasks. <code>cancelled()</code> returns a future that finishes once the token is cancelled.</p>
+
+<pre class="rs" data-crates="tokio,tokio-util" data-stdout="worker stopped: true">
+use std::time::Duration;
+use tokio_util::sync::CancellationToken;
+
+#[tokio::main]
+async fn main() {
+    let shutdown = CancellationToken::new();
+    let worker_stop = shutdown.child_token();
+
+    let worker = tokio::spawn(async move {
+        let mut ticks = 0u32;
+        loop {
+            tokio::select! {
+                biased;
+                _ = worker_stop.cancelled() =&gt; break,
+                _ = tokio::time::sleep(Duration::from_millis(10)) =&gt; ticks += 1,
+            }
+        }
+        ticks
+    });
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    shutdown.cancel();
+    let ticks = worker.await.unwrap();
+    println!("worker stopped: {}", ticks &gt; 0);
+}
+</pre>
+
+<p>The worker leaves its loop as soon as the token is cancelled, and it returns the number of ticks it counted. The <code>biased;</code> line makes the shutdown branch checked first. The next part explains why that matters.</p>
+
+<h3><code>biased;</code> checks the branches in order</h3>
+
+<p>By default <code>select!</code> checks its branches in random order. tokio's docs say this gives some fairness when a loop has several branches that are always ready. When one branch must win, begin the macro with <code>biased;</code>. The branches are then checked in the order you wrote them.</p>
+
+<pre class="rs" data-crates="tokio" data-stdout="shutdown">
+use std::future::ready;
+
+#[tokio::main]
+async fn main() {
+    // Both branches are ready at once. With `biased;` the first branch always wins.
+    let winner = tokio::select! {
+        biased;
+        _ = ready(()) =&gt; "shutdown",
+        _ = ready(()) =&gt; "work",
+    };
+    println!("{winner}");
+}
+</pre>
+
+<h3>Ctrl+C is not the only stop signal</h3>
+
+<p>On Unix, Ctrl+C sends SIGINT. Docker and Kubernetes stop a container with SIGTERM. <code>tokio::signal::ctrl_c()</code> listens only for SIGINT, so a server that waits for Ctrl+C alone is killed without any cleanup when it is stopped with SIGTERM. Listen for both:</p>
+
+<pre class="rs" data-crates="tokio" data-check="ok">
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c().await.expect("could not listen for Ctrl+C");
+    };
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("could not listen for SIGTERM")
+            .recv()
+            .await;
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::&lt;()&gt;();
+
+    tokio::select! {
+        _ = ctrl_c =&gt; {}
+        _ = terminate =&gt; {}
+    }
+}
+</pre>
+
+<p><code>shutdown_signal</code> returns when either signal arrives. Hand it to your server, then finish the work that is still running before you exit. The server in Chapter 20 passes a shutdown signal to <code>with_graceful_shutdown</code> in the same way.</p>
+
+<h3>Abort a task, or a whole set</h3>
+
+<p><code>JoinHandle::abort</code> asks a task to stop. The task stops at its next <code>.await</code>, and it drops everything it owns. Awaiting the handle then returns a <code>JoinError</code> whose <code>is_cancelled()</code> is true. <code>JoinSet::abort_all</code> does the same for every task in a set. The set still holds the handles, so call <code>join_next</code> until the set is empty to wait for all of them to finish.</p>
+
+<pre class="rs" data-crates="tokio" data-stdout="cancelled: true\ncancelled in set: 3">
+use std::time::Duration;
+use tokio::task::JoinSet;
+
+#[tokio::main]
+async fn main() {
+    let job = tokio::spawn(async {
+        tokio::time::sleep(Duration::from_secs(60)).await;
+        "finished"
+    });
+    job.abort();
+    let err = job.await.unwrap_err();
+    println!("cancelled: {}", err.is_cancelled());
+
+    let mut set = JoinSet::new();
+    for _ in 0..3 {
+        set.spawn(tokio::time::sleep(Duration::from_secs(60)));
+    }
+    set.abort_all();
+    let mut cancelled = 0;
+    while let Some(result) = set.join_next().await {
+        if let Err(err) = result {
+            if err.is_cancelled() {
+                cancelled += 1;
+            }
+        }
+    }
+    println!("cancelled in set: {cancelled}");
+}
+</pre>
+
+<p>A task started with <code>spawn_blocking</code> cannot be stopped this way. Once its closure has started, <code>abort</code> has no effect on it.</p>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Agents write <code>select!</code> loops that look right and lose data. When you review one, check three things. Which branch reads partial data, because that branch is not cancel safe if it does. Whether shutdown is a branch at all. Whether the code awaits the handle after it aborts a task. A <code>tokio::spawn</code> whose handle nobody keeps gives you no way to wait for it during shutdown.</p>
+</aside>
+
+<div class="ox-quiz" data-id="19:quiz-cancel" data-label="Check yourself">
+  <p class="ox-q">In this loop, which branch can lose data when another branch wins?</p>
+  <pre class="rs" data-crates="tokio,tokio-util" data-check="ok">
+use tokio::io::{AsyncReadExt, DuplexStream};
+use tokio::sync::mpsc::Receiver;
+use tokio_util::sync::CancellationToken;
+
+async fn pump(mut reader: DuplexStream, mut jobs: Receiver&lt;String&gt;, shutdown: CancellationToken) {
+    let mut frame = [0u8; 4];
+    loop {
+        tokio::select! {
+            result = reader.read_exact(&amp;mut frame) =&gt; println!("frame {result:?}"),
+            Some(job) = jobs.recv() =&gt; println!("job {job}"),
+            _ = shutdown.cancelled() =&gt; break,
+        }
+    }
+}
+
+#[tokio::main]
+async fn main() {
+    let (_writer, reader) = tokio::io::duplex(64);
+    let (_tx, rx) = tokio::sync::mpsc::channel::&lt;String&gt;(8);
+    let shutdown = CancellationToken::new();
+    shutdown.cancel();
+    pump(reader, rx, shutdown).await;
+    println!("stopped");
+}
+</pre>
+  <ol class="ox-choices">
+    <li><code>jobs.recv()</code>. A message can be taken off the channel and then dropped.</li>
+    <li data-correct><code>reader.read_exact(&amp;mut frame)</code>. The bytes it has already read go with the dropped future.</li>
+    <li><code>shutdown.cancelled()</code>. Cancelling a token can lose the signal.</li>
+    <li>None. <code>select!</code> finishes a branch before it drops anything.</li>
+  </ol>
+  <div class="ox-why"><p><code>recv</code> is cancel safe. tokio's docs guarantee that no message was received when another branch wins. The shutdown branch holds no progress to lose. <code>read_exact</code> is the branch that loses bytes, as the first example in this section showed. If you need a read that can stop at any moment, use <code>read</code>, which is cancel safe. Keep any partial frame in your own buffer.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="limits">Limits and backpressure</h2>
+
+<p>A server that spawns one task per request has no limit. Ten thousand requests can mean ten thousand tasks, all calling the same database at once. A limit keeps the amount of work in progress fixed. Backpressure is the same idea seen from the queue side: when the limit is reached, the producer waits.</p>
+
+<h3>Semaphore: at most N at once</h3>
+
+<p>A <code>Semaphore</code> holds a fixed number of permits. A task takes a permit before it does its work and gives the permit back when the permit is dropped. <code>acquire_owned</code> takes an <code>Arc</code> of the semaphore, so the permit can move into a spawned task. The program below starts ten tasks. Each one needs a permit, and the high-water mark records the most tasks that worked at the same time.</p>
+
+<pre class="rs" data-crates="tokio" data-stdout="high water mark: 3">
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
+use tokio::sync::Semaphore;
+
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
+    let permits = Arc::new(Semaphore::new(3));
+    let in_flight = Arc::new(AtomicUsize::new(0));
+    let high_water = Arc::new(AtomicUsize::new(0));
+
+    let mut handles = Vec::new();
+    for _ in 0..10 {
+        let permits = Arc::clone(&amp;permits);
+        let in_flight = Arc::clone(&amp;in_flight);
+        let high_water = Arc::clone(&amp;high_water);
+        handles.push(tokio::spawn(async move {
+            let _permit = permits.acquire_owned().await.unwrap();
+            let now = in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+            high_water.fetch_max(now, Ordering::SeqCst);
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            in_flight.fetch_sub(1, Ordering::SeqCst);
+        }));
+    }
+    for handle in handles {
+        handle.await.unwrap();
+    }
+    println!("high water mark: {}", high_water.load(Ordering::SeqCst));
+}
+</pre>
+
+<p>The example uses the <code>current_thread</code> runtime, so all the tasks share one thread. The semaphore limit holds on any runtime. tokio's docs list <code>Semaphore::acquire</code> as not cancel safe, because cancelling a call makes you lose your place in the queue.</p>
+
+<h3>Bounded channels and try_send</h3>
+
+<p>A bounded channel limits how many messages can wait in its queue. The async version is <code>tokio::sync::mpsc::channel(n)</code>. Its <code>send(..).await</code> waits while the queue is full, and the sending task gives up its thread so other tasks keep running. <code>try_send</code> never waits. When there is no room, it returns <code>TrySendError::Full</code> and gives the message back, so the caller can drop it, retry it, or report the overload.</p>
+
+<pre class="rs" data-crates="tokio" data-stdout="queued 1\nqueued 2\nfull, rejected 3\nfirst: Some(1)">
+use tokio::sync::mpsc::{self, error::TrySendError};
+
+#[tokio::main]
+async fn main() {
+    let (tx, mut rx) = mpsc::channel::&lt;u32&gt;(2);
+    for n in 1..=3 {
+        match tx.try_send(n) {
+            Ok(()) =&gt; println!("queued {n}"),
+            Err(TrySendError::Full(v)) =&gt; println!("full, rejected {v}"),
+            Err(TrySendError::Closed(v)) =&gt; println!("closed, rejected {v}"),
+        }
+    }
+    println!("first: {:?}", rx.recv().await);
+}
+</pre>
+
+<h3><code>buffer_unordered</code>: N futures at a time</h3>
+
+<p>A stream of futures can run a few at a time with <code>buffer_unordered(n)</code>. It keeps up to <code>n</code> of them in progress, and it yields each result as that future finishes. Results come out in completion order, not in the order you put the futures in. The program below runs seven jobs two at a time. It adds up the results and prints the total, because the order of completion depends on timing.</p>
+
+<pre class="rs" data-crates="futures,tokio" data-stdout="sum of squares: 140">
+use futures::{StreamExt, stream};
+use std::time::Duration;
+
+#[tokio::main]
+async fn main() {
+    // Seven jobs, at most two running at a time.
+    let results: Vec&lt;u64&gt; = stream::iter(1..=7u64)
+        .map(|n| async move {
+            tokio::time::sleep(Duration::from_millis(10 * (8 - n))).await;
+            n * n
+        })
+        .buffer_unordered(2)
+        .collect()
+        .await;
+    let total: u64 = results.iter().sum();
+    println!("sum of squares: {total}");
+}
+</pre>
+
+<h3>Retries with backoff and jitter</h3>
+
+<p>A retry that waits the same time on every attempt can make many clients retry at the same moment. Exponential backoff doubles the ceiling of the wait after each attempt, up to a cap. Jitter picks a random wait below that ceiling, so the clients spread out. This example uses only std. Std has no random number generator, so it uses a small linear congruential generator. That is enough to spread retries. It is not random enough for anything that must be unpredictable, such as a token. A real project would use the <code>rand</code> crate.</p>
+
+<pre class="rs" data-run data-stdout="attempt 0: wait 100 ms\nattempt 1: wait 176 ms\nattempt 2: wait 257 ms\nattempt 3: wait 204 ms\nattempt 4: wait 147 ms">
+use std::time::Duration;
+
+/// A tiny pseudo-random generator (a linear congruential generator).
+/// It spreads retries out. It is not for security.
+struct Jitter(u64);
+
+impl Jitter {
+    fn next_u64(&amp;mut self) -&gt; u64 {
+        self.0 = self
+            .0
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        self.0 &gt;&gt; 33
+    }
+}
+
+/// Full jitter: wait a random time between zero and the capped, doubling delay.
+fn backoff(attempt: u32, base_ms: u64, cap_ms: u64, rng: &amp;mut Jitter) -&gt; Duration {
+    let doubled = base_ms.saturating_mul(1u64 &lt;&lt; attempt.min(20));
+    let ceiling = doubled.min(cap_ms);
+    Duration::from_millis(rng.next_u64() % (ceiling + 1))
+}
+
+fn main() {
+    let mut rng = Jitter(42);
+    for attempt in 0..5 {
+        let wait = backoff(attempt, 100, 1_000, &amp;mut rng);
+        println!("attempt {attempt}: wait {} ms", wait.as_millis());
+    }
+}
+</pre>
+
+<p>The ceilings here are 100, 200, 400 and 800 ms, and then 1000 ms, which is the cap. Each wait falls between zero and its ceiling. Put a timeout on each attempt with <code>tokio::time::timeout</code>, so one slow call cannot hold the retry loop forever.</p>
+
+<h3>Async closures (stable since 1.85)</h3>
+
+<p>A closure that returns a future has worked for a long time: <code>|x| async move { ... }</code>. Rust 1.85 added async closures, written <code>async |x| ...</code>. The bound <code>AsyncFn(u32) -&gt; u32</code> names them, the way <code>Fn</code> names an ordinary closure. The closure below captures <code>offset</code> from <code>main</code>, like any other closure.</p>
+
+<pre class="rs" data-crates="tokio" data-stdout="[11, 12, 13]">
+use std::time::Duration;
+
+async fn apply_all&lt;F&gt;(f: F, items: &amp;[u32]) -&gt; Vec&lt;u32&gt;
+where
+    F: AsyncFn(u32) -&gt; u32,
+{
+    let mut out = Vec::new();
+    for &amp;item in items {
+        out.push(f(item).await);
+    }
+    out
+}
+
+#[tokio::main]
+async fn main() {
+    let offset = 10;
+    let shifted = apply_all(
+        async |x| {
+            tokio::time::sleep(Duration::from_millis(1)).await;
+            x + offset
+        },
+        &amp;[1, 2, 3],
+    )
+    .await;
+    println!("{shifted:?}");
+}
+</pre>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Agents often write "spawn one task for each item" loops with no limit. Ask two questions when you review one: how many tasks can run at once, and where that limit lives. If the answer is "as many as there are items", the program has no backpressure. A bounded channel or a semaphore fixes that. A timeout around each piece of work keeps one slow item from holding a permit forever.</p>
+</aside>
+
+<div class="ox-quiz" data-id="19:quiz-limits" data-label="Check yourself">
+  <p class="ox-q">You want at most three downloads running at once, each in its own task. Which tool fits?</p>
+  <ol class="ox-choices">
+    <li><code>mpsc::channel(3)</code>. A bounded channel limits the messages in its queue, not the tasks that run.</li>
+    <li data-correct><code>Semaphore::new(3)</code>, with each task calling <code>acquire_owned</code> before it downloads.</li>
+    <li><code>tokio::time::timeout</code> set to three seconds. A timeout limits how long one call runs, not how many run together.</li>
+    <li><code>JoinSet</code>. It runs tasks together, and it never limits them.</li>
+  </ol>
+  <div class="ox-why"><p>The permits are the limit. A task that cannot get a permit waits, so at most three downloads are in progress at any moment. A channel limits messages, and a timeout limits time. Neither one counts running tasks.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="streams">Streams and server-sent events</h2>
+
+<p>An iterator gives you the next value right away, or it says there are no more. A <strong>stream</strong> is the async version. Each value may take time to arrive, so asking for the next one returns a future. The <code>futures</code> crate provides the <code>Stream</code> trait, and <code>StreamExt::next</code> gives you that future. The loop has a familiar shape:</p>
+
+<pre class="rs" data-crates="futures,tokio" data-stdout="data: one\ndata: two\ndata: three">
+use futures::{StreamExt, stream};
+
+#[tokio::main]
+async fn main() {
+    let mut lines = stream::iter(["data: one", "data: two", "data: three"]);
+    while let Some(line) = lines.next().await {
+        println!("{line}");
+    }
+}
+</pre>
+
+<p><code>next()</code> returns a future of an <code>Option</code>. The <code>.await</code> waits for the next item, and <code>None</code> means the stream has ended. Most streaming code you will read uses this <code>while let</code> loop.</p>
+
+<h3>What server-sent events are</h3>
+
+<p>Server-sent events (SSE) are a text format for a long HTTP response. The server keeps the response open and writes events as they happen, and the client reads each one as it arrives. Many AI APIs stream their answers this way. The format is plain lines of text with a few rules:</p>
+
+<ul>
+  <li>Each line is a field, written as <code>name: value</code>.</li>
+  <li><code>data:</code> carries the payload. An event can have several <code>data:</code> lines, and the lines are joined with newlines.</li>
+  <li><code>event:</code> names the kind of event, and <code>id:</code> gives it an identifier.</li>
+  <li>A blank line ends the event.</li>
+  <li>A line that starts with a colon is a comment. Servers send one now and then to keep the connection open.</li>
+</ul>
+
+<p>This is a simplified description. The full specification has more rules, and this chapter covers the core. The parser below is enough for the examples here.</p>
+
+<h3>A parser that survives chunk boundaries</h3>
+
+<p>The network does not deliver events in neat pieces. One read may end in the middle of a line. The parser keeps the bytes it has not finished, and it decodes a line only when its newline arrives. A newline byte never appears inside a UTF-8 character, so a finished line always holds whole characters.</p>
+
+<pre class="rs" data-run data-stdout="greet: hello + world\n(no name): bye">
+#[derive(Debug)]
+struct Event {
+    name: Option&lt;String&gt;,
+    data: String,
+}
+
+#[derive(Default)]
+struct SseParser {
+    buf: Vec&lt;u8&gt;,
+    name: Option&lt;String&gt;,
+    data: Option&lt;String&gt;,
+}
+
+impl SseParser {
+    /// Feed bytes from the network. Returns the events completed by this chunk.
+    fn push(&amp;mut self, chunk: &amp;[u8]) -&gt; Vec&lt;Event&gt; {
+        self.buf.extend_from_slice(chunk);
+        let mut events = Vec::new();
+        // Only whole lines are decoded. A line ends at b'\n', which never occurs
+        // inside a UTF-8 character, so a split character cannot be read wrongly.
+        while let Some(end) = self.buf.iter().position(|&amp;b| b == b'\n') {
+            let line_bytes: Vec&lt;u8&gt; = self.buf.drain(..=end).collect();
+            let line = String::from_utf8_lossy(&amp;line_bytes[..end]).into_owned();
+            if line.is_empty() {
+                // A blank line ends the event.
+                if let Some(data) = self.data.take() {
+                    events.push(Event { name: self.name.take(), data });
+                }
+            } else if line.starts_with(':') {
+                // A line starting with a colon is a comment. Ignore it.
+            } else {
+                let (field, value) = line.split_once(':').unwrap_or((line.as_str(), ""));
+                let value = value.strip_prefix(' ').unwrap_or(value);
+                match field {
+                    "data" =&gt; match self.data.as_mut() {
+                        Some(data) =&gt; {
+                            data.push('\n');
+                            data.push_str(value);
+                        }
+                        None =&gt; self.data = Some(value.to_string()),
+                    },
+                    "event" =&gt; self.name = Some(value.to_string()),
+                    _ =&gt; {} // id, retry and unknown fields are ignored here
+                }
+            }
+        }
+        events
+    }
+}
+
+fn main() {
+    let mut parser = SseParser::default();
+    let chunks: [&amp;[u8]; 3] = [
+        b"event: greet\ndata: hel",
+        b"lo\ndata: wor",
+        b"ld\n\n: a comment\n\ndata: bye\n\n",
+    ];
+    for chunk in chunks {
+        for event in parser.push(chunk) {
+            let name = event.name.as_deref().unwrap_or("(no name)");
+            println!("{name}: {}", event.data.replace('\n', " + "));
+        }
+    }
+}
+</pre>
+
+<p>The first chunk ends in the middle of the <code>data:</code> line. The parser keeps <code>data: hel</code>, and the next chunk completes it. The comment line is skipped, and the blank line after <code>bye</code> ends the second event. This version ignores <code>id:</code> and does not handle carriage returns.</p>
+
+<p>Chapter 20 shows how an HTTP client gives you the chunks of a response, so you can feed them to a parser like this one.</p>
+
+<div class="ox-quiz" data-id="19:quiz-sse-chunk" data-label="Check yourself">
+  <p class="ox-q">A network read ends in the middle of a line: <code>data: hel</code>. What should the parser do?</p>
+  <ol class="ox-choices">
+    <li>Treat <code>hel</code> as a finished event.</li>
+    <li data-correct>Keep the bytes and wait for the rest, because the newline has not arrived.</li>
+    <li>Drop the bytes and wait for the server to send them again.</li>
+    <li>Stop with an error, because the line is incomplete.</li>
+  </ol>
+  <div class="ox-why"><p>A line ends at its newline, and a blank line ends an event. Until the newline arrives, the line is not finished, so the parser keeps the partial bytes in its buffer for the next chunk.</p></div>
+</div>
+</section>
+
+<section>
 <h2 id="mistakes">The mistakes everyone makes</h2>
 
 <h3>Blocking inside async</h3>
@@ -751,6 +1266,90 @@ async fn main() {
 <p>A future you never await or poll does nothing. The warning from section two is the compiler telling you that. Treat it as an error in your own code.</p>
 
 <p>Also, when <code>main</code> returns, the runtime shuts down, and any spawned task still running is dropped. If the work matters, keep its <code>JoinHandle</code> and await it.</p>
+
+<h3>Reading a Send error, step by step</h3>
+
+<p>The lock example above produced a long error. Here is a second cause: an <code>Rc</code> held by a spawned task. Read the error from top to bottom, because each part answers one question.</p>
+
+<pre class="rs" data-crates="tokio" data-check="error">
+use std::rc::Rc;
+use std::time::Duration;
+
+#[tokio::main]
+async fn main() {
+    let hits = Rc::new(3);
+    let task = async move {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        println!("hits {hits}");
+    };
+    tokio::spawn(task).await.unwrap();
+}
+</pre>
+
+<pre class="rustc">
+error: future cannot be sent between threads safely
+   --&gt; src/main.rs:11:5
+    |
+ 11 |     tokio::spawn(task).await.unwrap();
+    |     ^^^^^^^^^^^^^^^^^^ future created by async block is not `Send`
+    |
+    = help: within `{async block@src/main.rs:7:16: 7:26}`, the trait `Send` is not implemented for `Rc&lt;i32&gt;`
+note: captured value is not `Send`
+   --&gt; src/main.rs:9:25
+    |
+  9 |         println!("hits {hits}");
+    |                         ^^^^ has type `Rc&lt;i32&gt;` which is not `Send`
+note: required by a bound in `tokio::spawn`
+   --&gt; …/tokio-1.53.2/src/task/spawn.rs:176:21
+    |
+174 |     pub fn spawn&lt;F&gt;(future: F) -&gt; JoinHandle&lt;F::Output&gt;
+    |            ----- required by a bound in this function
+175 |     where
+176 |         F: Future + Send + 'static,
+    |                     ^^^^ required by this bound in `spawn`
+
+error: aborting due to 1 previous error
+</pre>
+
+<ol>
+  <li><strong>The first line</strong> names the rule: the future cannot be sent to another thread.</li>
+  <li><strong>The <code>help</code> line</strong> names the type that breaks it: <code>Rc&lt;i32&gt;</code> is not <code>Send</code>.</li>
+  <li><strong>The first note</strong> points at the value. The async block captures <code>hits</code>, and line 9 uses it.</li>
+  <li><strong>The last note</strong> shows where the rule comes from. <code>tokio::spawn</code> requires <code>F: Future + Send + 'static</code>. The path to tokio's source is different on your machine.</li>
+</ol>
+
+<p><code>Arc</code> counts its owners with atomic operations, so it can cross threads. Change the type, and the program builds and runs:</p>
+
+<pre class="rs" data-crates="tokio" data-stdout="hits 3">
+use std::sync::Arc;
+use std::time::Duration;
+
+#[tokio::main]
+async fn main() {
+    let hits = Arc::new(3);
+    let task = async move {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        println!("hits {hits}");
+    };
+    tokio::spawn(task).await.unwrap();
+}
+</pre>
+
+<h3>A panic inside a task: JoinError</h3>
+
+<p>A panic inside a spawned task does not stop the runtime. It ends that task, and the <code>JoinHandle</code> resolves to <code>Err(JoinError)</code>. Call <code>is_panic()</code> to check for a panic, or <code>is_cancelled()</code> to check for an abort. If you <code>unwrap</code> the result, your own code panics too. If you drop the handle, nothing in your program looks at the result.</p>
+
+<pre class="rs" data-crates="tokio" data-stdout="task panicked: true">
+#[tokio::main]
+async fn main() {
+    let handle = tokio::spawn(async {
+        let values: Vec&lt;u32&gt; = Vec::new();
+        values[0] // panics: the index is out of bounds
+    });
+    let err = handle.await.unwrap_err();
+    println!("task panicked: {}", err.is_panic());
+}
+</pre>
 
 <details class="ox-callout" data-kind="deep">
   <summary>Why does Pin exist?</summary>
@@ -951,7 +1550,7 @@ fn main() {
 
 <section>
 <h2 id="quests">Forge quests</h2>
-<p>Reading builds recognition. Writing a <code>block_on</code> and a <code>Future</code> by hand builds the mental model. These quests use std only, and they run locally against the real compiler.</p>
+<p>Reading builds recognition. Writing a <code>block_on</code> and a <code>Future</code> by hand builds the mental model. The quests here also cover a time limit for many jobs, a semaphore, and a server-sent event parser. Two of them are small cargo packages that use tokio, so their first run takes a few minutes while the crates build. They run locally against the real compiler.</p>
 <div class="ox-quests" data-chapter="19"></div>
 </section>
 
@@ -969,6 +1568,10 @@ fn main() {
     <li><code>tokio::spawn</code> needs <code>Send + 'static</code>. <code>join!</code> waits for all branches. <code>select!</code> takes the first and drops the rest. Dropping a future cancels it at its last <code>.await</code>.</li>
     <li>Never block a worker thread with <code>std::thread::sleep</code>, heavy CPU work or blocking I/O. Use the async version, or <code>spawn_blocking</code>.</li>
     <li>Never hold a <code>std</code> <code>MutexGuard</code> across an <code>.await</code>. Drop it first, or use <code>tokio::sync::Mutex</code>.</li>
+    <li>Dropping a future cancels it at its last <code>.await</code>. A future is <strong>cancel safe</strong> when dropping it loses nothing. tokio's <code>recv</code> is cancel safe, and <code>read_exact</code> is not. Shut down with a <code>CancellationToken</code> branch, and put <code>biased;</code> first so shutdown wins.</li>
+    <li>A <code>Semaphore</code> limits how many tasks work at once. A bounded channel makes a full sender wait, which is backpressure. <code>buffer_unordered(n)</code> keeps at most <code>n</code> futures from a stream in progress.</li>
+    <li>A <code>Stream</code> is an async iterator. A server-sent event is a text message made of <code>data:</code> lines that ends with a blank line, and it can arrive split across chunks.</li>
+    <li>A <code>JoinError</code> means the task panicked or was aborted. Check it, or <code>unwrap</code> it and let your own code panic too.</li>
   </ul>
 </div>
 
