@@ -13,7 +13,7 @@
   w: 640,
   h: 300,
   rust: 'fn main() {\n    let x: u8 = "255".parse().unwrap();\n    let y = x + 1;\n    println!("{y}");\n}',
-  check: "ok",
+  check: "panic",
   actors: [
     { id: "dbg-box", box: true, x: 160, y: 150, w: 300, h: 270, label: "debug build" },
     { id: "rel-box", box: true, x: 480, y: 150, w: 300, h: 270, label: "release build" },

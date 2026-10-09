@@ -52,7 +52,8 @@
      say      html, hold=1600, delay=0                    speech bubble above the actor (not replayed)
      label    text, delay=0                               change the caption under the actor
      art      {cast|prop, opts}, delay=0                  replace the actor's art
-     link     linkId, fromId, toId, kind="own", delay=0   own | ref | mut | bad | arrow
+     link     linkId, fromId, toId, kind="own", delay=0   own | ref | mut | bad | weak | arrow
+                                                         (weak: a thin grey thread that does not count, as Weak<T>)
      unlink   linkId, delay=0                             fade the link out
      shake    delay=0
      pulse    delay=0                                     an attention ring

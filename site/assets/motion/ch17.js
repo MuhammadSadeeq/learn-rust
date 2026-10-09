@@ -9,7 +9,7 @@
   w: 640,
   h: 300,
   rust: 'use std::cell::RefCell;\n\nfn main() {\n    let case = RefCell::new(String::from("fluffy"));\n    let r1 = case.borrow();\n    let r2 = case.borrow();\n    println!("{r1} {r2}");\n    case.borrow_mut().push(\'!\');\n}',
-  check: "ok",
+  check: "panic",
   actors: [
     { id: "case", box: true, x: 300, y: 150, w: 200, h: 240, label: "RefCell<String>" },
     { id: "fl", cast: "fluffy", x: 300, y: 165, size: 96, label: "String" },
@@ -65,7 +65,7 @@
       ],
     },
     {
-      say: "<p>Second run. The readers go first: <code>drop(r1)</code> and <code>drop(r2)</code> come before the call. The count falls back to 0.</p>",
+      say: "<p>Second run. <code>drop(r1)</code> and <code>drop(r2)</code> come before the call, so the count falls back to 0.</p>",
       line: 8,
       do: [
         ["unlink", "l1", 0],
@@ -172,7 +172,7 @@
       },
     },
     {
-      say: "<p>Neither fluffy is freed. Nothing ever sets a count to 0, so the memory leaks. Rust treats a leak as safe, so the compiler stays quiet.</p>",
+      say: "<p>Neither fluffy is freed, so the memory leaks. Rust treats a leak as safe, so the compiler stays quiet.</p>",
       line: 15,
       do: [
         ["pulse", "fa", 0],
@@ -190,11 +190,11 @@
         ["pop", "fd", 300],
         ["link", "rd", "cd", "fd", "own", 600],
         ["link", "rs", "fc", "fd", "own", 700],
-        ["link", "rw", "fd", "fc", "arrow", 900],
+        ["link", "rw", "fd", "fc", "weak", 900],
       ],
     },
     {
-      say: "<p>Block two ends. <code>d</code> lets go first, so its count drops to 1. Then <code>c</code> lets go, its count reaches 0, and <code>c</code> is freed. Its link to <code>d</code> goes with it, and <code>d</code> is freed too.</p>",
+      say: "<p>Block two ends. <code>d</code> lets go first, then <code>c</code>, whose count reaches 0 and frees <code>d</code> through its link.</p>",
       line: 21,
       do: [
         ["unlink", "rc", 0],
@@ -209,7 +209,7 @@
       ],
     },
     {
-      say: "<p>Both fluffies in block two are freed. The one <code>Weak</code> never kept anything alive. The pair from block one is still on the heap. That is the leak.</p>",
+      say: "<p>Both fluffies in block two are freed. The pair from block one is still on the heap, and that is the leak.</p>",
       line: 21,
       do: [["pulse", "fd", 0]],
     },

@@ -48,7 +48,7 @@
       ],
     },
     {
-      say: "<p>The Forge hands back an ingot, the built program. Building is the only step so far. Nothing has run yet.</p>",
+      say: "<p>The Forge hands back an ingot, the built program. Nothing has run yet.</p>",
       do: [
         ["pop", "ingot", 200],
         ["pose", "forge", "happy", 1000, 200],

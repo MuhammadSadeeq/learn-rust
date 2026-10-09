@@ -104,6 +104,7 @@
 .mo-link.is-mut path.mo-line { stroke: var(--mut); }
 .mo-link.is-bad path.mo-line { stroke: var(--bad); stroke-dasharray: 9 6; }
 .mo-link.is-arrow path.mo-line { stroke: var(--ink); }
+.mo-link.is-weak path.mo-line { stroke: var(--ghost); stroke-width: 2; stroke-dasharray: 3 5; }
 
 .mo-ring { position: absolute; box-sizing: border-box; aspect-ratio: 1; border: 2.5px solid var(--oxide); border-radius: 50%; pointer-events: none; z-index: 4; }
 .mo-piece { position: absolute; pointer-events: none; z-index: 5; }

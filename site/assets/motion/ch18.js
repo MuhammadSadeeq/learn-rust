@@ -94,7 +94,7 @@
       },
     },
     {
-      say: "<p><b>w3</b> takes its turn last. When it finishes, only <code>main</code> still holds the Arc. The final count is 3, every time.</p>",
+      say: "<p><b>w3</b> takes its turn last, and when it finishes, only <code>main</code> still holds the Arc. The final count is 3, every time.</p>",
       line: 17,
       do: [
         ["arc", "key", { x: 160, y: 232, scale: 0.8 }, 700, 0, 50],
