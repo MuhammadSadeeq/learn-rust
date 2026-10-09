@@ -197,6 +197,7 @@
   .mp-lair-cloth { fill: var(--oxide); }
   a.mp-lair:hover, a.mp-lair:focus-visible { transform: scale(1.1); }
   .mp-frame.is-narrow .mp-lair { width: 40px; height: 40px; margin: -20px 0 0 -20px; }
+  @media (max-width: 639px) { .mp-lair { width: 40px; height: 40px; margin: -20px 0 0 -20px; } }
   @keyframes mp-lair-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
   @media (prefers-reduced-motion: reduce) {
     .mp-lair, .mp-lair-art > .ca { transition: none; animation: none; }
@@ -476,7 +477,7 @@ Edit <span class="b">quests/06_ownership/move1.rs</span>
     }).join("");
 
     // Boss lairs: each act boss beside its chapter's stone, offset in map units.
-    var LAIR = { 4: [66, 20], 8: [-64, -34], 13: [66, -6], 17: [56, 22], 21: [-72, -10] };
+    var LAIR = { 4: [66, 20], 8: [-108, -34], 13: [76, 4], 17: [-42, 76], 21: [-82, -10] };
     var ROMAN_ACT = ["I", "II", "III", "IV", "V"];
     var lairs = (CAST.bosses || []).map(function (b) {
       var o = LAIR[b.ch] || [0, 0], s = S[b.ch - 1];
@@ -599,7 +600,7 @@ Edit <span class="b">quests/06_ownership/move1.rs</span>
     }
     Array.prototype.forEach.call(stage.querySelectorAll(".mp-lair"), function (a) {
       var L = lairs[+a.getAttribute("data-lair")];
-      var show = function () { fillLair(L); placeCard({ x: L.x, y: L.y }, frame.classList.contains("is-narrow") ? 20 : 23); card.classList.add("is-on"); };
+      var show = function () { fillLair(L); placeCard({ x: L.x, y: L.y }, a.offsetWidth / 2 + 3); card.classList.add("is-on"); };
       var hide = function () { card.classList.remove("is-on"); };
       a.addEventListener("mouseenter", show);
       a.addEventListener("focus", show);
