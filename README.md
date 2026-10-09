@@ -66,10 +66,10 @@ worker threads.
 ## Labs
 
 - **Memory X-Ray**: every step-through program in the course in one place.
-- **Be the Borrow Checker**: an arcade game. Accept or reject each program, then name the rule it breaks.
-- **Error Museum**: the compiler errors you'll meet most, with real output and fixes.
-- **PHP → Rust Rosetta**: a searchable phrasebook from PHP and Laravel to Rust.
-- **Agent Code Review Dojo**: find the smells in Rust that an AI agent wrote.
+- **Be the Borrow Checker**: an arcade game of 45 programs. Accept or reject each one, then name the rule it breaks.
+- **Error Museum**: the 25 compiler errors you'll meet most, each with real `rustc` output and fixes that compile.
+- **PHP → Rust Rosetta**: 111 PHP and Laravel habits next to the Rust that replaces them, searchable.
+- **Agent Code Review Dojo**: 18 programs an AI agent wrote. Flag the lines a senior reviewer would question, then compare with the reviewed version.
 - **Recall Deck**: spaced-repetition review of every chapter's cards.
 
 ## The Forge
@@ -109,10 +109,13 @@ node tools/sync-quests.mjs       # regenerate quests/Cargo.toml + site data from
 cargo forge verify --solutions   # the same check from Rust
 ```
 
-CI (`.github/workflows/ci.yml`) runs all of these on every push and pull
-request. `.github/workflows/pages.yml` publishes `site/` to GitHub Pages on
-pushes to `main`. To turn it on, go to *Settings → Pages* and set the source
-to *GitHub Actions*.
+CI (`.github/workflows/ci.yml`) runs all of these, plus the Forge's fmt,
+clippy and tests and the notes-api tests, on every pull request and every
+push to `main`.
+
+To put the course online, go to *Settings → Pages* and set the source to
+*GitHub Actions*, then run the *Publish site* workflow from the Actions tab.
+It publishes `site/` as it is; there is no build step.
 
 Progress, XP and quiz answers are stored in your browser's `localStorage`.
 Nothing is sent anywhere. The "Run" buttons on code samples send that code to

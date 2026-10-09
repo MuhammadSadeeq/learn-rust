@@ -2,8 +2,10 @@
    Each case is a program an AI agent wrote for the task. `rust` is that
    program as written; `smells` name the 1-based lines of `rust` a senior
    reviewer would flag (lines shared by a smell are one finding). `idiomatic`
-   is the reviewed version: same output as `rust` unless the explain says
-   otherwise. Both must compile (tools/check-snippets.mjs). */
+   is the reviewed version. It prints the same as `rust` except in the two
+   cases where the fix changes behavior on purpose: audit-log and
+   webhook-handler (the agent version hid a failure). Both must compile
+   (tools/check-snippets.mjs). */
 window.OX_DOJO = [
   {
     id: "invoice-total",

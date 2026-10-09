@@ -64,6 +64,8 @@
   .ox-code .dj-row.dj-missed { background: color-mix(in srgb, var(--c-nu) 14%, transparent); box-shadow: inset 3px 0 0 var(--c-nu); }
   .ox-code .dj-row.dj-gone { background: color-mix(in srgb, var(--bad) 24%, transparent); box-shadow: inset 3px 0 0 var(--bad); }
   .ox-code .dj-row.dj-new { background: color-mix(in srgb, var(--c-st) 18%, transparent); box-shadow: inset 3px 0 0 var(--c-st); }
+  .ox-code .dj-row:has(> .dj-num:not([aria-disabled="true"])) { cursor: pointer; }
+  .ox-code .dj-row:not(.is-hl):has(> .dj-num:not([aria-disabled="true"])):hover { background: color-mix(in srgb, var(--code-ink) 6%, transparent); }
   .dj-num { appearance: none; box-sizing: border-box; width: 2.6rem; margin: 0; padding: 0 0.7rem 0 0; border: 0; border-radius: 3px; background: none; color: var(--code-dim); font: inherit; text-align: right; cursor: pointer; user-select: none; }
   .dj-num:hover { color: var(--code-ink); }
   .dj-num:focus-visible { outline: 2px solid var(--c-kw); outline-offset: 1px; }
@@ -71,7 +73,7 @@
   .dj-num[aria-disabled="true"] { cursor: default; }
   .dj-n { display: block; box-sizing: border-box; width: 2.6rem; padding-right: 0.7rem; text-align: right; color: var(--code-dim); user-select: none; }
   .dj-src { white-space: pre; min-width: 0; }
-  .dj-note { box-sizing: border-box; width: min(44rem, calc(100cqi - 2rem)); margin: 6px 16px 14px; padding: 12px 14px 13px; display: grid; gap: 8px; background: var(--code-bg-2); border: 1px solid var(--code-line); border-left: 4px solid var(--code-dim); border-radius: var(--radius); color: var(--code-ink); font: 400 0.95rem/1.5 var(--font-body); white-space: normal; animation: ox-rise 0.25s ease-out; }
+  .dj-note { box-sizing: border-box; width: 40rem; width: min(44rem, calc(100cqi - 2rem)); margin: 6px 16px 14px; padding: 12px 14px 13px; display: grid; gap: 8px; background: var(--code-bg-2); border: 1px solid var(--code-line); border-left: 4px solid var(--code-dim); border-radius: var(--radius); color: var(--code-ink); font: 400 0.95rem/1.5 var(--font-body); white-space: normal; animation: ox-rise 0.25s ease-out; }
   .dj-note[data-sev="bug"] { border-left-color: var(--bad); }
   .dj-note[data-sev="perf"] { border-left-color: var(--warn); }
   .dj-note[data-sev="idiom"] { border-left-color: var(--stack); }
@@ -131,7 +133,7 @@
   </header>
 
   <section class="dj-intro">
-    <p>Each case is a short program an agent wrote for a task. Click the line numbers you would question, then submit. You score on the smells you found and on the false flags you raised, so flag what a careful reviewer would question, and nothing else.</p>
+    <p>Each case is a short program an agent wrote for a task. Click or tap each line you would question, then submit. You score on the smells you found and on the false flags you raised, so flag what a careful reviewer would question, and nothing else.</p>
     <dl class="dj-legend">
       <div><dt><span class="dj-sev" data-sev="bug">Bug</span></dt><dd>Wrong or unsafe at runtime.</dd></div>
       <div><dt><span class="dj-sev" data-sev="perf">Performance</span></dt><dd>Needless copies, allocations or passes.</dd></div>
@@ -498,10 +500,12 @@
     });
 
     viewEl.addEventListener("click", function (e) {
-      var num = e.target.closest(".dj-num");
-      if (num) {
-        var row = num.closest(".dj-row");
-        if (row) toggleLine(+row.getAttribute("data-n"));
+      // A click anywhere on a line of the agent's code flags it, unless the
+      // reader is selecting text to copy.
+      var row = e.target.closest(".dj-row");
+      if (row && row.querySelector(".dj-num")) {
+        var sel = window.getSelection && String(window.getSelection());
+        if (!sel || e.target.closest(".dj-num")) toggleLine(+row.getAttribute("data-n"));
         return;
       }
       var b = e.target.closest("[data-act]");

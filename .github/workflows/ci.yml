@@ -1,0 +1,48 @@
+name: CI
+
+# Keeps the course honest: every Rust snippet on the site is compiled, every
+# quest must fail as shipped and pass with its solution, and the Forge itself
+# must build cleanly.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  course:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            projects/notes-api -> target
+
+      - name: Quest manifest is in sync with quests.toml
+        run: |
+          node tools/sync-quests.mjs
+          git diff --exit-code -- quests/Cargo.toml site/assets/quests-data.js
+
+      - name: Forge builds, passes its tests and clippy
+        run: |
+          cargo fmt -p forge -- --check
+          cargo clippy -p forge --all-targets -- -D warnings
+          cargo test -p forge
+
+      - name: Every snippet on the site compiles (or fails exactly as documented)
+        run: node tools/check-snippets.mjs
+
+      - name: Every quest fails as shipped and passes with its solution
+        run: node tools/check-quests.mjs
+
+      - name: Companion project (notes-api) builds and passes its tests
+        if: hashFiles('projects/notes-api/Cargo.toml') != ''
+        run: cargo test --manifest-path projects/notes-api/Cargo.toml
