@@ -310,10 +310,11 @@
       setTimeout(() => fe.remove(), 460);
     }
 
-    function allocBeat(appeared, realloc) {
+    // A new block that appears while an old one is freed is a realloc: Alloc hops to the new block.
+    function allocBeat(appeared, freedToo) {
       if (alloc.hidden) return;
       OxCast.pose(caOf(alloc), "talk", 900);
-      const to = realloc && appeared.length ? fluffEls.get(appeared[0].id) : null;
+      const to = freedToo && appeared.length ? fluffEls.get(appeared[0].id) : null;
       if (!to || reduce()) return;
       const p = boxIn(alloc, stage), q = boxIn(to, stage);
       const dx = q.x - p.x, dy = q.y - p.y;
