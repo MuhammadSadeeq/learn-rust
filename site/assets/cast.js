@@ -1,7 +1,8 @@
 /* Oxidize cast components: meet cards, the Field Guide, Oxi's reaction to
-   every answer, and the level-up molt. Needs cast-art.js (OxCast) and
-   oxidize.js (Ox). Mounts on ox:ready, or at once when Ox is already ready.
-   Exports window.OxCastUI = { mountMeet, mountGuide, met }. */
+   every answer, the level-up molt, the act boss cards and the WANTED wall.
+   Needs cast-art.js (OxCast) and oxidize.js (Ox). Mounts on ox:ready, or at
+   once when Ox is already ready.
+   Exports window.OxCastUI = { mountMeet, mountGuide, mountBosses, mountBossGuide, met }. */
 (function () {
   "use strict";
 
@@ -301,14 +302,206 @@
       </article>`;
   }
 
+  /* ------------------------------------------------------------ act bosses */
+  // An act boss sits in front of its boss quest. Ticking that quest in the
+  // Forge (oxidize.js dispatches ox:quest) plays the defeat right there.
+  const BOSSES = () => (window.OxCast && OxCast.bosses) || [];
+  const questOf = (name) => (window.OX_QUESTS || []).find((q) => q.name === name) || {};
+  const hitsOf = (name) => (questOf(name).tests > 0 ? questOf(name).tests : 5);
+  const defeatedIn = (name) => !!(store() && store().quests && store().quests[name]);
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const cells = (hp, hits) => Array.from({ length: hits }, (_, i) => `<i${i < hp ? ' class="is-hp"' : ""}></i>`).join("");
+  let bossListening = false;
+
+  // Before each boss quest: <section class="ox-boss" data-boss="dragon">.
+  function mountBosses(root = document) {
+    $$(".ox-quest.is-boss[data-quest]", root).forEach((card) => {
+      if (card.dataset.bossDone) return;
+      const b = BOSSES().find((x) => x.quest === card.dataset.quest);
+      if (!b) return;
+      card.dataset.bossDone = "1";
+      const sec = bossCard(b);
+      card.parentNode.insertBefore(sec, card);
+      if (!sec.classList.contains("is-defeated")) loomOnView(sec);
+    });
+    if (!bossListening) {
+      bossListening = true;
+      document.addEventListener("ox:quest", (ev) => {
+        const d = ev.detail || {};
+        $$(".ox-boss").forEach((sec) => { if (sec.dataset.quest === d.name) setDefeated(sec, !!d.done); });
+      });
+    }
+  }
+
+  function bossCard(b) {
+    const name = b.quest, q = questOf(name), hits = hitsOf(name), down = defeatedIn(name);
+    const sec = document.createElement("section");
+    sec.className = "ox-boss" + (down ? " is-defeated is-stamped is-oxi" : "");
+    sec.dataset.boss = b.id;
+    sec.dataset.quest = name;
+    sec.dataset.hits = String(hits);
+    sec.setAttribute("aria-label", "Boss: " + b.name);
+    sec.innerHTML = `
+      <div class="ox-boss-art">${OxCast.boss(b.id, down ? { pose: "defeated" } : {})}<span class="ox-boss-stamp">Defeated</span></div>
+      <div class="ox-boss-body">
+        <p class="ox-boss-kicker">Act ${ROMAN[b.act]} boss</p>
+        <h3 class="ox-boss-name">${esc(b.name)}</h3>
+        <p class="ox-boss-guard">Guards the quest <b>${esc(q.title || name)}</b></p>
+        <div class="ox-boss-hp">
+          <div class="ox-boss-meter" role="meter" aria-label="Hit points" aria-valuemin="0" aria-valuemax="${hits}" aria-valuenow="${down ? 0 : hits}">${cells(down ? 0 : hits, hits)}</div>
+          <span class="ox-boss-hpn">HP ${down ? 0 : hits}/${hits}</span>
+        </div>
+        <p class="ox-boss-weak">Weak to: ${esc(b.weak)}</p>
+        <p class="ox-boss-role">${esc(b.role)}</p>
+        <p class="ox-boss-tip">Each test you pass in <code>cargo forge</code> lands a hit. Tick the quest below when the Forge says Boss defeated.</p>
+        <div class="ox-boss-oxi">
+          <span class="ox-boss-say">Act ${ROMAN[b.act]} complete!</span>${OxCast.el("oxi")}
+        </div>
+        <p class="ox-boss-live" aria-live="polite"></p>
+      </div>`;
+    return sec;
+  }
+
+  // Alive bosses rise into view once, the first time 40% of the card shows.
+  function loomOnView(sec) {
+    if (reduced() || !("IntersectionObserver" in window)) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((en) => en.isIntersecting && en.intersectionRatio >= 0.4)) {
+        io.disconnect();
+        sec.classList.add("is-looming");
+      }
+    }, { threshold: 0.4 });
+    io.observe(sec);
+  }
+
+  function setHp(sec, hp) {
+    $$(".ox-boss-meter > i", sec).forEach((c, i) => c.classList.toggle("is-hp", i < hp));
+    $(".ox-boss-meter", sec).setAttribute("aria-valuenow", String(hp));
+    $(".ox-boss-hpn", sec).textContent = `HP ${hp}/${sec.dataset.hits}`;
+  }
+
+  // The boss quest was ticked (down) or unticked. Every change takes a new
+  // token, so a defeat still playing is cancelled by a later untick.
+  function setDefeated(sec, down) {
+    const b = BOSSES().find((x) => x.id === sec.dataset.boss);
+    if (!b) return;
+    const token = (sec._seq = (sec._seq || 0) + 1);
+    if (down) {
+      if (!sec.classList.contains("is-defeated")) defeat(sec, b, token);
+    } else revive(sec);
+  }
+
+  // The defeat: drain, shake, pose, stamp, confetti, Oxi. Reduced motion
+  // skips straight to the final state.
+  async function defeat(sec, b, token) {
+    const alive = () => sec._seq === token;
+    const art = $(".ox-boss-art", sec), ca = $(".ox-boss-art > .ca", sec), oxi = $(".ox-boss-oxi > .ca", sec);
+    const hits = +sec.dataset.hits, motion = !reduced();
+    if (motion) {
+      // 1. The HP cells drain right to left, one every 70 ms.
+      for (let hp = hits - 1; hp >= 0; hp--) {
+        await wait(70);
+        if (!alive()) return;
+        setHp(sec, hp);
+      }
+      // 2. The art shakes for 300 ms.
+      art.classList.add("is-hit");
+      await wait(300);
+      if (!alive()) return;
+      art.classList.remove("is-hit");
+    } else setHp(sec, 0);
+    // 3. The defeated pose. No timeout: it stays knocked over.
+    OxCast.pose(ca, "defeated");
+    sec.classList.add("is-defeated");
+    $(".ox-boss-live", sec).textContent = `${b.name} is defeated.`;
+    if (!motion) { sec.classList.add("is-stamped", "is-oxi"); return; }
+    // 4. The stamp slams in over the art.
+    sec.classList.add("is-stamped", "is-slam");
+    await wait(220);
+    if (!alive()) return;
+    // 5. Confetti from the art.
+    confetti(art, 26, 1.5);
+    // 6. Oxi pops in beside the text.
+    sec.classList.add("is-oxi");
+    $(".ox-boss-oxi", sec).classList.add("is-pop");
+    OxCast.pose(oxi, "happy", 1600);
+  }
+
+  // The boss quest was unticked: refill the HP, stand the boss up, and fade
+  // the stamp and Oxi out.
+  function revive(sec) {
+    setHp(sec, +sec.dataset.hits);
+    OxCast.pose($(".ox-boss-art > .ca", sec), null);
+    OxCast.pose($(".ox-boss-oxi > .ca", sec), null);
+    $(".ox-boss-art", sec).classList.remove("is-hit");
+    $(".ox-boss-oxi", sec).classList.remove("is-pop");
+    $(".ox-boss-live", sec).textContent = "";
+    sec.classList.remove("is-defeated", "is-stamped", "is-slam", "is-oxi");
+  }
+
+  /* ------------------------------------------------------------ the WANTED wall */
+  // labs/cast.html: <div class="ox-boss-wall"></div>. One poster per act boss,
+  // lit "Defeated" once its quest is ticked. The reward is the boss-quest XP
+  // that oxidize.js awards.
+  const TILT = [-1.4, 1.1, -0.6, 1.5, -1];
+  const BOSS_XP = 60;
+  function mountBossGuide(root = document) {
+    const wall = $(".ox-boss-wall", root);
+    if (!wall || wall.dataset.wallDone || !window.OxCast) return;
+    wall.dataset.wallDone = "1";
+    const list = BOSSES();
+    wall.innerHTML = `<p class="ox-wall-count" aria-live="polite"></p>` +
+      `<div class="ox-wall-grid">${list.map((b, i) => posterHtml(b, i)).join("")}</div>`;
+    paintWall(wall);
+    // Pressing an alive boss's art makes it do a short wow.
+    wall.addEventListener("click", (ev) => {
+      const art = ev.target.closest && ev.target.closest(".ox-wanted-art");
+      if (!art || !wall.contains(art) || art.closest(".ox-wanted").classList.contains("is-defeated")) return;
+      OxCast.pose(art.querySelector(".ca"), "wow", 1200);
+    });
+  }
+
+  function posterHtml(b, i) {
+    const q = questOf(b.quest), ch = chapterOf(b.ch);
+    const href = (ch ? chapterHref(ch) : rel("index.html")) + "#quests";
+    return `<article class="ox-wanted" data-boss="${b.id}" style="--tilt:${TILT[i % TILT.length]}deg">
+      <div class="ox-wanted-paper">
+        <p class="ox-wanted-head">Wanted</p>
+        <button type="button" class="ox-wanted-art" aria-label="${esc(b.name)}">${OxCast.boss(b.id)}</button>
+        <h3 class="ox-wanted-name">${esc(b.name)}</h3>
+        <p class="ox-wanted-seen">Last seen: <a href="${href}">Chapter ${String(b.ch).padStart(2, "0")} · ${esc(q.title || b.quest)}</a></p>
+        <p class="ox-wanted-weak">Weak to: ${esc(b.weak)}</p>
+        <p class="ox-wanted-foot"></p>
+        <span class="ox-boss-stamp">Defeated</span>
+      </div>
+    </article>`;
+  }
+
+  function paintWall(wall) {
+    const list = BOSSES();
+    let have = 0;
+    list.forEach((b) => {
+      const poster = $(`.ox-wanted[data-boss="${b.id}"]`, wall);
+      const down = defeatedIn(b.quest);
+      if (down) have++;
+      if (!poster) return;
+      poster.classList.toggle("is-defeated", down);
+      OxCast.pose($(".ox-wanted-art > .ca", poster), down ? "defeated" : null);
+      $(".ox-wanted-foot", poster).textContent = down ? "Defeated" : `Reward: ${BOSS_XP} XP`;
+    });
+    $(".ox-wall-count", wall).textContent = `${have} of ${list.length} defeated`;
+  }
+
   /* ------------------------------------------------------------ boot */
   function mountAll(root) {
     if (!window.OxCast) { console.warn("cast.js needs cast-art.js"); return; }
     mountMeet(root);
     mountGuide(root);
+    mountBosses(root);
+    mountBossGuide(root);
   }
 
-  window.OxCastUI = { mountMeet, mountGuide, met };
+  window.OxCastUI = { mountMeet, mountGuide, mountBosses, mountBossGuide, met };
   if (window.Ox && window.Ox.ready) mountAll();
   else document.addEventListener("ox:ready", () => mountAll(), { once: true });
 })();

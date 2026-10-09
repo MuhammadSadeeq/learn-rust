@@ -1,6 +1,7 @@
 /* Oxidize cast components: meet cards, Oxi's reaction to answers, the level-up
-   molt and the Field Guide. Colors come from the oxidize.css tokens, so light
-   and dark follow the theme. Every motion here stops under reduced motion. */
+   molt, the Field Guide, the act bosses and the WANTED wall. Colors come from
+   the oxidize.css tokens, so light and dark follow the theme. Every motion
+   here stops under reduced motion. */
 
 /* ------------------------------------------------------------ meet cards */
 .ox-meet {
@@ -134,6 +135,143 @@ button.fg-art:hover { background: var(--surface-3); }
 }
 :root[data-theme="dark"] .fg-card.is-unmet .fg-art > .ca { filter: brightness(0) invert(1); opacity: 0.14; }
 
+/* ------------------------------------------------------------ act bosses */
+/* The boss card that sits in front of its boss quest. Its HP cells, stamp and
+   Oxi all follow the classes that cast.js sets: is-defeated, is-stamped, is-oxi. */
+.ox-boss {
+  --hp: #c8402f; --hp-top: #f08c79;
+  position: relative; display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 8px 22px; align-items: center;
+  min-width: 0; margin: 0 0 4px; padding: 18px;
+  border: 1px solid color-mix(in srgb, var(--oxide) 45%, var(--line)); border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--oxide-soft) 26%, var(--surface)); box-shadow: var(--shadow);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ox-boss { --hp: #e5573f; --hp-top: #ffa894; } }
+:root[data-theme="dark"] .ox-boss { --hp: #e5573f; --hp-top: #ffa894; }
+.ox-boss.is-defeated { border-color: var(--ok); }
+.ox-boss.is-looming { animation: ox-boss-loom 0.7s cubic-bezier(.3, 1.2, .5, 1) both; }
+
+.ox-boss-art { position: relative; width: 150px; min-width: 0; }
+.ox-boss-art > .ca { display: block; width: 100%; }
+.ox-boss-art > .ca > svg { display: block; }
+.ox-boss-art.is-hit > .ca { animation: ox-boss-hit 0.3s ease-in-out; }
+
+.ox-boss-body { display: grid; gap: 4px; min-width: 0; align-content: center; }
+.ox-boss-kicker { margin: 0; font: 700 0.72rem/1.4 var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--oxide-ink); }
+.ox-boss .ox-boss-name { margin: 0; font: 800 clamp(1.7rem, 4vw, 2.2rem)/1.02 var(--font-display); letter-spacing: 0.005em; color: var(--ink); }
+.ox-boss-guard, .ox-boss-weak, .ox-boss-role, .ox-boss-tip { margin: 0; }
+.ox-boss-guard { font-size: 0.95rem; color: var(--ink-2); }
+.ox-boss-guard b { color: var(--ink); }
+.ox-boss-weak { font-size: 0.92rem; color: var(--ink-2); }
+.ox-boss-role { font-size: 0.9rem; line-height: 1.45; color: var(--muted); }
+.ox-boss-tip { font-size: 0.8rem; line-height: 1.45; color: var(--muted); }
+.ox-boss-tip code { font-size: 0.78rem; }
+
+/* HP: one cell per test. Full cells are warm red with a lighter top edge; the
+   empty ones are the muted track. */
+.ox-boss-hp { display: flex; align-items: center; gap: 10px; min-width: 0; margin: 4px 0 2px; }
+.ox-boss-meter { display: flex; flex: 1; gap: 3px; min-width: 0; max-width: 22rem; }
+.ox-boss-meter > i {
+  flex: 1; height: 14px; border-radius: 3px;
+  background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--line);
+  transition: background 0.12s linear;
+}
+.ox-boss-meter > i.is-hp { background: var(--hp); box-shadow: inset 0 3px 0 var(--hp-top); }
+.ox-boss-hpn { font: 700 0.9rem/1 var(--font-mono); color: var(--ink); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* The stamp: real text, a rotated double border, readable in both themes. It
+   also styles the poster on the WANTED wall. */
+.ox-boss-stamp {
+  position: absolute; left: 50%; top: 42%; z-index: 2; pointer-events: none;
+  padding: 4px 10px 3px; border: 3px double var(--bad); border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  color: var(--bad); font: 900 1.15rem/1 var(--font-display); letter-spacing: 0.14em; text-transform: uppercase; white-space: nowrap;
+  transform: translate(-50%, -50%) rotate(-12deg);
+  opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0s linear 0.3s;
+}
+.ox-boss.is-stamped .ox-boss-stamp, .ox-wanted.is-defeated .ox-boss-stamp { opacity: 1; visibility: visible; transition: opacity 0.15s ease; }
+.ox-boss.is-slam .ox-boss-stamp { animation: ox-boss-slam 0.22s cubic-bezier(.3, 1.2, .5, 1) both; }
+
+/* Oxi and the bubble, in the card's top-right corner. */
+.ox-boss-oxi {
+  position: absolute; top: 12px; right: 14px; display: flex; align-items: flex-start; gap: 8px; pointer-events: none;
+  opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0s linear 0.3s;
+}
+.ox-boss.is-oxi .ox-boss-oxi { opacity: 1; visibility: visible; transition: opacity 0.2s ease; }
+.ox-boss-oxi.is-pop { animation: ox-boss-oxi-pop 0.5s cubic-bezier(.3, 1.4, .5, 1) both; }
+.ox-boss-oxi > .ca { display: block; width: 44px; flex: none; }
+.ox-boss-oxi > .ca > svg { display: block; }
+.ox-boss-say {
+  margin-top: 6px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--surface); color: var(--ink); box-shadow: var(--shadow);
+  font: 700 0.84rem/1.2 var(--font-body); white-space: nowrap;
+}
+
+/* Announced to screen readers when the boss goes down. Not shown. */
+.ox-boss-live { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+@media (max-width: 559px) {
+  .ox-boss { grid-template-columns: minmax(0, 1fr); justify-items: start; padding: 16px; }
+  .ox-boss-art { width: 112px; justify-self: center; }
+  .ox-boss-oxi { top: auto; bottom: 12px; right: 12px; }
+}
+
+/* ------------------------------------------------------------ WANTED wall */
+.ox-boss-wall { min-width: 0; margin: 0 0 4rem; }
+.ox-wall-count { margin: 0 0 0.9rem; font: 800 1.5rem/1.1 var(--font-display); color: var(--ink); font-variant-numeric: tabular-nums; }
+.ox-wall-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 22px 16px; padding: 8px 4px; }
+@media (max-width: 920px) { .ox-wall-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .ox-wall-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; } }
+@media (max-width: 340px) { .ox-wall-grid { grid-template-columns: minmax(0, 1fr); } }
+
+.ox-wanted { min-width: 0; transform: rotate(var(--tilt, 0deg)); transition: transform 0.2s ease; }
+.ox-wanted:hover { transform: rotate(0deg) translateY(-2px); }
+.ox-wanted-paper {
+  position: relative; display: grid; justify-items: center; align-content: start; gap: 6px; height: 100%; box-sizing: border-box;
+  padding: 12px 12px 14px; text-align: center;
+  background: linear-gradient(180deg, #f8edd2 0%, #ead6a9 100%); color: #3a2614;
+  border: 4px solid #5a3a1e; border-radius: 6px;
+  box-shadow: 0 2px 0 rgba(60, 36, 14, 0.25), 0 10px 22px rgba(60, 36, 14, 0.2), inset 0 0 0 2px rgba(90, 58, 30, 0.22);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .ox-wanted-paper { background: linear-gradient(180deg, #3a2c1b 0%, #2b2014 100%); color: #f1e2cc; border-color: #9a6b3a; box-shadow: 0 10px 22px rgba(0, 0, 0, 0.4), inset 0 0 0 2px rgba(154, 107, 58, 0.3); }
+}
+:root[data-theme="dark"] .ox-wanted-paper { background: linear-gradient(180deg, #3a2c1b 0%, #2b2014 100%); color: #f1e2cc; border-color: #9a6b3a; box-shadow: 0 10px 22px rgba(0, 0, 0, 0.4), inset 0 0 0 2px rgba(154, 107, 58, 0.3); }
+.ox-wanted-head { margin: 0; font: 900 1.7rem/1 var(--font-display); letter-spacing: 0.22em; text-transform: uppercase; color: #7a2e12; }
+:root[data-theme="dark"] .ox-wanted-head, :root[data-theme="dark"] .ox-wanted-foot { color: #ffb07e; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .ox-wanted-head, :root:not([data-theme="light"]) .ox-wanted-foot { color: #ffb07e; }
+}
+.ox-wanted-art { display: block; width: 100%; margin: 2px 0 0; padding: 4px 0; border: 0; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
+.ox-wanted-art > .ca { display: block; width: 100%; max-width: 150px; margin: 0 auto; }
+.ox-wanted-art > .ca > svg { display: block; }
+.ox-wanted-name { margin: 0; font: 800 1.35rem/1.05 var(--font-display); letter-spacing: 0.02em; text-transform: uppercase; color: inherit; }
+.ox-wanted-seen, .ox-wanted-weak { margin: 0; font-size: 0.82rem; line-height: 1.35; }
+.ox-wanted-seen a { color: inherit; font-weight: 700; }
+.ox-wanted-foot { margin: 4px 0 0; font: 800 0.8rem/1.2 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: #7a2e12; }
+.ox-wanted .ox-boss-stamp { top: 52%; font-size: 1rem; }
+
+@keyframes ox-boss-loom {
+  0% { opacity: 0; transform: translateY(12px); }
+  60% { opacity: 1; transform: translateY(-2px); }
+  78% { transform: translateX(-2px); }
+  86% { transform: translateX(2px); }
+  94% { transform: translateX(-1px); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes ox-boss-hit {
+  0%, 100% { transform: none; }
+  20% { transform: translate(-6px, 1px) rotate(-2.5deg); }
+  40% { transform: translate(6px, -1px) rotate(2.5deg); }
+  60% { transform: translate(-5px, 0) rotate(-1.5deg); }
+  80% { transform: translate(4px, 0) rotate(1.5deg); }
+}
+@keyframes ox-boss-slam {
+  0% { opacity: 0; transform: translate(-50%, -50%) rotate(-12deg) scale(1.8); }
+  65% { opacity: 1; transform: translate(-50%, -50%) rotate(-12deg) scale(0.94); }
+  100% { opacity: 1; transform: translate(-50%, -50%) rotate(-12deg) scale(1); }
+}
+@keyframes ox-boss-oxi-pop { from { opacity: 0; transform: translateY(14px) scale(0.3); } to { opacity: 1; transform: none; } }
+
 /* ------------------------------------------------------------ keyframes */
 @keyframes cast-pop { from { transform: scale(0.2); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes cast-fade { from { opacity: 0; } }
@@ -158,4 +296,10 @@ button.fg-art:hover { background: var(--surface-3); }
   .ox-meet *, .ox-oxi-react, .ox-oxi-react *, .ox-molt, .ox-molt *, .fg-art *, .cast-spark, .cast-confetti {
     animation: none !important; transition: none !important;
   }
+  /* Bosses and the wall jump to their final state: no drain, shake, loom,
+     slam, confetti or tilt-up hover. Poses still switch. */
+  .ox-boss, .ox-boss *, .ox-wanted, .ox-wanted * {
+    animation: none !important; transition: none !important;
+  }
+  .ox-wanted:hover { transform: rotate(var(--tilt, 0deg)); }
 }

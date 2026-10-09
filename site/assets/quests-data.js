@@ -6,7 +6,8 @@ window.OX_QUESTS = [
   "path": "01_hello/hello1.rs",
   "title": "First words",
   "summary": "Make the program compile and greet the world.",
-  "boss": false
+  "boss": false,
+  "tests": 2
  },
  {
   "name": "hello2",
@@ -14,7 +15,8 @@ window.OX_QUESTS = [
   "path": "01_hello/hello2.rs",
   "title": "Formatting",
   "summary": "Build strings with format! and inline arguments.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "vars1",
@@ -22,7 +24,8 @@ window.OX_QUESTS = [
   "path": "02_variables/vars1.rs",
   "title": "Mutable on purpose",
   "summary": "Decide which bindings really need mut.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "vars2",
@@ -30,7 +33,8 @@ window.OX_QUESTS = [
   "path": "02_variables/vars2.rs",
   "title": "Shadowing",
   "summary": "Reuse a name for a value of a different type.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "vars3",
@@ -38,7 +42,8 @@ window.OX_QUESTS = [
   "path": "02_variables/vars3.rs",
   "title": "Constants",
   "summary": "Declare constants with explicit types.",
-  "boss": false
+  "boss": false,
+  "tests": 2
  },
  {
   "name": "types1",
@@ -46,7 +51,8 @@ window.OX_QUESTS = [
   "path": "03_types/types1.rs",
   "title": "Pick the right integer",
   "summary": "Choose integer types that fit the data and don't overflow.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "types2",
@@ -54,7 +60,8 @@ window.OX_QUESTS = [
   "path": "03_types/types2.rs",
   "title": "Tuples",
   "summary": "Return several values at once and destructure them.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "types3",
@@ -62,7 +69,8 @@ window.OX_QUESTS = [
   "path": "03_types/types3.rs",
   "title": "Arrays",
   "summary": "Fixed-size arrays, indexing and length.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "types4",
@@ -70,7 +78,8 @@ window.OX_QUESTS = [
   "path": "03_types/types4.rs",
   "title": "Casting with as",
   "summary": "Convert between numeric types explicitly.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "functions1",
@@ -78,7 +87,8 @@ window.OX_QUESTS = [
   "path": "04_control_flow/functions1.rs",
   "title": "Return values",
   "summary": "Fix signatures and the semicolon that swallows a return value.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "control1",
@@ -86,7 +96,8 @@ window.OX_QUESTS = [
   "path": "04_control_flow/control1.rs",
   "title": "if is an expression",
   "summary": "Use if/else to produce a value.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "control2",
@@ -94,7 +105,8 @@ window.OX_QUESTS = [
   "path": "04_control_flow/control2.rs",
   "title": "loop returns a value",
   "summary": "Break out of a loop with a result.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "control3",
@@ -102,7 +114,8 @@ window.OX_QUESTS = [
   "path": "04_control_flow/control3.rs",
   "title": "FizzBuzz, the Rust way",
   "summary": "Ranges, for loops and a match on a tuple.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "boss1_receipt",
@@ -110,7 +123,8 @@ window.OX_QUESTS = [
   "path": "04_control_flow/boss1_receipt.rs",
   "title": "Print a receipt",
   "summary": "Act I boss: totals, tax and aligned columns.",
-  "boss": true
+  "boss": true,
+  "tests": 6
  },
  {
   "name": "memory1",
@@ -118,7 +132,8 @@ window.OX_QUESTS = [
   "path": "05_memory/memory1.rs",
   "title": "Size it up",
   "summary": "Predict how many bytes common types take on the stack.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "memory2",
@@ -126,7 +141,8 @@ window.OX_QUESTS = [
   "path": "05_memory/memory2.rs",
   "title": "Length vs capacity",
   "summary": "Watch a String's heap buffer grow.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "move1",
@@ -134,7 +150,8 @@ window.OX_QUESTS = [
   "path": "06_ownership/move1.rs",
   "title": "Use after move",
   "summary": "Fix the classic E0382 without cloning.",
-  "boss": false
+  "boss": false,
+  "tests": 2
  },
  {
   "name": "move2",
@@ -142,7 +159,8 @@ window.OX_QUESTS = [
   "path": "06_ownership/move2.rs",
   "title": "Ownership in, ownership out",
   "summary": "Take a String, change it, hand it back.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "move3",
@@ -150,7 +168,8 @@ window.OX_QUESTS = [
   "path": "06_ownership/move3.rs",
   "title": "Copy or move?",
   "summary": "Know which values are copied and which are moved.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "move4",
@@ -158,7 +177,8 @@ window.OX_QUESTS = [
   "path": "06_ownership/move4.rs",
   "title": "Loops consume",
   "summary": "Iterate a Vec without giving it away.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "borrow1",
@@ -166,7 +186,8 @@ window.OX_QUESTS = [
   "path": "07_borrowing/borrow1.rs",
   "title": "Look, don't take",
   "summary": "Pass references instead of moving values.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "borrow2",
@@ -174,7 +195,8 @@ window.OX_QUESTS = [
   "path": "07_borrowing/borrow2.rs",
   "title": "Mutable borrow",
   "summary": "Modify a value through &mut.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "borrow3",
@@ -182,7 +204,8 @@ window.OX_QUESTS = [
   "path": "07_borrowing/borrow3.rs",
   "title": "Readers or a writer",
   "summary": "Untangle overlapping shared and mutable borrows.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "borrow4",
@@ -190,7 +213,8 @@ window.OX_QUESTS = [
   "path": "07_borrowing/borrow4.rs",
   "title": "No dangling",
   "summary": "Return owned data instead of a reference to a local.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "strings1",
@@ -198,7 +222,8 @@ window.OX_QUESTS = [
   "path": "08_strings_slices/strings1.rs",
   "title": "String or &str",
   "summary": "Convert between owned and borrowed text.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "strings2",
@@ -206,7 +231,8 @@ window.OX_QUESTS = [
   "path": "08_strings_slices/strings2.rs",
   "title": "First word",
   "summary": "Return a slice into the input.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "strings3",
@@ -214,7 +240,8 @@ window.OX_QUESTS = [
   "path": "08_strings_slices/strings3.rs",
   "title": "Characters, not bytes",
   "summary": "Handle UTF-8 text correctly.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "strings4",
@@ -222,7 +249,8 @@ window.OX_QUESTS = [
   "path": "08_strings_slices/strings4.rs",
   "title": "Building strings",
   "summary": "push_str, format! and title case.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "boss2_text_stats",
@@ -230,7 +258,8 @@ window.OX_QUESTS = [
   "path": "08_strings_slices/boss2_text_stats.rs",
   "title": "Text statistics",
   "summary": "Act II boss: analyze text without a single unnecessary clone.",
-  "boss": true
+  "boss": true,
+  "tests": 7
  },
  {
   "name": "structs1",
@@ -238,7 +267,8 @@ window.OX_QUESTS = [
   "path": "09_structs/structs1.rs",
   "title": "Define a struct",
   "summary": "Named fields, tuple structs and unit structs.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "structs2",
@@ -246,7 +276,8 @@ window.OX_QUESTS = [
   "path": "09_structs/structs2.rs",
   "title": "Methods and new()",
   "summary": "impl blocks, &self, &mut self and constructors.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "structs3",
@@ -254,7 +285,8 @@ window.OX_QUESTS = [
   "path": "09_structs/structs3.rs",
   "title": "Derive and compare",
   "summary": "derive Debug, Clone, PartialEq and update syntax.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "enums1",
@@ -262,7 +294,8 @@ window.OX_QUESTS = [
   "path": "10_enums_match/enums1.rs",
   "title": "Enums with data",
   "summary": "Model messages whose variants carry different data.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "enums2",
@@ -270,7 +303,8 @@ window.OX_QUESTS = [
   "path": "10_enums_match/enums2.rs",
   "title": "Exhaustive match",
   "summary": "A traffic light state machine.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "option1",
@@ -278,7 +312,8 @@ window.OX_QUESTS = [
   "path": "10_enums_match/option1.rs",
   "title": "Option instead of null",
   "summary": "Return None when there is nothing to return.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "option2",
@@ -286,7 +321,8 @@ window.OX_QUESTS = [
   "path": "10_enums_match/option2.rs",
   "title": "if let and let else",
   "summary": "Unwrap optional values without unwrap().",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "errors1",
@@ -294,7 +330,8 @@ window.OX_QUESTS = [
   "path": "11_errors/errors1.rs",
   "title": "Return a Result",
   "summary": "Replace a panic with a recoverable error.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "errors2",
@@ -302,7 +339,8 @@ window.OX_QUESTS = [
   "path": "11_errors/errors2.rs",
   "title": "The ? operator",
   "summary": "Propagate parse errors upward.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "errors3",
@@ -310,7 +348,8 @@ window.OX_QUESTS = [
   "path": "11_errors/errors3.rs",
   "title": "Your own error type",
   "summary": "An error enum with Display.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "errors4",
@@ -318,7 +357,8 @@ window.OX_QUESTS = [
   "path": "11_errors/errors4.rs",
   "title": "From conversions",
   "summary": "Let ? convert errors for you.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "vecs1",
@@ -326,7 +366,8 @@ window.OX_QUESTS = [
   "path": "12_collections/vecs1.rs",
   "title": "Vec basics",
   "summary": "push, get, iterate, remove.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "hashmap1",
@@ -334,7 +375,8 @@ window.OX_QUESTS = [
   "path": "12_collections/hashmap1.rs",
   "title": "Word counter",
   "summary": "Count words with the entry API.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "hashmap2",
@@ -342,7 +384,8 @@ window.OX_QUESTS = [
   "path": "12_collections/hashmap2.rs",
   "title": "Group by",
   "summary": "Laravel's groupBy, by hand.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "sets1",
@@ -350,7 +393,8 @@ window.OX_QUESTS = [
   "path": "12_collections/sets1.rs",
   "title": "Unique tags",
   "summary": "HashSet and BTreeSet for de-duplication and order.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "closures1",
@@ -358,7 +402,8 @@ window.OX_QUESTS = [
   "path": "13_iterators_closures/closures1.rs",
   "title": "Closures capture",
   "summary": "Write closures that read, mutate and move.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "iter1",
@@ -366,7 +411,8 @@ window.OX_QUESTS = [
   "path": "13_iterators_closures/iter1.rs",
   "title": "Collection pipeline",
   "summary": "Translate a Laravel collection chain into iterators.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "iter2",
@@ -374,7 +420,8 @@ window.OX_QUESTS = [
   "path": "13_iterators_closures/iter2.rs",
   "title": "fold, zip and sum",
   "summary": "Combine iterators to compute results.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "iter3",
@@ -382,7 +429,8 @@ window.OX_QUESTS = [
   "path": "13_iterators_closures/iter3.rs",
   "title": "Your own iterator",
   "summary": "Implement Iterator for a Fibonacci generator.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "boss3_ledger",
@@ -390,7 +438,8 @@ window.OX_QUESTS = [
   "path": "13_iterators_closures/boss3_ledger.rs",
   "title": "Bank ledger",
   "summary": "Act III boss: enums, Results, maps and iterators together.",
-  "boss": true
+  "boss": true,
+  "tests": 8
  },
  {
   "name": "traits1",
@@ -398,7 +447,8 @@ window.OX_QUESTS = [
   "path": "14_traits_generics/traits1.rs",
   "title": "Implement a trait",
   "summary": "Give two types the same ability.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "traits2",
@@ -406,7 +456,8 @@ window.OX_QUESTS = [
   "path": "14_traits_generics/traits2.rs",
   "title": "Default methods and impl Trait",
   "summary": "Share behavior and accept anything that can do it.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "generics1",
@@ -414,7 +465,8 @@ window.OX_QUESTS = [
   "path": "14_traits_generics/generics1.rs",
   "title": "Generic largest",
   "summary": "One function, many types, with trait bounds.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "traits3",
@@ -422,7 +474,8 @@ window.OX_QUESTS = [
   "path": "14_traits_generics/traits3.rs",
   "title": "Trait objects",
   "summary": "A Vec<Box<dyn Shape>> of different shapes.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "traits4",
@@ -430,7 +483,8 @@ window.OX_QUESTS = [
   "path": "14_traits_generics/traits4.rs",
   "title": "Display and From",
   "summary": "Implement the standard traits everyone expects.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "lifetimes1",
@@ -438,7 +492,8 @@ window.OX_QUESTS = [
   "path": "15_lifetimes/lifetimes1.rs",
   "title": "Longest",
   "summary": "Tie an output reference to its inputs.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "lifetimes2",
@@ -446,7 +501,8 @@ window.OX_QUESTS = [
   "path": "15_lifetimes/lifetimes2.rs",
   "title": "Structs that borrow",
   "summary": "A parser that holds a &str.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "lifetimes3",
@@ -454,7 +510,8 @@ window.OX_QUESTS = [
   "path": "15_lifetimes/lifetimes3.rs",
   "title": "Outlive me",
   "summary": "Fix borrowed values that don't live long enough.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "modules1",
@@ -462,7 +519,8 @@ window.OX_QUESTS = [
   "path": "16_modules_cargo/modules1.rs",
   "title": "Visibility",
   "summary": "pub, private fields and constructors.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "modules2",
@@ -470,7 +528,8 @@ window.OX_QUESTS = [
   "path": "16_modules_cargo/modules2.rs",
   "title": "Paths and use",
   "summary": "Nested modules, use, self and super.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "tests1",
@@ -478,7 +537,8 @@ window.OX_QUESTS = [
   "path": "16_modules_cargo/tests1.rs",
   "title": "Testing toolkit",
   "summary": "Satisfy assert!, assert_eq!, should_panic and Result tests.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "box1",
@@ -486,7 +546,8 @@ window.OX_QUESTS = [
   "path": "17_smart_pointers/box1.rs",
   "title": "Recursive types",
   "summary": "Build a linked list with Box.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "rc1",
@@ -494,7 +555,8 @@ window.OX_QUESTS = [
   "path": "17_smart_pointers/rc1.rs",
   "title": "Shared ownership",
   "summary": "Count owners with Rc.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "refcell1",
@@ -502,7 +564,8 @@ window.OX_QUESTS = [
   "path": "17_smart_pointers/refcell1.rs",
   "title": "Interior mutability",
   "summary": "A test double that records calls through &self.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "rc_refcell1",
@@ -510,7 +573,8 @@ window.OX_QUESTS = [
   "path": "17_smart_pointers/rc_refcell1.rs",
   "title": "Shared and mutable",
   "summary": "Rc<RefCell<T>> for a shared shopping cart.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "boss4_template",
@@ -518,7 +582,8 @@ window.OX_QUESTS = [
   "path": "17_smart_pointers/boss4_template.rs",
   "title": "Mini Blade",
   "summary": "Act IV boss: a tiny template engine with traits and lifetimes.",
-  "boss": true
+  "boss": true,
+  "tests": 6
  },
  {
   "name": "threads1",
@@ -526,7 +591,8 @@ window.OX_QUESTS = [
   "path": "18_concurrency/threads1.rs",
   "title": "Spawn and join",
   "summary": "Run work on threads and collect the results.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "channels1",
@@ -534,7 +600,8 @@ window.OX_QUESTS = [
   "path": "18_concurrency/channels1.rs",
   "title": "Message passing",
   "summary": "Several producers, one consumer.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "mutex1",
@@ -542,7 +609,8 @@ window.OX_QUESTS = [
   "path": "18_concurrency/mutex1.rs",
   "title": "Shared counter",
   "summary": "Arc<Mutex<T>> across threads.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "scoped1",
@@ -550,7 +618,8 @@ window.OX_QUESTS = [
   "path": "18_concurrency/scoped1.rs",
   "title": "Scoped threads",
   "summary": "Borrow local data from threads safely.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "async1",
@@ -558,7 +627,8 @@ window.OX_QUESTS = [
   "path": "19_async/async1.rs",
   "title": "Drive a future",
   "summary": "Write a tiny block_on and run async functions.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "async2",
@@ -566,7 +636,8 @@ window.OX_QUESTS = [
   "path": "19_async/async2.rs",
   "title": "Hand-written future",
   "summary": "Implement Future yourself and watch it get polled.",
-  "boss": false
+  "boss": false,
+  "tests": 3
  },
  {
   "name": "http1",
@@ -574,7 +645,8 @@ window.OX_QUESTS = [
   "path": "20_web/http1.rs",
   "title": "Parse a request",
   "summary": "Turn raw HTTP text into a typed Request.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "http2",
@@ -582,7 +654,8 @@ window.OX_QUESTS = [
   "path": "20_web/http2.rs",
   "title": "A tiny router",
   "summary": "Laravel-style routes with path parameters.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "macros1",
@@ -590,7 +663,8 @@ window.OX_QUESTS = [
   "path": "21_mastery/macros1.rs",
   "title": "Your first macro",
   "summary": "A hashmap! macro with macro_rules!.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "newtype1",
@@ -598,7 +672,8 @@ window.OX_QUESTS = [
   "path": "21_mastery/newtype1.rs",
   "title": "Newtypes guard invariants",
   "summary": "Make invalid emails unrepresentable.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "builder1",
@@ -606,7 +681,8 @@ window.OX_QUESTS = [
   "path": "21_mastery/builder1.rs",
   "title": "Builder pattern",
   "summary": "A fluent builder with sensible defaults.",
-  "boss": false
+  "boss": false,
+  "tests": 4
  },
  {
   "name": "boss5_job_queue",
@@ -614,6 +690,7 @@ window.OX_QUESTS = [
   "path": "21_mastery/boss5_job_queue.rs",
   "title": "Job queue",
   "summary": "Final boss: a worker pool like Laravel queues, with threads and channels.",
-  "boss": true
+  "boss": true,
+  "tests": 6
  }
 ];

@@ -184,6 +184,24 @@
     .mp-oxi-body .ca { animation: none; }
   }
 
+  /* boss lairs: an act boss beside its chapter's stone */
+  .mp-lair { position: absolute; z-index: 1; display: block; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; color: var(--ink); text-decoration: none; transition: transform 0.15s; }
+  .mp-lair::before { content: ""; position: absolute; inset: 4px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(196, 31, 31, 0.34), 0 0 12px 3px rgba(196, 31, 31, 0.26); pointer-events: none; }
+  .mp-lair.is-defeated::before { display: none; }
+  .mp-lair-art { position: relative; display: block; width: 100%; height: 100%; }
+  .mp-lair-art > .ca { display: block; width: 100%; height: 100%; }
+  .mp-lair:not(.is-defeated) .mp-lair-art > .ca { animation: mp-lair-bob 3.2s ease-in-out infinite; }
+  .mp-lair.is-defeated .mp-lair-art { opacity: 0.7; filter: grayscale(1); }
+  .mp-lair-flag { position: absolute; top: -9px; right: -7px; z-index: 1; width: 16px; height: 22px; overflow: visible; pointer-events: none; }
+  .mp-lair-pole { stroke: var(--ink); stroke-width: 1.6; stroke-linecap: round; fill: none; }
+  .mp-lair-cloth { fill: var(--oxide); }
+  a.mp-lair:hover, a.mp-lair:focus-visible { transform: scale(1.1); }
+  .mp-frame.is-narrow .mp-lair { width: 40px; height: 40px; margin: -20px 0 0 -20px; }
+  @keyframes mp-lair-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+  @media (prefers-reduced-motion: reduce) {
+    .mp-lair, .mp-lair-art > .ca { transition: none; animation: none; }
+  }
+
   .mp-switch { display: inline-flex; gap: 4px; margin: 14px 0 26px; padding: 4px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
   .mp-switch button { appearance: none; min-width: 96px; min-height: 40px; padding: 0 18px; border: 0; border-radius: 999px; background: transparent; color: var(--ink-2); font: 800 1.02rem/1 var(--font-display); text-transform: uppercase; letter-spacing: 0.04em; cursor: pointer; }
   .mp-switch button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
@@ -457,10 +475,27 @@ Edit <span class="b">quests/06_ownership/move1.rs</span>
       }).join("");
     }).join("");
 
+    // Boss lairs: each act boss beside its chapter's stone, offset in map units.
+    var LAIR = { 4: [66, 20], 8: [-64, -34], 13: [66, -6], 17: [56, 22], 21: [-72, -10] };
+    var ROMAN_ACT = ["I", "II", "III", "IV", "V"];
+    var lairs = (CAST.bosses || []).map(function (b) {
+      var o = LAIR[b.ch] || [0, 0], s = S[b.ch - 1];
+      return { b: b, x: s.x + o[0], y: s.y + o[1], down: !!(st.quests && st.quests[b.quest]) };
+    });
+    var lairHtml = lairs.map(function (L, i) {
+      var c = chOf(L.b.ch);
+      var label = L.b.name + " guards chapter " + L.b.ch + ". " + (L.down ? "Defeated." : "Undefeated.");
+      return '<a class="mp-lair' + (L.down ? " is-defeated" : "") + '" href="chapters/' + esc(c.slug) + '.html#quests" aria-label="' + esc(label) +
+        '" data-lair="' + i + '" style="left:' + pct(L.x, W) + ';top:' + pct(L.y, H) + '"><span class="mp-lair-art">' +
+        CAST.boss(L.b.id, L.down ? { pose: "defeated" } : {}) + "</span>" +
+        (L.down ? '<svg class="mp-lair-flag" viewBox="0 0 16 22" aria-hidden="true"><path class="mp-lair-pole" d="M3 21 V2"/><path class="mp-lair-cloth" d="M3 2 L15 6.5 L3 11 Z"/></svg>' : "") +
+        "</a>";
+    }).join("");
+
     var oxi = '<div class="mp-oxi" aria-hidden="true" style="left:' + pct(sNow.x, W) + ';top:' + pct(sNow.y, H) + '"><div class="mp-oxi-body">' +
       CAST.el(allDone ? "graduate" : "oxi") + "</div></div>";
 
-    stage.innerHTML = M.svg() + stones + chars + oxi + '<div class="mp-card" id="mp-card" aria-hidden="true"></div>';
+    stage.innerHTML = M.svg() + stones + chars + lairHtml + oxi + '<div class="mp-card" id="mp-card" aria-hidden="true"></div>';
 
     var svg = stage.querySelector("svg.mp-svg"), trail = svg.querySelector(".mp-trail");
     var card = document.getElementById("mp-card"), oxiEl = stage.querySelector(".mp-oxi");
@@ -529,9 +564,9 @@ Edit <span class="b">quests/06_ownership/move1.rs</span>
     }
     // Right of the stone, else flipped left, else below or above it: the first
     // spot that fits inside the map box AND the part of it currently on screen.
-    function placeCard(n) {
-      var s = S[n - 1], SW = stage.clientWidth, SH = stage.clientHeight;
-      var r = frame.classList.contains("is-narrow") ? 22 : 25;
+    // s: the point in map units, r: the radius in px it sits clear of.
+    function placeCard(s, r) {
+      var SW = stage.clientWidth, SH = stage.clientHeight;
       var cx = s.x / W * SW, cy = s.y / H * SH, cw = card.offsetWidth, ch = card.offsetHeight;
       var xMin = Math.max(8, scroll.scrollLeft + 8), xMax = Math.min(SW - 8, scroll.scrollLeft + scroll.clientWidth - 8);
       var spots = [
@@ -548,7 +583,23 @@ Edit <span class="b">quests/06_ownership/move1.rs</span>
     }
     Array.prototype.forEach.call(stage.querySelectorAll(".mp-stone"), function (a) {
       var n = +a.getAttribute("data-n");
-      var show = function () { fillCard(n); placeCard(n); card.classList.add("is-on"); };
+      var show = function () { fillCard(n); placeCard(S[n - 1], frame.classList.contains("is-narrow") ? 22 : 25); card.classList.add("is-on"); };
+      var hide = function () { card.classList.remove("is-on"); };
+      a.addEventListener("mouseenter", show);
+      a.addEventListener("focus", show);
+      a.addEventListener("mouseleave", hide);
+      a.addEventListener("blur", hide);
+    });
+
+    // A lair's card: the boss, its act and quest, and what it is weak to.
+    function fillLair(L) {
+      var qq = Q.find(function (q) { return q.name === L.b.quest; });
+      card.innerHTML = "<b>" + esc(L.b.name) + "</b><span>Act " + ROMAN_ACT[L.b.act - 1] + " boss · " + esc(qq ? qq.title : L.b.quest) +
+        "</span><small>Weak to: " + esc(L.b.weak) + "</small>";
+    }
+    Array.prototype.forEach.call(stage.querySelectorAll(".mp-lair"), function (a) {
+      var L = lairs[+a.getAttribute("data-lair")];
+      var show = function () { fillLair(L); placeCard({ x: L.x, y: L.y }, frame.classList.contains("is-narrow") ? 20 : 23); card.classList.add("is-on"); };
       var hide = function () { card.classList.remove("is-on"); };
       a.addEventListener("mouseenter", show);
       a.addEventListener("focus", show);

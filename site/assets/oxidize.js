@@ -726,7 +726,7 @@
     if (!quests.length) { el.innerHTML = `<p class="ox-forge-howto">Quests for this chapter are on the way.</p>`; return; }
     quests.forEach((q) => {
       const done = !!state.quests[q.name];
-      const card = h("div", { class: "ox-quest" + (q.boss ? " is-boss" : "") + (done ? " is-done" : "") });
+      const card = h("div", { class: "ox-quest" + (q.boss ? " is-boss" : "") + (done ? " is-done" : ""), "data-quest": q.name });
       card.innerHTML = `<div class="ox-quest-icon">${ICON.anvil}</div><div><h4>${q.boss ? "Boss · " : ""}${esc(q.title)}</h4><p>${esc(q.summary || "")} <code>quests/${esc(q.path)}</code></p></div>`;
       const lab = h("label", { class: "ox-quest-check" });
       const cb = h("input", { type: "checkbox" });
@@ -734,6 +734,7 @@
       cb.addEventListener("change", () => {
         state.quests[q.name] = cb.checked;
         save();
+        document.dispatchEvent(new CustomEvent("ox:quest", { detail: { name: q.name, done: cb.checked, boss: !!q.boss } }));
         card.classList.toggle("is-done", cb.checked);
         if (cb.checked) award(q.boss ? 60 : 20, "quest: " + q.title, "quest:" + q.name);
       });
