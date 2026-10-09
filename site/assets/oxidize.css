@@ -815,6 +815,11 @@ details.ox-think > summary {
   align-items: baseline;
 }
 details.ox-think > summary::-webkit-details-marker { display: none; }
+details.ox-think > summary > .ox-think-q { flex: 1; min-width: 0; }
+@media (max-width: 560px) {
+  details.ox-think > summary { flex-wrap: wrap; }
+  details.ox-think > summary::after { margin-left: 0; }
+}
 details.ox-think > summary::before {
   content: "THINK FIRST";
   flex: none;

@@ -859,6 +859,14 @@
       if (pre.closest(".ox-fill")) return;
       enhancePre(pre);
     });
+    // A <summary> is a flex row; wrap its content so inline <code> doesn't
+    // become separate flex items that refuse to wrap.
+    $$("details.ox-think > summary").forEach((sum) => {
+      if (sum.querySelector(":scope > .ox-think-q")) return;
+      const span = h("span", { class: "ox-think-q" });
+      while (sum.firstChild) span.appendChild(sum.firstChild);
+      sum.appendChild(span);
+    });
     $$(".ox-callout").forEach(enhanceCallout);
     $$(".ox-bridge").forEach(enhanceBridge);
     $$(".ox-quiz").forEach(enhanceQuiz);
