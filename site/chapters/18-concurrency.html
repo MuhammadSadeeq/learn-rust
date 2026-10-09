@@ -1,0 +1,1863 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fearless Concurrency · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<link rel="stylesheet" href="../assets/cast-art.css">
+<link rel="stylesheet" href="../assets/cast.css">
+<link rel="stylesheet" href="../assets/motion.css">
+<link rel="stylesheet" href="../assets/story.css">
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/quests-data.js" defer></script>
+<script src="../assets/cards/ch18.js" defer></script>
+<script src="../assets/motion/ch18.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+<script src="../assets/cast-art.js"></script>
+<script src="../assets/cast.js" defer></script>
+<script src="../assets/motion.js" defer></script>
+<script src="../assets/xray.js" defer></script>
+<script src="../assets/story.js" defer></script>
+</head>
+<body data-chapter="18">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<div class="ox-page">
+<aside class="ox-rail" aria-label="Chapter contents"></aside>
+<main class="ox-main" id="main">
+
+<header class="ox-hero" data-auto>
+  <ul>
+    <li>Spawn threads, move data into them and collect their results.</li>
+    <li>Pass messages over channels, and know exactly when a receiver loop ends.</li>
+    <li>Share state with <code>Arc&lt;Mutex&lt;T&gt;&gt;</code>, <code>RwLock</code> and atomics.</li>
+    <li>Explain how <code>Send</code> and <code>Sync</code> turn data races into compile errors.</li>
+  </ul>
+</header>
+
+<section>
+<h2 id="php-model">From shared-nothing to shared memory</h2>
+
+<p>Your PHP code almost never thinks about two things running at the same moment, and that comes from how PHP runs. A PHP-FPM worker handles one request from start to finish. Each worker is a separate process with its own memory, so two workers share nothing and cannot corrupt each other. More load means more workers. Background work goes to queue workers under Horizon, which are separate processes too. Octane is the one setup to watch. It boots your app once and keeps each worker alive between requests, so a static variable can outlive the request that set it. Octane's docs warn that this can leak memory.</p>
+
+<p>A Rust program usually runs the other way. One process starts several threads, and all of them live in the same memory. That is fast: starting a thread is much cheaper than starting a process, and threads can hand each other data without copying it. It is also dangerous. When two threads touch the same memory with no coordination, and at least one of them writes, you have a <em>data race</em>. The result depends on timing, and it is often wrong without any error.</p>
+
+<figure class="ox-figure">
+<svg viewBox="0 0 400 376" width="400" role="img" aria-label="Top: three PHP-FPM worker processes, each with its own private memory and nothing shared. Bottom: one Rust process with three threads that all reach the same heap.">
+  <text x="16" y="22" class="t-muted" font-size="14">PHP-FPM: separate processes</text>
+  <rect x="8" y="32" width="384" height="130" rx="8" class="f-plain" stroke-width="1"/>
+  <rect x="20" y="44" width="108" height="106" rx="6" class="f-plain" stroke-width="1.2"/>
+  <text x="30" y="64" font-size="13" font-weight="700">worker 1</text>
+  <rect x="28" y="74" width="92" height="68" rx="4" class="f-stack" stroke-width="1.2"/>
+  <text x="36" y="112" font-size="12" class="t-muted">own memory</text>
+  <rect x="146" y="44" width="108" height="106" rx="6" class="f-plain" stroke-width="1.2"/>
+  <text x="156" y="64" font-size="13" font-weight="700">worker 2</text>
+  <rect x="154" y="74" width="92" height="68" rx="4" class="f-stack" stroke-width="1.2"/>
+  <text x="162" y="112" font-size="12" class="t-muted">own memory</text>
+  <rect x="272" y="44" width="108" height="106" rx="6" class="f-plain" stroke-width="1.2"/>
+  <text x="282" y="64" font-size="13" font-weight="700">worker 3</text>
+  <rect x="280" y="74" width="92" height="68" rx="4" class="f-stack" stroke-width="1.2"/>
+  <text x="288" y="112" font-size="12" class="t-muted">own memory</text>
+  <text x="16" y="196" class="t-muted" font-size="14">Rust: threads in one process</text>
+  <rect x="8" y="206" width="384" height="126" rx="8" class="f-plain" stroke-width="1"/>
+  <rect x="20" y="218" width="108" height="44" rx="6" class="f-stack" stroke-width="1.2"/>
+  <text x="30" y="245" font-size="13" font-weight="700">thread 1</text>
+  <rect x="146" y="218" width="108" height="44" rx="6" class="f-stack" stroke-width="1.2"/>
+  <text x="156" y="245" font-size="13" font-weight="700">thread 2</text>
+  <rect x="272" y="218" width="108" height="44" rx="6" class="f-stack" stroke-width="1.2"/>
+  <text x="282" y="245" font-size="13" font-weight="700">thread 3</text>
+  <path d="M74 262 V280 M200 262 V280 M326 262 V280" class="s-muted" stroke-width="2"/>
+  <rect x="20" y="280" width="360" height="40" rx="6" class="f-heap" stroke-width="1.5"/>
+  <text x="200" y="305" font-size="13" font-weight="700" text-anchor="middle">shared heap</text>
+  <text x="16" y="354" font-size="12" class="t-muted">PHP-FPM workers share nothing, so nothing races.</text>
+  <text x="16" y="370" font-size="12" class="t-muted">Rust threads share memory: every access must be safe.</text>
+</svg>
+<figcaption>Same language features, different memory model. The rest of this chapter is about the Rust half, at the bottom.</figcaption>
+</figure>
+
+<p>Rust's claim is that the ownership and borrowing rules you already know also rule out data races in safe code. The compiler reads who owns each value and who may write to it, and it refuses code where two threads could collide. The rest of this chapter shows how that works, and where it stops.</p>
+
+<details class="ox-think">
+  <summary>Why can a PHP app run fifty workers with no locks in your code?</summary>
+  <div class="ox-think-body">
+    <p>Each worker is its own process with its own memory, so nothing in one worker is reachable from another. The state that <em>is</em> shared (sessions, counters, rows) lives in MySQL, Redis or the cache, and those systems handle concurrency themselves.</p>
+    <p>Rust threads take that wall away. Their memory is reachable from every thread in the process, so the compiler has to prove that every shared access is safe.</p>
+  </div>
+</details>
+
+<aside class="ox-callout" data-kind="php">
+  <p>Your PHP brain says: concurrency means more processes. A process is a wall, and the wall keeps data apart for free. Threads have no wall. The language rules have to do the work the process boundary did for you.</p>
+</aside>
+
+<aside class="ox-callout" data-kind="insight">
+  <p>A data race needs three things: two threads, the same memory, and at least one write with no coordination. Remove any one of them and the race is gone. Rust's job is to make the compiler check the last two.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="spawn">Spawning threads</h2>
+
+<p><code>thread::spawn</code> takes a closure, starts it on a new thread, and returns a <code>JoinHandle</code> straight away. The closure runs at the same time as the code after the call. <code>join()</code> blocks until that thread finishes and returns whatever the closure returned. This program splits a sum across four threads:</p>
+
+<pre class="rs" data-run data-stdout="total = 500500">
+use std::thread;
+
+fn main() {
+    let mut handles = Vec::new();
+    for i in 0..4u64 {
+        handles.push(thread::spawn(move || {
+            let start = i * 250 + 1;
+            let end = start + 249;
+            (start..=end).sum::&lt;u64&gt;()
+        }));
+    }
+
+    let mut total = 0;
+    for handle in handles {
+        total += handle.join().unwrap();
+    }
+    println!("total = {total}");
+}
+</pre>
+
+<p>Each closure is marked <code>move</code>, so each thread gets its own copy of <code>i</code>. The threads may finish in any order, but the total is the same on every run, because <code>main</code> joins all of them before it prints.</p>
+
+<aside class="ox-callout" data-kind="trap">
+  <p><code>join()</code> returns a <code>Result</code>. It is <code>Err</code> if the thread panicked. <code>unwrap()</code> turns that into a panic in <code>main</code>, which is fine for a short program. In a long-running service, match on the error and decide what a crashed worker means for the work it was doing.</p>
+</aside>
+
+<p>Now the case that trips most people up. Borrow a local instead of moving it:</p>
+
+<pre class="rs" data-check="E0373">
+use std::thread;
+
+fn main() {
+    let names = vec![String::from("Ana"), String::from("Bo")];
+    let handle = thread::spawn(|| {
+        println!("{names:?}");
+    });
+    handle.join().unwrap();
+}
+</pre>
+
+<p>Here is what <code>rustc</code> says:</p>
+
+<pre class="rustc">
+error[E0373]: closure may outlive the current function, but it borrows `names`, which is owned by the current function
+ --&gt; src/main.rs:5:32
+  |
+5 |     let handle = thread::spawn(|| {
+  |                                ^^ may outlive borrowed value `names`
+6 |         println!("{names:?}");
+  |                    ----- `names` is borrowed here
+  |
+note: function requires argument type to outlive `'static`
+ --&gt; src/main.rs:5:18
+  |
+5 |       let handle = thread::spawn(|| {
+  |  __________________^
+6 | |         println!("{names:?}");
+7 | |     });
+  | |______^
+help: to force the closure to take ownership of `names` (and any other referenced variables), use the `move` keyword
+  |
+5 |     let handle = thread::spawn(move || {
+  |                                ++++
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0373`.
+</pre>
+
+<p>Read it from the top. The summary says the closure may outlive the function. The arrows show why. <code>names</code> is borrowed inside the closure, and <code>thread::spawn</code> makes no promise about when its thread ends. The closure therefore has to own what it uses. A borrow of <code>names</code> ends when <code>main</code> ends, and the thread might still be running then. The <code>help</code> line gives the fix.</p>
+
+<div class="ox-fill" data-id="18:fill-move">
+  <p class="ox-q">Complete the closure so the thread owns <code>name</code>.</p>
+  <pre class="rs">
+use std::thread;
+
+fn main() {
+    let name = String::from("worker");
+    let handle = thread::spawn([[move]] || {
+        println!("hello from {name}");
+    });
+    handle.join().unwrap();
+}
+</pre>
+  <div class="ox-why"><p><code>move</code> transfers <code>name</code> into the closure, so the thread owns the <code>String</code>. <code>main</code> can no longer use it, and that is the point. Chapter 06's move rule applies to closures exactly the same way.</p></div>
+</div>
+
+<p>Sometimes the threads should borrow instead of own. Say you want several threads to read parts of one list. <code>thread::scope</code> makes that safe. Every thread spawned inside the scope is joined before <code>scope</code> returns, so the borrows end while the data is still alive.</p>
+
+<pre class="rs" data-run data-stdout="10 26">
+use std::thread;
+
+fn main() {
+    let numbers = vec![1, 2, 3, 4, 5, 6, 7, 8];
+    let (left, right) = numbers.split_at(4);
+
+    let (left_sum, right_sum) = thread::scope(|s| {
+        let a = s.spawn(|| left.iter().sum::&lt;i32&gt;());
+        let b = s.spawn(|| right.iter().sum::&lt;i32&gt;());
+        (a.join().unwrap(), b.join().unwrap())
+    });
+
+    println!("{left_sum} {right_sum}");
+}
+</pre>
+
+<p>Both threads borrow slices of <code>numbers</code>. Nothing is moved, and <code>numbers</code> is still usable after the scope ends.</p>
+
+<details class="ox-think">
+  <summary>Why does <code>thread::scope</code> accept borrows that <code>thread::spawn</code> rejects?</summary>
+  <div class="ox-think-body">
+    <p><code>thread::spawn</code> promises nothing about when its thread ends, so the closure must own its data. <code>thread::scope</code> joins every thread before it returns, so the borrowed data is guaranteed to outlive them. The signature of <code>scope</code> expresses that, and the compiler checks it.</p>
+  </div>
+</details>
+
+<h3>Laravel's Concurrency facade</h3>
+
+<p>Laravel has a helper for running independent tasks at the same time. The <code>Concurrency</code> facade takes an array of closures, runs them together, and returns the results in the same order:</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+use Illuminate\Support\Facades\Concurrency;
+use Illuminate\Support\Facades\DB;
+
+[$userCount, $orderCount] = Concurrency::run([
+    fn () =&gt; DB::table('users')-&gt;count(),
+    fn () =&gt; DB::table('orders')-&gt;count(),
+]);</pre>
+  <pre class="rs" data-stdout="3 users, 2 orders">
+use std::thread;
+
+fn main() {
+    let users = vec!["ana", "bo", "cy"];
+    let orders = vec![10, 20];
+
+    let (user_count, order_count) = thread::scope(|s| {
+        let users_task = s.spawn(|| users.len());
+        let orders_task = s.spawn(|| orders.len());
+        (users_task.join().unwrap(), orders_task.join().unwrap())
+    });
+
+    println!("{user_count} users, {order_count} orders");
+}</pre>
+  <div class="ox-bridge-note"><p>The shape matches: two tasks run at once, and you get both results back. The memory model does not. <code>Concurrency::run</code> serializes each closure, runs it in a child PHP process, and serializes the result back. Each child works on a copy of what its closure captured, so it cannot change your variables. The scoped threads borrow <code>users</code> and <code>orders</code> from <code>main</code>. They share that memory, and the compiler checks that both threads finish before <code>main</code> uses the data again.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="channels">Message passing</h2>
+
+<p>Threads can share memory, and they can also send each other values. A channel is a queue with two ends: a <code>Sender</code> and a <code>Receiver</code>. <code>send</code> moves a value into the queue, and the receiver takes values out in order. Because <code>send</code> takes ownership, the sending thread cannot touch the value afterwards, so there is nothing to race on.</p>
+
+<p>Here three workers report back to <code>main</code>. Each one gets its own clone of the sender:</p>
+
+<pre class="rs" data-run data-stdout="worker 0 done\nworker 1 done\nworker 2 done">
+use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+
+    for id in 0..3 {
+        let tx = tx.clone();
+        thread::spawn(move || {
+            tx.send(format!("worker {id} done")).unwrap();
+        });
+    }
+    drop(tx); // without this line, the loop below never ends
+
+    let mut messages = Vec::new();
+    for msg in rx {
+        messages.push(msg);
+    }
+    messages.sort();
+    for msg in messages {
+        println!("{msg}");
+    }
+}
+</pre>
+
+<p>Cloning a <code>Sender</code> makes a new handle to the same queue. The receiver's loop ends only when <em>every</em> sender has been dropped. Each clone is dropped when its thread finishes. The original <code>tx</code> is still owned by <code>main</code>, which is why the program has the <code>drop(tx)</code> line.</p>
+
+<div class="ox-motion" data-scene="ch18-channel"></div>
+
+<aside class="ox-callout" data-kind="trap">
+  <p>Forgetting <code>drop(tx)</code> is the most common channel bug. The loop waits for one more message that can never arrive, and the program hangs. It doesn't panic and it doesn't print an error. When you review code with <code>for msg in rx</code>, check that every sender gets dropped.</p>
+</aside>
+
+<div class="ox-quiz" data-id="18:quiz-hang" data-label="Check yourself">
+  <p class="ox-q">This program has no <code>drop(tx)</code>. What does it do?</p>
+  <pre class="rs" data-check="ok">
+use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+    for id in 0..3 {
+        let tx = tx.clone();
+        thread::spawn(move || {
+            tx.send(id).unwrap();
+        });
+    }
+    let mut total = 0;
+    for n in rx {
+        total += n;
+    }
+    println!("{total}");
+}
+</pre>
+  <ol class="ox-choices">
+    <li>It prints <code>3</code> and exits, because the threads finish.</li>
+    <li data-correct>It hangs. <code>main</code> still holds a sender, so the loop never ends.</li>
+    <li>It doesn't compile, because <code>tx</code> is never dropped.</li>
+    <li>It prints <code>0</code>, because the loop ends before the threads send.</li>
+  </ol>
+  <div class="ox-why"><p>The threads finish and drop their clones, but the <code>tx</code> that <code>main</code> created is still alive. The channel stays open, so <code>for n in rx</code> waits for a message that is never sent. Add <code>drop(tx);</code> before the loop. Don't run this program as written: it will hang.</p></div>
+</div>
+
+<p>In Laravel 13, a job states its own retry rules with attributes. Each attribute sets one rule for that job class:</p>
+
+<pre class="php">
+namespace App\Jobs;
+
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Queue\Attributes\Backoff;
+use Illuminate\Queue\Attributes\Timeout;
+use Illuminate\Queue\Attributes\Tries;
+
+#[Tries(3)]
+#[Backoff([10, 60, 300])]
+#[Timeout(30)]
+class ProcessInvoice implements ShouldQueue
+{
+    use Queueable;
+
+    public function __construct(public readonly int $invoiceId) {}
+
+    public function handle(): void
+    {
+        // Send the invoice. The worker calls this once per attempt.
+    }
+}</pre>
+
+<p><code>Tries</code> sets how many attempts the job gets. <code>Backoff</code> sets how many seconds Laravel waits before each retry. <code>Timeout</code> sets how long one attempt may run, and it needs the <code>pcntl</code> extension. Here is how the job travels from a controller to a worker:</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+// In a controller: hand the work to the queue.
+ProcessInvoice::dispatch($invoice-&gt;id);
+
+// Later, a worker started by `php artisan queue:work`
+// pulls the job and runs its handle() method.</pre>
+  <pre class="rs" data-stdout="sending invoice 41">
+use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (jobs, queue) = mpsc::channel::&lt;u32&gt;();
+
+    let worker = thread::spawn(move || {
+        for invoice_id in queue {
+            println!("sending invoice {invoice_id}");
+        }
+    });
+
+    jobs.send(41).unwrap(); // ProcessInvoice::dispatch(41)
+    drop(jobs);             // no more jobs: the worker's loop ends
+    worker.join().unwrap();
+}
+</pre>
+  <div class="ox-bridge-note"><p>The shape is the same: one side hands off a job, and one consumer takes jobs in order. The differences matter. A Laravel queue is stored in Redis or a database, so jobs survive a crash and the workers can run on other machines. A channel lives in one process's memory and disappears with it. Use the queue for durable work between processes, and channels for coordination inside one program. The Rust worker above has no retries. A job that fails is gone unless your loop puts it back. In Laravel, <code>Tries</code> and <code>Backoff</code> handle that part for you.</p></div>
+</div>
+
+<h3>Bounded and unbounded channels</h3>
+
+<p><code>mpsc::channel()</code> has no limit. The standard library calls it an "infinitely buffered" channel. A sender never waits, so a fast producer can fill memory long before a slow receiver catches up. For a short job that is fine. For a long-running program it is a quiet risk.</p>
+
+<p><code>mpsc::sync_channel(n)</code> sets a limit. Its buffer holds at most <code>n</code> messages. When the buffer is full, <code>send</code> blocks the sending thread until the receiver takes a message. The slow side pushes back on the fast side. That push-back is called <strong>backpressure</strong>: work waits at the edge of the program instead of piling up in memory.</p>
+
+<pre class="rs" data-run data-stdout="queued 1\nqueued 2\nfull, rejected 3\nfirst received: 1">
+use std::sync::mpsc::{self, TrySendError};
+
+fn main() {
+    // A bounded channel with room for two messages.
+    let (tx, rx) = mpsc::sync_channel::&lt;u32&gt;(2);
+    for n in 1..=3 {
+        match tx.try_send(n) {
+            Ok(()) =&gt; println!("queued {n}"),
+            Err(TrySendError::Full(v)) =&gt; println!("full, rejected {v}"),
+            Err(TrySendError::Disconnected(v)) =&gt; println!("closed, rejected {v}"),
+        }
+    }
+    println!("first received: {}", rx.recv().unwrap());
+}
+</pre>
+
+<p><code>try_send</code> never waits. When there is no room, it gives the value back inside <code>TrySendError::Full</code>, and the caller decides what to do with it. <code>send</code> is the version that waits. A bound of <code>0</code> is allowed too. It makes a <em>rendezvous</em> channel, where every <code>send</code> waits until a <code>recv</code> takes the value.</p>
+
+<div class="ox-quiz" data-id="18:quiz-bounded" data-label="Check yourself">
+  <p class="ox-q">What does this program print? Nothing has been received yet.</p>
+  <pre class="rs" data-stdout="true">
+use std::sync::mpsc;
+
+fn main() {
+    let (tx, _rx) = mpsc::sync_channel::&lt;&amp;str&gt;(1);
+    let _ = tx.try_send("a");
+    let second = tx.try_send("b");
+    println!("{}", second.is_err());
+}
+</pre>
+  <ol class="ox-choices">
+    <li><code>false</code>, because the second message waits in the sender.</li>
+    <li data-correct><code>true</code>, because the one slot is taken by the first message, so the second <code>try_send</code> fails at once.</li>
+    <li>It hangs, because the second send blocks.</li>
+    <li>It prints nothing, because <code>_rx</code> is never used.</li>
+  </ol>
+  <div class="ox-why"><p><code>try_send</code> never waits. The buffer holds one message, and nothing has taken the first one out, so the second call returns <code>Err</code> straight away. The program prints the result of <code>is_err()</code>. A plain <code>send</code> in the same spot would block instead.</p></div>
+</div>
+
+<h3 id="worker-pool">One queue, many workers</h3>
+
+<p>A worker pool is a common job. Several threads take jobs from one queue, and each job goes to exactly one worker. It looks like a channel with many receivers. Rust does not let you write that directly, because a <code>Receiver</code> has one owner. There are two obvious ways to share one, and the compiler stops both.</p>
+
+<p>The first is to clone it. A <code>Receiver</code> has no <code>clone</code> method:</p>
+
+<pre class="rs" data-check="E0599">
+use std::sync::mpsc;
+
+fn main() {
+    let (_tx, rx) = mpsc::channel::&lt;u32&gt;();
+    let _second = rx.clone();
+}
+</pre>
+
+<pre class="rustc">
+error[E0599]: no method named `clone` found for struct `std::sync::mpsc::Receiver&lt;T&gt;` in the current scope
+ --&gt; src/main.rs:5:22
+  |
+5 |     let _second = rx.clone();
+  |                      ^^^^^ method not found in `std::sync::mpsc::Receiver&lt;u32&gt;`
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0599`.
+</pre>
+
+<p>The second is to share it through an <code>Arc</code>. That fails for a different reason. An <code>Arc&lt;T&gt;</code> can be sent to another thread only when <code>T</code> is both <code>Send</code> and <code>Sync</code>, and a <code>Receiver</code> is not <code>Sync</code>:</p>
+
+<pre class="rs" data-check="E0277">
+use std::sync::Arc;
+use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (_tx, rx) = mpsc::channel::&lt;u32&gt;();
+    let rx = Arc::new(rx);
+    let worker = thread::spawn(move || rx.recv());
+    let _ = worker.join();
+}
+</pre>
+
+<pre class="rustc">
+error[E0277]: `std::sync::mpsc::Receiver&lt;u32&gt;` cannot be shared between threads safely
+   --&gt; src/main.rs:8:32
+    |
+  8 |     let worker = thread::spawn(move || rx.recv());
+    |                  ------------- ^^^^^^^^^^^^^^^^^ `std::sync::mpsc::Receiver&lt;u32&gt;` cannot be shared between threads safely
+    |                  |
+    |                  required by a bound introduced by this call
+    |
+    = help: the trait `Sync` is not implemented for `std::sync::mpsc::Receiver&lt;u32&gt;`
+    = note: required for `Arc&lt;std::sync::mpsc::Receiver&lt;u32&gt;&gt;` to implement `Send`
+note: required because it's used within this closure
+   --&gt; src/main.rs:8:32
+    |
+  8 |     let worker = thread::spawn(move || rx.recv());
+    |                                ^^^^^^^
+note: required by a bound in `spawn`
+   --&gt; /root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/thread/functions.rs:128:8
+    |
+125 | pub fn spawn&lt;F, T&gt;(f: F) -&gt; JoinHandle&lt;T&gt;
+    |        ----- required by a bound in this function
+...
+128 |     F: Send + 'static,
+    |        ^^^^ required by this bound in `spawn`
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0277`.
+</pre>
+
+<p>The fix is to put the receiver behind a <code>Mutex</code>. A <code>Mutex&lt;T&gt;</code> is <code>Sync</code> when <code>T</code> is <code>Send</code>, so <code>Arc&lt;Mutex&lt;Receiver&lt;Job&gt;&gt;&gt;</code> can be shared. The lock lets one worker at a time call <code>recv</code>. Here a <code>Job</code> is a number, to keep the example short. A real job could be a struct or a closure.</p>
+
+<pre class="rs" data-run data-stdout="1 squared is 1\n2 squared is 4\n3 squared is 9\n4 squared is 16\n5 squared is 25\n6 squared is 36">
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+type Job = u32; // a number to square; a real job could be a struct
+
+fn main() {
+    let (job_tx, job_rx) = mpsc::channel::&lt;Job&gt;();
+    let (done_tx, done_rx) = mpsc::channel::&lt;String&gt;();
+
+    // One receiver, shared by every worker.
+    let job_rx = Arc::new(Mutex::new(job_rx));
+
+    let mut workers = Vec::new();
+    for _ in 0..3 {
+        let job_rx = Arc::clone(&amp;job_rx);
+        let done_tx = done_tx.clone();
+        workers.push(thread::spawn(move || loop {
+            // Lock only long enough to take one job. The guard is a temporary,
+            // so the lock is released at the end of this statement.
+            let job = job_rx.lock().unwrap().recv();
+            match job {
+                Ok(n) =&gt; done_tx.send(format!("{n} squared is {}", n * n)).unwrap(),
+                Err(_) =&gt; break, // every sender is gone: no more jobs
+            }
+        }));
+    }
+    drop(done_tx);
+
+    for n in 1..=6 {
+        job_tx.send(n).unwrap();
+    }
+    drop(job_tx); // no more jobs: each worker's recv returns Err
+
+    // The results arrive in any order, so sort them before printing.
+    let mut results: Vec&lt;String&gt; = done_rx.iter().collect();
+    results.sort();
+    for line in results {
+        println!("{line}");
+    }
+    for worker in workers {
+        worker.join().unwrap();
+    }
+}
+</pre>
+
+<p>Each worker locks the receiver only long enough to take one job. The guard is a temporary. It lives until the end of the <code>let</code> statement, and <code>recv</code> returns a plain <code>Result</code> that does not borrow it. So the lock is free while the worker does the job. If the worker kept the lock during the job, the other workers would wait at the lock, and the pool would run one job at a time.</p>
+
+<p>The same lock can be held much longer by accident. A <code>while let</code> keeps its temporaries alive until the end of the loop body, so <code>while let Ok(job) = job_rx.lock().unwrap().recv()</code> holds the lock while every job runs. The quiz checks it.</p>
+
+<div class="ox-quiz" data-id="18:quiz-worker-guard" data-label="Check yourself">
+  <p class="ox-q">A worker reads its jobs with <code>while let</code>. What does this program print?</p>
+  <pre class="rs" data-stdout="1 true">
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
+
+fn main() {
+    let (tx, rx) = mpsc::channel::&lt;u32&gt;();
+    let rx = Arc::new(Mutex::new(rx));
+    tx.send(1).unwrap();
+    drop(tx);
+    while let Ok(n) = rx.lock().unwrap().recv() {
+        // Is the lock still held here?
+        println!("{n} {}", rx.try_lock().is_err());
+    }
+}
+</pre>
+  <ol class="ox-choices">
+    <li><code>1 false</code>, because the lock is released once <code>recv</code> returns.</li>
+    <li data-correct><code>1 true</code>, because the guard from <code>lock()</code> lives until the end of the loop body, so the lock is still held.</li>
+    <li>It hangs, because <code>try_lock</code> waits for the lock.</li>
+  </ol>
+  <div class="ox-why"><p><code>try_lock</code> never waits. It returns an error at once when the lock is already held, and here this same thread holds it. Write the job on its own <code>let</code> line, as in the pool above, and the lock is free while the job runs.</p></div>
+</div>
+
+<p>The <code>bounded1</code> quest in the Forge builds this pool with a bounded queue, and it counts the jobs waiting in that queue.</p>
+</section>
+
+<section>
+<h2 id="shared">Shared state: Arc&lt;Mutex&lt;T&gt;&gt;</h2>
+
+<p>Sometimes threads really do need the same value: a counter, a cache, a list of results. Rust splits that job in two. <code>Arc&lt;T&gt;</code> lets several owners hold one value. It works like <code>Rc</code> from Chapter 17, except its count is updated atomically, so it is safe across threads. <code>Mutex&lt;T&gt;</code> wraps the data and hands out access one thread at a time. It is the single key to the room. Unlike <code>&amp;mut</code>, which the compiler checks before the program runs, with no lock at all, a <code>Mutex</code> is a real lock. A thread that asks for it waits its turn.</p>
+
+<div class="ox-meet" data-cast="keeper" data-say="One key, one room. Whoever holds me goes in, and everyone else waits at the door."></div>
+
+<pre class="rs" data-run data-stdout="count = 8000">
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+fn main() {
+    let counter = Arc::new(Mutex::new(0));
+    let mut handles = Vec::new();
+
+    for _ in 0..8 {
+        let counter = Arc::clone(&amp;counter);
+        handles.push(thread::spawn(move || {
+            for _ in 0..1000 {
+                let mut guard = counter.lock().unwrap();
+                *guard += 1;
+            }
+        }));
+    }
+
+    for handle in handles {
+        handle.join().unwrap();
+    }
+
+    println!("count = {}", *counter.lock().unwrap());
+}
+</pre>
+
+<p><code>lock()</code> returns a <code>MutexGuard</code>. The guard dereferences to the number, so <code>*guard += 1</code> changes the value inside the mutex. The lock is released when the guard is dropped. Here that happens at the end of each loop pass, so each thread holds the lock for exactly one increment. Keep critical sections that short. Anything slow inside the lock makes every other thread wait.</p>
+
+<div class="ox-motion" data-scene="ch18-key"></div>
+
+<aside class="ox-callout" data-kind="trap">
+  <p>The guard <em>is</em> the lock. <code>let _ = counter.lock();</code> drops the guard at once, so nothing is protected. This is the same trap as in Chapter 06. Give the guard a name, as above.</p>
+</aside>
+
+<aside class="ox-callout" data-kind="php">
+  <p>Laravel's <code>Cache::lock()</code> is the cross-process cousin. It coordinates separate PHP processes through the cache store. A <code>Mutex</code> coordinates threads inside one process, and the guard releases the lock for you when it goes out of scope.</p>
+</aside>
+
+<div class="ox-quiz" data-id="18:quiz-mutex-deadlock" data-label="Check yourself">
+  <p class="ox-q">Does this compile? What happens when it runs?</p>
+  <pre class="rs" data-check="ok">
+use std::sync::Mutex;
+
+fn main() {
+    let m = Mutex::new(5);
+    let a = m.lock().unwrap();
+    let b = m.lock().unwrap();
+    println!("{} {}", *a, *b);
+}
+</pre>
+  <ol class="ox-choices">
+    <li>No. A Mutex can't be locked twice, so the second <code>lock()</code> is a borrow error.</li>
+    <li data-correct>It compiles. At runtime the second <code>lock()</code> waits for a lock this same thread already holds. The documentation says that may deadlock or panic.</li>
+    <li>Yes, and it prints <code>5 5</code>.</li>
+  </ol>
+  <div class="ox-why"><p><code>lock()</code> takes <code>&amp;self</code>, so the type system happily allows two guards to exist at once. The lock itself knows nothing about which thread owns it. Never lock the same mutex twice on one thread without dropping the first guard. Don't run this program: it will hang or panic.</p></div>
+</div>
+
+<p>A <code>RwLock</code> is the borrow rule at runtime. Any number of threads can hold a read guard at once, like many <code>&amp;T</code>. A writer needs the write guard, which waits until every reader has let go, like <code>&amp;mut T</code>. Use it when reads far outnumber writes. For short critical sections, a plain <code>Mutex</code> is simpler and is often the better choice.</p>
+
+<pre class="rs" data-run data-stdout="v1\nv1\nv2">
+use std::sync::RwLock;
+use std::thread;
+
+fn main() {
+    let config = RwLock::new(String::from("v1"));
+    thread::scope(|s| {
+        // Readers on separate threads can hold their read guards at the same time.
+        s.spawn(|| println!("{}", *config.read().unwrap()));
+        s.spawn(|| println!("{}", *config.read().unwrap()));
+    });
+    *config.write().unwrap() = String::from("v2");
+    println!("{}", config.read().unwrap());
+}
+</pre>
+
+<p>For a single number, a lock is more machinery than you need. <code>AtomicUsize</code> offers operations such as <code>fetch_add</code>, which adds to the value and returns the old one as one indivisible operation. No thread can read between the add and the store, so no update is lost.</p>
+
+<pre class="rs" data-run data-stdout="hits = 8000">
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::thread;
+
+fn main() {
+    let hits = Arc::new(AtomicUsize::new(0));
+    let handles: Vec&lt;_&gt; = (0..8)
+        .map(|_| {
+            let hits = Arc::clone(&amp;hits);
+            thread::spawn(move || {
+                for _ in 0..1000 {
+                    hits.fetch_add(1, Ordering::Relaxed);
+                }
+            })
+        })
+        .collect();
+
+    for handle in handles {
+        handle.join().unwrap();
+    }
+    println!("hits = {}", hits.load(Ordering::Relaxed));
+}
+</pre>
+
+<p>The <code>Ordering</code> argument says how this operation is ordered relative to other memory accesses. <code>Relaxed</code> is enough for a standalone counter, where nothing else depends on the order. Once an atomic is used to publish other data, you need stronger orderings. <em>Rust Atomics and Locks</em> by Mara Bos covers them in depth.</p>
+
+<p>One more detail. If a thread panics while it holds a guard, the mutex is <em>poisoned</em>. Later calls to <code>lock()</code> return <code>Err</code>, because the data may be half-updated. <code>lock().unwrap()</code> turns that into a panic, which is the usual choice.</p>
+</section>
+
+<section>
+<h2 id="globals">Safe globals</h2>
+
+<p>Some values belong to the whole program: a table of prices, a compiled regex, a connection pool. Every thread should see the same one. A <code>static</code> item is that kind of value. It lives for the whole run of the program and is never freed. A <code>static</code> that threads share must be <code>Sync</code>, which means a shared reference <code>&amp;T</code> can be used from several threads at once (the section Send and Sync explains it). The compiler checks it:</p>
+
+<pre class="rs" data-check="error">
+use std::cell::Cell;
+
+static COUNT: Cell&lt;u32&gt; = Cell::new(0);
+
+fn main() {
+    COUNT.set(COUNT.get() + 1);
+    println!("{}", COUNT.get());
+}
+</pre>
+
+<pre class="rustc">
+error[E0277]: `Cell&lt;u32&gt;` cannot be shared between threads safely
+ --&gt; src/main.rs:3:15
+  |
+3 | static COUNT: Cell&lt;u32&gt; = Cell::new(0);
+  |               ^^^^^^^^^ `Cell&lt;u32&gt;` cannot be shared between threads safely
+  |
+  = help: the trait `Sync` is not implemented for `Cell&lt;u32&gt;`
+  = note: if you want to do aliasing and mutation between multiple threads, use `std::sync::RwLock` or `std::sync::atomic::AtomicU32` instead
+  = note: shared static variables must have a type that implements `Sync`
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0277`.
+</pre>
+
+<p>A <code>Cell</code> changes its value through a shared reference. Two threads must not do that at the same time without a lock or an atomic. The next two types are the usual answer for a value that is set up once and then read.</p>
+
+<p>The initializer of a <code>static</code> has to be computed when the program is compiled. A value that needs work at run time uses one of two standard library types. <code>LazyLock</code> runs its setup code the first time something reads it. <code>OnceLock</code> is an empty slot that the program fills at most once. Both are safe to share between threads. <code>LazyLock</code> is stable since Rust 1.80, and <code>OnceLock</code> since 1.70.</p>
+
+<pre class="rs" data-run data-stdout="start\nbuilding the table once\ntea costs 300\ncake costs 450\nErr(&quot;again&quot;)\noxide">
+use std::collections::HashMap;
+use std::sync::{LazyLock, OnceLock};
+
+static PRICES: LazyLock&lt;HashMap&lt;&amp;'static str, u32&gt;&gt; = LazyLock::new(|| {
+    println!("building the table once");
+    HashMap::from([("tea", 300), ("cake", 450)])
+});
+
+static NAME: OnceLock&lt;String&gt; = OnceLock::new();
+
+fn main() {
+    println!("start");
+    println!("tea costs {}", PRICES["tea"]);
+    println!("cake costs {}", PRICES["cake"]);
+    NAME.set("oxide".to_string()).unwrap();
+    println!("{:?}", NAME.set("again".to_string()));
+    println!("{}", NAME.get().unwrap());
+}
+</pre>
+
+<p>The table is built at the first read, which is why the message comes after <code>start</code>. <code>NAME.set</code> returns <code>Err</code> with the value you tried to store, because the slot is already full. <code>get</code> returns an <code>Option</code>, so you handle the empty case. If two threads read <code>PRICES</code> at the same time, one builds the table and the other waits. The documentation says a read blocks while another initialization is running.</p>
+
+<h3><code>thread_local!</code>: one copy per thread</h3>
+
+<p>Some state belongs to one thread, such as a counter of the calls that thread has made. <code>thread_local!</code> gives every thread its own copy, which starts from the initial value. You reach it with <code>with</code>, which lends you the value for the length of a closure.</p>
+
+<pre class="rs" data-run data-stdout="main thread: 3\nnew thread: 1">
+use std::cell::Cell;
+use std::thread;
+
+thread_local! {
+    static CALLS: Cell&lt;u32&gt; = Cell::new(0);
+}
+
+fn tick() -&gt; u32 {
+    CALLS.with(|c| {
+        c.set(c.get() + 1);
+        c.get()
+    })
+}
+
+fn main() {
+    tick();
+    tick();
+    println!("main thread: {}", tick());
+    let other = thread::spawn(tick).join().unwrap();
+    println!("new thread: {other}");
+}
+</pre>
+
+<p>The main thread made three calls, so it sees 3. The new thread starts from the initial value, makes one call, and sees 1.</p>
+
+<h3>Why not <code>static mut</code></h3>
+
+<p>Chapter 02 said that <code>static mut</code> exists and that you should use <code>const</code> until later. You will still meet it in older code, and agents write it. Every access to a <code>static mut</code> needs <code>unsafe</code>, and nothing stops two threads from using it at once. Edition 2024 goes further. It refuses to create a reference to a mutable static, even when you only want to read it:</p>
+
+<pre class="rs" data-check="error">
+static mut COUNTER: u32 = 0;
+
+fn main() {
+    unsafe {
+        COUNTER += 1;
+        let r = &amp;COUNTER;
+        println!("{r}");
+    }
+}
+</pre>
+
+<pre class="rustc">
+error: creating a shared reference to mutable static
+ --&gt; src/main.rs:6:17
+  |
+6 |         let r = &amp;COUNTER;
+  |                 ^^^^^^^^ shared reference to mutable static
+  |
+  = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+  = note: for more information, see &lt;https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html&gt;
+  = note: `#[deny(static_mut_refs)]` (part of `#[deny(rust_2024_compatibility)]`) on by default
+help: use `&amp;raw const` instead to create a raw pointer
+  |
+6 |         let r = &amp;raw const COUNTER;
+  |                  +++++++++
+</pre>
+
+<p>The write on line 5 is allowed. The reference on line 6 is not. Edition 2021 reports the same line as a warning, and edition 2024 makes it an error. Chapter 21 covers <code>unsafe</code> and raw pointers. For shared state that a program sets up and reads, use <code>LazyLock</code>, <code>OnceLock</code> or an atomic instead.</p>
+
+<h3>Pass the value when you can</h3>
+
+<p>Most of the time the best global is no global. Pass the value to the code that needs it. A function that takes a <code>&amp;PriceTable</code> says what it depends on, and a test can give it a different table. A global hides that dependency, so a test has to work with the real value or change the code.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+class AppServiceProvider extends ServiceProvider
+{
+    public function register(): void
+    {
+        $this-&gt;app-&gt;singleton(PriceTable::class, fn () =&gt; new PriceTable(['tea' =&gt; 300]));
+    }
+}</pre>
+  <pre class="rs" data-run data-stdout="tea costs 300">
+use std::collections::HashMap;
+use std::sync::LazyLock;
+
+static PRICES: LazyLock&lt;HashMap&lt;&amp;'static str, u32&gt;&gt; =
+    LazyLock::new(|| HashMap::from([("tea", 300)]));
+
+fn main() {
+    println!("tea costs {}", PRICES["tea"]);
+}
+</pre>
+  <div class="ox-bridge-note"><p>Laravel's container plays the part of a global. A <code>singleton</code> is built once, and later calls return the same object, as the container docs say. The container is still a registry you can change: a test can bind a fake for the same class. A Rust static is fixed for the life of the program. In Rust, pass the table into the function that needs it, the way Laravel injects a dependency into a constructor.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="18:quiz-lazy-init" data-label="Check yourself">
+  <p class="ox-q">What does this program print? Two threads read the same <code>LazyLock</code> at about the same time.</p>
+  <pre class="rs" data-stdout="init\n3 3">
+use std::sync::LazyLock;
+
+static TABLE: LazyLock&lt;Vec&lt;u32&gt;&gt; = LazyLock::new(|| {
+    println!("init");
+    vec![1, 2, 3]
+});
+
+fn main() {
+    let a = std::thread::spawn(|| TABLE.len());
+    let b = std::thread::spawn(|| TABLE.len());
+    println!("{} {}", a.join().unwrap(), b.join().unwrap());
+}
+</pre>
+  <ol class="ox-choices">
+    <li><code>init</code> prints twice, once from each thread.</li>
+    <li data-correct><code>init</code> prints once, and then both threads print their length, <code>3</code>.</li>
+    <li>It doesn't compile, because a <code>static</code> can't hold a <code>Vec</code>.</li>
+    <li><code>init</code> can print after <code>3 3</code>, because the threads race.</li>
+  </ol>
+  <div class="ox-why"><p>The first thread that reads <code>TABLE</code> runs the setup closure. The second thread waits for that to finish and then reuses the value, so <code>init</code> runs once. Both lengths are known before <code>main</code> prints.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="race-sim">Watch a data race happen</h2>
+
+<p>This is the bug the rest of the chapter guards against. The simulator plays two threads that each run <code>count = count + 1</code> a thousand times. Each increment is really three steps: READ the shared count into a register, ADD 1 to the register, and WRITE the register back. The threads interleave those steps. Step through a few by hand first, then run the random batch.</p>
+
+<style>
+#racesim { --rs-a: var(--stack); --rs-b: var(--php); }
+#racesim * { box-sizing: border-box; }
+#racesim p { margin: 0; }
+#racesim .rs-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin: 0 0 14px; }
+#racesim .rs-title { font: 800 var(--step-1)/1.1 var(--font-display); color: var(--ink); }
+#racesim .rs-modes { display: flex; gap: 4px; flex-wrap: wrap; }
+#racesim .rs-modes button { font: 600 0.9rem/1.2 var(--font-body); min-height: 36px; padding: 6px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); color: var(--ink-2); cursor: pointer; }
+#racesim .rs-modes button[aria-selected="true"] { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+#racesim button:focus-visible { outline: 2px solid var(--oxide); outline-offset: 2px; }
+#racesim .rs-board { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1fr); gap: 12px; align-items: stretch; }
+@media (max-width: 640px) { #racesim .rs-board { grid-template-columns: minmax(0, 1fr); } }
+#racesim .rs-thread { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; padding: 12px; background: var(--surface-2); border: 1px solid var(--line); border-left: 4px solid var(--rs-a); border-radius: var(--radius); }
+#racesim .rs-thread[data-t="B"] { border-left-color: var(--rs-b); }
+#racesim .rs-thread h4 { margin: 0; font: 800 1.05rem/1.1 var(--font-display); color: var(--ink); }
+#racesim .rs-reg, #racesim .rs-label, #racesim .rs-meta, #racesim .rs-lock { font-size: 0.86rem; color: var(--muted); }
+#racesim .rs-reg b, #racesim .rs-meta b { color: var(--ink); font-variant-numeric: tabular-nums; }
+#racesim .rs-steps { list-style: none; margin: 0; padding: 0; width: 100%; display: flex; flex-direction: column; gap: 4px; }
+#racesim .rs-steps li { font: 600 0.8rem/1 var(--font-mono); padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--muted); }
+#racesim .rs-steps li.is-next { border-color: var(--oxide); background: var(--oxide-soft); color: var(--ink); }
+#racesim .rs-state { font-size: 0.88rem; color: var(--ink-2); min-height: 1.3em; }
+#racesim .rs-state.is-wait { color: var(--bad); font-weight: 700; }
+#racesim .rs-shared { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 6px; min-width: 0; padding: 14px; text-align: center; background: var(--surface); border: 2px solid var(--oxide); border-radius: var(--radius-lg); }
+#racesim .rs-count { font: 700 clamp(2.4rem, 8vw, 3.4rem)/1 var(--font-mono); color: var(--ink); font-variant-numeric: tabular-nums; }
+#racesim .rs-say { margin-top: 14px; min-height: 3.2em; padding: 10px 12px; color: var(--ink); background: var(--surface-2); border-left: 3px solid var(--oxide); border-radius: 0 var(--radius) var(--radius) 0; }
+#racesim .rs-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+#racesim .rs-batch { margin-top: 14px; }
+#racesim .rs-batch-out { font-size: 0.92rem; color: var(--ink-2); min-height: 2.6em; }
+#racesim .rs-bar { position: relative; height: 10px; margin-top: 8px; background: var(--surface-3); border-radius: 5px; }
+#racesim .rs-bar i { display: block; height: 100%; width: 0; background: var(--oxide); border-radius: 5px; }
+@media (prefers-reduced-motion: no-preference) { #racesim .rs-bar i { transition: width 0.4s ease; } }
+#racesim .rs-bar::after { content: ""; position: absolute; right: 0; top: -4px; bottom: -4px; width: 2px; background: var(--ok); }
+#racesim .rs-log { margin: 12px 0 0; padding: 0; list-style: none; max-height: 11em; overflow: auto; font: 500 0.8rem/1.45 var(--font-mono); color: var(--muted); }
+#racesim .rs-log li { padding: 4px 0; border-bottom: 1px dashed var(--line); }
+#racesim .rs-log li.is-lost { color: var(--bad); }
+#racesim .rs-keeper { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+#racesim .rs-keeper[hidden] { display: none; }
+#racesim .rs-keeper-art { display: block; width: 84px; }
+#racesim .rs-keeper-art .ca, #racesim .rs-keyslot .ca { display: block; width: 100%; }
+#racesim .rs-keeper-art .ca-svg, #racesim .rs-keyslot .ca-svg { display: block; width: 100%; height: auto; }
+#racesim .rs-keyslot { display: block; width: 46px; }
+#racesim .rs-keyslot[hidden] { display: none; }
+#racesim .rs-keeper-say { margin: 0; font-size: 0.8rem; color: var(--muted); text-align: center; }
+</style>
+
+<figure class="ox-figure ox-wide" id="racesim" aria-labelledby="racesim-title">
+  <div class="rs-top">
+    <p class="rs-title" id="racesim-title">Data Race Simulator</p>
+    <div class="rs-modes" role="tablist" aria-label="Synchronization mode">
+      <button type="button" role="tab" aria-selected="true" data-mode="none">No lock</button>
+      <button type="button" role="tab" aria-selected="false" data-mode="mutex">Mutex</button>
+      <button type="button" role="tab" aria-selected="false" data-mode="atomic">Atomic</button>
+    </div>
+  </div>
+
+  <div class="rs-board">
+    <div class="rs-thread" data-t="A">
+      <h4>Thread A</h4>
+      <p class="rs-reg">register <b data-reg="A">0</b></p>
+      <ol class="rs-steps" data-steps="A">
+        <li class="is-next">READ count</li>
+        <li>ADD 1</li>
+        <li>WRITE back</li>
+      </ol>
+      <p class="rs-state" data-state="A">ready</p>
+      <span class="rs-keyslot" data-keyslot="A" aria-hidden="true" hidden></span>
+      <button type="button" class="ox-btn is-small" data-step="A">Step A</button>
+    </div>
+
+    <div class="rs-shared">
+      <div class="rs-keeper" data-keeper hidden>
+        <span class="rs-keeper-art" data-keeper-art aria-hidden="true"></span>
+        <span class="rs-keyslot" data-keyslot="free" aria-hidden="true"></span>
+        <p class="rs-keeper-say">The Keeper holds the only key. A thread holding it is the only one inside.</p>
+      </div>
+      <p class="rs-label">shared count</p>
+      <p class="rs-count" data-count aria-live="polite">0</p>
+      <p class="rs-lock" data-lock>no lock</p>
+      <p class="rs-meta">increments done <b data-done>0</b> · lost updates <b data-lost>0</b></p>
+    </div>
+
+    <div class="rs-thread" data-t="B">
+      <h4>Thread B</h4>
+      <p class="rs-reg">register <b data-reg="B">0</b></p>
+      <ol class="rs-steps" data-steps="B">
+        <li class="is-next">READ count</li>
+        <li>ADD 1</li>
+        <li>WRITE back</li>
+      </ol>
+      <p class="rs-state" data-state="B">ready</p>
+      <span class="rs-keyslot" data-keyslot="B" aria-hidden="true" hidden></span>
+      <button type="button" class="ox-btn is-small" data-step="B">Step B</button>
+    </div>
+  </div>
+
+  <p class="rs-say" data-say aria-live="polite">Both threads start at READ. Press Step A and Step B to interleave them yourself. To see a lost update, press A, B, A, B, A, B.</p>
+
+  <div class="rs-actions">
+    <button type="button" class="ox-btn is-primary is-small" data-batch>Run 1,000 rounds each (random order)</button>
+    <button type="button" class="ox-btn is-small" data-reset>Reset</button>
+  </div>
+
+  <div class="rs-batch">
+    <p class="rs-batch-out" data-batch-out aria-live="polite">Random run: each thread does 1,000 increments, and a seeded scheduler picks which thread moves next. The green mark is the correct total, 2,000.</p>
+    <div class="rs-bar" aria-hidden="true"><i data-bar></i></div>
+  </div>
+
+  <ol class="rs-log" data-log aria-label="Recent steps"></ol>
+
+  <figcaption>Each increment is three steps, and the threads take turns between them. No lock means the steps can interleave. The random run picks a thread for every single step, which makes races far more frequent than on real hardware.</figcaption>
+</figure>
+
+<p>Press A, B, A, B, A, B in No lock mode. Both threads read 0 before either one writes, so both write 1. Two increments ran, and the count is 1. Nothing crashed and nothing reported an error. The bug only shows up in the number.</p>
+
+<p>The write that overwrote the other one is a <em>lost update</em>. It was computed from an old read. The batch loses close to half of its increments, because the scheduler switches threads after every step. Real races are rarer and harder to reproduce, but they are just as wrong when they happen. With Mutex or Atomic, the random run always finishes at exactly 2,000. The Mutex turns the five steps LOCK, READ, ADD, WRITE, UNLOCK into one piece of work the other thread cannot enter. The Atomic mode makes the whole increment one indivisible step.</p>
+
+<p>Rust will not compile the honest attempt. Here is the same idea as code, with two scoped threads that each increment the same <code>count</code>:</p>
+
+<pre class="rs" data-check="E0499">
+use std::thread;
+
+fn main() {
+    let mut count = 0;
+    thread::scope(|s| {
+        s.spawn(|| {
+            for _ in 0..1000 {
+                count += 1;
+            }
+        });
+        s.spawn(|| {
+            for _ in 0..1000 {
+                count += 1;
+            }
+        });
+    });
+    println!("{count}");
+}
+</pre>
+
+<pre class="rustc">
+error[E0499]: cannot borrow `count` as mutable more than once at a time
+   --&gt; src/main.rs:11:17
+    |
+  5 |       thread::scope(|s| {
+    |                      - has type `&amp;'1 Scope&lt;'1, '_&gt;`
+  6 |           s.spawn(|| {
+    |           -       -- first mutable borrow occurs here
+    |  _________|
+    | |
+  7 | |             for _ in 0..1000 {
+  8 | |                 count += 1;
+    | |                 ----- first borrow occurs due to use of `count` in closure
+  9 | |             }
+ 10 | |         });
+    | |__________- argument requires that `count` is borrowed for `'1`
+ 11 |           s.spawn(|| {
+    |                   ^^ second mutable borrow occurs here
+ 12 |               for _ in 0..1000 {
+ 13 |                   count += 1;
+    |                   ----- second borrow occurs due to use of `count` in closure
+    |
+note: requirement that the value outlives `'1` introduced here
+   --&gt; /root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/thread/scoped.rs:203:35
+    |
+203 |         F: FnOnce() -&gt; T + Send + 'scope,
+    |                                   ^^^^^^
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0499`.
+</pre>
+
+<p>Each closure needs <code>&amp;mut count</code> for as long as its thread runs. Two live mutable borrows of the same value are not allowed, so the second <code>spawn</code> is rejected. Rust refuses at compile time what the simulator showed at run time. Adding <code>move</code> to a <code>spawn</code> closure compiles, but an <code>i32</code> is <code>Copy</code>. Each thread would then increment its own copy, and <code>main</code> would still print 0.</p>
+
+<details class="ox-think">
+  <summary>Predict: both threads read 3 before either one writes. What does the count end at after both writes?</summary>
+  <div class="ox-think-body">
+    <p>4, not 5. Both threads compute 3 + 1 = 4 from the same old read, and the second write overwrites the first. One increment is gone.</p>
+  </div>
+</details>
+</section>
+
+<section>
+<h2 id="send-sync">Send and Sync</h2>
+
+<p>Rust decides which types may cross threads with two marker traits. You rarely write them yourself. The compiler checks them every time you call <code>thread::spawn</code>.</p>
+
+<ul>
+  <li><code>Send</code>: a value of this type can be moved to another thread.</li>
+  <li><code>Sync</code>: a shared reference <code>&amp;T</code> can be used from several threads at once. A type is <code>Sync</code> exactly when <code>&amp;T</code> is <code>Send</code>.</li>
+</ul>
+
+<p>Both traits are automatic. A struct or enum is <code>Send</code> only when every field is <code>Send</code>, and the same goes for <code>Sync</code>. You never add a line for it. A few standard types opt out, and the compiler stops you from sending them. <code>Rc</code> is the classic example.</p>
+
+<pre class="rs" data-check="E0277">
+use std::rc::Rc;
+use std::thread;
+
+fn main() {
+    let shared = Rc::new(5);
+    let handle = thread::spawn(move || {
+        println!("{shared}");
+    });
+    handle.join().unwrap();
+}
+</pre>
+
+<pre class="rustc">
+error[E0277]: `Rc&lt;i32&gt;` cannot be sent between threads safely
+   --&gt; src/main.rs:6:32
+    |
+  6 |       let handle = thread::spawn(move || {
+    |                    ------------- ^------
+    |                    |             |
+    |  __________________|_____________within this `{closure@src/main.rs:6:32: 6:39}`
+    | |                  |
+    | |                  required by a bound introduced by this call
+  7 | |         println!("{shared}");
+  8 | |     });
+    | |_____^ `Rc&lt;i32&gt;` cannot be sent between threads safely
+    |
+    = help: within `{closure@src/main.rs:6:32: 6:39}`, the trait `Send` is not implemented for `Rc&lt;i32&gt;`
+note: required because it's used within this closure
+   --&gt; src/main.rs:6:32
+    |
+  6 |     let handle = thread::spawn(move || {
+    |                                ^^^^^^^
+note: required by a bound in `spawn`
+   --&gt; /root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/thread/functions.rs:128:8
+    |
+125 | pub fn spawn&lt;F, T&gt;(f: F) -&gt; JoinHandle&lt;T&gt;
+    |        ----- required by a bound in this function
+...
+128 |     F: Send + 'static,
+    |        ^^^^ required by this bound in `spawn`
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0277`.
+</pre>
+
+<p>The count inside an <code>Rc</code> is updated without atomic operations. If two threads cloned or dropped the same <code>Rc</code> at the same moment, the count could end up wrong. So <code>Rc</code> is not <code>Send</code>, and the compiler stops the move at the <code>spawn</code> call. The fix is <code>Arc</code>. It has the same API and an atomic count:</p>
+
+<pre class="rs" data-stdout="5">
+use std::sync::Arc;
+use std::thread;
+
+fn main() {
+    let shared = Arc::new(5);
+    let handle = thread::spawn(move || {
+        println!("{shared}");
+    });
+    handle.join().unwrap();
+}
+</pre>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Type</th><th>Send / Sync</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td><code>Rc&lt;T&gt;</code></td><td><span class="c-bad">No</span> / <span class="c-bad">No</span></td><td>Its count is not atomic, and handles update it with no protection.</td></tr>
+    <tr><td><code>Arc&lt;T&gt;</code></td><td><span class="c-ok">Yes</span> / <span class="c-ok">Yes</span></td><td>Atomic count. Both only if T is Send and Sync, because T itself is shared.</td></tr>
+    <tr><td><code>Cell&lt;T&gt;</code></td><td><span class="c-ok">Yes</span> / <span class="c-bad">No</span></td><td>Send only if T is Send. It changes through <code>&amp;self</code> with no lock, so it is unsafe to share.</td></tr>
+    <tr><td><code>RefCell&lt;T&gt;</code></td><td><span class="c-ok">Yes</span> / <span class="c-bad">No</span></td><td>Send only if T is Send. Its borrow count is updated with no lock.</td></tr>
+    <tr><td><code>Mutex&lt;T&gt;</code></td><td><span class="c-ok">Yes</span> / <span class="c-ok">Yes</span></td><td>Both only if T is Send. The lock is what makes shared access safe.</td></tr>
+    <tr><td><code>Arc&lt;Mutex&lt;T&gt;&gt;</code></td><td><span class="c-ok">Yes</span> / <span class="c-ok">Yes</span></td><td>The combination you will write most often. Both only if T is Send.</td></tr>
+    <tr><td><code>Arc&lt;RefCell&lt;T&gt;&gt;</code></td><td><span class="c-bad">No</span> / <span class="c-bad">No</span></td><td><code>RefCell</code> is not <code>Sync</code>, so <code>Arc</code> cannot share it.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p><code>RwLock&lt;T&gt;</code> follows the same pattern as <code>Mutex</code>, but it is <code>Sync</code> only when <code>T</code> is both <code>Send</code> and <code>Sync</code>, because readers share <code>&amp;T</code> at the same time.</p>
+
+<div class="ox-quiz" data-id="18:quiz-arc-refcell" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0277">
+use std::cell::RefCell;
+use std::sync::Arc;
+use std::thread;
+
+fn main() {
+    let cell = Arc::new(RefCell::new(0));
+    let c = Arc::clone(&amp;cell);
+    thread::spawn(move || {
+        *c.borrow_mut() += 1;
+    })
+    .join()
+    .unwrap();
+}
+</pre>
+  <ol class="ox-choices">
+    <li>Yes. The <code>Arc</code> makes the <code>RefCell</code> safe to share.</li>
+    <li data-correct>No, E0277. <code>RefCell</code> is not <code>Sync</code>, so <code>Arc&lt;RefCell&lt;i32&gt;&gt;</code> can't be sent to another thread.</li>
+    <li>No. <code>borrow_mut</code> can't be called from a spawned thread.</li>
+  </ol>
+  <div class="ox-why"><p><code>Arc&lt;T&gt;</code> is <code>Send</code> only when <code>T</code> is both <code>Send</code> and <code>Sync</code>. The borrow count inside a <code>RefCell</code> is updated without a lock, so it isn't <code>Sync</code>. Replacing it with <code>Arc&lt;Mutex&lt;i32&gt;&gt;</code> fixes the code, because a <code>Mutex&lt;i32&gt;</code> is both <code>Send</code> and <code>Sync</code>.</p></div>
+</div>
+
+<aside class="ox-callout" data-kind="trap">
+  <p><code>Box&lt;dyn Error&gt;</code> is not <code>Send</code>. A trait object does not carry <code>Send</code> unless you name it, so a result that holds one cannot be returned from a spawned thread:</p>
+<pre class="rs" data-check="E0277">
+use std::error::Error;
+use std::thread;
+
+fn main() {
+    let handle = thread::spawn(|| -&gt; Result&lt;u32, Box&lt;dyn Error&gt;&gt; {
+        Ok("42".parse::&lt;u32&gt;()?)
+    });
+    println!("{}", handle.join().unwrap().unwrap());
+}
+</pre>
+<pre class="rustc">
+error[E0277]: `dyn std::error::Error` cannot be sent between threads safely
+   --&gt; src/main.rs:5:18
+    |
+  5 |       let handle = thread::spawn(|| -&gt; Result&lt;u32, Box&lt;dyn Error&gt;&gt; {
+    |  __________________^
+  6 | |         Ok("42".parse::&lt;u32&gt;()?)
+  7 | |     });
+    | |______^ `dyn std::error::Error` cannot be sent between threads safely
+    |
+    = help: the trait `Send` is not implemented for `dyn std::error::Error`
+    = note: required for `std::ptr::Unique&lt;dyn std::error::Error&gt;` to implement `Send`
+note: required because it appears within the type `Box&lt;dyn std::error::Error&gt;`
+   --&gt; /root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:234:12
+    |
+...
+note: required by a bound in `spawn`
+   --&gt; /root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/thread/functions.rs:129:8
+    |
+125 | pub fn spawn&lt;F, T&gt;(f: F) -&gt; JoinHandle&lt;T&gt;
+    |        ----- required by a bound in this function
+...
+129 |     T: Send + 'static,
+    |        ^^^^ required by this bound in `spawn`
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0277`.
+</pre>
+  <p>Name the marker traits in the box: <code>Box&lt;dyn Error + Send + Sync&gt;</code>. The program then builds and prints the value:</p>
+<pre class="rs" data-stdout="42">
+use std::error::Error;
+use std::thread;
+
+fn main() {
+    let handle = thread::spawn(|| -&gt; Result&lt;u32, Box&lt;dyn Error + Send + Sync&gt;&gt; {
+        Ok("42".parse::&lt;u32&gt;()?)
+    });
+    println!("{}", handle.join().unwrap().unwrap());
+}
+</pre>
+</aside>
+</section>
+
+<section>
+<h2 id="limits">What Rust doesn't prevent</h2>
+
+<p>The compiler rules out data races. It does not rule out every concurrency bug, and several of the most common ones compile cleanly. Here are three, and then two gotchas about locks.</p>
+
+<h3>Deadlock: two locks, two orders</h3>
+
+<p>Each thread takes one lock and then waits for the other. Neither thread can move on, so both wait forever. Nothing in the types is wrong.</p>
+
+<pre class="rs" data-check="ok">
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
+
+fn main() {
+    let accounts = Arc::new(Mutex::new(0));
+    let orders = Arc::new(Mutex::new(0));
+
+    let (a1, o1) = (Arc::clone(&amp;accounts), Arc::clone(&amp;orders));
+    let t1 = thread::spawn(move || {
+        let _a = a1.lock().unwrap();
+        thread::sleep(Duration::from_millis(100)); // give thread 2 time to take orders
+        let _o = o1.lock().unwrap(); // waits for thread 2 to release orders
+    });
+
+    let (a2, o2) = (Arc::clone(&amp;accounts), Arc::clone(&amp;orders));
+    let t2 = thread::spawn(move || {
+        let _o = o2.lock().unwrap();
+        thread::sleep(Duration::from_millis(100)); // give thread 1 time to take accounts
+        let _a = a2.lock().unwrap(); // waits for thread 1 to release accounts
+    });
+
+    t1.join().unwrap();
+    t2.join().unwrap();
+}
+</pre>
+
+<p>The two sleeps make the bad timing certain. Each thread takes its first lock, then waits long enough for the other thread to take its own. Without the sleeps, the first thread usually takes both locks before the second one starts, so the program finishes. That is why this kind of bug survives testing. The usual cure is a rule: every thread takes the locks in the same order. Don't run this one. It will hang.</p>
+
+<h3>Check, then act, across two locks</h3>
+
+<p>Each <code>lock()</code> below is safe on its own, and there is no data race. The check and the withdrawal are two separate critical sections, though. If both threads see 100 before either one subtracts, both pass the check, and the balance ends at -60. The data is protected. The logic is not.</p>
+
+<pre class="rs" data-check="ok">
+use std::sync::Mutex;
+
+fn withdraw(balance: &amp;Mutex&lt;i32&gt;, amount: i32) -&gt; bool {
+    // Lock 1: check.
+    let enough = *balance.lock().unwrap() &gt;= amount;
+    if enough {
+        // Lock 2: act. Another thread may have withdrawn in between.
+        *balance.lock().unwrap() -= amount;
+    }
+    enough
+}
+
+fn main() {
+    let balance = Mutex::new(100);
+    std::thread::scope(|s| {
+        s.spawn(|| withdraw(&amp;balance, 80));
+        s.spawn(|| withdraw(&amp;balance, 80));
+    });
+    println!("{}", balance.lock().unwrap());
+}
+</pre>
+
+<h3>Leaks are safe</h3>
+
+<p>Leaking memory is not undefined behavior, so the compiler doesn't stop it. <code>std::mem::forget</code> leaks a value on purpose, and an <code>Rc</code> cycle leaks without anyone noticing (Chapter 17 covers <code>Rc</code>). A leak is a waste rather than a memory-safety bug, and it is still a bug to fix.</p>
+
+<h3>A lock held by a match or if let</h3>
+
+<p>A <code>match</code> keeps the value it was given until its last arm has finished. Suppose that value is a temporary <code>MutexGuard</code>. The lock then stays held for the whole <code>match</code>, not just for the line where you called <code>lock()</code>:</p>
+
+<pre class="rs" data-run data-stdout="match arm: got 1, lock held: true\nelse: lock held: false\nafter let: None, lock held: false">
+use std::sync::Mutex;
+
+fn main() {
+    let jobs = Mutex::new(vec![1]);
+    match jobs.lock().unwrap().pop() {
+        Some(n) =&gt; println!("match arm: got {n}, lock held: {}", jobs.try_lock().is_err()),
+        None =&gt; println!("match arm: no job"),
+    }
+
+    let empty: Mutex&lt;Vec&lt;i32&gt;&gt; = Mutex::new(Vec::new());
+    if let Some(n) = empty.lock().unwrap().pop() {
+        println!("body: got {n}");
+    } else {
+        println!("else: lock held: {}", empty.try_lock().is_err());
+    }
+
+    let next = jobs.lock().unwrap().pop();
+    println!("after let: {:?}, lock held: {}", next, jobs.try_lock().is_err());
+}
+</pre>
+
+<p>A temporary lives until the end of the statement that made it. A <code>match</code> is one statement, so the lock lasts for all of it. Edition 2024 changed one row of the table below. The <code>else</code> block of an <code>if let</code> no longer sees the lock held. The <code>match</code> arms still see it in both editions.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Where the code runs</th><th>Edition 2021</th><th>Edition 2024</th></tr></thead>
+  <tbody>
+    <tr><td>Inside a <code>match</code> arm</td><td>Lock held</td><td>Lock held</td></tr>
+    <tr><td>Inside the <code>else</code> block of an <code>if let</code></td><td>Lock held</td><td>Lock released</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Compile the program above with <code>--edition 2021</code>, and the <code>else</code> line prints <code>else: lock held: true</code>. The fix is the same in both editions: give the value a name with <code>let</code>. The guard is then dropped at the end of that line, and the last line of the output shows the lock free.</p>
+
+<div class="ox-quiz" data-id="18:quiz-guard-arm" data-label="Check yourself">
+  <p class="ox-q">Is the lock still held inside the arm? Predict first.</p>
+  <pre class="rs" data-stdout="job 7\nlock free: false">
+use std::sync::Mutex;
+
+fn main() {
+    let queue = Mutex::new(vec![7]);
+    match queue.lock().unwrap().pop() {
+        Some(job) =&gt; {
+            println!("job {job}");
+            let lock_free = queue.try_lock().is_ok();
+            println!("lock free: {lock_free}");
+        }
+        None =&gt; {}
+    }
+}
+</pre>
+  <ol class="ox-choices">
+    <li><code>true</code>, because <code>pop</code> has finished, so the guard was dropped.</li>
+    <li data-correct><code>false</code>, because the guard lives until the end of the <code>match</code>.</li>
+    <li>It deadlocks, because <code>try_lock</code> waits for the lock.</li>
+    <li><code>true</code> in edition 2024 and <code>false</code> in edition 2021.</li>
+  </ol>
+  <div class="ox-why"><p><code>try_lock</code> never waits. It returns an error when another guard holds the lock. The guard from <code>lock()</code> is the scrutinee of the <code>match</code>, so it is still alive inside the arm. The fix is to take the value with <code>let</code> before the <code>match</code>.</p></div>
+</div>
+
+<h3>Poisoned locks: recover or panic</h3>
+
+<p>If a thread panics while it holds a guard, Rust marks the mutex as <em>poisoned</em>. The data may be half-updated, so later calls to <code>lock()</code> return an <code>Err</code>. Most code calls <code>lock().unwrap()</code>, which turns the poison into a second panic. When the data is still usable, such as a counter or a cache, you can take the guard out of the error with <code>into_inner</code>:</p>
+
+<pre class="rs" data-run data-stdout="thread panicked: true\npoisoned: true\nrecovered: [1, 2, 3]\npoisoned after clear: false">
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+fn main() {
+    let data = Arc::new(Mutex::new(vec![1, 2]));
+
+    let writer = Arc::clone(&amp;data);
+    let result = thread::spawn(move || {
+        let mut guard = writer.lock().unwrap();
+        guard.push(3);
+        panic!("oops while holding the lock");
+    })
+    .join();
+    println!("thread panicked: {}", result.is_err());
+
+    println!("poisoned: {}", data.is_poisoned());
+    let values: Vec&lt;i32&gt; = match data.lock() {
+        Ok(guard) =&gt; guard.clone(),
+        Err(poisoned) =&gt; poisoned.into_inner().clone(),
+    };
+    println!("recovered: {values:?}");
+
+    data.clear_poison();
+    println!("poisoned after clear: {}", data.is_poisoned());
+}
+</pre>
+
+<p><code>clear_poison</code> removes the flag. It has been stable since Rust 1.77. Clear the flag only after you have checked the data. Until you do, every later <code>lock()</code> still reports the poison.</p>
+
+<h3>The easy button: rayon</h3>
+
+<p>For data parallelism, where you apply the same work to many items, the <code>rayon</code> crate removes most of the boilerplate. It spreads the work over a pool of threads, so you write no <code>spawn</code>, no channel and no lock.</p>
+
+<pre class="rs" data-check="skip">
+use rayon::prelude::*;
+
+fn main() {
+    let numbers: Vec&lt;u64&gt; = (1..=1_000).collect();
+    let total: u64 = numbers.par_iter().map(|n| n * n).sum();
+    println!("{total}");
+}
+</pre>
+
+<p>Add <code>rayon = "1"</code> to <code>Cargo.toml</code>. The <code>par_iter()</code> call replaces <code>iter()</code>, and the rest of the chain stays the same. Reach for it when each item is real work and no item depends on another. For tiny loops, the cost of coordinating threads is more than the loop itself.</p>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Agents reach for <code>Arc&lt;Mutex&lt;…&gt;&gt;</code> in almost every concurrent program they write, because it compiles once the types line up. Treat it the way you treat a <code>.clone()</code>. Find where each guard is dropped. A guard held across slow I/O, or across an <code>.await</code> (Chapter 19), blocks every other thread that needs the lock. Ask whether the program needs shared state at all. When an agent builds an <code>Arc&lt;Mutex&lt;Vec&lt;…&gt;&gt;&gt;</code> only to collect results from workers, a channel or the values returned by <code>join()</code> usually says the same thing with nothing shared.</p>
+</aside>
+
+<div class="ox-quiz" data-id="18:quiz-prevented" data-label="Check yourself">
+  <p class="ox-q">Which of these bugs does the Rust compiler prevent?</p>
+  <ol class="ox-choices">
+    <li>Two threads take two locks in opposite orders and wait forever.</li>
+    <li>A thread checks a balance, releases the lock, and withdraws based on the old check.</li>
+    <li data-correct>Two threads hold a <code>&amp;mut</code> to the same <code>Vec</code> at the same time, with no lock.</li>
+    <li>A thread holds a <code>MutexGuard</code> for a long time, and everything else waits.</li>
+  </ol>
+  <div class="ox-why"><p>That is a data race in its plain form. The compiler refuses it, because two live <code>&amp;mut</code> borrows of one value can't exist, even across threads. The other three compile. Deadlocks, logic races and long lock holds are design problems, and they need review and tests.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="practice">Practice</h2>
+
+<p>These checks use everything above. Some have code the compiler must reject, and some ask you to predict output.</p>
+
+<div class="ox-quiz" data-id="18:quiz-e0373" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0373">
+use std::thread;
+
+fn main() {
+    let label = String::from("nightly report");
+    let handle = thread::spawn(|| {
+        println!("running {label}");
+    });
+    handle.join().unwrap();
+}
+</pre>
+  <ol class="ox-choices">
+    <li>Yes. Threads can see the locals of the function that spawned them.</li>
+    <li data-correct>No, E0373. The closure borrows <code>label</code>, and the thread may outlive <code>main</code>. Adding <code>move</code> fixes it.</li>
+    <li>No, E0382. <code>label</code> was moved into the closure.</li>
+  </ol>
+  <div class="ox-why"><p>Nothing was moved. The closure borrows <code>label</code>, and <code>thread::spawn</code> won't accept a borrow of a local, because the thread might still run after the function that owns <code>label</code> has returned. E0382 is the error for use after a move, and this program never moves anything.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="18:quiz-join" data-label="Check yourself">
+  <p class="ox-q">What type is <code>answer</code>?</p>
+  <pre class="rs" data-check="ok">
+use std::thread;
+
+fn main() {
+    let handle = thread::spawn(|| 40 + 2);
+    let answer = handle.join();
+}
+</pre>
+  <ol class="ox-choices">
+    <li><code>i32</code>, because the closure returns <code>40 + 2</code>.</li>
+    <li data-correct><code>Result&lt;i32, Box&lt;dyn Any + Send&gt;&gt;</code>: <code>Ok</code> with the value, or <code>Err</code> if the thread panicked.</li>
+    <li><code>Option&lt;i32&gt;</code>, which is <code>None</code> if the thread panicked.</li>
+    <li><code>()</code>, because <code>join</code> only waits.</li>
+  </ol>
+  <div class="ox-why"><p>Ask for <code>()</code> directly and rustc says: <code>expected (), found Result&lt;{integer}, Box&lt;dyn Any + Send&gt;&gt;</code>. The <code>Err</code> side carries the panic payload. That is why <code>join().unwrap()</code> panics in the thread that called <code>join</code>.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="18:quiz-rc-mutex" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0277">
+use std::rc::Rc;
+use std::sync::Mutex;
+use std::thread;
+
+fn main() {
+    let counter = Rc::new(Mutex::new(0));
+    let c = Rc::clone(&amp;counter);
+    thread::spawn(move || {
+        *c.lock().unwrap() += 1;
+    })
+    .join()
+    .unwrap();
+}
+</pre>
+  <ol class="ox-choices">
+    <li>Yes. The Mutex makes the <code>Rc</code> safe to share.</li>
+    <li data-correct>No, E0277. An <code>Rc</code> is not <code>Send</code>, and wrapping it in a Mutex doesn't change that. Use <code>Arc</code>.</li>
+    <li>No. A Mutex can't be used with threads.</li>
+  </ol>
+  <div class="ox-why"><p>The Mutex protects the number inside it. It doesn't change the type of the handle that holds the Mutex. The <code>Rc</code> count is still updated without atomic operations, so the compiler refuses to move the handle into a thread. Change <code>Rc</code> to <code>Arc</code> and the code compiles.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="18:quiz-counter" data-label="Predict the output">
+  <p class="ox-q">What does this print?</p>
+  <pre class="rs" data-stdout="total = 40">
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+fn main() {
+    let total = Arc::new(Mutex::new(0));
+    let mut handles = Vec::new();
+    for _ in 0..4 {
+        let total = Arc::clone(&amp;total);
+        handles.push(thread::spawn(move || {
+            for _ in 0..10 {
+                *total.lock().unwrap() += 1;
+            }
+        }));
+    }
+    for handle in handles {
+        handle.join().unwrap();
+    }
+    println!("total = {}", *total.lock().unwrap());
+}
+</pre>
+  <ol class="ox-choices">
+    <li data-correct><code>total = 40</code>, on every run.</li>
+    <li><code>total = 40</code> most of the time, and less under load.</li>
+    <li><code>total = 4</code>, because each thread adds once.</li>
+    <li>It doesn't compile, because <code>total</code> is moved into four closures.</li>
+  </ol>
+  <div class="ox-why"><p>Each thread adds 10, and four threads make 40. Every <code>+= 1</code> happens under the lock, so no update is lost, whatever the timing. The Mutex makes the total exact.</p></div>
+</div>
+
+<div class="ox-fill" data-id="18:fill-arc">
+  <p class="ox-q">Complete the counter so that four threads can share it and add to it safely.</p>
+  <pre class="rs">
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+fn main() {
+    let counter = [[Arc]]::new([[Mutex]]::new(0));
+    let mut handles = Vec::new();
+    for _ in 0..4 {
+        let counter = Arc::clone(&amp;counter);
+        handles.push(thread::spawn(move || {
+            *counter.lock().unwrap() += 1;
+        }));
+    }
+    for handle in handles {
+        handle.join().unwrap();
+    }
+    println!("{}", *counter.lock().unwrap());
+}
+</pre>
+  <div class="ox-why"><p><code>Arc::new</code> creates the shared owner, and <code>Arc::clone</code> gives each thread its own handle. Cloning an <code>Arc</code> only bumps the count. <code>Mutex::new</code> puts the number behind the lock, so each <code>+= 1</code> happens under the guard. The program prints <code>4</code>.</p></div>
+</div>
+
+<div class="ox-match" data-id="18:match" data-left-label="PHP / Laravel" data-right-label="Rust">
+  <ul>
+    <li data-left="A PHP-FPM worker handling one request">a thread started by <code>thread::spawn</code></li>
+    <li data-left="ProcessInvoice::dispatch() onto a queue"><code>tx.send(job)</code> into an mpsc channel</li>
+    <li data-left="Horizon's pool of queue workers">several threads that take jobs from one shared receiver</li>
+    <li data-left="Cache::lock('report')"><code>Mutex::lock()</code></li>
+    <li data-left="Redis INCR on a counter key"><code>AtomicUsize::fetch_add(1, ...)</code></li>
+    <li data-left="Each request owns its own variables">a value moved into a thread belongs only to that thread</li>
+  </ul>
+</div>
+
+<div class="ox-quiz" data-id="18:quiz-move-ch06" data-label="From Chapter 06">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0382">
+use std::thread;
+
+fn main() {
+    let words = vec![String::from("alpha"), String::from("beta")];
+    let handle = thread::spawn(move || {
+        println!("{words:?}");
+    });
+    handle.join().unwrap();
+    println!("{}", words.len());
+}
+</pre>
+  <ol class="ox-choices">
+    <li>Yes. The thread is joined before <code>words.len()</code> runs.</li>
+    <li data-correct>No, E0382. The <code>move</code> closure took <code>words</code> when it was created, so <code>main</code> can't use it afterwards.</li>
+  </ol>
+  <div class="ox-why"><p>The join changes when the thread finishes, not who owns the vector. Ownership moved when the closure was created. Chapter 06's rule holds for threads too: once a value has been moved, its old name can't be used. If <code>main</code> still needs the vector, use a scoped thread, or clone the vector before the move.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="quests">Forge quests</h2>
+<p>Five quests cover this chapter: spawn and join, message passing, a shared counter, scoped threads, and a worker pool whose job queue has a bound. They run locally against the real compiler.</p>
+<div class="ox-quests" data-chapter="18"></div>
+</section>
+
+<section>
+<h2 id="recap">Recap</h2>
+
+<div class="ox-recap">
+  <h3>Threads, messages and shared state</h3>
+  <ul>
+    <li><code>thread::spawn</code> runs a closure on a new thread and returns a <code>JoinHandle</code>. <code>join()</code> waits for the thread and returns its result as a <code>Result</code>.</li>
+    <li>A spawned closure must own what it uses, so you write <code>move</code>. <code>thread::scope</code> lets threads borrow locals, because it joins every thread before it returns.</li>
+    <li>A channel moves values from many senders to one receiver. The receiver's loop ends only when every sender has been dropped.</li>
+    <li><code>Arc&lt;Mutex&lt;T&gt;&gt;</code> shares one value safely. The lock is released when the guard is dropped, so keep the critical section short.</li>
+    <li><code>RwLock</code> allows many readers or one writer. Atomics such as <code>AtomicUsize::fetch_add</code> make a single counter update indivisible.</li>
+    <li><code>Send</code> means a type can move to another thread. <code>Sync</code> means <code>&amp;T</code> can be shared between threads. <code>Rc</code> is neither, and <code>Cell</code> and <code>RefCell</code> are not <code>Sync</code>.</li>
+    <li>A bounded channel, <code>sync_channel(n)</code>, makes a full sender wait. That wait is <strong>backpressure</strong>. <code>try_send</code> reports a full channel instead of waiting.</li>
+    <li><code>static</code> items hold values for the whole program. <code>LazyLock</code> builds one on first use, <code>OnceLock</code> is filled once, and <code>thread_local!</code> gives each thread its own copy. Edition 2024 refuses references to a <code>static mut</code>.</li>
+    <li>A temporary guard in a <code>match</code> or <code>if let</code> keeps the lock until the construct ends. A poisoned mutex stays poisoned until you check the data and call <code>clear_poison</code>.</li>
+    <li>The compiler prevents data races. It does not prevent deadlocks, logic races or leaks.</li>
+  </ul>
+</div>
+
+<div class="ox-deck" data-chapter="18"></div>
+
+<details class="ox-think">
+  <summary>Explain it back: why does the borrow checker also prevent data races? Answer in three sentences.</summary>
+  <div class="ox-think-body">
+    <p>One good answer: "A data race needs two threads touching the same memory, with at least one write and no coordination. The borrow rules allow many shared borrows or one mutable borrow, never both, so the compiler will not let two threads hold writable access to the same value at once. Sharing a value that must be written across threads needs a type that does the coordination itself, such as Mutex or an atomic, and the compiler checks that the value is Send and Sync before it crosses a spawn."</p>
+    <p>If your version mentions <em>one writer or many readers</em>, <em>no unsynchronized writable access</em> and <em>Send and Sync checked at spawn</em>, you have it.</p>
+  </div>
+</details>
+
+<div class="ox-complete-host"></div>
+</section>
+
+</main>
+</div>
+<script>
+(function () {
+  "use strict";
+  // @core-begin
+// Data Race Simulator core. Pure logic: no DOM, no randomness outside rsRand.
+var RS_PROG = {
+  none: ["READ", "ADD", "WRITE"],
+  mutex: ["LOCK", "READ", "ADD", "WRITE", "UNLOCK"],
+  atomic: ["FETCH_ADD"]
+};
+
+function rsNew(mode) {
+  var t = {};
+  ["A", "B"].forEach(function (w) {
+    t[w] = { pc: 0, reg: 0, seen: 0, rounds: 0, waiting: false };
+  });
+  return { mode: mode, count: 0, done: 0, holder: null, t: t };
+}
+
+function rsOther(w) { return w === "A" ? "B" : "A"; }
+
+// True when who's next micro-step is LOCK and the other thread holds the lock.
+function rsBlocked(sim, who) {
+  return sim.mode === "mutex" && RS_PROG.mutex[sim.t[who].pc] === "LOCK" &&
+    sim.holder !== null && sim.holder !== who;
+}
+
+// Perform exactly one micro-step for who. Mutates sim, returns an event.
+function rsStep(sim, who) {
+  var th = sim.t[who], other = sim.t[rsOther(who)], prog = RS_PROG[sim.mode];
+  var op = prog[th.pc];
+  var ev = { who: who, op: op, blocked: false, lost: false, text: "" };
+
+  if (op === "LOCK") {
+    if (sim.holder !== null && sim.holder !== who) {
+      th.waiting = true;
+      ev.blocked = true;
+      ev.text = who + " tries to LOCK, but " + rsOther(who) + " holds it. " + who + " waits.";
+      return ev;
+    }
+    sim.holder = who;
+    th.waiting = false;
+    ev.text = who + " takes the lock. Anyone else who tries to LOCK now has to wait.";
+  } else if (op === "READ") {
+    th.seen = sim.count;
+    th.reg = sim.count;
+    ev.text = who + " reads " + sim.count + " into its register.";
+    if (sim.mode === "none" && other.pc > 0 && other.seen === sim.count) {
+      ev.text += " " + rsOther(who) + " read the same value, so both now hold " + sim.count + ".";
+    }
+  } else if (op === "ADD") {
+    th.reg = th.reg + 1;
+    ev.text = who + " adds 1. Its register is now " + th.reg + ". The shared count is still " + sim.count + ".";
+  } else if (op === "WRITE") {
+    var prev = sim.count;
+    sim.count = th.reg;
+    sim.done += 1;
+    if (prev > th.seen) {
+      // This write throws away prev - seen increments: the count was already
+      // higher than the value this thread read, and the write overwrites it.
+      ev.lost = true;
+      var gone = prev - th.seen;
+      ev.text = "Lost update. " + who + " read " + th.seen + ", but the count was already " + prev +
+        ". Writing " + th.reg + " over it throws away " + gone + (gone === 1 ? " increment." : " increments.");
+    } else if (prev < th.seen) {
+      ev.text = "Stale write. " + who + " read " + th.seen + ", but the count has since dropped to " + prev +
+        ". Writing " + th.reg + " puts back a value from an older read.";
+    } else {
+      ev.text = who + " writes " + th.reg + " back. count = " + sim.count + ".";
+    }
+  } else if (op === "UNLOCK") {
+    sim.holder = null;
+    ev.text = who + " releases the lock. " + rsOther(who) + " can enter now.";
+  } else if (op === "FETCH_ADD") {
+    sim.count = sim.count + 1;
+    sim.done += 1;
+    ev.text = who + " runs fetch_add(1). Read, add and write happen as one indivisible step: count = " + sim.count + ".";
+  }
+
+  th.pc += 1;
+  if (th.pc === prog.length) { th.pc = 0; th.rounds += 1; }
+  return ev;
+}
+
+// Seeded PRNG (mulberry32): the same seed always gives the same interleaving.
+function rsRand(seed) {
+  var a = seed >>> 0;
+  return function () {
+    a = (a + 0x6d2b79f5) >>> 0;
+    var t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Each thread performs `rounds` increments. At every step a random thread
+// that is not blocked is chosen. Returns the final numbers.
+function rsBatch(mode, seed, rounds) {
+  var rng = rsRand(seed), sim = rsNew(mode), steps = 0;
+  function open(w) { return sim.t[w].rounds < rounds; }
+  while (open("A") || open("B")) {
+    var ready = ["A", "B"].filter(function (w) { return open(w) && !rsBlocked(sim, w); });
+    if (!ready.length) throw new Error("scheduler stuck");
+    rsStep(sim, ready[Math.floor(rng() * ready.length)]);
+    steps += 1;
+  }
+  return { mode: mode, count: sim.count, done: sim.done, lost: sim.done - sim.count, steps: steps };
+}
+// @core-end
+  var RS_LABEL = { READ: "READ count", ADD: "ADD 1", WRITE: "WRITE back", LOCK: "LOCK", UNLOCK: "UNLOCK", FETCH_ADD: "fetch_add(1)" };
+  var RS_START = {
+    none: "Both threads start at READ. Press Step A and Step B to interleave them yourself. To see a lost update, press A, B, A, B, A, B.",
+    mutex: "The Keeper appears and holds the only key. Each increment takes the key first. If one thread holds it, the other waits at the door. Press Step A and Step B.",
+    atomic: "Each increment is one fetch_add. Nothing can interleave inside it, so every step adds exactly one."
+  };
+  var RS_MODE_NAME = { none: "No lock", mutex: "Mutex", atomic: "Atomic" };
+
+  function rsFmt(n) { return n.toLocaleString("en-US"); }
+  function rsAward(xp, reason, key) {
+    try { if (window.Ox && typeof window.Ox.award === "function") window.Ox.award(xp, reason, key); } catch (e) { /* no XP outside the course */ }
+  }
+
+  function rsInit() {
+    var root = document.getElementById("racesim");
+    if (!root) return;
+    var q = function (sel) { return root.querySelector(sel); };
+    var qa = function (sel) { return Array.prototype.slice.call(root.querySelectorAll(sel)); };
+    var tabs = qa(".rs-modes button");
+    var out = q("[data-batch-out]"), bar = q("[data-bar]"), say = q("[data-say]");
+    var log = q("[data-log]");
+    // The Keeper and the key are drawn only in Mutex mode: the key sits with the holder.
+    var keeperBox = q("[data-keeper]"), keeperArt = q("[data-keeper-art]");
+    var keySlots = qa("[data-keyslot]");
+    if (window.OxCast) {
+      keeperArt.innerHTML = OxCast.el("keeper");
+      keySlots.forEach(function (s) { s.innerHTML = OxCast.prop("key"); });
+    }
+    var mode = "none", sim = rsNew(mode), current = RS_START.none, events = [], runs = 0, sawLoss = false;
+    var batchStart = out.textContent;
+
+    function render() {
+      var prog = RS_PROG[mode];
+      var keyed = mode === "mutex";
+      keeperBox.hidden = !keyed;
+      keySlots.forEach(function (s) {
+        var at = sim.holder === null ? "free" : sim.holder;
+        s.hidden = !keyed || s.getAttribute("data-keyslot") !== at;
+      });
+      ["A", "B"].forEach(function (w) {
+        var th = sim.t[w];
+        q('[data-reg="' + w + '"]').textContent = String(th.reg);
+        var list = q('[data-steps="' + w + '"]');
+        list.textContent = "";
+        prog.forEach(function (op, i) {
+          var li = document.createElement("li");
+          li.textContent = RS_LABEL[op];
+          if (i === th.pc) li.className = "is-next";
+          list.appendChild(li);
+        });
+        var waiting = rsBlocked(sim, w);
+        var label;
+        if (waiting) label = "waiting for the lock";
+        else if (mode === "mutex" && sim.holder === w) label = "holds the lock";
+        else if (th.pc === 0) label = th.rounds === 0 ? "ready" : "between increments";
+        else label = "mid-increment";
+        var st = q('[data-state="' + w + '"]');
+        st.textContent = label;
+        st.className = "rs-state" + (waiting ? " is-wait" : "");
+      });
+      q("[data-count]").textContent = String(sim.count);
+      q("[data-done]").textContent = rsFmt(sim.done);
+      q("[data-lost]").textContent = rsFmt(sim.done - sim.count);
+      q("[data-lock]").textContent = mode === "mutex" ? (sim.holder ? "lock held by " + sim.holder : "lock is free")
+        : mode === "atomic" ? "no lock: one atomic step" : "no lock";
+      tabs.forEach(function (b) { b.setAttribute("aria-selected", b.getAttribute("data-mode") === mode ? "true" : "false"); });
+      say.textContent = current;
+      log.textContent = "";
+      events.slice(0, 8).forEach(function (ev) {
+        var li = document.createElement("li");
+        li.textContent = ev.text;
+        if (ev.lost) li.className = "is-lost";
+        log.appendChild(li);
+      });
+    }
+
+    function reset(nextMode) {
+      mode = nextMode;
+      sim = rsNew(mode);
+      events = [];
+      current = RS_START[mode];
+      out.textContent = batchStart;
+      bar.style.width = "";
+      render();
+    }
+
+    function press(w) {
+      var ev = rsStep(sim, w);
+      current = ev.text;
+      events.unshift(ev);
+      if (ev.lost && !sawLoss) { sawLoss = true; rsAward(5, "watched a lost update", "ch18:race-lost"); }
+      render();
+    }
+
+    tabs.forEach(function (b) {
+      b.addEventListener("click", function () { reset(b.getAttribute("data-mode")); });
+    });
+    qa("[data-step]").forEach(function (b) {
+      b.addEventListener("click", function () { press(b.getAttribute("data-step")); });
+    });
+    q("[data-reset]").addEventListener("click", function () { reset(mode); });
+    q("[data-batch]").addEventListener("click", function () {
+      runs += 1;
+      var r = rsBatch(mode, runs, 1000);
+      var verdict = r.lost === 0 ? "Every increment survived." : rsFmt(r.lost) + " increments were lost.";
+      out.textContent = "Run " + runs + " (seed " + runs + ", random order, " + RS_MODE_NAME[mode] + "): count = " +
+        rsFmt(r.count) + " after " + rsFmt(r.done) + " increments. " + verdict + " This does not change the stepper above.";
+      bar.style.width = (r.count / 2000 * 100).toFixed(1) + "%";
+      rsAward(5, "ran the simulator", "ch18:race-run");
+    });
+    render();
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", rsInit);
+  else rsInit();
+})();
+</script>
+</body>
+</html>

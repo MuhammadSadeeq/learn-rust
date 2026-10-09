@@ -1,0 +1,1251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Types Are Shapes · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<link rel="stylesheet" href="../assets/cast-art.css">
+<link rel="stylesheet" href="../assets/cast.css">
+<link rel="stylesheet" href="../assets/motion.css">
+<link rel="stylesheet" href="../assets/story.css">
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/quests-data.js" defer></script>
+<script src="../assets/cards/ch03.js" defer></script>
+<script src="../assets/motion/ch03.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+<script src="../assets/cast-art.js"></script>
+<script src="../assets/cast.js" defer></script>
+<script src="../assets/motion.js" defer></script>
+<script src="../assets/xray.js" defer></script>
+<script src="../assets/story.js" defer></script>
+</head>
+<body data-chapter="3">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<div class="ox-page">
+<aside class="ox-rail" aria-label="Chapter contents"></aside>
+<main class="ox-main" id="main">
+
+<header class="ox-hero" data-auto>
+  <ul>
+    <li>Pick the right integer type for a job and predict what overflow does.</li>
+    <li>Explain why <code>char</code> is 4 bytes and how it differs from a PHP string byte.</li>
+    <li>Use tuples and arrays, and say where they live in memory.</li>
+    <li>Convert between number types safely with <code>as</code>, <code>From</code> and <code>TryFrom</code>.</li>
+  </ul>
+</header>
+
+<section>
+<h2 id="static" data-toc="One type per value">One value, one type, decided before running</h2>
+
+<p>In PHP, adding a numeric string to a number just works. <code>"5" + 5</code> is <code>10</code>, because PHP reads the string as a number and carries on. A string that isn't a number, such as <code>"five"</code>, throws a <code>TypeError</code>. Rust doesn't guess in either case. Predict first.</p>
+
+<details class="ox-think">
+  <summary>Does <code>"5" + 5</code> compile in Rust? If not, what stops it?</summary>
+  <div class="ox-think-body">
+    <p>It doesn't compile. A <code>&amp;str</code> is text, and Rust has no <code>+</code> that takes a text and a number. The error comes from the compiler, before the program runs.</p>
+  </div>
+</details>
+
+<pre class="rs" data-check="E0369">
+fn main() {
+    let n = "5" + 5;
+    println!("{n}");
+}
+</pre>
+
+<p>rustc refuses to build it. This is the real output:</p>
+
+<pre class="rustc">
+error[E0369]: cannot add `{integer}` to `&amp;str`
+ --&gt; src/main.rs:2:17
+  |
+2 |     let n = "5" + 5;
+  |             --- ^ - {integer}
+  |             |
+  |             &amp;str
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0369`.
+</pre>
+
+<p>The first line names the error code and what went wrong. The arrows under the code show the two sides of the <code>+</code>: a <code>&amp;str</code> on the left and an integer on the right. Rust never converts one to the other behind your back.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+var_dump("5" + 5);   // int(10)
+  </pre>
+  <pre class="rs" data-run data-stdout="10">
+fn main() {
+    let text = "5";
+    let n: i32 = text.parse().unwrap();
+    println!("{}", n + 5);
+}
+  </pre>
+  <div class="ox-bridge-note"><p>PHP converts the string for you, silently. Rust makes the conversion a step you write. <code>parse</code> returns a <code>Result</code>, because "five" is not a number. Chapter 11 covers how to handle that case instead of calling <code>unwrap</code>.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="03:shadow-type" data-xp="10" data-label="Check yourself">
+  <p class="ox-q">Does this compile? (Chapter 02 covered shadowing.)</p>
+  <pre class="rs" data-stdout="3">
+fn main() {
+    let spaces = "   ";
+    let spaces = spaces.len();
+    println!("{spaces}");
+}
+  </pre>
+  <ol class="ox-choices">
+    <li data-correct>Yes. The second <code>spaces</code> is a new binding, and it can have a different type. It prints <code>3</code>.</li>
+    <li>No. A variable can't change its type once it has one.</li>
+  </ol>
+  <div class="ox-why"><p>Shadowing creates a new binding. The first <code>spaces</code> is a <code>&amp;str</code> and the second is a <code>usize</code>. Each binding has one type, and a new <code>let</code> is allowed to pick a different one.</p></div>
+</div>
+
+<p class="ox-pull">Types are shapes. A value only fits the hole it was cut for.</p>
+
+<aside class="ox-callout" data-kind="insight">
+  <p>Every value has one exact type, and the compiler settles it before the program runs. The type is either written in the source or inferred from how the value is used. In PHP you usually have to work it out from context, or find out at runtime.</p>
+</aside>
+
+<div class="ox-meet" data-cast="pebbles" data-say="We are small values, and each of us has a shape. A value only fits the slot cut for its shape."></div>
+</section>
+
+<section>
+<h2 id="integers">Integers come in sizes</h2>
+
+<p>An integer type is a fixed number of bits. The first letter says whether it can be negative (<code>i</code> for signed) or not (<code>u</code> for unsigned). The number says how many bits it takes. A <code>u8</code> is eight bits, so it can count from 0 to 255 and nothing more.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Type</th><th>Bits</th><th>Smallest</th><th>Largest</th></tr></thead>
+  <tbody>
+    <tr><td><code>i8</code></td><td>8</td><td>-128</td><td>127</td></tr>
+    <tr><td><code>i16</code></td><td>16</td><td>-32,768</td><td>32,767</td></tr>
+    <tr><td><code>i32</code></td><td>32</td><td>-2,147,483,648</td><td>2,147,483,647</td></tr>
+    <tr><td><code>i64</code></td><td>64</td><td>-9,223,372,036,854,775,808</td><td>9,223,372,036,854,775,807</td></tr>
+    <tr><td><code>i128</code></td><td>128</td><td>-170,141,183,460,469,231,731,687,303,715,884,105,728</td><td>170,141,183,460,469,231,731,687,303,715,884,105,727</td></tr>
+    <tr><td><code>isize</code></td><td>64 (pointer size)</td><td>-9,223,372,036,854,775,808</td><td>9,223,372,036,854,775,807</td></tr>
+    <tr><td><code>u8</code></td><td>8</td><td>0</td><td>255</td></tr>
+    <tr><td><code>u16</code></td><td>16</td><td>0</td><td>65,535</td></tr>
+    <tr><td><code>u32</code></td><td>32</td><td>0</td><td>4,294,967,295</td></tr>
+    <tr><td><code>u64</code></td><td>64</td><td>0</td><td>18,446,744,073,709,551,615</td></tr>
+    <tr><td><code>u128</code></td><td>128</td><td>0</td><td>340,282,366,920,938,463,463,374,607,431,768,211,455</td></tr>
+    <tr><td><code>usize</code></td><td>64 (pointer size)</td><td>0</td><td>18,446,744,073,709,551,615</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="ox-caption"><code>isize</code> and <code>usize</code> match the pointer size: 64 bits on a 64-bit machine, 32 bits on a 32-bit one. The table shows a 64-bit machine. You can print any of these yourself with <code>i8::MIN</code>, <code>u64::MAX</code> and the rest.</p>
+
+<p>Four rules of thumb cover most of the integers you will write.</p>
+
+<ul>
+  <li><strong><code>i32</code> is the default.</strong> An integer literal with nothing else to decide its type becomes an <code>i32</code>. Use it unless you have a reason not to.</li>
+  <li><strong><code>usize</code> is for sizes and positions.</strong> <code>len()</code> returns a <code>usize</code>, and indexes are <code>usize</code> too.</li>
+  <li><strong><code>u8</code> is for bytes.</strong> Raw data, such as a file or a network packet, is a list of <code>u8</code>.</li>
+  <li><strong>Money is an <code>i64</code> in cents.</strong> Never store money in a float. Section 4 shows why.</li>
+</ul>
+
+<p>Rust accepts the number styles you know from PHP, plus a few more. Underscores are only there for your eyes, and a suffix such as <code>u8</code> pins the type of one literal. Read the output, then check each line against its comment.</p>
+
+<pre class="rs" data-run data-stdout="1000000 255 63 170 65 5 300">
+fn main() {
+    let million = 1_000_000;   // underscores are ignored
+    let mask = 0xff;           // hexadecimal: 255
+    let perms = 0o77;          // octal: 63
+    let bits = 0b1010_1010;    // binary: 170
+    let letter = b'A';         // a byte literal: a u8 holding 65
+    let small = 5u8;           // the suffix sets the type
+    let big = 300_i64;         // a suffix can follow an underscore too
+
+    println!("{million} {mask} {perms} {bits} {letter} {small} {big}");
+}
+</pre>
+
+<div class="ox-bridge">
+  <pre class="php">
+var_dump(PHP_INT_MAX);      // int(9223372036854775807)
+var_dump(PHP_INT_MAX + 1);  // float(9.223372036854776E+18)
+  </pre>
+  <pre class="rs" data-stdout="9223372036854775807\nNone">
+fn main() {
+    let max = i64::MAX;
+    println!("{max}");
+    println!("{:?}", max.checked_add(1));
+}
+  </pre>
+  <div class="ox-bridge-note"><p>PHP quietly switches to a float when an integer runs out of room. In Rust, an <code>i64</code> stays an <code>i64</code>. Adding 1 to <code>i64::MAX</code> is an overflow. A debug build panics, and a release build wraps to <code>i64::MIN</code>. The next section covers each choice, and the methods that let you pick one in the code.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="03:default-int" data-xp="10" data-label="Check yourself">
+  <p class="ox-q">Which type does <code>let n = 42;</code> get, if nothing else in the program decides it?</p>
+  <ol class="ox-choices">
+    <li>i64</li>
+    <li data-correct>i32</li>
+    <li>u32</li>
+    <li>usize</li>
+  </ol>
+  <div class="ox-why">
+    <p>Integer literals default to <code>i32</code>. This program only compiles if <code>n</code> is an <code>i32</code>:</p>
+    <pre class="rs">
+fn main() {
+    let n = 42;
+    let m: i32 = n;
+    println!("{m}");
+}
+    </pre>
+  </div>
+</div>
+
+<aside class="ox-callout" data-kind="trap">
+  <p>An index must be a <code>usize</code>. An <code>i32</code> index doesn't compile, even when its value is positive, because Rust won't guess what a negative index would mean:</p>
+  <pre class="rs" data-check="E0277">
+fn main() {
+    let arr = [1, 2, 3];
+    let i: i32 = 1;
+    println!("{}", arr[i]);
+}
+  </pre>
+</aside>
+</section>
+
+<section>
+<h2 id="overflow">What happens at the edge</h2>
+
+<p>What happens when a result doesn't fit? It depends on how the program was built, and the answer is not the same in both builds.</p>
+
+<ul>
+  <li><strong>Debug builds</strong> (<code>cargo run</code>) check every arithmetic operation. An overflow panics, which stops the program with a message.</li>
+  <li><strong>Release builds</strong> (<code>cargo run --release</code>) skip the check. The result wraps around the range instead.</li>
+</ul>
+
+<div class="ox-motion" data-scene="ch03-overflow"></div>
+
+<p>Sometimes the compiler sees the overflow coming, and then it refuses to build the program at all:</p>
+
+<pre class="rs" data-check="error">
+fn main() {
+    let x: u8 = 255 + 1;
+    println!("{x}");
+}
+</pre>
+
+<pre class="rustc">
+error: this arithmetic operation will overflow
+ --&gt; src/main.rs:2:17
+  |
+2 |     let x: u8 = 255 + 1;
+  |                 ^^^^^^^ attempt to compute `u8::MAX + 1_u8`, which would overflow
+  |
+  = note: `#[deny(arithmetic_overflow)]` on by default
+
+error: aborting due to 1 previous error
+</pre>
+
+<p>This is a lint, so it has no error code. To see the runtime panic, hide the value from the compiler. Here the number comes from <code>parse</code>, and the compiler can't evaluate it:</p>
+
+<pre class="rs" data-check="panic">
+fn main() {
+    let x: u8 = "255".parse().unwrap();
+    let y = x + 1;
+    println!("{y}");
+}
+</pre>
+
+<pre class="text">
+thread 'main' (2420) panicked at src/main.rs:3:13:
+attempt to add with overflow
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+</pre>
+
+<p>The panic names the file and line where the addition happened. The number in parentheses is the id of the thread that panicked, so yours will differ.</p>
+
+<aside class="ox-callout" data-kind="trap">
+  <p>A release build doesn't panic. The same program run with <code>cargo run --release</code> prints <code>0</code>, and nothing tells you the arithmetic went wrong. Debug builds protect you while you develop. Code that handles input from outside the program should not depend on that, so use the explicit methods below wherever a value can overflow.</p>
+</aside>
+
+<p>Each overflow mode has a method, and the methods make the choice visible in the code. Here are four of them on the same sum, 250 plus 10 in a <code>u8</code>:</p>
+
+<pre class="rs" data-run data-stdout="wrapping: 4\nchecked: None\nsaturating: 255\noverflowing: (4, true)">
+fn main() {
+    let a: u8 = 250;
+    println!("wrapping: {}", a.wrapping_add(10));
+    println!("checked: {:?}", a.checked_add(10));
+    println!("saturating: {}", a.saturating_add(10));
+    println!("overflowing: {:?}", a.overflowing_add(10));
+}
+</pre>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Method</th><th>Result for 250 + 10</th><th>Use it when</th></tr></thead>
+  <tbody>
+    <tr><td><code>wrapping_add</code></td><td><code>4</code>, the sum modulo 256</td><td>Wrapping is the behavior you want: checksums, hash functions, counters that roll over.</td></tr>
+    <tr><td><code>checked_add</code></td><td><code>None</code>, an <code>Option&lt;u8&gt;</code></td><td>An overflow is a failure, and the caller has to handle it.</td></tr>
+    <tr><td><code>saturating_add</code></td><td><code>255</code>, the largest value</td><td>Clamping at the limit is correct: volume, progress, scores.</td></tr>
+    <tr><td><code>overflowing_add</code></td><td><code>(4, true)</code>, the wrapped value and a flag</td><td>You need the wrapped value and also need to know that it wrapped.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p><code>checked_add</code> returns an <code>Option</code>, a value that is either <code>Some(x)</code> or <code>None</code>. Chapter 04 gives a first look at <code>Option</code>, and Chapter 10 covers it in full.</p>
+<p>The other operations have the same family: <code>checked_sub</code>, <code>checked_mul</code> and <code>checked_div</code>. <code>checked_div</code> returns <code>None</code> for a zero divisor, so dividing by zero is a failure you can handle instead of a panic.</p>
+
+<p>The Bit Box below runs these operations on a real integer and shows its bits. The arithmetic is exact for every width, so the results match what Rust gives. Predict before you press anything.</p>
+
+<details class="ox-think">
+  <summary>The box is in debug mode and holds 250 in a u8. You press +1 six times. What happens on the sixth press?</summary>
+  <div class="ox-think-body">
+    <p>The first five presses reach 251, 252, 253, 254 and 255. The sixth would need 256, which doesn't fit in a <code>u8</code>, so debug mode panics with <code>attempt to add with overflow</code>. The value stays at 255, because the program has stopped.</p>
+  </div>
+</details>
+
+<div class="ox-figure ox-wide" id="bitbox">
+  <div class="bb-row">
+    <span class="bb-label" id="bb-type-label">type</span>
+    <div class="bb-seg" role="group" aria-labelledby="bb-type-label">
+      <button type="button" class="ox-btn is-small" data-type="u8" aria-pressed="true">u8</button>
+      <button type="button" class="ox-btn is-small" data-type="i8" aria-pressed="false">i8</button>
+      <button type="button" class="ox-btn is-small" data-type="u16" aria-pressed="false">u16</button>
+      <button type="button" class="ox-btn is-small" data-type="i16" aria-pressed="false">i16</button>
+      <button type="button" class="ox-btn is-small" data-type="u32" aria-pressed="false">u32</button>
+      <button type="button" class="ox-btn is-small" data-type="i32" aria-pressed="false">i32</button>
+    </div>
+  </div>
+  <div class="bb-row">
+    <span class="bb-label" id="bb-mode-label">overflow</span>
+    <div class="bb-seg" role="group" aria-labelledby="bb-mode-label">
+      <button type="button" class="ox-btn is-small" data-mode="debug" aria-pressed="true">debug (+ panics on overflow)</button>
+      <button type="button" class="ox-btn is-small" data-mode="wrapping" aria-pressed="false">wrapping_*</button>
+      <button type="button" class="ox-btn is-small" data-mode="checked" aria-pressed="false">checked_* → Option</button>
+      <button type="button" class="ox-btn is-small" data-mode="saturating" aria-pressed="false">saturating_*</button>
+    </div>
+  </div>
+
+  <div class="bb-screen">
+    <p class="bb-dec" id="bb-dec">250</p>
+    <p class="bb-meta" id="bb-meta">u8 · 8 bits · 0 to 255 · 0xfa</p>
+    <div class="bb-bits" id="bb-bits" role="img" aria-label="8 bits: 11111010"></div>
+    <p class="bb-caption" id="bb-caption">Every box is a value bit. An unsigned type has no sign bit.</p>
+  </div>
+
+  <div class="bb-ops">
+    <button type="button" class="ox-btn" data-op="add" data-k="1">+1</button>
+    <button type="button" class="ox-btn" data-op="sub" data-k="1">−1</button>
+    <button type="button" class="ox-btn" data-op="mul" data-k="2">×2</button>
+    <form class="bb-set" id="bb-set" autocomplete="off" novalidate>
+      <label for="bb-input">set…</label>
+      <input id="bb-input" type="number" step="1" placeholder="e.g. 42">
+      <button type="submit" class="ox-btn is-small">Set</button>
+    </form>
+    <button type="button" class="ox-btn is-small" data-reset>reset</button>
+  </div>
+
+  <p class="bb-line" id="bb-line" aria-live="polite"><code class="bb-expr" id="bb-expr">let x: u8 = 250;</code> <span class="bb-arrow" aria-hidden="true">→</span> <span class="bb-res" id="bb-res">x is 250</span></p>
+  <p class="bb-note" id="bb-note">Press +1 and watch the boxes. Five presses reach 255.</p>
+</div>
+
+<p>Some things to try, in order. Press +1 six times in debug mode. Then press reset, switch the mode to <code>wrapping_*</code>, and press +1 six times: the box goes from 255 to 0 and carries on counting. Set the value to 300 and read the message. Last, press reset and switch the type to <code>i8</code>. The 250 becomes −6, because switching type is an <code>as</code> cast, and the expression line shows it.</p>
+
+<div class="ox-quiz" data-id="03:overflow" data-xp="10" data-label="Check yourself">
+  <p class="ox-q">What does <code>250u8.checked_add(10)</code> return?</p>
+  <pre class="rs" data-stdout="None">
+fn main() {
+    println!("{:?}", 250u8.checked_add(10));
+}
+  </pre>
+  <ol class="ox-choices">
+    <li>4</li>
+    <li data-correct><code>None</code></li>
+    <li>255</li>
+    <li data-feedback="It returns an Option, and it never panics.">It panics, because the sum overflows.</li>
+  </ol>
+  <div class="ox-why"><p>The sum is 260, which doesn't fit in a <code>u8</code>, so <code>checked_add</code> returns <code>None</code>. It never panics. <code>wrapping_add</code> would give 4, and <code>saturating_add</code> would give 255. The <code>Option</code> it returns is previewed in Chapter 04 and covered in Chapter 10.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="floats">Floats, bools and chars</h2>
+
+<p>Rust has two floating-point types, <code>f64</code> and <code>f32</code>. <code>f64</code> is the default, and it is the same 64-bit kind of number PHP uses. Reach for <code>f32</code> only when memory is tight. A float is an approximation. Most decimal fractions have no exact binary form, so arithmetic on them drifts in small steps.</p>
+
+<pre class="rs" data-run data-stdout="0.30000000000000004\nfalse">
+fn main() {
+    let sum = 0.1 + 0.2;
+    println!("{sum}");
+    println!("{}", sum == 0.3);
+}
+</pre>
+
+<p>PHP gives the same answer: <code>var_dump(0.1 + 0.2 == 0.3)</code> prints <code>bool(false)</code>. This is how binary floats work in any language, and it is the reason money never goes in a float.</p>
+
+<p>There is also a float value that is not equal to itself. <code>NaN</code>, "not a number", comes from an operation such as <code>0.0 / 0.0</code>. Comparing it to anything, including itself, gives <code>false</code>. To test for it, call <code>is_nan()</code>.</p>
+
+<pre class="rs" data-run data-stdout="false\ntrue\nNaN">
+fn main() {
+    let nan = 0.0_f64 / 0.0;
+    println!("{}", nan == nan);
+    println!("{}", nan.is_nan());
+    println!("{nan}");
+}
+</pre>
+
+<p><code>bool</code> is one byte and holds only <code>true</code> or <code>false</code>. Rust has no truthiness. An <code>if</code> needs a <code>bool</code>, so a number is never a condition.</p>
+
+<div class="ox-quiz" data-id="03:truthy" data-xp="10" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0308">
+fn main() {
+    let count: i32 = 3;
+    if count {
+        println!("some");
+    }
+}
+  </pre>
+  <ol class="ox-choices">
+    <li>Yes. Any non-zero number counts as true.</li>
+    <li data-correct>No. <code>if</code> needs a <code>bool</code>, and <code>count</code> is an <code>i32</code>.</li>
+  </ol>
+  <div class="ox-why"><p>In PHP, <code>if ($count)</code> takes any non-zero number as true, and an empty string or an empty array as false. Rust asks you to write the comparison: <code>if count != 0</code>. The reader never has to remember which values count as false.</p></div>
+</div>
+
+<p><code>char</code> is 4 bytes. It holds one Unicode scalar value, which is a code point: the number Unicode assigns to a character. <code>'a'</code> is 97, <code>'é'</code> is 233, and the crab is 129,408. Every <code>char</code> takes 4 bytes, however small the character is. The number of bytes it needs in a string is a separate question, and <code>len_utf8</code> answers it.</p>
+
+<p>The next program uses <code>use</code> to bring <code>size_of</code> into scope, and <code>size_of::&lt;char&gt;()</code> asks for the size of <code>char</code>. <code>use</code> brings a name into scope, like PHP's <code>use</code>; Chapter 16 covers it. The angle brackets pass a type to the function, and Chapter 14 covers the generics behind that syntax. The loop also uses <code>c as u32</code> to read a character's code point as a number. The section <a href="#casting">Converting between types</a> explains <code>as</code>.</p>
+
+<pre class="rs" data-run data-stdout="char is 4 bytes\na  utf-8 bytes: 1  code point: 97\né  utf-8 bytes: 2  code point: 233\n🦀  utf-8 bytes: 4  code point: 129408\nthe string é: 2 bytes">
+use std::mem::size_of;
+
+fn main() {
+    println!("char is {} bytes", size_of::&lt;char&gt;());
+    for c in ['a', 'é', '🦀'] {
+        println!("{c}  utf-8 bytes: {}  code point: {}", c.len_utf8(), c as u32);
+    }
+    println!("the string é: {} bytes", "é".len());
+}
+</pre>
+
+<aside class="ox-callout" data-kind="php">
+  <p>In PHP, <code>strlen("é")</code> is 2, and <code>$s[0]</code> is one byte, not one character. You reach for <code>mb_substr($s, 0, 1)</code> when you want a character. Rust makes the difference a type: a <code>char</code> is one decoded character, and a <code>u8</code> is one byte. Chapter 08 covers strings, which are UTF-8 bytes underneath and can't be indexed by number.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="tuples">Tuples: a few values, fixed shape</h2>
+
+<p>A tuple groups a few values under one name, and the values can have different types. Its shape is part of its type. <code>(i32, f64, char)</code> and <code>(i32, f64)</code> are different types, and the compiler will not mix them up. The <code>fn</code> in the next example has a signature, the parameter types and the return type. Chapter 04 explains signatures in full.</p>
+
+<pre class="rs" data-run data-stdout="1 2.5 x\n1 2.5 x\n4 9">
+fn sorted_pair(a: i32, b: i32) -> (i32, i32) {
+    (a.min(b), a.max(b))
+}
+
+fn main() {
+    let p: (i32, f64, char) = (1, 2.5, 'x');
+    println!("{} {} {}", p.0, p.1, p.2);
+
+    let (a, b, c) = p;
+    println!("{a} {b} {c}");
+
+    let (lo, hi) = sorted_pair(9, 4);
+    println!("{lo} {hi}");
+}
+</pre>
+
+<p>Read a field with <code>.0</code>, <code>.1</code> and so on, counting from zero. Or destructure the whole tuple with <code>let (a, b, c) = p;</code>, which gives each field its own name. A function that needs to return two values returns a tuple, as <code>sorted_pair</code> does.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+function sortedPair(int $a, int $b): array {
+    return [min($a, $b), max($a, $b)];
+}
+[$lo, $hi] = sortedPair(9, 4);
+  </pre>
+  <pre class="rs" data-stdout="4 9">
+fn sorted_pair(a: i32, b: i32) -> (i32, i32) {
+    (a.min(b), a.max(b))
+}
+
+fn main() {
+    let (lo, hi) = sorted_pair(9, 4);
+    println!("{lo} {hi}");
+}
+  </pre>
+  <div class="ox-bridge-note"><p>A PHP array can hold anything, in any order, and it grows at runtime. A tuple has exactly as many fields as its type says, and each field keeps its own type. Mistakes that PHP lets through quietly become compile errors. The quiz below shows one.</p></div>
+</div>
+
+<aside class="ox-callout" data-kind="insight">
+  <p>A tuple is <code>Copy</code> when every one of its fields is <code>Copy</code>. <code>(i32, f64, char)</code> qualifies, so <code>let q = p;</code> copies it, and <code>p</code> stays usable. A tuple that holds a <code>String</code> is not <code>Copy</code>, so <code>let t = s;</code> moves it, and <code>s</code> can no longer be used. Chapter 06 explains <code>Copy</code> and moves.</p>
+</aside>
+
+<p>The empty tuple, <code>()</code>, is called the <em>unit</em> type. It holds nothing. A function with no return type returns <code>()</code>, and Chapter 04 shows where else it turns up:</p>
+
+<pre class="rs" data-run data-stdout="hello crab\n()">
+fn say(name: &amp;str) {
+    println!("hello {name}");
+}
+
+fn main() {
+    let nothing: () = say("crab");
+    println!("{nothing:?}");
+}
+</pre>
+
+<div class="ox-quiz" data-id="03:tuple-arity" data-xp="10" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0308">
+fn main() {
+    let p = (1, "two");
+    let (a, b, c) = p;
+    println!("{a} {b} {c}");
+}
+  </pre>
+  <ol class="ox-choices">
+    <li>Yes. The extra name just gets no value.</li>
+    <li data-correct>No. The pattern has three names, but the tuple has two fields.</li>
+  </ol>
+  <div class="ox-why"><p>A tuple pattern has to match the shape of the tuple exactly. The compiler reports E0308, mismatched types. PHP's <code>[$a, $b, $c] = [1, 'two'];</code> doesn't stop. It warns about the missing key and sets <code>$c</code> to <code>null</code>.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="arrays">Arrays: fixed length, on the stack</h2>
+
+<p>An array holds values of one type in a fixed number of slots. The length is part of the type: <code>[i32; 3]</code> has three <code>i32</code> slots, and <code>[i32; 4]</code> is a different type.</p>
+
+<pre class="rs" data-run data-stdout="3 5\n[1, 2, 3] [0, 0, 0, 0, 0] [10, 20, 30]\n10\n20\n30">
+fn main() {
+    let nums = [1, 2, 3];
+    let zeros = [0; 5];
+    let typed: [i32; 3] = [10, 20, 30];
+
+    println!("{} {}", nums.len(), zeros.len());
+    println!("{:?} {:?} {:?}", nums, zeros, typed);
+
+    for x in typed {
+        println!("{x}");
+    }
+}
+</pre>
+
+<p><code>[0; 5]</code> means five copies of <code>0</code>. <code>len()</code> reports the length, and <code>for x in typed</code> walks the slots in order. Chapter 04 covers <code>for</code> loops.</p>
+
+<p>The size of an array is known at compile time, so the whole array lives in the function's stack frame, next to the other local values. Chapter 05 explains the stack and the heap. The figure shows <code>typed</code>.</p>
+
+<figure class="ox-figure">
+<svg viewBox="0 0 480 196" width="480" style="max-width:100%" role="img" aria-label="The array typed holds 10, 20 and 30 in three neighboring slots on the stack, at offsets 0, 4 and 8. A dashed box marks the heap, which holds nothing for this array.">
+  <text x="16" y="20" class="t-muted" font-size="12">STACK</text>
+  <text x="368" y="20" class="t-muted" font-size="12">HEAP</text>
+  <text x="16" y="52" font-size="14" font-weight="700">typed: [i32; 3] · 12 bytes</text>
+  <rect x="16" y="64" width="104" height="54" rx="6" class="f-stack" stroke-width="1.5"/>
+  <rect x="130" y="64" width="104" height="54" rx="6" class="f-stack" stroke-width="1.5"/>
+  <rect x="244" y="64" width="104" height="54" rx="6" class="f-stack" stroke-width="1.5"/>
+  <text x="68" y="97" font-size="18" font-weight="700" text-anchor="middle">10</text>
+  <text x="182" y="97" font-size="18" font-weight="700" text-anchor="middle">20</text>
+  <text x="296" y="97" font-size="18" font-weight="700" text-anchor="middle">30</text>
+  <text x="68" y="136" font-size="12" class="t-muted" text-anchor="middle">[0] · offset 0</text>
+  <text x="182" y="136" font-size="12" class="t-muted" text-anchor="middle">[1] · offset 4</text>
+  <text x="296" y="136" font-size="12" class="t-muted" text-anchor="middle">[2] · offset 8</text>
+  <rect x="368" y="64" width="112" height="54" rx="6" class="f-ghost" stroke-width="1.5"/>
+  <text x="424" y="96" font-size="12" class="t-muted" text-anchor="middle">no allocation</text>
+  <text x="16" y="182" font-size="12" class="t-muted">Three 4-byte numbers side by side, 12 bytes in all.</text>
+</svg>
+<figcaption>An array is one block of values next to each other. It has no pointer and no heap buffer, so there is nothing extra to allocate or free.</figcaption>
+</figure>
+
+<h3>Indexing is checked</h3>
+
+<p>Indexing with <code>[]</code> checks the position against the length. A constant index that is out of range is a compile error:</p>
+
+<pre class="rs" data-check="error">
+fn main() {
+    let arr = [1, 2, 3];
+    println!("{}", arr[5]);
+}
+</pre>
+
+<pre class="rustc">
+error: this operation will panic at runtime
+ --&gt; src/main.rs:3:20
+  |
+3 |     println!("{}", arr[5]);
+  |                    ^^^^^^ index out of bounds: the length is 3 but the index is 5
+  |
+  = note: `#[deny(unconditional_panic)]` on by default
+
+error: aborting due to 1 previous error
+</pre>
+
+<p>When the index comes from outside the program, the compiler can't see its value, so the check happens at runtime:</p>
+
+<pre class="rs" data-check="panic">
+fn main() {
+    let arr = [1, 2, 3];
+    let i: usize = "7".parse().unwrap();
+    println!("{}", arr[i]);
+}
+</pre>
+
+<pre class="text">
+thread 'main' (2421) panicked at src/main.rs:4:20:
+index out of bounds: the len is 3 but the index is 7
+</pre>
+
+<aside class="ox-callout" data-kind="php">
+  <p>In C, reading <code>arr[5]</code> from a three-element array returns whatever bytes sit next to the array, and nothing complains. Rust's check means an array can't hand you memory outside itself. The cost is a comparison on each index, and the compiler often removes it when it can prove the index is in range.</p>
+</aside>
+
+<div class="ox-bridge">
+  <pre class="php">
+$nums = [1, 2, 3];
+$nums[] = 4;      // arrays grow
+echo $nums[9];    // Warning: Undefined array key 9
+  </pre>
+  <pre class="rs" data-stdout="None">
+fn main() {
+    let nums = [1, 2, 3];
+    // nums.push(4) does not compile: arrays don't grow.
+    println!("{:?}", nums.get(9));
+}
+  </pre>
+  <div class="ox-bridge-note"><p>A PHP array is an ordered map that grows and shrinks. A Rust array is a fixed block. A list that grows is a <code>Vec</code>, which Chapter 12 covers. <code>get</code> returns an <code>Option</code> instead of a warning and a <code>null</code>, so the missing slot becomes a value you have to handle.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="03:arrlen" data-xp="10" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0308">
+fn takes_three(a: [i32; 3]) -> i32 {
+    a[0]
+}
+
+fn main() {
+    let four = [1, 2, 3, 4];
+    println!("{}", takes_three(four));
+}
+  </pre>
+  <ol class="ox-choices">
+    <li>Yes. Both are arrays of <code>i32</code>.</li>
+    <li data-correct>No. The length is part of the type, so a four-slot array is not a <code>[i32; 3]</code>.</li>
+  </ol>
+  <div class="ox-why"><p>E0308 reports the mismatch at the call, with the expected and found lengths. If you want one function to take any length, the parameter is a slice, <code>&amp;[i32]</code>, which Chapter 08 introduces.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="casting">Converting between types</h2>
+
+<p>Rust never converts between number types on its own, not even a small integer to a bigger one. This program is a compile error, and rustc suggests the conversion it wants:</p>
+
+<pre class="rs" data-check="E0308">
+fn main() {
+    let small: i32 = 5;
+    let big: i64 = small;
+    println!("{big}");
+}
+</pre>
+
+<pre class="rustc">
+error[E0308]: mismatched types
+ --&gt; src/main.rs:3:20
+  |
+3 |     let big: i64 = small;
+  |              ---   ^^^^^ expected `i64`, found `i32`
+  |              |
+  |              expected due to this
+  |
+help: you can convert an `i32` to an `i64`
+  |
+3 |     let big: i64 = small.into();
+  |                         +++++++
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0308`.
+</pre>
+
+<h3>PHP's strict mode is the closest match</h3>
+
+<p>PHP converts arguments for you by default. A file that starts with <code>declare(strict_types=1);</code> turns that off for the calls it makes, so a scalar of the wrong type is an error. The rule belongs to the calling file. A strict file that calls a function in a weak file is still checked, and a weak file that calls a strict function gets the conversion.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+&lt;?php
+declare(strict_types=1);
+
+function add(int $a, int $b): int {
+    return $a + $b;
+}
+
+echo add("5", 5);   // TypeError: "5" is a string</pre>
+  <pre class="rs" data-check="E0308">
+fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+fn main() {
+    println!("{}", add("5", 5));
+}</pre>
+  <div class="ox-bridge-note"><p>Both reject the call before any sum is computed. PHP does it while the program runs, on the line that makes the call. rustc does it before the program exists. Rust has no weak mode to switch off, because it never converts a string to a number for you.</p></div>
+</div>
+
+<pre class="rustc">
+error[E0308]: mismatched types
+ --&gt; src/main.rs:6:24
+  |
+6 |     println!("{}", add("5", 5));
+  |                    --- ^^^ expected `i32`, found `&amp;str`
+  |                    |
+  |                    arguments to this function are incorrect
+  |
+note: function defined here
+ --&gt; src/main.rs:1:4
+  |
+1 | fn add(a: i32, b: i32) -&gt; i32 {
+  |    ^^^ ------
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0308`.</pre>
+
+<p>Strict mode also checks union types, such as <code>int|string</code>, which PHP 8.0 added, and DNF types, such as <code>(HasId&amp;HasName)|null</code>, which PHP 8.2 added. Rust has no union type in a function signature. The closest match is an enum with one variant per type, and the caller has to choose a variant. Chapter 10 covers enums in full.</p>
+
+<pre class="rs" data-stdout="number 5\ntext abc">
+enum Id {
+    Number(i64),
+    Text(String),
+}
+
+fn show(id: Id) -> String {
+    match id {
+        Id::Number(n) => format!("number {n}"),
+        Id::Text(t) => format!("text {t}"),
+    }
+}
+
+fn main() {
+    println!("{}", show(Id::Number(5)));
+    println!("{}", show(Id::Text(String::from("abc"))));
+}</pre>
+
+<p>A DNF type has no direct match in a signature. The nearest Rust shape is <code>Option&lt;T&gt;</code> with a trait bound such as <code>T: HasId + HasName</code>, which Chapter 14 covers.</p>
+
+<p><code>as</code> is the explicit conversion between number types. It compiles for any pair of them, and it doesn't report when information is lost:</p>
+
+<pre class="rs" data-run data-stdout="44\n255\n3\n2147483647">
+fn main() {
+    println!("{}", 300i32 as u8);     // keeps the low 8 bits: 300 - 256 = 44
+    println!("{}", -1i32 as u8);      // the same bits, read as unsigned: 255
+    println!("{}", 3.99f64 as i32);   // a float cuts toward zero: 3
+    println!("{}", 1e10 as i32);      // too big for an i32: clamped to i32::MAX
+}
+</pre>
+
+<p>Use <code>From</code> when the conversion can't lose anything, and <code>TryFrom</code> when it might. <code>From</code> returns the new type directly, so <code>i64::from(x)</code> works for any integer type that always fits in an <code>i64</code>, such as <code>i32</code> or <code>u32</code>. <code>TryFrom</code> returns a <code>Result</code>, which Chapter 11 covers in full, so the program has to handle a value that doesn't fit.</p>
+<p><code>u32::from(x)</code> is the lossless form for an integer that always fits, such as a <code>u8</code> into a <code>u32</code>. <code>u32::from(200u8)</code> gives <code>200</code> and cannot lose anything, unlike <code>as</code>, which can cut bits off.</p>
+
+<pre class="rs" data-run data-stdout="200\nOk(200)\nErr(TryFromIntError(PosOverflow))\nOk(42)">
+fn main() {
+    let wide = u16::from(200u8);            // always fits, so there is no Result
+    println!("{wide}");
+    println!("{:?}", u8::try_from(200i32));  // fits: Ok
+    println!("{:?}", u8::try_from(300i32));  // does not fit: Err
+    println!("{:?}", "42".parse::&lt;i32&gt;());   // ::&lt;i32&gt; names the type to produce
+}
+</pre>
+
+<div class="ox-fill" data-id="03:fill-try">
+  <p class="ox-q">Complete the call so that a value which doesn't fit reports an error instead of being truncated.</p>
+  <pre class="rs">
+fn main() {
+    let small = u8::[[try_from]](300i32);
+    println!("{small:?}");
+}
+  </pre>
+  <div class="ox-why"><p><code>u8::try_from(300i32)</code> returns <code>Err(TryFromIntError(PosOverflow))</code>. The error says why the conversion failed. With <code>as</code>, the same line would quietly print 44.</p></div>
+</div>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Agents write <code>as</code> constantly, because it compiles for any pair of numbers. That is the problem. When you review agent-written Rust, ask one question of every cast: can this value be outside the target range? If it came from a request, a file, a database or a parser, it can. Then ask for <code>try_from</code> and a real error path. If the code around the cast proves the range, <code>as</code> is fine, and a short comment that says why helps the next reader.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="practice">Check your types</h2>
+
+<div class="ox-quiz" data-id="03:infer" data-xp="10" data-label="Check yourself">
+  <p class="ox-q">What type does <code>x</code> get in this program?</p>
+  <pre class="rs" data-check="ok">
+fn main() {
+    let x = 3.0;
+}
+  </pre>
+  <ol class="ox-choices">
+    <li><code>f32</code></li>
+    <li data-correct><code>f64</code></li>
+    <li><code>i32</code></li>
+    <li>None. A float literal has no type until you annotate it.</li>
+  </ol>
+  <div class="ox-why"><p>Float literals default to <code>f64</code>, in the same way integer literals default to <code>i32</code>. Write <code>3.0_f32</code> or <code>let x: f32 = 3.0;</code> to choose the smaller type.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="03:print-cast" data-xp="15" data-label="Check yourself">
+  <p class="ox-q">What does this program print?</p>
+  <pre class="rs" data-stdout="44 18">
+fn main() {
+    let big: i32 = 300;
+    let byte = big as u8;
+    let next = byte.wrapping_add(230);
+    println!("{byte} {next}");
+}
+  </pre>
+  <ol class="ox-choices">
+    <li>300 274</li>
+    <li>44 274</li>
+    <li data-correct>44 18</li>
+    <li data-feedback="Neither step checks for overflow.">It panics on the <code>wrapping_add</code> line.</li>
+  </ol>
+  <div class="ox-why"><p><code>big as u8</code>, where <code>big</code> is an <code>i32</code> holding 300, keeps the low 8 bits, which gives 44. Then 44 + 230 is 274, and <code>wrapping_add</code> takes that modulo 256, which gives 18. Neither <code>as</code> nor a <code>wrapping_</code> method panics.</p></div>
+</div>
+
+<div class="ox-match" data-id="03:match" data-left-label="PHP" data-right-label="Rust">
+  <ul>
+    <li data-left="int"><code>i64</code></li>
+    <li data-left="float"><code>f64</code></li>
+    <li data-left="bool"><code>bool</code></li>
+    <li data-left="&quot;é&quot;[0] (one byte)"><code>u8</code></li>
+    <li data-left="mb_substr($s, 0, 1) (one character)"><code>char</code></li>
+    <li data-left="[$a, $b]"><code>(A, B)</code> tuple</li>
+  </ul>
+</div>
+
+<p>Two rows deserve a second look. PHP's <code>"é"[0]</code> is a single byte, which is why the right-hand match is <code>u8</code> and not <code>char</code>. And PHP's <code>int</code> is 64 bits on a 64-bit build, so <code>i64</code> is the closest match, while <code>i32</code> is what Rust picks when nothing else decides the type.</p>
+
+<style>
+#sorter { margin: 24px 0; }
+#sorter .so-intro { margin: 0 0 12px; color: var(--ink-2); }
+#sorter .so-count { margin: 0 0 8px; font: 600 0.85rem/1 var(--font-mono); color: var(--muted); }
+#sorter .so-tray { display: flex; flex-wrap: wrap; gap: 8px; min-height: 96px; padding: 12px; border: 1px dashed var(--line); border-radius: var(--radius-lg); background: var(--surface-2); align-items: center; }
+#sorter .so-empty { margin: 0; color: var(--muted); }
+#sorter .so-pebble { display: grid; justify-items: center; gap: 4px; width: 88px; padding: 8px 6px 6px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); font: 700 0.85rem/1 var(--font-mono); cursor: pointer; }
+#sorter .so-pebble[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+#sorter .so-pebble:focus-visible, #sorter .so-bin:focus-visible { outline: 2px solid var(--oxide); outline-offset: 3px; }
+#sorter .so-pebble.is-bounce { animation: so-bounce 380ms ease-in-out; }
+#sorter .so-art { display: block; width: 46px; }
+#sorter .so-art .ca { display: block; width: 100%; }
+#sorter .so-art .ca-svg { display: block; width: 100%; height: auto; }
+#sorter .so-bins { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+@media (max-width: 620px) { #sorter .so-bins { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+#sorter .so-bin { display: grid; justify-items: center; align-content: start; gap: 6px; min-height: 124px; padding: 10px 6px; border: 1.5px dashed var(--line); border-radius: var(--radius-lg); background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
+#sorter .so-bin:hover { border-color: var(--ink-2); }
+#sorter .so-name { font: 800 1.05rem/1 var(--font-display); color: var(--ink); }
+#sorter .so-in { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; min-height: 1.4em; }
+#sorter .so-chip { padding: 2px 7px; border-radius: 999px; background: var(--ok-soft); color: var(--ok); font: 700 0.75rem/1.3 var(--font-mono); }
+#sorter .so-msg { min-height: 3em; margin: 12px 0 0; padding: 10px 12px; border-left: 3px solid var(--line); border-radius: 0 var(--radius) var(--radius) 0; background: var(--surface-2); color: var(--ink); }
+#sorter .so-msg.is-ok { border-left-color: var(--ok); }
+#sorter .so-msg.is-bad { border-left-color: var(--bad); }
+#sorter .so-end { margin-top: 12px; padding: 12px 14px; border-left: 3px solid var(--ok); border-radius: 0 var(--radius) var(--radius) 0; background: var(--ok-soft); }
+#sorter .so-end[hidden] { display: none; }
+#sorter .so-end p { margin: 0 0 6px; }
+#sorter .so-end p:last-child { margin-bottom: 0; }
+#sorter .so-bar { margin-top: 12px; }
+@keyframes so-bounce { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+@media (prefers-reduced-motion: reduce) { #sorter .so-pebble.is-bounce { animation: none; } }
+</style>
+
+<div class="ox-figure ox-wide" id="sorter">
+  <p class="ox-label">Shape sorter</p>
+  <p class="so-intro">Pick a pebble, then pick the slot it belongs in. A pebble only fits a slot of its type, and a wrong drop bounces back with the reason.</p>
+  <p class="so-count" aria-live="polite">Sorted 0 of 8</p>
+  <div class="so-tray" role="group" aria-label="Pebbles to sort"></div>
+  <div class="so-bins" role="group" aria-label="Slots, one per type"></div>
+  <p class="so-msg" aria-live="polite">Choose a pebble to start.</p>
+  <div class="so-end" hidden aria-live="polite"></div>
+  <div class="so-bar"><button type="button" class="ox-btn is-small" data-so-reset>Start over</button></div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  function init() {
+    var root = document.getElementById("sorter");
+    if (!root || !window.OxCast) return;
+    var items = window.OX_CH03_SORT || [];
+    // Each pebble is shown with the shape of the type its literal has by default.
+    var PEBBLES = [
+      { id: "42", shape: "i32" }, { id: "3.14", shape: "f64" }, { id: "true", shape: "bool" }, { id: "é", shape: "char" },
+      { id: "300", shape: "i32" }, { id: "-1", shape: "i32" }, { id: "255", shape: "i32" }, { id: "Z", shape: "char" }
+    ];
+    var SLOTS = [
+      { id: "i32", shape: "i32" }, { id: "f64", shape: "f64" }, { id: "bool", shape: "bool" }, { id: "char", shape: "char" }, { id: "u8", shape: "u8" }
+    ];
+    var reduced = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+    var tray = root.querySelector(".so-tray");
+    var bins = root.querySelector(".so-bins");
+    var msg = root.querySelector(".so-msg");
+    var count = root.querySelector(".so-count");
+    var endBox = root.querySelector(".so-end");
+    var reset = root.querySelector("[data-so-reset]");
+    var sel = null, placed = {}, awarded = false;
+
+    function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+    function art(shape) { return OxCast.prop("pebble", { type: shape, value: "" }); }
+    function find(p, s) { for (var i = 0; i < items.length; i++) if (items[i].pebble === p && items[i].slot === s) return items[i]; return null; }
+    function nPlaced() { return Object.keys(placed).length; }
+    function say(text, tone) { msg.className = "so-msg" + (tone ? " " + tone : ""); msg.textContent = text; }
+
+    function render(focusSlot) {
+      tray.innerHTML = "";
+      var left = PEBBLES.filter(function (p) { return !(p.id in placed); });
+      if (!left.length) tray.innerHTML = '<p class="so-empty">Every pebble is sorted.</p>';
+      left.forEach(function (p) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "so-pebble";
+        b.setAttribute("data-id", p.id);
+        b.setAttribute("aria-pressed", String(sel === p.id));
+        b.setAttribute("aria-label", "Pebble " + p.id + ", shape of " + p.shape);
+        b.innerHTML = '<span class="so-art">' + art(p.shape) + "</span><span>" + esc(p.id) + "</span>";
+        b.addEventListener("click", function () { choose(p.id); });
+        tray.appendChild(b);
+      });
+      bins.innerHTML = "";
+      SLOTS.forEach(function (s) {
+        var here = PEBBLES.filter(function (p) { return placed[p.id] === s.id; });
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "so-bin";
+        b.setAttribute("data-slot", s.id);
+        b.setAttribute("aria-label", "Slot " + s.id + ", " + (here.length ? "holding " + here.map(function (p) { return p.id; }).join(", ") : "empty"));
+        b.innerHTML = '<span class="so-art">' + art(s.shape) + '</span><span class="so-name">' + s.id + '</span><span class="so-in">' +
+          here.map(function (p) { return '<span class="so-chip">' + esc(p.id) + "</span>"; }).join("") + "</span>";
+        b.addEventListener("click", function () { drop(s.id); });
+        bins.appendChild(b);
+      });
+      count.textContent = "Sorted " + nPlaced() + " of " + PEBBLES.length;
+      if (focusSlot) { var f = bins.querySelector('[data-slot="' + focusSlot + '"]'); if (f) f.focus({ preventScroll: true }); }
+    }
+
+    function choose(id) {
+      sel = sel === id ? null : id;
+      tray.querySelectorAll(".so-pebble").forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-id") === sel)); });
+      say(sel ? "Now pick the slot for " + sel + "." : "Choose a pebble to start.", "");
+    }
+
+    function drop(slot) {
+      if (!sel) { say("Pick a pebble first, then a slot.", ""); return; }
+      var id = sel, it = find(id, slot);
+      if (it && it.check === "ok") {
+        placed[id] = slot;
+        sel = null;
+        say(id + " fits " + slot + ". Its program builds and prints " + it.stdout + ".", "is-ok");
+        render(slot);
+        if (nPlaced() === PEBBLES.length) finish();
+        return;
+      }
+      var pb = tray.querySelector('[data-id="' + id + '"]');
+      if (pb && !reduced) { pb.classList.remove("is-bounce"); void pb.offsetWidth; pb.classList.add("is-bounce"); }
+      say((it && it.code ? it.code : "no code") + " · " + (it ? it.why : id + " does not fit " + slot + "."), "is-bad");
+    }
+
+    function finish() {
+      endBox.hidden = false;
+      endBox.innerHTML =
+        "<p><strong>All eight sorted.</strong> 42 and 255 fit both i32 and u8, because both values are in range for either type. Either slot is right for them, and the sorter accepts either one.</p>" +
+        "<p>300 and -1 fit only i32, since u8 cannot hold them. 3.14, true, é and Z each have a single type that fits.</p>";
+      if (!awarded && window.Ox && Ox.award) { awarded = true; Ox.award(10, "sorted the pebbles", "ch03:shape-sorter"); }
+    }
+
+    function restart() {
+      placed = {};
+      sel = null;
+      endBox.hidden = true;
+      say("Choose a pebble to start.", "");
+      render(null);
+    }
+
+    reset.addEventListener("click", restart);
+    restart();
+  }
+  // cast-art.js and the scene data are deferred, so wait for them.
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
+</script>
+</section>
+
+<section>
+<h2 id="quests">Forge quests</h2>
+<p>Reading builds recognition. Writing code builds the skill. These quests run locally against the real compiler.</p>
+<div class="ox-quests" data-chapter="3"></div>
+</section>
+
+<section>
+<h2 id="recap">Recap</h2>
+
+<div class="ox-recap">
+  <h3>Types are shapes</h3>
+  <ul>
+    <li>Rust never converts between number types for you. <code>"5" + 5</code> is a compile error (E0369), not 10.</li>
+    <li>Integers are signed (<code>i</code>) or unsigned (<code>u</code>), 8 to 128 bits wide, plus the pointer-sized <code>isize</code> and <code>usize</code>. A bare literal is an <code>i32</code>. Lengths and indexes are <code>usize</code>.</li>
+    <li>Overflow panics in debug builds and wraps in release builds. The <code>wrapping_</code>, <code>checked_</code>, <code>saturating_</code> and <code>overflowing_</code> methods make the choice in your code.</li>
+    <li><code>char</code> is one 4-byte Unicode scalar value. <code>bool</code> has no truthiness, so an <code>if</code> needs a comparison.</li>
+    <li>A tuple has a fixed shape and an array has a fixed length. Both are part of the type.</li>
+    <li><code>as</code> truncates silently. <code>From</code> is for conversions that can't lose data. <code>TryFrom</code> returns a <code>Result</code> when a value might not fit.</li>
+    <li>PHP's <code>declare(strict_types=1)</code> is the closest match to Rust's rule. It checks scalar arguments, but only for calls made from the file that declares it.</li>
+  </ul>
+</div>
+
+<div class="ox-deck" data-chapter="3"></div>
+
+<details class="ox-think">
+  <summary>Explain it back: why does Rust make you choose integer sizes when PHP doesn't?</summary>
+  <div class="ox-think-body">
+    <p>One good answer: "PHP gives every integer one size, 64 bits, and quietly becomes a float when it runs out of room. Rust asks for the size because the size decides how much memory a value takes, the range it can hold and what happens at the edge. The choice is written in the code, where a reviewer can see it, and the compiler rejects the mismatches it can see."</p>
+    <p>If your version mentions <em>memory</em>, <em>range</em> and <em>what overflow does</em>, you have the core of it.</p>
+  </div>
+</details>
+
+<div class="ox-complete-host"></div>
+</section>
+
+</main>
+</div>
+
+<style>
+#bitbox { --bw: 26px; }
+@media (max-width: 560px) { #bitbox { --bw: 14px; } }
+#bitbox .bb-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 12px; }
+#bitbox .bb-label { min-width: 4.5rem; font: 700 0.8rem/1 var(--font-display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+#bitbox .bb-seg { display: flex; flex-wrap: wrap; gap: 6px; }
+#bitbox .ox-btn[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+#bitbox .bb-screen { margin: 6px 0 14px; padding: 14px 12px 12px; background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--radius); }
+#bitbox .bb-dec { margin: 0; font: 700 2.2rem/1.1 var(--font-mono); color: var(--ink); overflow-wrap: anywhere; }
+#bitbox .bb-meta { margin: 6px 0 14px; font: 0.85rem/1.5 var(--font-mono); color: var(--muted); overflow-wrap: anywhere; }
+#bitbox .bb-bits { display: grid; grid-template-columns: repeat(var(--cols, 4), auto); justify-content: center; gap: 12px 14px; }
+#bitbox .bb-nib { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+#bitbox .bb-group { display: flex; gap: 3px; }
+#bitbox .bb-bit { width: var(--bw); height: calc(var(--bw) * 1.3); display: grid; place-items: center; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--muted); font: 600 12px/1 var(--font-mono); }
+#bitbox .bb-bit.is-on { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+#bitbox .bb-bit.is-sign { outline: 2px solid var(--warn); outline-offset: 2px; }
+#bitbox .bb-hexd { font: 600 0.8rem/1 var(--font-mono); color: var(--muted); }
+#bitbox .bb-caption { margin: 14px 0 0; font-size: 0.88rem; color: var(--muted); }
+#bitbox .bb-ops { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; }
+#bitbox .bb-set { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
+#bitbox .bb-set input { width: 9rem; min-height: 40px; padding: 6px 10px; font: 600 1rem var(--font-mono); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+#bitbox .bb-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin: 16px 0 4px; font: 0.95rem/1.5 var(--font-mono); color: var(--ink); }
+#bitbox .bb-expr { overflow-wrap: anywhere; }
+#bitbox .bb-res { font-weight: 700; overflow-wrap: anywhere; }
+#bitbox .bb-line.is-bad .bb-res { color: var(--bad); }
+#bitbox .bb-line.is-ok .bb-res { color: var(--ok); }
+#bitbox .bb-note { margin: 0; color: var(--ink-2); }
+</style>
+
+<script>
+(function () {
+  // Exact integer rules for the Bit Box. Every value is a BigInt, so all six
+  // widths are exact. Nothing in this block touches the page.
+  // BB-PURE-BEGIN
+  const BB_TYPES = {
+    u8: { bits: 8, signed: false },
+    i8: { bits: 8, signed: true },
+    u16: { bits: 16, signed: false },
+    i16: { bits: 16, signed: true },
+    u32: { bits: 32, signed: false },
+    i32: { bits: 32, signed: true }
+  };
+  const BB_OPS = {
+    add: { sym: "+", name: "add", panic: "attempt to add with overflow" },
+    sub: { sym: "-", name: "sub", panic: "attempt to subtract with overflow" },
+    mul: { sym: "*", name: "mul", panic: "attempt to multiply with overflow" }
+  };
+  function bbRange(t) {
+    const bits = BigInt(BB_TYPES[t].bits);
+    return BB_TYPES[t].signed
+      ? { min: -(1n << (bits - 1n)), max: (1n << (bits - 1n)) - 1n }
+      : { min: 0n, max: (1n << bits) - 1n };
+  }
+  function bbModulus(t) { return 1n << BigInt(BB_TYPES[t].bits); }
+  function bbMod(a, m) { return ((a % m) + m) % m; }
+  function bbFits(t, v) { const r = bbRange(t); return v >= r.min && v <= r.max; }
+  // wrap = ((v - min) mod 2^bits) + min: the result of wrapping_* and of `as`
+  function bbWrap(t, v) { const r = bbRange(t); return bbMod(v - r.min, bbModulus(t)) + r.min; }
+  function bbClamp(t, v) { const r = bbRange(t); return v < r.min ? r.min : v > r.max ? r.max : v; }
+  // two's complement bit pattern: (v + 2^bits) mod 2^bits for negatives
+  function bbPattern(t, v) { return bbMod(v, bbModulus(t)); }
+  function bbBitString(t, v) { return bbPattern(t, v).toString(2).padStart(BB_TYPES[t].bits, "0"); }
+  function bbHex(t, v) { return "0x" + bbPattern(t, v).toString(16).padStart(BB_TYPES[t].bits / 4, "0"); }
+  // How a literal is written in Rust. A negative literal needs parentheses before a method call.
+  function bbLit(t, v) { return v < 0n ? `(-${String(-v)}${t})` : `${String(v)}${t}`; }
+  // Apply one operation in one mode. Returns the expression as Rust writes it, the
+  // text after the arrow, and the new stored value (undefined when nothing is stored).
+  function bbApply(t, mode, v, op, k) {
+    const o = BB_OPS[op];
+    const r = op === "add" ? v + k : op === "sub" ? v - k : v * k;
+    const lit = bbLit(t, v);
+    const arg = String(k);
+    if (mode === "debug") {
+      const expr = `${lit} ${o.sym} ${arg}`;
+      return bbFits(t, r) ? { expr, value: r, result: String(r) } : { expr, panic: o.panic };
+    }
+    if (mode === "checked") {
+      const expr = `${lit}.checked_${o.name}(${arg})`;
+      return bbFits(t, r) ? { expr, value: r, result: `Some(${String(r)})` } : { expr, result: "None" };
+    }
+    if (mode === "wrapping") {
+      const value = bbWrap(t, r);
+      return { expr: `${lit}.wrapping_${o.name}(${arg})`, value, result: String(value) };
+    }
+    if (mode === "saturating") {
+      const value = bbClamp(t, r);
+      return { expr: `${lit}.saturating_${o.name}(${arg})`, value, result: String(value) };
+    }
+    throw new Error("unknown mode " + mode);
+  }
+  // Changing the type is an `as` cast: the number is wrapped into the new range.
+  function bbCast(from, to, v) {
+    const w = bbWrap(to, v);
+    return { expr: `${bbLit(from, v)} as ${to}`, value: w, result: String(w) };
+  }
+  // The "set…" box. Returns { value } or { error } with rustc's wording.
+  function bbParse(t, text) {
+    const s = String(text).trim().replace(/_/g, "");
+    if (!/^-?\d+$/.test(s)) return { error: "Type a whole number, such as 42 or -6." };
+    if (s.startsWith("-") && !BB_TYPES[t].signed) {
+      return { error: "error[E0600]: cannot apply unary operator `-` to type `" + t + "`" };
+    }
+    const v = BigInt(s);
+    if (!bbFits(t, v)) return { error: "error: literal out of range for `" + t + "`" };
+    return { value: v };
+  }
+  // BB-PURE-END
+
+  function init() {
+    const root = document.getElementById("bitbox");
+    if (!root) return;
+    const $ = (sel) => root.querySelector(sel);
+    const $$ = (sel) => Array.from(root.querySelectorAll(sel));
+    const S = { t: "u8", mode: "debug", v: 250n };
+
+    function bitsHtml() {
+      const { bits, signed } = BB_TYPES[S.t];
+      const s = bbBitString(S.t, S.v);
+      const hex = bbHex(S.t, S.v).slice(2);
+      let out = "";
+      for (let n = 0; n < bits / 4; n++) {
+        let group = "";
+        for (let j = 0; j < 4; j++) {
+          const i = n * 4 + j;
+          const cls = "bb-bit" + (s[i] === "1" ? " is-on" : "") + (signed && i === 0 ? " is-sign" : "");
+          group += `<span class="${cls}">${s[i]}</span>`;
+        }
+        out += `<span class="bb-nib"><span class="bb-group">${group}</span><span class="bb-hexd">${hex[n]}</span></span>`;
+      }
+      return out;
+    }
+
+    function render() {
+      const info = BB_TYPES[S.t];
+      const r = bbRange(S.t);
+      $("#bb-dec").textContent = String(S.v);
+      $("#bb-meta").textContent = `${S.t} · ${info.bits} bits · ${String(r.min)} to ${String(r.max)} · ${bbHex(S.t, S.v)}`;
+      const bitsEl = $("#bb-bits");
+      bitsEl.style.setProperty("--cols", info.bits === 8 ? 2 : 4);
+      bitsEl.setAttribute("aria-label", `${info.bits} bits: ${bbBitString(S.t, S.v)}`);
+      bitsEl.innerHTML = bitsHtml();
+      $("#bb-caption").textContent = info.signed
+        ? "The leftmost box is the sign bit. It is 1 for every negative number. Negatives are stored in two's complement."
+        : "Every box is a value bit. An unsigned type has no sign bit.";
+      $$("[data-type]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.type === S.t)));
+      $$("[data-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === S.mode)));
+    }
+
+    function line(expr, res, tone, note) {
+      const ln = $("#bb-line");
+      ln.className = "bb-line" + (tone ? " " + tone : "");
+      $("#bb-expr").textContent = expr;
+      $("#bb-res").textContent = res;
+      $("#bb-note").textContent = note;
+    }
+
+    function operate(op, k) {
+      const exact = op === "add" ? S.v + k : op === "sub" ? S.v - k : S.v * k;
+      const fits = bbFits(S.t, exact);
+      const r = bbApply(S.t, S.mode, S.v, op, k);
+      if (r.panic) {
+        line(r.expr, "panic: " + r.panic, "is-bad",
+          `Debug builds stop the program here. The box keeps ${String(S.v)}, the last value that fit.`);
+        if (window.Ox && Ox.award) Ox.award(10, "a debug panic, found on purpose", "ch03:bitbox-panic");
+      } else {
+        if (r.value !== undefined) S.v = r.value;
+        let note;
+        if (S.mode === "debug") note = "It fits, so the debug check passes.";
+        else if (S.mode === "checked") note = r.value !== undefined
+          ? "Some holds the number. Real code opens the Option with match or if let before it uses the value."
+          : "None: nothing is stored, so the box keeps its value.";
+        else if (fits) note = "It fits, so the result is exact.";
+        else note = S.mode === "wrapping"
+          ? "Past the limit, so the result wraps around to the other end of the range."
+          : "Past the limit, so the result sticks at the limit.";
+        line(r.expr, r.result, "is-ok", note);
+      }
+      render();
+    }
+
+    function changeType(t) {
+      if (t === S.t) return;
+      const c = bbCast(S.t, t, S.v);
+      line(c.expr, c.result, "",
+        "Changing type is an `as` cast: the number is wrapped into the " + t + " range.");
+      S.t = t;
+      S.v = c.value;
+      render();
+    }
+
+    $$("[data-type]").forEach((b) => b.addEventListener("click", () => changeType(b.dataset.type)));
+    $$("[data-mode]").forEach((b) => b.addEventListener("click", () => {
+      S.mode = b.dataset.mode;
+      render();
+      $("#bb-note").textContent = "Mode changed. Press an operation to see the new rule.";
+    }));
+    $$("[data-op]").forEach((b) => b.addEventListener("click", () => operate(b.dataset.op, BigInt(b.dataset.k))));
+    $("[data-reset]").addEventListener("click", () => {
+      S.t = "u8"; S.mode = "debug"; S.v = 250n;
+      render();
+      line("let x: u8 = 250;", "x is 250", "", "Back to the start. Press +1 six times to reach the panic.");
+    });
+
+    const form = $("#bb-set");
+    const input = $("#bb-input");
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const raw = input.value.trim();
+      const p = bbParse(S.t, raw);
+      if (p.error) {
+        line(`let x: ${S.t} = ${raw || "?"};`, p.error, "is-bad",
+          "Nothing changed. rustc reports this at compile time, so the program never runs.");
+        return;
+      }
+      S.v = p.value;
+      input.value = "";
+      render();
+      line(`let x: ${S.t} = ${String(p.value)};`, `x is now ${String(p.value)}`, "is-ok",
+        "A plain assignment. There is no arithmetic, so no overflow check runs.");
+    });
+
+    render();
+    line("let x: u8 = 250;", "x is 250", "", "Press +1 and watch the boxes. Five presses reach 255.");
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
+</script>
+</body>
+</html>

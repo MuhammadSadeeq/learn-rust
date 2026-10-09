@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Be the Borrow Checker · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<link rel="stylesheet" href="../assets/cast-art.css">
+<link rel="stylesheet" href="../assets/cast.css">
+<link rel="stylesheet" href="../assets/motion.css">
+<link rel="stylesheet" href="../assets/story.css">
+<style>
+  .bc-intro { display: grid; gap: 6px; margin: 0 0 1.4rem; color: var(--ink-2); font-size: 0.98rem; line-height: 1.5; }
+  .bc-intro p { margin: 0; max-width: 46rem; }
+  .bc-keys { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 6px !important; font-size: 0.9rem; color: var(--muted); }
+  .bc-keys kbd { margin-right: 4px; }
+
+  .bc-host { max-width: 52rem; min-width: 0; }
+  .bc-panel { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow); padding: 18px; min-width: 0; }
+  .bc-panel:focus { outline: none; }
+  .bc-card.is-right { animation: bc-right 0.6s ease both; }
+  .bc-card.is-wrong { animation: bc-wrong 0.45s ease both; }
+  @keyframes bc-right { 0% { border-color: var(--ok); box-shadow: 0 0 0 4px var(--ok-soft); } 100% { border-color: var(--line); box-shadow: var(--shadow); } }
+  @keyframes bc-wrong { 0% { border-color: var(--bad); transform: none; } 20% { transform: translateX(-6px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(3px); } 100% { border-color: var(--line); transform: none; } }
+
+  .bc-hud { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: flex-end; margin: 0 0 10px; }
+  .bc-stat { display: grid; gap: 2px; min-width: 0; }
+  .bc-stat b { font: 900 1.45rem/1 var(--font-display); color: var(--ink); font-variant-numeric: tabular-nums; }
+  .bc-hearts { display: inline-flex; gap: 4px; margin-left: auto; padding-bottom: 2px; }
+  .bc-hearts svg { width: 22px; height: 22px; fill: var(--bad); }
+  .bc-hearts svg.is-lost { fill: none; stroke: var(--muted); stroke-width: 2; }
+  .bc-bar { height: 4px; border-radius: 2px; background: var(--surface-3); overflow: hidden; margin: 0 0 16px; }
+  .bc-bar i { display: block; height: 100%; width: 0; background: var(--oxide); transition: width 0.3s ease; }
+
+  .bc-ask { margin: 2px 0 0; font: 700 1.2rem/1.3 var(--font-body); color: var(--ink); }
+  .bc-status { margin: 4px 0 0; font-size: 0.95rem; color: var(--ink-2); }
+  .bc-status span { color: var(--muted); }
+  .bc-verdict { margin: 4px 0 8px; font: 700 1.1rem/1.35 var(--font-body); }
+  .bc-verdict.is-ok { color: var(--ok); }
+  .bc-verdict.is-bad { color: var(--bad); }
+  .bc-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 4px; }
+  .bc-plate { margin: 12px 0 16px; }
+  .bc-plate pre { font-size: 0.9rem; }
+  .bc-src code { counter-reset: bcl; }
+  .bc-src .ln::before { counter-increment: bcl; content: counter(bcl); display: inline-block; width: 2ch; margin-right: 14px; text-align: right; color: var(--code-dim); user-select: none; }
+  .bc-err .ox-code-scroll { max-height: 22rem; overflow-y: auto; }
+  .bc-err pre { font-size: 0.8rem; }
+
+  .bc-answers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .bc-big { display: grid; justify-items: start; align-content: space-between; gap: 10px; min-height: 96px; padding: 14px 16px; border: 2px solid var(--line); border-radius: var(--radius-lg); background: var(--surface-2); color: var(--ink); font: 700 1.12rem/1.25 var(--font-body); text-align: left; cursor: pointer; transition: border-color 0.15s, background 0.15s, transform 0.08s; }
+  .bc-big:hover { background: var(--surface-3); }
+  .bc-big:active { transform: translateY(1px); }
+  .bc-big.is-accept:hover { border-color: var(--ok); }
+  .bc-big.is-reject:hover { border-color: var(--bad); }
+  .bc-big-k { font: 600 0.78rem/1 var(--font-mono); color: var(--muted); padding: 3px 7px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--surface); }
+
+  .bc-choices { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .bc-choice { width: 100%; display: flex; gap: 10px; align-items: flex-start; min-height: 48px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); font: 500 1rem/1.35 var(--font-body); text-align: left; cursor: pointer; }
+  .bc-choice:hover:not([disabled]) { border-color: var(--oxide); background: var(--surface-2); }
+  .bc-choice kbd { flex: none; font-family: var(--font-mono); font-size: 0.8rem; }
+  .bc-choice.is-right { border-color: var(--ok); background: var(--ok-soft); }
+  .bc-choice.is-wrong { border-color: var(--bad); background: var(--bad-soft); }
+  .bc-choice.is-faded { opacity: 0.55; }
+  .bc-choice[disabled] { cursor: default; }
+  .bc-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; }
+  .bc-row .ox-btn kbd { font-size: 0.8rem; }
+
+  .bc-rulebox { margin: 0 0 12px; font-size: 0.95rem; color: var(--ink-2); }
+  .bc-rulebox b { color: var(--ink); }
+  .bc-sub { margin: 4px 0 0; }
+  .bc-why p { margin: 0 0 0.6em; line-height: 1.55; }
+  .bc-why p:last-child { margin-bottom: 0; }
+  .bc-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; }
+  .bc-actions .bc-next { margin-left: auto; }
+  .bc-actions .bc-next kbd { font-size: 0.75rem; }
+
+  .bc-tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr)); gap: 10px; }
+  .bc-tier { display: grid; gap: 6px; padding: 12px 14px; border: 2px solid var(--line); border-radius: var(--radius-lg); background: var(--surface-2); color: var(--ink); text-align: left; cursor: pointer; font: inherit; }
+  .bc-tier:hover { border-color: var(--ink-2); }
+  .bc-tier[aria-pressed="true"] { border-color: var(--oxide); background: var(--surface); }
+  .bc-tier b { font: 900 1.4rem/1 var(--font-display); text-transform: uppercase; letter-spacing: 0.02em; }
+  .bc-tier small { font: 600 0.7rem/1.35 var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+  .bc-blurb { margin: 12px 0 0; color: var(--ink-2); }
+  .bc-help { margin: 16px 0 0; font-size: 0.92rem; color: var(--muted); line-height: 1.55; }
+  .bc-help p { margin: 0 0 0.5em; }
+
+  .bc-results { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr)); gap: 12px; margin: 12px 0 0; }
+  .bc-results div { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); }
+  .bc-results b { font: 900 1.9rem/1 var(--font-display); color: var(--ink); font-variant-numeric: tabular-nums; }
+  .bc-results span { font: 600 0.7rem/1.3 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .bc-award { margin: 14px 0 0; color: var(--ink-2); }
+  .bc-missed { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
+  .bc-missed li { padding: 12px 14px; border: 1px solid var(--line); border-left: 4px solid var(--bad); border-radius: var(--radius); background: var(--surface-2); }
+  .bc-missed b { display: block; color: var(--ink); }
+  .bc-missed p { margin: 4px 0 6px; font-size: 0.93rem; color: var(--ink-2); }
+  .bc-missed .ox-label { display: inline; margin-left: 6px; }
+  .bc-missed a { font-size: 0.92rem; }
+
+  @media (max-width: 560px) {
+    .bc-answers { gap: 8px; }
+    .bc-big { min-height: 84px; padding: 12px; font-size: 1.02rem; }
+    .bc-plate pre { font-size: 0.8rem; }
+    .bc-hud { gap: 8px 16px; }
+    .bc-actions .bc-next { margin-left: 0; }
+  }
+</style>
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/labs/borrow-data.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+<script src="../assets/cast-art.js"></script>
+<script src="../assets/cast.js" defer></script>
+<script src="../assets/motion.js" defer></script>
+</head>
+<body data-crumb="Lab · Be the Borrow Checker">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<main class="ox-lab" id="main">
+  <header class="ox-lab-hero">
+    <span class="ox-label">Lab</span>
+    <h1 class="ox-title">Be the Borrow Checker</h1>
+    <p>Read a program, decide whether rustc accepts it, and when it rejects it, name the rule it broke.</p>
+    <p class="ox-label">Best after Chapter 9. Master needs Chapter 18.</p>
+  </header>
+
+  <section class="bc-intro" aria-label="How to play">
+    <p>Each program either compiles or it doesn't. Make your call before you look at the answer.</p>
+    <p>When rustc rejects a program, name the rule it broke for 50 bonus points.</p>
+    <p>You have three hearts. A wrong call costs one, and a streak of right calls multiplies your points.</p>
+    <p class="bc-keys" aria-label="Keyboard shortcuts"><span><kbd>A</kbd> accepts</span><span><kbd>R</kbd> rejects</span><span><kbd>1</kbd>–<kbd>4</kbd> pick a rule</span><span><kbd>S</kbd> skip the rule</span><span><kbd>Enter</kbd> next</span></p>
+  </section>
+
+  <div class="bc-host" id="bc-host"></div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  // Everything reads window.OX_BORROW and Ox, which exist only after the
+  // deferred scripts run, so the whole lab starts on DOMContentLoaded.
+  function boot() {
+  var ITEMS = window.OX_BORROW || [];
+  var BY_ID = {};
+  ITEMS.forEach(function (p) { BY_ID[p.id] = p; });
+
+  var RUN_LEN = 12, LIVES = 3, PASS = 75, AWARD_XP = 20;
+  var TIERS = [
+    { id: "novice", label: "Novice", blurb: "Moves, Copy and scope, mostly from Chapter 6, with a few structs from Chapter 9." },
+    { id: "adept", label: "Adept", blurb: "Borrows, slices, iterators and invalidation, from Chapters 6 to 13." },
+    { id: "master", label: "Master", blurb: "Lifetimes, closures, threads and smart pointers, plus accepted code that looks wrong." },
+    { id: "mixed", label: "Mixed", blurb: "Puzzles from every tier, shuffled together. Master puzzles need Chapters 15 to 18." }
+  ];
+  var TIER_LABEL = { novice: "Novice", adept: "Adept", master: "Master", mixed: "Mixed", review: "Review" };
+  var RULES = {
+    "move": "Moved a value, then used it again",
+    "shared-mut": "Read and write overlapped: a value was borrowed while another borrow of it was still in use",
+    "two-mut": "Two mutable borrows of one value at the same time",
+    "assign-borrowed": "Assigned to a value while it was borrowed",
+    "dangling": "Kept a reference after the value it points to was gone",
+    "not-mut": "Changed something that was not declared mut",
+    "move-out-of-borrow": "Moved a value out from behind a reference, index or Rc",
+    "closure-outlives": "A closure borrowed a local that might not outlive it",
+    "missing-lifetime": "Returned or stored a reference without naming its lifetime",
+    "type": "Passed a value of the wrong type",
+    "not-send": "Sent a value to another thread that isn't safe to share"
+  };
+  var RULE_KEYS = Object.keys(RULES);
+
+  var host = document.getElementById("bc-host");
+  var view = "menu";        // "menu" | "play" | "summary"
+  var S = null;             // the run in progress
+  var summary = null;       // the last finished run
+  var pickedTier = "novice";
+
+  /* ------------------------------------------------------------ storage */
+  function store() {
+    var st = Ox.state();
+    st.game = st.game || {};
+    var b = st.game.borrow = st.game.borrow || {};
+    if (!b.best || typeof b.best !== "object") b.best = {};
+    if (!Array.isArray(b.missed)) b.missed = [];
+    return b;
+  }
+  function savedMissed() { return store().missed.filter(function (id) { return !!BY_ID[id]; }); }
+  function todayKey() {
+    var d = new Date(), m = d.getMonth() + 1, day = d.getDate();
+    return d.getFullYear() + "-" + (m < 10 ? "0" : "") + m + "-" + (day < 10 ? "0" : "") + day;
+  }
+
+  /* ------------------------------------------------------------ helpers */
+  function poolFor(tier) { return tier === "mixed" ? ITEMS : ITEMS.filter(function (p) { return p.tier === tier; }); }
+  function shuffle(arr) {
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+    }
+    return arr;
+  }
+  function multFor(streak) { return streak >= 6 ? 3 : streak >= 3 ? 2 : 1; }
+  function isRejected(p) { return p.check !== "ok"; }
+  function chapterHref(n) { var c = Ox.chapterByNum(n); return c ? Ox.chapterUrl(c) : "#"; }
+  function ruleOptions(right) {
+    var others = RULE_KEYS.filter(function (k) { return k !== right; });
+    shuffle(others);
+    return shuffle([right].concat(others.slice(0, 3)));
+  }
+  function markLines(error) {
+    var err = new Set(), hl = new Set();
+    var ls = (error || "").split("\n");
+    for (var i = 0; i < ls.length - 1; i++) {
+      var m = /^\s*(\d+)\s*\|/.exec(ls[i]);
+      if (!m) continue;
+      var mk = /^\s*\|\s*([\^\-])/.exec(ls[i + 1]);
+      if (mk) (mk[1] === "^" ? err : hl).add(+m[1]);
+    }
+    return { err: err, hl: hl };
+  }
+  function codePlate(src, lang, marks, title, extraClass) {
+    var lines = Ox.splitLines(Ox.highlight(src, lang === "rustc" ? "rustc" : "rust"));
+    var body = lines.map(function (l, i) {
+      var n = i + 1, cls = "ln";
+      if (marks && marks.err.has(n)) cls += " is-err";
+      else if (marks && marks.hl.has(n)) cls += " is-hl";
+      return '<span class="' + cls + '">' + (l || " ") + "</span>";
+    }).join("");
+    var label = lang === "rustc" ? "rustc output" : "Rust";
+    var titleHtml = title ? '<span class="ox-code-title">' + Ox.esc(title) + "</span>" : "";
+    return '<figure class="ox-code bc-plate ' + (extraClass || "") + '" data-lang="' + (lang === "rustc" ? "rustc" : "rust") + '">' +
+      '<div class="ox-code-bar"><span class="ox-code-lang">' + label + "</span>" + titleHtml + "</div>" +
+      '<div class="ox-code-scroll"><pre><code' + (extraClass === "bc-src" ? ' class="bc-src"' : "") + ">" + body + "</code></pre></div></figure>";
+  }
+  function heartsHtml(alive) {
+    var out = "";
+    for (var i = 0; i < LIVES; i++) {
+      out += '<svg viewBox="0 0 24 24" class="' + (i < alive ? "" : "is-lost") + '" aria-hidden="true"><path d="M12 20.5s-7.5-4.5-9.3-9C1.6 8.4 3.6 5 7 5c2 0 3.7 1.1 5 2.9C13.3 6.1 15 5 17 5c3.4 0 5.4 3.4 4.3 6.5-1.8 4.5-9.3 9-9.3 9z"/></svg>';
+    }
+    return out;
+  }
+
+  /* ------------------------------------------------------------ run engine */
+  function newRun(mode, tier, ids) {
+    return { mode: mode, tier: tier, queue: ids, pos: 0, lives: LIVES, score: 0, streak: 0,
+      answered: 0, correct: 0, rulesTried: 0, rulesRight: 0, cleared: 0, missed: [],
+      stage: "verdict", cur: null, options: null, flash: null };
+  }
+  function curItem() { return BY_ID[S.queue[S.pos]]; }
+  function isLast() { return S.pos + 1 >= S.queue.length || (S.mode === "tier" && S.lives <= 0); }
+
+  function startRun(tier) {
+    S = newRun("tier", tier, shuffle(poolFor(tier).slice()).slice(0, RUN_LEN).map(function (p) { return p.id; }));
+    view = "play";
+    render(true);
+  }
+  function startReview() {
+    var ids = shuffle(savedMissed());
+    if (!ids.length) return;
+    S = newRun("review", "review", ids);
+    view = "play";
+    render(true);
+  }
+
+  function answer(accept) {
+    if (!S || S.stage !== "verdict") return;
+    var p = curItem(), rejected = isRejected(p);
+    var verdictRight = accept !== rejected;
+    var r = { accepted: accept, verdictRight: verdictRight, rejected: rejected, mult: 1, pts: 0, rulePts: 0,
+      ruleChosen: null, ruleRight: false, ruleSkipped: false, clean: false, reason: "" };
+    if (S.mode === "tier") {
+      r.mult = multFor(S.streak);
+      if (verdictRight) { r.pts = 100 * r.mult; S.score += r.pts; S.streak++; }
+      else { S.lives--; S.streak = 0; }
+    }
+    if (verdictRight) S.correct++;
+    S.cur = r;
+    S.flash = verdictRight ? "right" : "wrong";
+    if (verdictRight && rejected) {
+      S.options = ruleOptions(p.rule);
+      S.stage = "rule";
+    } else {
+      finishPuzzle();
+    }
+    render(true);
+  }
+
+  function pickRule(i) {
+    if (!S || S.stage !== "rule") return;
+    var p = curItem(), r = S.cur;
+    r.ruleChosen = S.options[i];
+    r.ruleRight = r.ruleChosen === p.rule;
+    S.rulesTried++;
+    if (r.ruleRight) {
+      S.rulesRight++;
+      if (S.mode === "tier") { r.rulePts = 50; S.score += 50; }
+    }
+    S.flash = r.ruleRight ? "right" : "wrong";
+    finishPuzzle();
+    render(true);
+  }
+
+  function skipRule() {
+    if (!S || S.stage !== "rule") return;
+    S.cur.ruleSkipped = true;
+    S.flash = null;
+    finishPuzzle();
+    render(true);
+  }
+
+  // A puzzle is clean when the verdict is right and, for rejected code, the
+  // rule was named. Clean puzzles leave the saved mistakes list; the others join it.
+  function finishPuzzle() {
+    var p = curItem(), r = S.cur;
+    r.clean = r.verdictRight && (!r.rejected || r.ruleRight === true);
+    if (!r.verdictRight) r.reason = "You said it " + (r.accepted ? "compiles" : "fails") + ". rustc " + (r.rejected ? "rejects it with " + p.check : "accepts it") + ".";
+    else if (r.rejected && r.ruleSkipped) r.reason = "Right call. You skipped naming the rule.";
+    else if (r.rejected && !r.ruleRight) r.reason = "Right call, wrong rule. The rule was: " + RULES[p.rule] + ".";
+    S.answered++;
+    S.stage = "reveal";
+    var b = store(), idx = b.missed.indexOf(p.id);
+    if (r.clean) {
+      if (idx >= 0) b.missed.splice(idx, 1);
+      if (S.mode === "review") S.cleared++;
+    } else {
+      if (idx < 0) b.missed.push(p.id);
+      S.missed.push({ id: p.id, reason: r.reason });
+    }
+    Ox.save();
+  }
+
+  function next() {
+    if (!S || S.stage !== "reveal") return;
+    if (isLast()) return endRun();
+    S.pos++;
+    S.stage = "verdict";
+    S.cur = null;
+    S.options = null;
+    S.flash = null;
+    render(true);
+  }
+
+  function endRun() {
+    var b = store();
+    var finished = S.answered === S.queue.length;
+    var acc = S.answered ? Math.round((100 * S.correct) / S.answered) : 0;
+    var res = { mode: S.mode, tier: S.tier, finished: finished, outOfHearts: S.mode === "tier" && S.lives <= 0,
+      score: S.score, answered: S.answered, correct: S.correct, acc: acc, rulesTried: S.rulesTried,
+      rulesRight: S.rulesRight, cleared: S.cleared, total: S.queue.length, missed: S.missed,
+      prevBest: 0, newBest: false, awarded: false, claimed: false };
+    if (S.mode === "tier") {
+      res.prevBest = b.best[S.tier] || 0;
+      if (S.score > res.prevBest) { b.best[S.tier] = S.score; res.newBest = S.score > 0; }
+      if (finished && acc >= PASS) {
+        res.awarded = Ox.award(AWARD_XP, "borrow checker run", "bc:" + S.tier + ":" + todayKey());
+        res.claimed = !res.awarded;
+      }
+      res.best = b.best[S.tier] || 0;
+    }
+    res.remaining = savedMissed().length;
+    Ox.save();
+    summary = res;
+    S = null;
+    view = "summary";
+    render(true);
+  }
+
+  /* ------------------------------------------------------------ rendering */
+  function render(focusCard) {
+    if (view === "menu") host.innerHTML = menuHtml();
+    else if (view === "play") host.innerHTML = playHtml();
+    else host.innerHTML = summaryHtml();
+    if (focusCard) {
+      var el = host.querySelector("[data-focus]");
+      if (el) el.focus({ preventScroll: true });
+    }
+    if (view === "play" && S && S.stage === "reveal") {
+      var v = host.querySelector(".bc-verdict");
+      if (v) v.scrollIntoView({ block: "nearest" });
+    }
+  }
+
+  function menuHtml() {
+    var b = store(), reviewN = savedMissed().length;
+    var tier = TIERS.filter(function (t) { return t.id === pickedTier; })[0] || TIERS[0];
+    var tiles = TIERS.map(function (t) {
+      var n = poolFor(t.id).length, best = b.best[t.id];
+      return '<button type="button" class="bc-tier" data-act="tier" data-tier="' + t.id + '" aria-pressed="' + (t.id === pickedTier) + '">' +
+        "<b>" + t.label + "</b><small>" + n + " puzzles · best " + (best != null ? best : "none") + "</small></button>";
+    }).join("");
+    return '<section class="bc-panel" data-focus tabindex="-1" aria-labelledby="bc-menu-h">' +
+      '<div class="ox-quiz-head"><span id="bc-menu-h">Choose a tier</span></div>' +
+      '<div class="bc-tiers">' + tiles + "</div>" +
+      '<p class="bc-blurb">' + Ox.esc(tier.blurb) + "</p>" +
+      '<div class="bc-row">' +
+        '<button type="button" class="ox-btn is-primary" data-act="start">Start a run of ' + RUN_LEN + "</button>" +
+        '<button type="button" class="ox-btn" data-act="review"' + (reviewN ? "" : " disabled") + ">Review my mistakes (" + reviewN + ")</button>" +
+      "</div>" +
+      '<div class="bc-help">' +
+        "<p>Each right call in a run is worth 100 points, times your streak multiplier: " + "×2 after three in a row, ×3 after six. Naming the rule adds 50. A wrong call costs a heart and resets the streak.</p>" +
+        "<p>Finish all " + RUN_LEN + " puzzles with " + PASS + "% or better to earn " + AWARD_XP + " XP, once per day for each tier. Mistakes are saved; review mode replays them with no hearts until each one is right.</p>" +
+      "</div></section>";
+  }
+
+  function playHtml() {
+    var p = curItem(), total = S.queue.length, stage = S.stage, review = S.mode === "review";
+    var progress = Math.round(((S.pos + (stage === "reveal" ? 1 : 0)) / total) * 100);
+    var hud = review
+      ? '<span class="bc-stat"><span class="ox-label">Review</span><b>' + (S.pos + 1) + " of " + total + '</b></span>' +
+        '<span class="bc-stat"><span class="ox-label">Cleared</span><b>' + S.cleared + "</b></span>"
+      : '<span class="bc-stat"><span class="ox-label">Puzzle</span><b>' + (S.pos + 1) + " of " + total + '</b></span>' +
+        '<span class="bc-stat"><span class="ox-label">Score</span><b>' + S.score + "</b></span>" +
+        '<span class="bc-stat"><span class="ox-label">Streak</span><b>' + S.streak + " · ×" + multFor(S.streak) + "</b></span>" +
+        '<div class="bc-hearts" role="img" aria-label="' + S.lives + " of " + LIVES + ' hearts left">' + heartsHtml(S.lives) + "</div>";
+
+    var flash = S.flash ? (S.flash === "right" ? " is-right" : " is-wrong") : "";
+    S.flash = null;
+    var reveal = stage === "reveal", r = S.cur;
+    var head = '<div class="ox-quiz-head"><span>' + (review ? "Review" : "Puzzle") + " " + (S.pos + 1) + '</span><span class="ox-quiz-xp">' + TIER_LABEL[p.tier] + "</span></div>";
+
+    var top = "";
+    if (reveal) {
+      var ok = r.verdictRight, rj = r.rejected;
+      var text = ok
+        ? (rj ? "Right. rustc rejects it with " + p.check + "." : "Right. rustc accepts it.")
+        : (rj ? "Not quite. rustc rejects it with " + p.check + "." : "Not quite. rustc accepts it.");
+      top += '<p class="bc-verdict ' + (ok ? "is-ok" : "is-bad") + '" role="status">' + text + "</p>";
+      var chips = "";
+      if (review) chips = r.clean ? '<span class="ox-chip is-ok">Removed from your list</span>' : '<span class="ox-chip is-bad">Stays on your list</span>';
+      else {
+        if (r.pts) chips += '<span class="ox-chip is-ok">+' + r.pts + (r.mult > 1 ? " · ×" + r.mult : "") + "</span>";
+        if (r.rulePts) chips += '<span class="ox-chip is-ok">+' + r.rulePts + " for the rule</span>";
+        if (!ok) chips += '<span class="ox-chip is-bad">−1 heart</span>';
+      }
+      if (chips) top += '<div class="bc-chips">' + chips + "</div>";
+    } else if (stage === "rule") {
+      top += '<p class="bc-ask">Which rule does it break?</p>' +
+        '<p class="bc-status" role="status">Right call. rustc rejects it. Name the rule for 50 bonus points. <span>Keys 1 to 4, or S to skip.</span></p>';
+    } else {
+      top += '<p class="bc-ask">Does rustc accept this program?</p>';
+    }
+
+    var marks = reveal && isRejected(p) ? markLines(p.error) : null;
+    var plate = codePlate(p.rust, "rust", marks, "src/main.rs", "bc-src");
+
+    var body = "";
+    if (stage === "verdict") {
+      body = '<div class="bc-answers">' +
+        '<button type="button" class="bc-big is-accept" data-act="accept"><span class="bc-big-k">A</span><span>rustc accepts it</span></button>' +
+        '<button type="button" class="bc-big is-reject" data-act="reject"><span class="bc-big-k">R</span><span>rustc rejects it</span></button>' +
+        "</div>";
+    } else if (stage === "rule") {
+      body = '<ol class="bc-choices" aria-label="Rules">' + S.options.map(function (k, i) {
+        return '<li><button type="button" class="bc-choice" data-act="rule" data-i="' + i + '"><kbd>' + (i + 1) + "</kbd><span>" + Ox.esc(RULES[k]) + "</span></button></li>";
+      }).join("") + "</ol>" +
+        '<div class="bc-row"><button type="button" class="ox-btn is-small" data-act="skip"><kbd>S</kbd> Skip the rule</button></div>';
+    } else {
+      body = revealBody(p, r);
+    }
+
+    return '<div class="bc-hud">' + hud + "</div>" +
+      '<div class="bc-bar" aria-hidden="true"><i style="width:' + progress + '%"></i></div>' +
+      '<article class="bc-panel bc-card' + flash + '" data-focus tabindex="-1" aria-label="' + (review ? "Review puzzle" : "Puzzle") + '">' +
+        head + top + plate + body +
+      "</article>";
+  }
+
+  function revealBody(p, r) {
+    var rj = isRejected(p), out = "";
+    if (rj) {
+      var said = r.ruleChosen ? (r.ruleRight ? "You named it." : "You picked: " + Ox.esc(RULES[r.ruleChosen]) + ".") : (r.ruleSkipped ? "You skipped the rule." : "");
+      out += '<p class="bc-rulebox"><span class="ox-label">Rule broken</span><br><b>' + Ox.esc(RULES[p.rule]) + "</b>" + (said ? "<br><span>" + said + "</span>" : "") + "</p>";
+      out += '<p class="ox-label bc-sub">What rustc said</p>';
+      out += '<div class="bc-err">' + codePlate(p.error, "rustc", null, "") + "</div>";
+    }
+    out += '<div class="bc-why"><p>' + p.why + "</p></div>";
+    if (rj) {
+      out += '<p class="ox-label bc-sub">A fix that compiles</p>';
+      out += codePlate(p.fix, "rust", null, "src/main.rs");
+    }
+    var last = isLast();
+    out += '<div class="bc-actions">' +
+      '<a class="ox-btn" href="' + chapterHref(p.chapter) + '">Learn it in Chapter ' + p.chapter + " →</a>" +
+      '<button type="button" class="ox-btn is-primary bc-next" data-act="next">' + (last ? "See results" : "Next puzzle") + " <kbd>Enter</kbd></button>" +
+      "</div>";
+    return out;
+  }
+
+  function summaryHtml() {
+    var r = summary, b = store();
+    var title = r.mode === "review" ? "Review finished" : r.outOfHearts ? "Out of hearts" : r.finished ? "Run complete" : "Run ended";
+    var stats, award = "", buttons = "";
+    if (r.mode === "review") {
+      stats = '<div><b>' + r.cleared + "</b><span>Cleared</span></div>" +
+        '<div><b>' + r.remaining + "</b><span>Still on your list</span></div>";
+      buttons = (r.remaining ? '<button type="button" class="ox-btn is-primary" data-act="review">Review again (' + r.remaining + ")</button>" : "") +
+        '<button type="button" class="ox-btn" data-act="menu">Back to tiers</button>';
+    } else {
+      var bestNow = b.best[r.tier] || 0;
+      stats = '<div><b>' + r.score + "</b><span>Score" + (r.newBest ? " · new best" : "") + "</span></div>" +
+        '<div><b>' + r.acc + "%</b><span>Accuracy · " + r.correct + " of " + r.answered + "</span></div>" +
+        '<div><b>' + r.rulesRight + " of " + r.rulesTried + "</b><span>Rules named</span></div>" +
+        '<div><b>' + bestNow + "</b><span>Best for " + TIER_LABEL[r.tier] + "</span></div>";
+      if (r.awarded) award = "+" + AWARD_XP + " XP for finishing this tier today.";
+      else if (r.claimed) award = "You already earned today's " + AWARD_XP + " XP for this tier. Come back tomorrow for more.";
+      else if (!r.finished) award = "Finish all " + RUN_LEN + " puzzles with " + PASS + "% or better to earn " + AWARD_XP + " XP.";
+      else award = "Reach " + PASS + "% to earn " + AWARD_XP + " XP for this tier.";
+      buttons = '<button type="button" class="ox-btn is-primary" data-act="again">Play again</button>' +
+        (r.remaining ? '<button type="button" class="ox-btn" data-act="review">Review my mistakes (' + r.remaining + ")</button>" : "") +
+        '<button type="button" class="ox-btn" data-act="menu">Choose another tier</button>';
+    }
+    var missed = "";
+    if (r.missed.length) {
+      missed = '<p class="ox-label" style="margin:18px 0 0">' + (r.mode === "review" ? "Still on your list" : "Missed this run") + "</p><ul class=\"bc-missed\">" +
+        r.missed.map(function (m) {
+          var p = BY_ID[m.id];
+          return "<li><b>" + Ox.esc(p.title) + '<span class="ox-label">' + TIER_LABEL[p.tier] + " · Chapter " + p.chapter + "</span></b>" +
+            "<p>" + Ox.esc(m.reason) + "</p>" +
+            '<a href="' + chapterHref(p.chapter) + '">Learn it in Chapter ' + p.chapter + " →</a></li>";
+        }).join("") + "</ul>";
+    } else if (r.mode === "review") {
+      missed = '<p class="bc-award">Every mistake on your list is now right. Nice work.</p>';
+    } else {
+      missed = '<p class="bc-award">No misses this run.</p>';
+    }
+    var info = r.mode === "review"
+      ? '<p class="bc-award">Review has no hearts and no score. A puzzle leaves the list once you call it and name its rule.</p>'
+      : (award ? '<p class="bc-award">' + Ox.esc(award) + "</p>" : "");
+    return '<section class="bc-panel" data-focus tabindex="-1" aria-labelledby="bc-sum-h">' +
+      '<div class="ox-quiz-head"><span>' + (r.mode === "review" ? "Review" : TIER_LABEL[r.tier] + " run") + '</span></div>' +
+      '<h2 id="bc-sum-h" class="ox-title" style="font-size:var(--step-3);margin:6px 0 0">' + title + "</h2>" +
+      '<div class="bc-results">' + stats + "</div>" + info + missed +
+      '<div class="bc-row" style="margin-top:18px">' + buttons + "</div></section>";
+  }
+
+  /* ------------------------------------------------------------ input */
+  host.addEventListener("click", function (e) {
+    var el = e.target.closest("[data-act]");
+    if (!el || el.disabled) return;
+    var act = el.getAttribute("data-act");
+    if (act === "tier") {
+      pickedTier = el.getAttribute("data-tier");
+      store().tier = pickedTier;
+      Ox.save();
+      render(false);
+      var same = host.querySelector('[data-tier="' + pickedTier + '"]');
+      if (same) same.focus({ preventScroll: true });
+    }
+    else if (act === "start") startRun(pickedTier);
+    else if (act === "review") startReview();
+    else if (act === "accept") answer(true);
+    else if (act === "reject") answer(false);
+    else if (act === "rule") pickRule(+el.getAttribute("data-i"));
+    else if (act === "skip") skipRule();
+    else if (act === "next") next();
+    else if (act === "again") { if (summary.mode === "review") startReview(); else startRun(summary.tier); }
+    else if (act === "menu") { view = "menu"; S = null; render(true); }
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey || !S) return;
+    var t = e.target, onButton = t && t.tagName === "BUTTON";
+    var k = (e.key || "").toLowerCase();
+    if (S.stage === "verdict") {
+      if (k === "a") { e.preventDefault(); answer(true); }
+      else if (k === "r") { e.preventDefault(); answer(false); }
+    } else if (S.stage === "rule") {
+      if (/^[1-4]$/.test(e.key) && S.options) { e.preventDefault(); pickRule(+e.key - 1); }
+      else if (k === "s") { e.preventDefault(); skipRule(); }
+    } else if (S.stage === "reveal") {
+      if (e.key === "Enter" && !onButton && !(t && t.tagName === "A")) { e.preventDefault(); next(); }
+    }
+  });
+
+  pickedTier = (store().tier && TIERS.some(function (t) { return t.id === store().tier; })) ? store().tier : "novice";
+  render(false);
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
+</script>
+</body>
+</html>

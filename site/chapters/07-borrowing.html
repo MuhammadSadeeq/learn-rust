@@ -1,0 +1,1308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Borrowing · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<link rel="stylesheet" href="../assets/cast-art.css">
+<link rel="stylesheet" href="../assets/cast.css">
+<link rel="stylesheet" href="../assets/motion.css">
+<link rel="stylesheet" href="../assets/story.css">
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/quests-data.js" defer></script>
+<script src="../assets/cards/ch07.js" defer></script>
+<script src="../assets/scenarios/ch07.js" defer></script>
+<script src="../assets/motion/ch07.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+<script src="../assets/cast-art.js"></script>
+<script src="../assets/cast.js" defer></script>
+<script src="../assets/motion.js" defer></script>
+<script src="../assets/xray.js" defer></script>
+<script src="../assets/story.js" defer></script>
+</head>
+<body data-chapter="7">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<div class="ox-page">
+<aside class="ox-rail" aria-label="Chapter contents"></aside>
+<main class="ox-main" id="main">
+
+<header class="ox-hero" data-auto>
+  <ul>
+    <li>Pass references instead of moving values, and say what <code>&amp;</code> and <code>&amp;mut</code> allow.</li>
+    <li>State the borrowing rule and explain the two bugs it prevents.</li>
+    <li>Predict how long a borrow lasts: until its last use, not until the end of its scope.</li>
+    <li>Read E0502, E0499, E0506, E0596 and E0106, and fix each one.</li>
+  </ul>
+</header>
+
+<section>
+<h2 id="tiresome">Looking without taking</h2>
+
+<p>Chapter 06 ended with a frustration. To let a function read a <code>String</code>, you handed the string over and got it back as part of the return value. Here is that pattern for a length check:</p>
+
+<pre class="rs" data-run data-stdout="hello has 5 bytes">
+fn len(s: String) -&gt; (String, usize) {
+    let n = s.len();
+    (s, n)
+}
+
+fn main() {
+    let s = String::from("hello");
+    let (s, n) = len(s);
+    println!("{s} has {n} bytes");
+}
+</pre>
+
+<p>It works, but every caller has to unpack the tuple, and every function has to repeat the trick. A <strong>borrow</strong> removes the need. An <code>&amp;</code> in front of a value makes a reference: a pointer that lets the callee look at the value while the caller keeps ownership.</p>
+
+<p>The <strong>borrow checker</strong>, which you met in Chapter 6, checks moves, borrows (shared and exclusive), mutability and lifetimes. This chapter is about the borrows.</p>
+
+<div class="ox-meet" data-cast="borrows" data-say="Any number of you may look. One of you may take an exclusive borrow, and then nobody else may look."></div>
+
+<pre class="rs" data-run data-stdout="hello has 5 bytes">
+fn len(s: &amp;String) -&gt; usize {
+    s.len()
+}
+
+fn main() {
+    let s = String::from("hello");
+    let n = len(&amp;s);
+    println!("{s} has {n} bytes");
+}
+</pre>
+
+<p>The parameter type <code>&amp;String</code> means "a borrowed String". The call <code>len(&amp;s)</code> lends <code>s</code> for as long as <code>len</code> runs, and <code>s</code> is still usable on the next line. Nothing moved, and nothing was freed.</p>
+
+<p>Step through that call. The question comes at the end of <code>len</code>.</p>
+
+<div class="ox-xray ox-wide" data-scenario="borrow-len"></div>
+
+<aside class="ox-callout" data-kind="insight">
+  <p>A reference is a pointer with a promise attached. It will never outlive the value it points to, and it obeys the rule you'll meet in section four. Everything else in this chapter follows from that promise.</p>
+</aside>
+
+<div class="ox-quiz" data-id="07:forgot-amp" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0308">
+fn len(s: &amp;String) -&gt; usize {
+    s.len()
+}
+
+fn main() {
+    let s = String::from("hello");
+    let n = len(s);
+    println!("{s} {n}");
+}
+</pre>
+  <ol class="ox-choices">
+    <li>Yes. Rust turns a String into a reference when it is passed to a function.</li>
+    <li data-correct>No. <code>len</code> asks for a <code>&amp;String</code> and gets a <code>String</code>. The types don't match, which is error E0308.</li>
+    <li>No. <code>s</code> is moved into the call, so <code>println!</code> can't use it.</li>
+  </ol>
+  <div class="ox-why">
+    <p>The compiler reports the type mismatch before it looks at ownership. The fix it suggests is the borrow itself.</p>
+    <pre class="rustc">error[E0308]: mismatched types
+ --&gt; src/main.rs:7:17
+  |
+7 |     let n = len(s);
+  |             --- ^ expected `&amp;String`, found `String`
+  |             |
+  |             arguments to this function are incorrect
+  |
+note: function defined here
+ --&gt; src/main.rs:1:4
+  |
+1 | fn len(s: &amp;String) -&gt; usize {
+  |    ^^^ ----------
+help: consider borrowing here
+  |
+7 |     let n = len(&amp;s);
+  |                 +
+
+
+For more information about this error, try `rustc --explain E0308`.</pre>
+  </div>
+</div>
+</section>
+
+<section>
+<h2 id="deref">Using a reference</h2>
+
+<p>A reference is a different type from the value it points to. <code>&amp;i32</code> is not <code>i32</code>. Two rules keep that manageable:</p>
+<ul>
+  <li>Comparisons want the same type on both sides, so you follow the pointer with <code>*</code>: <code>*r == 5</code>. Arithmetic on plain numbers also works through a reference (<code>r + 1</code> compiles), but <code>*r + 1</code> shows the dereference.</li>
+  <li>Method calls don't need the star. <code>rs.len()</code> works on a <code>&amp;String</code>, because the compiler dereferences automatically when it looks up a method.</li>
+</ul>
+
+<pre class="rs" data-run data-stdout="6\ntrue\n2">
+fn main() {
+    let x = 5;
+    let r = &amp;x;
+    println!("{}", *r + 1);
+    println!("{}", *r == 5);
+
+    let s = String::from("hi");
+    let rs = &amp;s;
+    println!("{}", rs.len());
+}
+</pre>
+
+<div class="ox-quiz" data-id="07:deref-cmp" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0277">
+fn main() {
+    let x = 5;
+    let r = &amp;x;
+    if r == 5 {
+        println!("five");
+    }
+}
+</pre>
+  <ol class="ox-choices">
+    <li>Yes. Comparisons see through references, the same way method calls do.</li>
+    <li data-correct>No. <code>&amp;i32</code> and <code>i32</code> are different types. Write <code>*r == 5</code>.</li>
+  </ol>
+  <div class="ox-why">
+    <p>Method calls dereference automatically. <code>==</code> doesn't. It compares the types you wrote, and there is no <code>==</code> between <code>&amp;i32</code> and <code>i32</code>, so you say which level you mean. (Arithmetic on references to numbers is implemented, so <code>r + 1</code> works.)</p>
+    <pre class="rustc">error[E0277]: can't compare `&amp;{integer}` with `{integer}`
+ --&gt; src/main.rs:4:10
+  |
+4 |     if r == 5 {
+  |          ^^ no implementation for `&amp;{integer} == {integer}`
+  |
+  = help: the trait `PartialEq&lt;{integer}&gt;` is not implemented for `&amp;{integer}`
+help: consider dereferencing here
+  |
+4 |     if *r == 5 {
+  |        +
+
+
+For more information about this error, try `rustc --explain E0277`.</pre>
+  </div>
+</div>
+
+<h3 id="ref-patterns">Patterns that take references apart</h3>
+
+<p>When you loop over a borrowed list, each item is a reference. A pattern can copy the value out of it for you: <code>for &amp;x in &amp;v</code> makes <code>x</code> an <code>i32</code> instead of an <code>&amp;i32</code>. The same works in closures: <code>|&amp;x| x &gt; 2</code>. This only works when the type is <code>Copy</code>, because the value is copied out of the borrow. The keyword <code>ref</code> goes the other way: <code>let ref x = s;</code> binds <code>x</code> as a reference to <code>s</code>, so <code>s</code> is borrowed and stays usable.</p>
+
+<pre class="rs" data-run data-stdout="10\ntrue">
+fn main() {
+    let v = vec![1, 2, 3, 4];
+
+    let mut total = 0;
+    for &amp;x in &amp;v {
+        total += x;
+    }
+    println!("{total}");
+
+    let any_big = v.iter().any(|&amp;x| x &gt; 2);
+    println!("{any_big}");
+}
+</pre>
+
+<div class="ox-quiz" data-id="07:ref-pattern-check" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0507">
+fn main() {
+    let names = vec![String::from("Ana")];
+    for &amp;name in &amp;names {
+        println!("{name}");
+    }
+}
+</pre>
+  <ol class="ox-choices">
+    <li>Yes. The pattern copies each name out, the same way it copies a number.</li>
+    <li data-correct>No. A <code>String</code> is not <code>Copy</code>, so the pattern would move it out of the reference. That is E0507.</li>
+  </ol>
+  <div class="ox-why">
+    <p>The loop item is a <code>&amp;String</code>. The <code>&amp;</code> pattern tries to take the <code>String</code> out of the reference, and only <code>Copy</code> types can be taken that way. Write <code>for name in &amp;names</code> to keep <code>name</code> as a reference.</p>
+    <pre class="rustc">error[E0507]: cannot move out of a shared reference
+ --&gt; src/main.rs:3:18
+  |
+3 |     for &amp;name in &amp;names {
+  |          ----    ^^^^^^
+  |          |
+  |          data moved here because `name` has type `String`, which does not implement the `Copy` trait
+  |
+help: consider removing the borrow
+  |
+3 -     for &amp;name in &amp;names {
+3 +     for name in &amp;names {
+  |
+
+For more information about this error, try `rustc --explain E0507`.</pre>
+  </div>
+</div>
+</section>
+
+<section>
+<h2 id="mut-ref">&amp;mut: borrowing to change</h2>
+
+<p>A shared borrow only reads. To change a value through a borrow you need <code>&amp;mut</code>, and the owner has to allow it, which means its binding is declared <code>mut</code>.</p>
+
+<pre class="rs" data-run data-stdout="[0, 1]">
+fn add_one(v: &amp;mut Vec&lt;i32&gt;) {
+    v.push(1);
+}
+
+fn main() {
+    let mut v = vec![0];
+    add_one(&amp;mut v);
+    println!("{v:?}");
+}
+</pre>
+
+<p>Both halves are visible. The parameter says <code>&amp;mut Vec&lt;i32&gt;</code>, and the call says <code>&amp;mut v</code>. Leave out the <code>mut</code> on the <code>let</code> and the call stops compiling:</p>
+
+<div class="ox-quiz" data-id="07:mut-let" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0596">
+fn add_one(v: &amp;mut Vec&lt;i32&gt;) {
+    v.push(1);
+}
+
+fn main() {
+    let v = vec![0];
+    add_one(&amp;mut v);
+    println!("{v:?}");
+}
+</pre>
+  <ol class="ox-choices">
+    <li>Yes. The call borrows <code>v</code> mutably, which is always allowed.</li>
+    <li data-correct>No. <code>v</code> isn't declared <code>mut</code>, so it can't be borrowed mutably. That is error E0596.</li>
+  </ol>
+  <div class="ox-why">
+    <p>The <code>mut</code> on the binding is the permission. The <code>&amp;mut</code> at the call site is the request, and the compiler checks the permission first.</p>
+    <pre class="rustc">error[E0596]: cannot borrow `v` as mutable, as it is not declared as mutable
+ --&gt; src/main.rs:7:13
+  |
+7 |     add_one(&amp;mut v);
+  |             ^^^^^^ cannot borrow as mutable
+  |
+help: consider changing this to be mutable
+  |
+6 |     let mut v = vec![0];
+  |         +++
+
+
+For more information about this error, try `rustc --explain E0596`.</pre>
+  </div>
+</div>
+
+<p>Here is what the magenta arrow means while the borrow is alive. Predict at the question.</p>
+
+<div class="ox-xray ox-wide" data-scenario="mut-borrow"></div>
+
+<p>An exclusive borrow (<code>&amp;mut</code>) is the one key to the editing room. While it exists, nobody else may even look.</p>
+
+<p><code>&amp;mut</code> is checked when you compile, and no lock exists at runtime. Chapter 18's <code>Mutex</code> is a real lock that threads wait on.</p>
+
+<p>Watch the rule play out. Three readers look at <code>v</code>, and then a fourth asks for an exclusive borrow. Predict the verdict at the question.</p>
+
+<div class="ox-motion" data-scene="ch07-readers-writer"></div>
+</section>
+
+<section>
+<h2 data-toc="The rule" id="rule">The rule: many readers or one writer</h2>
+
+<p>Those two kinds of borrow come with one rule. Read it slowly. Everything after this section applies it.</p>
+
+<div class="ox-rules">
+  <div class="ox-rule"><div><p>Any number of shared borrows, <code>&amp;T</code>, may exist at the same time.</p><p>Readers never get in each other's way.</p></div></div>
+  <div class="ox-rule"><div><p>Or exactly one mutable borrow, <code>&amp;mut T</code>, and nothing else alongside it.</p><p>While it is alive, no other borrow of that value may exist, shared or mutable.</p></div></div>
+  <div class="ox-rule"><div><p>A reference must always be valid.</p><p>It can never outlive the value it points to, and the value can't move out from under a live reference.</p></div></div>
+</div>
+
+<p class="ox-pull">Many readers or one writer. Never both.</p>
+
+<p>The rule prevents data races. Two readers can't corrupt each other, but a writer that changes data while a reader is looking at it can, and that is a race. The exclusive writer closes that gap. Chapter 18 shows how the same rule keeps threads apart.</p>
+
+<div class="ox-quiz" data-id="07:rule-shared" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="ok" data-stdout="1 2">
+fn main() {
+    let v = vec![1, 2, 3];
+    let a = &amp;v[0];
+    let b = &amp;v[1];
+    println!("{a} {b}");
+}
+</pre>
+  <ol class="ox-choices">
+    <li data-correct>Yes. Any number of shared borrows can coexist.</li>
+    <li>No. Two borrows of the same vector can't exist at once.</li>
+  </ol>
+  <div class="ox-why"><p>Both borrows are <code>&amp;T</code>. The first half of the rule allows any number of them, so <code>a</code> and <code>b</code> can both be alive.</p></div>
+</div>
+
+<p>The second half protects against something you can't see from the reference. A change to the owner can move the memory the reference points into.</p>
+
+<p>Take a <code>Vec</code>. Its elements live in a heap buffer with a fixed size. When a <code>push</code> finds the buffer full, it needs a bigger allocation, and the elements may be moved into it. The old buffer is then freed. A reference into the old buffer would point at freed memory. Rust refuses that. This diagram shows where it stops:</p>
+
+<div class="ox-xray ox-wide" data-scenario="invalidate"></div>
+
+<p>Here is the compiler's report for the same program:</p>
+<pre class="rustc">error[E0502]: cannot borrow `v` as mutable because it is also borrowed as immutable
+ --&gt; src/main.rs:4:5
+  |
+3 |     let first = &amp;v[0];
+  |                  - immutable borrow occurs here
+4 |     v.push(4);
+  |     ^^^^^^^^^ mutable borrow occurs here
+5 |     println!("{first}");
+  |                ----- immutable borrow later used here
+
+
+For more information about this error, try `rustc --explain E0502`.</pre>
+</section>
+
+<section>
+<h2 data-toc="When a borrow ends" id="nll">A borrow lasts until its last use</h2>
+
+<p>Here is the part that surprises people. A borrow does not last until the end of the block where its reference is declared. It lasts until the last place that reference is used. Each bar below is one borrow's life, from its creation to its last use.</p>
+
+<div class="ox-timeline ox-wide" data-scenario="nll-ok"></div>
+
+<p>In this program the bar of <code>r</code> ends on line 4, before the push. The push is allowed, even though <code>r</code> is still in scope.</p>
+
+<div class="ox-timeline ox-wide" data-scenario="nll-bad"></div>
+
+<p>Move one use, and the bar of <code>r</code> reaches past the push. Here is the compiler's report for that version:</p>
+<pre class="rustc">error[E0502]: cannot borrow `s` as mutable because it is also borrowed as immutable
+ --&gt; src/main.rs:4:5
+  |
+3 |     let r = &amp;s;
+  |             -- immutable borrow occurs here
+4 |     s.push('!');
+  |     ^^^^^^^^^^^ mutable borrow occurs here
+5 |     println!("{r}");
+  |                - immutable borrow later used here
+
+
+For more information about this error, try `rustc --explain E0502`.</pre>
+
+<p>Now a program that is easy to misjudge. Predict it before you read the verdict.</p>
+
+<div class="ox-quiz" data-id="07:nll" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="ok" data-stdout="first = 10\n3">
+fn main() {
+    let mut scores = vec![10, 20];
+    let first = &amp;scores[0];
+    println!("first = {first}");
+    scores.push(30);
+    println!("{}", scores.len());
+}
+</pre>
+  <ol class="ox-choices">
+    <li>No. <code>first</code> is still in scope when <code>push</code> runs, so the borrow is still alive.</li>
+    <li data-correct>Yes. The last use of <code>first</code> comes before the push, so its borrow has already ended.</li>
+  </ol>
+  <div class="ox-why"><p>Scope doesn't decide it. <code>first</code> is in scope until the end of <code>main</code>, but the borrow ends at the last line that uses it. Move the <code>println!</code> that reads <code>first</code> below the push, and the program stops compiling.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="dangling">No dangling references</h2>
+
+<p>What happens if a function returns a reference to something it created?</p>
+
+<pre class="rs" data-check="E0106">
+fn dangle() -&gt; &amp;String {
+    let s = String::from("x");
+    &amp;s
+}
+
+fn main() {
+    let r = dangle();
+    println!("{r}");
+}
+</pre>
+
+<pre class="rustc">error[E0106]: missing lifetime specifier
+ --&gt; src/main.rs:1:16
+  |
+1 | fn dangle() -&gt; &amp;String {
+  |                ^ expected named lifetime parameter
+  |
+  = help: this function's return type contains a borrowed value, but there is no value for it to be borrowed from
+help: consider using the `'static` lifetime, but this is uncommon unless you're returning a borrowed value from a `const` or a `static`
+  |
+1 | fn dangle() -&gt; &amp;'static String {
+  |                 +++++++
+help: instead, you are more likely to want to return an owned value
+  |
+1 - fn dangle() -&gt; &amp;String {
+1 + fn dangle() -&gt; String {
+  |
+
+
+For more information about this error, try `rustc --explain E0106`.</pre>
+
+<p><code>s</code> is a local. It is dropped when <code>dangle</code> returns, so a reference to it would point at memory that has already been freed. The signature has no input to borrow from, and the compiler reports that as a missing lifetime. E0106 is a lifetime error, so the compiler reports it before the borrow checker runs. The help text offers two fixes. Ignore the <code>'static</code> one, which is almost never what you want here. The second one is the right answer: return an owned value, so ownership moves out to the caller.</p>
+
+<pre class="rs" data-run data-stdout="x">
+fn fixed() -&gt; String {
+    let s = String::from("x");
+    s
+}
+
+fn main() {
+    let t = fixed();
+    println!("{t}");
+}
+</pre>
+
+<p>The signature tells the story. A function that returns a <code>String</code> hands ownership out. A function that returns a <code>&amp;String</code> claims to borrow from one of its inputs, and the compiler checks that claim. Chapter 15 covers lifetimes in depth.</p>
+
+<details class="ox-think">
+  <summary>Why is returning the String the right fix, and not a reference with a longer life?</summary>
+  <div class="ox-think-body">
+    <p>The String is created inside <code>fixed</code>, so the only owner that can outlive the function is the caller. Returning it moves ownership to the caller, who frees it when its own scope ends. A reference could only be valid if something outside the function owned the data, and this function has nothing outside to borrow from.</p>
+  </div>
+</details>
+</section>
+
+<section>
+<h2 id="desk">Borrow Desk</h2>
+
+<p>This is a simulator of the borrow checker, and it follows the rules in this chapter. The owner is <code>s</code>, and up to three borrows can exist at once. Press the buttons to build a program one line at a time. Each line gets a verdict, the way rustc would judge the finished program. After every call you make, the Inspector stamps the desk: APPROVED in green, or the error code in red.</p>
+
+<p>The judgment rests on one idea. A borrow is alive from the line that creates it to the last line that uses it. An access that conflicts with a live borrow is an error. The desk starts with two lines: <code>s</code> is owned, and <code>r1</code> borrows it.</p>
+
+<div class="ox-figure ox-wide" id="borrowdesk" role="group" aria-label="Borrow Desk: build a program and see where rustc would object">
+<style>
+  #borrowdesk .bd-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin-bottom: 14px; }
+  #borrowdesk .bd-owner { font: 700 0.8rem/1.2 var(--font-mono); padding: 5px 11px; border-radius: 999px; background: var(--oxide-soft); color: var(--oxide-ink); border: 1px solid transparent; }
+  #borrowdesk .bd-owner.is-moved { background: var(--surface-2); color: var(--muted); border: 1px dashed var(--ghost); }
+  #borrowdesk .bd-controls { display: grid; gap: 10px; margin-bottom: 12px; }
+  #borrowdesk .bd-group { display: grid; grid-template-columns: minmax(6.5rem, auto) minmax(0, 1fr); gap: 8px 12px; align-items: center; }
+  #borrowdesk .bd-group > .ox-label { white-space: nowrap; }
+  #borrowdesk .bd-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+  #borrowdesk .bd-btns .ox-btn { font-family: var(--font-mono); font-size: 0.8rem; }
+  #borrowdesk .bd-empty { color: var(--muted); font-size: 0.86rem; }
+  #borrowdesk .bd-note { min-height: 1.3em; margin: 0 0 10px; font-size: 0.86rem; color: var(--muted); }
+  #borrowdesk .bd-code { list-style: none; margin: 0 0 12px; padding: 8px 0; background: var(--code-bg); color: var(--code-ink); border-radius: var(--radius); font: 0.9rem/1.5 var(--font-mono); }
+  #borrowdesk .bd-line { display: grid; grid-template-columns: 2rem minmax(0, 1fr) auto; align-items: center; column-gap: 10px; padding: 4px 14px 4px 10px; border-left: 3px solid transparent; }
+  #borrowdesk .bd-line.is-err { background: color-mix(in srgb, var(--bad) 20%, transparent); border-left-color: var(--bad); }
+  #borrowdesk .bd-line.is-because { background: var(--c-hl); border-left: 3px dotted var(--code-dim); }
+  #borrowdesk .bd-no { color: var(--code-dim); text-align: right; }
+  #borrowdesk .bd-src { display: block; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; padding: 0; background: none; color: inherit; font: inherit; }
+  #borrowdesk .bd-tag { font: 700 0.7rem/1 var(--font-mono); padding: 5px 7px; border-radius: 4px; letter-spacing: 0.04em; }
+  #borrowdesk .bd-tag.is-ok { background: var(--ok-soft); color: var(--ok); }
+  #borrowdesk .bd-tag.is-bad { background: var(--bad-soft); color: var(--bad); }
+  #borrowdesk .bd-why { grid-column: 2 / -1; margin: 4px 0 2px; font: 0.84rem/1.45 var(--font-body); color: var(--code-ink); }
+  #borrowdesk .bd-verdict { margin: 0 0 10px; font-weight: 700; color: var(--ok); }
+  #borrowdesk .bd-verdict.is-bad { color: var(--bad); }
+  #borrowdesk .bd-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 2rem; }
+  #borrowdesk .bd-check { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 0 0 14px; }
+  #borrowdesk .bd-inspector { display: inline-block; width: 64px; }
+  #borrowdesk .bd-inspector .ca { display: block; width: 100%; }
+  #borrowdesk .bd-stamp { display: inline-block; font: 900 0.95rem/1 var(--font-mono); letter-spacing: 0.06em; padding: 7px 11px; border: 2px solid currentColor; border-radius: 4px; color: var(--muted); transform: rotate(-3deg); }
+  #borrowdesk .bd-stamp.is-idle { border-style: dashed; }
+  #borrowdesk .bd-stamp.is-ok { color: var(--ok); background: var(--ok-soft); }
+  #borrowdesk .bd-stamp.is-bad { color: var(--bad); background: var(--bad-soft); }
+  #borrowdesk .bd-stamp.is-pop { animation: bd-stamp 0.42s cubic-bezier(.3, 1.4, .5, 1); }
+  #borrowdesk .bd-check-note { color: var(--muted); font-size: 0.86rem; }
+  @keyframes bd-stamp { from { transform: rotate(-3deg) scale(1.6); opacity: 0; } to { transform: rotate(-3deg) scale(1); opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { #borrowdesk .bd-stamp.is-pop { animation: none; } }
+  @media (max-width: 560px) {
+    #borrowdesk .bd-group { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  }
+</style>
+  <div class="bd-head">
+    <span class="ox-label">Borrow Desk</span>
+    <span class="bd-owner" data-owner>s: String, owned</span>
+  </div>
+  <div class="bd-check">
+    <span class="bd-inspector" data-inspector aria-hidden="true"></span>
+    <span class="bd-stamp is-idle" data-stamp aria-hidden="true">No call yet</span>
+    <span class="bd-check-note">The Inspector stamps every call you make.</span>
+  </div>
+  <div class="bd-controls">
+    <div class="bd-group"><span class="ox-label">Borrow</span>
+      <div class="bd-btns">
+        <button type="button" class="ox-btn is-small" data-act="ref-shared">let r2 = &amp;s;</button>
+        <button type="button" class="ox-btn is-small" data-act="ref-mut">let m1 = &amp;mut s;</button>
+      </div>
+    </div>
+    <div class="bd-group"><span class="ox-label">Use a borrow</span>
+      <div class="bd-btns" data-uses></div>
+    </div>
+    <div class="bd-group"><span class="ox-label">Touch s</span>
+      <div class="bd-btns">
+        <button type="button" class="ox-btn is-small" data-act="push">s.push('x');</button>
+        <button type="button" class="ox-btn is-small" data-act="move">let t = s;</button>
+        <button type="button" class="ox-btn is-small" data-act="drop">drop(s);</button>
+        <button type="button" class="ox-btn is-small" data-act="assign">s = String::new();</button>
+      </div>
+    </div>
+    <div class="bd-group"><span class="ox-label">Start over</span>
+      <div class="bd-btns">
+        <button type="button" class="ox-btn is-small" data-act="undo">Undo</button>
+        <button type="button" class="ox-btn is-small" data-act="reset">Reset</button>
+      </div>
+    </div>
+  </div>
+  <p class="bd-note" data-note aria-live="polite"></p>
+  <ol class="bd-code" aria-label="The program so far" data-code></ol>
+  <p class="bd-verdict" data-verdict aria-live="polite"></p>
+  <div class="bd-strip"><span class="ox-label">Borrows</span><span class="bd-chips" data-chips></span></div>
+  <script>
+// ---- pure logic begin
+var DESK_MAX = 12;
+
+// One desk line is {k, n, m}: k = kind, n = borrow name, m = mutable.
+function deskText(st) {
+  switch (st.k) {
+    case "own": return 'let mut s = String::from("hi");';
+    case "ref": return st.m ? "let " + st.n + " = &mut s;" : "let " + st.n + " = &s;";
+    case "use": return st.m ? st.n + ".push('!');" : 'println!("{' + st.n + '}");';
+    case "push": return "s.push('x');";
+    case "move": return "let t = s;";
+    case "drop": return "drop(s);";
+    case "assign": return "s = String::new();";
+  }
+  return "";
+}
+
+// Borrows made by the program. at = creation line, last = last use line (0 = never used).
+function borrowsOf(lines) {
+  var out = [];
+  lines.forEach(function (st, i) {
+    var L = i + 1;
+    if (st.k === "ref") out.push({ name: st.n, mut: !!st.m, at: L, last: 0 });
+    if (st.k === "use") out.forEach(function (b) { if (b.name === st.n) b.last = L; });
+  });
+  return out;
+}
+
+// What a line does to the owner s: read (&s), mutref (let m = &mut s),
+// push (s.push, a two-phase autoref borrow), write (assign) or move.
+function deskAccess(st) {
+  if (st.k === "ref") return st.m ? "mutref" : "read";
+  if (st.k === "push") return "push";
+  if (st.k === "assign") return "write";
+  if (st.k === "move" || st.k === "drop") return "move";
+  return "";
+}
+
+// Verdict per line for the finished program, as rustc gives it (NLL).
+// A borrow is alive strictly between its creation line and its last use, except that an
+// assignment to s ends every borrow made before it. A conflicting access gets one error:
+// - &s needs no live &mut;       - let m = &mut s takes the first live borrow in creation order;
+// - s.push reserves first, so a live &mut gives E0499; a live & gives E0502 only once,
+//   because a reservation error on s silences later E0502s from pushes.
+function analyze(lines) {
+  var borrows = borrowsOf(lines);
+  var writes = [];
+  lines.forEach(function (st, i) { if (st.k === "assign") writes.push(i + 1); });
+  var reservationErr = false;
+  return lines.map(function (st, i) {
+    var L = i + 1, v = { line: L, ok: true, code: "", msg: "", because: 0 };
+    var acc = deskAccess(st);
+    if (!acc) return v;
+    var alive = borrows.filter(function (b) {
+      if (!(b.at < L && L < b.last)) return false;
+      return !writes.some(function (w) { return b.at < w && w < L; });
+    });
+    var hit = null, code = "";
+    if (acc === "read") {
+      hit = alive.filter(function (b) { return b.mut; })[0] || null;
+      code = "E0502";
+    } else if (acc === "mutref") {
+      hit = alive[0] || null;
+      code = hit && hit.mut ? "E0499" : "E0502";
+    } else if (acc === "push") {
+      var mutHit = alive.filter(function (b) { return b.mut; })[0];
+      if (mutHit) { hit = mutHit; code = "E0499"; reservationErr = true; }
+      else if (alive[0] && !reservationErr) { hit = alive[0]; code = "E0502"; }
+    } else if (acc === "write") {
+      hit = alive[0] || null; code = "E0506";
+    } else {
+      hit = alive[0] || null; code = "E0505";
+    }
+    if (!hit) return v;
+    v.ok = false;
+    v.code = code;
+    v.because = hit.last;
+    var tail = " " + hit.name + " (line " + hit.at + ") is still used on line " + hit.last + ".";
+    if (code === "E0502" && acc === "read") v.msg = "Line " + L + " borrows s immutably, but" + tail;
+    else if (code === "E0502") v.msg = "Line " + L + " borrows s mutably, but" + tail;
+    else if (code === "E0499") v.msg = "Line " + L + " borrows s mutably again, but" + tail;
+    else if (code === "E0506") v.msg = "Line " + L + " assigns to s, but" + tail;
+    else v.msg = "Line " + L + " moves s, but" + tail;
+    return v;
+  });
+}
+
+// Is s owned (not moved) at the end of the program?
+function deskMovedAt(lines) {
+  var at = 0;
+  lines.forEach(function (st, i) {
+    if (st.k === "move" || st.k === "drop") at = i + 1;
+    else if (st.k === "assign") at = 0;
+  });
+  return at;
+}
+
+// The buttons. Returns the new program, or null when the action is not allowed.
+function deskAction(lines, act) {
+  if (act === "undo") return lines.length > 2 ? lines.slice(0, -1) : null;
+  if (act === "reset") return [{ k: "own" }, { k: "ref", n: "r1", m: false }];
+  if (lines.length >= DESK_MAX) return null;
+  var refs = lines.filter(function (x) { return x.k === "ref"; });
+  var moved = deskMovedAt(lines) > 0;
+  var next = null;
+  if (act.indexOf("use:") === 0) {
+    var name = act.slice(4), found = refs.filter(function (x) { return x.n === name; })[0];
+    if (!found) return null;
+    next = { k: "use", n: name, m: found.m };
+  } else if (moved && act !== "assign") {
+    return null;                             // s was moved: only reuse refs or reassign it
+  } else if (act === "ref-shared" || act === "ref-mut") {
+    if (refs.length >= 3) return null;
+    var shared = refs.filter(function (x) { return !x.m; }).length + 1;
+    var muts = refs.filter(function (x) { return x.m; }).length + 1;
+    next = act === "ref-mut" ? { k: "ref", n: "m" + muts, m: true } : { k: "ref", n: "r" + shared, m: false };
+  } else if (["push", "move", "drop", "assign"].indexOf(act) >= 0) {
+    next = { k: act };
+  } else return null;
+  return lines.concat([next]);
+}
+// ---- pure logic end
+
+document.addEventListener("DOMContentLoaded", function () {
+  var root = document.getElementById("borrowdesk");
+  if (!root) return;
+  var lines = [{ k: "own" }, { k: "ref", n: "r1", m: false }];
+  var usesKey = null, awarded = false;
+
+  function q(sel) { return root.querySelector(sel); }
+  function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function code(t) { return window.Ox && Ox.highlight ? Ox.highlight(t, "rust") : esc(t); }
+  function setBtn(act, label, disabled) {
+    var b = root.querySelector('button[data-act="' + act + '"]');
+    if (!b) return;
+    if (label) b.textContent = label;
+    b.disabled = !!disabled;
+  }
+
+  function refresh() {
+    var res = analyze(lines);
+    var borrows = borrowsOf(lines);
+    var moved = deskMovedAt(lines);
+    var full = lines.length >= DESK_MAX;
+    var three = borrows.length >= 3;
+    var firstErr = null, because = {};
+    res.forEach(function (v) {
+      if (v.ok) return;
+      if (!firstErr) firstErr = v;
+      if (v.because) because[v.because] = true;
+    });
+
+    var owner = q("[data-owner]");
+    owner.textContent = moved ? "s was moved on line " + moved : "s: String, owned";
+    owner.classList.toggle("is-moved", !!moved);
+
+    q("[data-code]").innerHTML = lines.map(function (st, i) {
+      var v = res[i], n = i + 1;
+      var cls = "bd-line" + (v.ok ? "" : " is-err") + (because[n] ? " is-because" : "");
+      var tag = v.ok ? '<span class="bd-tag is-ok">ok</span>' : '<span class="bd-tag is-bad">' + v.code + "</span>";
+      var why = v.ok ? "" : '<p class="bd-why">' + esc(v.msg) + "</p>";
+      return '<li class="' + cls + '"><span class="bd-no">' + n + '</span><code class="bd-src">' + code(deskText(st)) + "</code>" + tag + why + "</li>";
+    }).join("");
+
+    q("[data-chips]").innerHTML = borrows.length ? borrows.map(function (b) {
+      var killer = 0;
+      lines.forEach(function (st, i) {
+        var L = i + 1;
+        if (!killer && st.k === "assign" && L > b.at && b.last && L < b.last) killer = L;
+      });
+      var what = !b.last ? "never used, so it ends at once"
+        : killer ? "alive on lines " + b.at + " to " + (killer - 1) + ", ended by line " + killer
+        : "alive on lines " + b.at + " to " + b.last;
+      return '<span class="ox-chip ' + (b.mut ? "is-mut" : "is-ref") + '">' + (b.mut ? "&amp;mut " : "&amp;") + esc(b.name) + " · " + what + "</span>";
+    }).join("") : '<span class="bd-empty">No borrows yet.</span>';
+
+    var verdict = q("[data-verdict]");
+    verdict.textContent = firstErr
+      ? "rustc would reject this program. The first error is on line " + firstErr.line + ", " + firstErr.code + "."
+      : "rustc accepts every line so far.";
+    verdict.classList.toggle("is-bad", !!firstErr);
+    if (firstErr && !awarded) {
+      awarded = true;
+      if (window.Ox && Ox.award) Ox.award(10, "borrow desk: found a conflict", "desk:conflict");
+    }
+
+    var notes = [];
+    if (moved) notes.push("s was moved, so only uses of the borrows and s = String::new(); are allowed now.");
+    if (three) notes.push("All three borrows are in use. Undo or reset to add more.");
+    if (full) notes.push("The desk holds twelve lines. Undo or reset to add more.");
+    q("[data-note]").textContent = notes.join(" ");
+
+    var sharedN = borrows.filter(function (b) { return !b.mut; }).length + 1;
+    var mutN = borrows.filter(function (b) { return b.mut; }).length + 1;
+    var refBlocked = full || three || !!moved;
+    var ownBlocked = full || !!moved;
+    setBtn("ref-shared", "let r" + sharedN + " = &s;", refBlocked);
+    setBtn("ref-mut", "let m" + mutN + " = &mut s;", refBlocked);
+    setBtn("push", null, ownBlocked);
+    setBtn("move", null, ownBlocked);
+    setBtn("drop", null, ownBlocked);
+    setBtn("assign", null, full);
+    setBtn("undo", null, lines.length <= 2);
+    setBtn("reset", null, false);
+
+    var key = borrows.map(function (b) { return b.name; }).join(",");
+    var uses = q("[data-uses]");
+    if (key !== usesKey) {
+      usesKey = key;
+      uses.innerHTML = borrows.length
+        ? borrows.map(function (b) { return '<button type="button" class="ox-btn is-small" data-act="use:' + esc(b.name) + '"></button>'; }).join("")
+        : '<span class="bd-empty">Make a borrow first.</span>';
+      borrows.forEach(function (b) {
+        var btn = root.querySelector('button[data-act="use:' + b.name + '"]');
+        if (btn) btn.textContent = deskText({ k: "use", n: b.name, m: b.mut });
+      });
+    }
+    Array.prototype.forEach.call(uses.querySelectorAll("button"), function (btn) { btn.disabled = full; });
+    return firstErr;
+  }
+
+  // The Inspector stamps every call: APPROVED in green, or the first error code in red.
+  function stamp(firstErr) {
+    var el = q("[data-stamp]"), ca = q("[data-inspector] .ca");
+    el.classList.remove("is-idle", "is-ok", "is-bad", "is-pop");
+    void el.offsetWidth;
+    el.textContent = firstErr ? firstErr.code : "APPROVED";
+    el.classList.add(firstErr ? "is-bad" : "is-ok", "is-pop");
+    if (ca && window.OxCast) OxCast.pose(ca, firstErr ? "oops" : "happy", 1200);
+  }
+
+  var insp = q("[data-inspector]");
+  if (insp && window.OxCast) insp.innerHTML = OxCast.el("inspector");
+
+  root.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("button[data-act]");
+    if (!b || b.disabled) return;
+    var next = deskAction(lines, b.getAttribute("data-act"));
+    if (!next) return;
+    lines = next;
+    stamp(refresh());
+  });
+
+  refresh();
+});
+  </script>
+</div>
+
+<p class="ox-caption">Try this. Press <code>s.push('x');</code>, which looks harmless, and then <code>use r1</code>. Read the verdict on the push line. Then press Undo and try the same two lines in the other order. Which order compiles?</p>
+
+<details class="ox-think">
+  <summary>Predict first: <code>let r1 = &amp;s;</code>, then <code>s.push('x');</code>, then <code>println!("{r1}");</code>. Which line does rustc object to, and why?</summary>
+  <div class="ox-think-body">
+    <p>Line 3, the push. <code>r1</code> is alive from line 2 to line 4, because line 4 uses it. A push needs <code>&amp;mut s</code>, and that can't exist while the shared borrow is alive. The error sits on the conflicting access, and the later use is the reason for it.</p>
+  </div>
+</details>
+</section>
+
+<section>
+<h2 id="php">PHP references are a different thing</h2>
+
+<p>PHP's <code>&amp;</code> makes an alias: a second name for the same storage. No rules come with it. Here is the classic way it bites:</p>
+
+<pre class="php">
+$arr = [1, 2, 3];
+foreach ($arr as &amp;$v) {}
+foreach ($arr as $v) {}
+print_r($arr); // [0] =&gt; 1, [1] =&gt; 2, [2] =&gt; 2
+</pre>
+
+<p>The first loop leaves <code>$v</code> as an alias of <code>$arr[2]</code>, and nothing ends that alias. On the second loop's first pass, the value 1 is written into the slot that <code>$v</code> still aliases. The second pass copies 2 into it, and the third pass copies the 2 that is already there.</p>
+
+<p>A by-reference parameter follows the same rule. PHP accepts one variable in both slots of this call. The function runs without a warning, and both writes land in the same array:</p>
+
+<pre class="php">
+declare(strict_types=1);
+
+function addTwo(array &amp;$a, array &amp;$b): void
+{
+    $a[] = 'x';
+    $b[] = 'y';
+}
+
+$list = [];
+addTwo($list, $list);
+print_r($list);   // [0] =&gt; x, [1] =&gt; y
+</pre>
+
+<p>Rust refuses the same call before the program runs:</p>
+
+<pre class="rs" data-check="E0499">
+fn add_two(a: &amp;mut Vec&lt;&amp;str&gt;, b: &amp;mut Vec&lt;&amp;str&gt;) {
+    a.push("x");
+    b.push("y");
+}
+
+fn main() {
+    let mut list = Vec::new();
+    add_two(&amp;mut list, &amp;mut list);
+    println!("{list:?}");
+}
+</pre>
+
+<pre class="rustc">error[E0499]: cannot borrow `list` as mutable more than once at a time
+ --&gt; src/main.rs:8:24
+  |
+8 |     add_two(&amp;mut list, &amp;mut list);
+  |     ------- ---------  ^^^^^^^^^ second mutable borrow occurs here
+  |     |       |
+  |     |       first mutable borrow occurs here
+  |     first borrow later used by call
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0499`.</pre>
+
+<p>Rust makes that kind of overlap impossible to write. Here is the safe loop in both languages:</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+$arr = [1, 2, 3];
+foreach ($arr as &amp;$v) {
+    $v *= 2;
+}
+unset($v);   // without this, $v still aliases $arr[2]
+  </pre>
+  <pre class="rs">
+let mut v = vec![1, 2, 3];
+for v in v.iter_mut() {
+    *v *= 2;
+}
+  </pre>
+  <div class="ox-bridge-note"><p><code>iter_mut()</code> hands out each element by mutable reference. Chapter 13 explains iterators. The Rust loop borrows the vector mutably for exactly as long as the loop runs. The loop variable is a <code>&amp;mut i32</code> to one element, and nothing else can see the vector while that borrow is alive. When the loop ends, the borrow ends with it. In PHP the alias outlives the loop, so you have to end it yourself with <code>unset($v)</code>.</p></div>
+</div>
+
+<p>The bug from the PHP example has a Rust cousin: a mutable alias that is still used after a read of the same vector. It doesn't compile.</p>
+
+<div class="ox-quiz" data-id="07:php-alias" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0502">
+fn main() {
+    let mut v = vec![1, 2, 3];
+    let last = v.last_mut().unwrap();
+    for x in &amp;v {
+        println!("{x}");
+    }
+    *last = 9;
+}
+</pre>
+  <ol class="ox-choices">
+    <li>Yes. <code>last</code> is only used after the loop, so the loop is fine.</li>
+    <li data-correct>No. <code>last</code> is a mutable borrow of <code>v</code> that is still used after the loop. Reading <code>v</code> inside the loop is error E0502.</li>
+  </ol>
+  <div class="ox-why">
+    <p>The loop needs a shared borrow of <code>v</code>, and <code>last</code> is still a live mutable borrow of it. Rust doesn't allow a second path into the vector alongside the first.</p>
+    <pre class="rustc">error[E0502]: cannot borrow `v` as immutable because it is also borrowed as mutable
+ --&gt; src/main.rs:4:14
+  |
+3 |     let last = v.last_mut().unwrap();
+  |                - mutable borrow occurs here
+4 |     for x in &amp;v {
+  |              ^^ immutable borrow occurs here
+...
+7 |     *last = 9;
+  |     --------- mutable borrow later used here
+
+
+For more information about this error, try `rustc --explain E0502`.</pre>
+  </div>
+</div>
+
+<aside class="ox-callout" data-kind="php">
+  <p>In PHP, <code>$v</code> is a name for a slot, and a reference makes a second name for the same slot. The alias lasts until you <code>unset($v)</code> or bind <code>$v</code> to something else by reference. PHP doesn't check whether two names overlap, so a leftover alias from an earlier loop can change data you didn't touch in the current one.</p>
+  <p>PHP also has no read-only reference. Every by-reference parameter can write, so <code>&amp;$x</code> is closer to Rust's <code>&amp;mut T</code> than to <code>&amp;T</code>.</p>
+  <p>Rust's references are checked. The compiler knows where each one is alive, so it can reject an overlap before the program runs.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="errors">Reading borrow errors</h2>
+
+<p>You have met E0502 and E0106. Here are the other codes that come up most often in borrow errors. Each has its real report, a plain reading and a fix.</p>
+
+<h3>E0499: two mutable borrows</h3>
+
+<pre class="rs" data-check="E0499">
+fn main() {
+    let mut s = String::from("hi");
+    let a = &amp;mut s;
+    let b = &amp;mut s;
+    a.push('!');
+    b.push('?');
+}
+</pre>
+
+<pre class="rustc">error[E0499]: cannot borrow `s` as mutable more than once at a time
+ --&gt; src/main.rs:4:13
+  |
+3 |     let a = &amp;mut s;
+  |             ------ first mutable borrow occurs here
+4 |     let b = &amp;mut s;
+  |             ^^^^^^ second mutable borrow occurs here
+5 |     a.push('!');
+  |     - first borrow later used here
+
+
+For more information about this error, try `rustc --explain E0499`.</pre>
+
+<p>The compiler points at the second <code>&amp;mut s</code>. It labels the first borrow and marks where it is still used, on line 5. The fix is to finish with <code>a</code> before you create <code>b</code>, or to keep only one of them.</p>
+
+<details class="ox-think">
+  <summary>In the E0499 report, the compiler points at the second borrow, not the first. Why?</summary>
+  <div class="ox-think-body">
+    <p>The first borrow is fine by itself. What breaks the rule is creating the second borrow while the first is still used later. The error belongs to the access that conflicts, and the label on the first borrow explains why it conflicts.</p>
+  </div>
+</details>
+
+<h3>E0506: assigning to a borrowed value</h3>
+
+<pre class="rs" data-check="E0506">
+fn main() {
+    let mut s = String::from("hi");
+    let r = &amp;s;
+    s = String::from("new");
+    println!("{r} {s}");
+}
+</pre>
+
+<pre class="rustc">error[E0506]: cannot assign to `s` because it is borrowed
+ --&gt; src/main.rs:4:5
+  |
+3 |     let r = &amp;s;
+  |             -- `s` is borrowed here
+4 |     s = String::from("new");
+  |     ^ `s` is assigned to here but it was already borrowed
+5 |     println!("{r} {s}");
+  |                - borrow later used here
+
+
+For more information about this error, try `rustc --explain E0506`.</pre>
+
+<p>You can't overwrite <code>s</code> while <code>r</code> still needs the old value. Finish with <code>r</code> first, or copy out whatever you still need before the assignment.</p>
+
+<h3>E0505: moving a value that is still borrowed</h3>
+
+<pre class="rs" data-check="E0505">
+fn main() {
+    let s = String::from("hi");
+    let r1 = &amp;s;
+    let t = s;
+    println!("{r1} {t}");
+}
+</pre>
+
+<pre class="rustc">error[E0505]: cannot move out of `s` because it is borrowed
+ --&gt; src/main.rs:4:13
+  |
+2 |     let s = String::from("hi");
+  |         - binding `s` declared here
+3 |     let r1 = &amp;s;
+  |              -- borrow of `s` occurs here
+4 |     let t = s;
+  |             ^ move out of `s` occurs here
+5 |     println!("{r1} {t}");
+  |                -- borrow later used here
+  |
+help: consider cloning the value if the performance cost is acceptable
+  |
+3 |     let r1 = &amp;s.clone();
+  |                ++++++++
+
+For more information about this error, try `rustc --explain E0505`.</pre>
+
+<p>E0505 says you moved or dropped a value while a borrow of it is still used later. The compiler points at the move on line 4. The borrow <code>r1</code> is still used on line 5, so the move has to wait. Finish with the borrow first, or borrow instead of moving. Here, <code>let t = &amp;s;</code> keeps <code>s</code> where it is.</p>
+
+<h3>E0515: returning a reference to a local</h3>
+
+<pre class="rs" data-check="E0515">
+fn longest_name(name: &amp;str) -&gt; &amp;String {
+    let s = String::from(name);
+    &amp;s
+}
+
+fn main() {
+    let s = longest_name("hi");
+    println!("{s}");
+}
+</pre>
+
+<pre class="rustc">error[E0515]: cannot return reference to local variable `s`
+ --&gt; src/main.rs:3:5
+  |
+3 |     &amp;s
+  |     ^^ returns a reference to data owned by the current function
+
+For more information about this error, try `rustc --explain E0515`.</pre>
+
+<p>This signature has an input, so the compiler can tie the result to it. It gets as far as the body, and there it finds that the reference points at <code>s</code>. <code>s</code> is dropped when the function returns. E0106 is the error for a returned reference that the compiler cannot tie to one input: a signature with no input at all, or one with several. E0515 is the error for a body that returns a reference to its own local. The fix is the same as before: return the owned <code>String</code>.</p>
+
+<h3>E0597: a borrow outlives its value</h3>
+
+<pre class="rs" data-check="E0597">
+fn main() {
+    let r;
+    {
+        let x = 5;
+        r = &amp;x;
+    }
+    println!("{r}");
+}
+</pre>
+
+<pre class="rustc">error[E0597]: `x` does not live long enough
+ --&gt; src/main.rs:5:13
+  |
+4 |         let x = 5;
+  |             - binding `x` declared here
+5 |         r = &amp;x;
+  |             ^^ borrowed value does not live long enough
+6 |     }
+  |     - `x` dropped here while still borrowed
+7 |     println!("{r}");
+  |                - borrow later used here
+
+For more information about this error, try `rustc --explain E0597`.</pre>
+
+<p>E0597 is the cousin of E0515. <code>x</code> lives only inside the inner block, but <code>r</code> is still used after the block ends, so the borrow would outlive <code>x</code>. The compiler marks the closing brace, where <code>x</code> is dropped. The fix is to give the value a scope at least as long as the borrow. Declare <code>x</code> outside the block, and <code>r</code> can point at it.</p>
+
+
+<details class="ox-callout" data-kind="deep">
+  <summary>Two-phase borrows: why v.push(v.len()) compiles</summary>
+  <p><code>push</code> takes <code>&amp;mut v</code>, and <code>v.len()</code> takes <code>&amp;v</code>. They overlap on one line, yet the program is accepted. The compiler treats the mutable borrow in two phases. It first reserves <code>&amp;mut v</code>, which still allows reads, and it activates the borrow when the call happens. The argument is evaluated in between, and its shared borrow has ended before the activation.</p>
+  <pre class="rs" data-run data-stdout="[1, 2, 2]">
+fn main() {
+    let mut v = vec![1, 2];
+    v.push(v.len());
+    println!("{v:?}");
+}
+  </pre>
+  <p>Passing a <code>&amp;mut</code> variable to a function doesn't move it. The compiler reborrows it, giving the callee a temporary <code>&amp;mut *m</code>, so <code>m</code> is usable again afterwards:</p>
+  <pre class="rs" data-run data-stdout="3">
+fn bump(n: &amp;mut i32) {
+    *n += 1;
+}
+
+fn main() {
+    let mut x = 1;
+    let m = &amp;mut x;
+    bump(m);
+    bump(m);
+    println!("{m}");
+}
+  </pre>
+</details>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Agents tend to silence E0502 in two ways. They add <code>.clone()</code> until the error goes away, or they change a <code>&amp;T</code> parameter to <code>&amp;mut T</code> "to be safe". Both compile, and neither is a design.</p>
+  <p>In review, ask two questions. Does this function really need to mutate, or does it only need to look? And if it changes a value, is that change visible to the caller in a way the caller expects? A parameter of type <code>&amp;T</code>, <code>&amp;str</code> or <code>&amp;[T]</code> says "I only read", and that is the signature to prefer when it fits.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="practice">Be the borrow checker</h2>
+
+<p>Four short programs and two practice exercises. For each one, decide what <code>rustc</code> does before you look at the answer.</p>
+
+<div class="ox-quiz" data-id="07:bc-two-mut" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0499">
+fn main() {
+    let mut name = String::from("Ana");
+    let a = &amp;mut name;
+    let b = &amp;mut name;
+    b.push('!');
+    a.push('?');
+}
+</pre>
+  <ol class="ox-choices">
+    <li>Yes. The second <code>&amp;mut</code> simply takes over from the first.</li>
+    <li data-correct>No. <code>a</code> is still used on line 6, so creating <code>b</code> on line 4 is error E0499.</li>
+  </ol>
+  <div class="ox-why">
+    <p>Two mutable borrows of the same value can't be alive together. <code>a</code> is alive until its use on line 6, so it is still alive when <code>b</code> is created.</p>
+    <pre class="rustc">error[E0499]: cannot borrow `name` as mutable more than once at a time
+ --&gt; src/main.rs:4:13
+  |
+3 |     let a = &amp;mut name;
+  |             --------- first mutable borrow occurs here
+4 |     let b = &amp;mut name;
+  |             ^^^^^^^^^ second mutable borrow occurs here
+5 |     b.push('!');
+6 |     a.push('?');
+  |     - first borrow later used here
+
+
+For more information about this error, try `rustc --explain E0499`.</pre>
+  </div>
+</div>
+
+<div class="ox-quiz" data-id="07:bc-iter" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0502">
+fn main() {
+    let mut nums = vec![1, 2, 3];
+    for n in &amp;nums {
+        nums.push(*n * 10);
+    }
+}
+</pre>
+  <ol class="ox-choices">
+    <li>Yes. The loop only reads <code>nums</code>, and the push is quick.</li>
+    <li data-correct>No. The loop holds a shared borrow of <code>nums</code> for its whole run, and <code>push</code> needs <code>&amp;mut nums</code>. That is error E0502.</li>
+  </ol>
+  <div class="ox-why">
+    <p>The <code>for</code> loop borrows the vector for as long as it runs. The push inside the loop asks for an exclusive borrow while that shared one is still in use.</p>
+    <pre class="rustc">error[E0502]: cannot borrow `nums` as mutable because it is also borrowed as immutable
+ --&gt; src/main.rs:4:9
+  |
+3 |     for n in &amp;nums {
+  |              -----
+  |              |
+  |              immutable borrow occurs here
+  |              immutable borrow later used here
+4 |         nums.push(*n * 10);
+  |         ^^^^^^^^^^^^^^^^^^ mutable borrow occurs here
+
+
+For more information about this error, try `rustc --explain E0502`.</pre>
+  </div>
+</div>
+
+<div class="ox-quiz" data-id="07:bc-nll" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="ok" data-stdout="2">
+fn main() {
+    let mut count = 1;
+    let view = &amp;count;
+    count += 1;
+    println!("{count}");
+}
+</pre>
+  <ol class="ox-choices">
+    <li>No. <code>view</code> is still in scope when <code>count</code> changes.</li>
+    <li data-correct>Yes. <code>view</code> is never used after the change, so its borrow has already ended.</li>
+  </ol>
+  <div class="ox-why"><p>Scope doesn't decide it. A borrow ends at its last use, and <code>view</code> has none after the change. The compiler also warns that <code>view</code> is unused, which is a hint in itself.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="07:bc-insert" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="ok" data-stdout="[&quot;a&quot;, &quot;b&quot;]">
+fn main() {
+    let mut words = vec!["a"];
+    words.insert(words.len(), "b");
+    println!("{words:?}");
+}
+</pre>
+  <ol class="ox-choices">
+    <li>No. <code>insert</code> borrows <code>words</code> mutably, so <code>words.len()</code> can't read it.</li>
+    <li data-correct>Yes. The argument is evaluated while the mutable borrow is only reserved, the same as <code>v.push(v.len())</code>.</li>
+  </ol>
+  <div class="ox-why"><p>This is a two-phase borrow. The read in the argument happens before the mutable borrow is activated, so it doesn't clash.</p></div>
+</div>
+
+<div class="ox-fill" data-id="07:fill-ref">
+  <p class="ox-q">Complete the parameter so <code>byte_count</code> borrows its text, and <code>word</code> stays usable after the call.</p>
+  <pre class="rs" data-stdout="4\nrust">
+fn byte_count(text: [[&amp;String|&amp;str]]) -&gt; usize {
+    text.len()
+}
+
+fn main() {
+    let word = String::from("rust");
+    println!("{}", byte_count(&amp;word));
+    println!("{word}");
+}
+  </pre>
+  <div class="ox-why"><p>Either answer works. <code>&amp;word</code> is a <code>&amp;String</code>, and Rust turns it into a <code>&amp;str</code> automatically when a function asks for one. The borrow is the point: <code>word</code> is still usable on the next line. You'll meet <code>&amp;str</code> properly in Chapter 08.</p></div>
+</div>
+
+<div class="ox-match" data-id="07:match" data-left-label="Situation" data-right-label="What rustc says">
+  <ul>
+    <li data-left="Two &amp;mut of the same value are alive at once">E0499</li>
+    <li data-left="A &amp;mut is taken while a shared borrow is still used later">E0502</li>
+    <li data-left="A value is assigned while a borrow of it is still used">E0506</li>
+    <li data-left="A returned reference that no single input explains">E0106</li>
+    <li data-left="A function returns a reference to one of its own locals">E0515</li>
+    <li data-left="A value is moved while a borrow of it is still used">E0505</li>
+    <li data-left="A borrow is still used after the value it points to is dropped">E0597</li>
+    <li data-left="A &amp;mut is taken of a variable that isn't declared mut">E0596</li>
+    <li data-left="Many shared borrows of one value at the same time">Fine, it compiles</li>
+  </ul>
+</div>
+<div class="ox-quiz" data-id="07:quiz-vec-push-borrow" data-label="Check yourself">
+  <p class="ox-q">Chapter 05 taught that a Vec can grow. Does this compile?</p>
+  <pre class="rs" data-check="E0502">
+fn main() {
+    let mut v = vec![1, 2, 3];
+    let first = &amp;v[0];
+    v.push(4);
+    println!("{first}");
+}
+</pre>
+  <ol class="ox-choices">
+    <li>Yes. <code>first</code> is a copy of the number, so the borrow ends at once.</li>
+    <li data-correct>No, E0502. <code>first</code> borrows <code>v</code>, and <code>push</code> needs a mutable borrow while <code>first</code> is still used.</li>
+    <li>No, E0499, because <code>v</code> is borrowed twice.</li>
+  </ol>
+  <div class="ox-why"><p>A reference like <code>&amp;v[0]</code> points into the Vec. <code>push</code> may move that buffer, so the compiler refuses the mutable borrow while the reference is still used.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="quests">Forge quests</h2>
+<p>Reading builds recognition. Writing code builds the skill. These quests run locally against the real compiler.</p>
+<div class="ox-quests" data-chapter="7"></div>
+</section>
+
+<section>
+<h2 id="recap">Recap</h2>
+
+<div class="ox-recap">
+  <h3>Many readers or one writer</h3>
+  <ul>
+    <li><code>&amp;s</code> lends a value without taking it. The owner stays usable, and nothing is freed.</li>
+    <li><code>&amp;mut s</code> is exclusive. While it is alive, no other borrow of <code>s</code> may exist, and the binding must be <code>mut</code>.</li>
+    <li>Any number of <code>&amp;T</code>, or exactly one <code>&amp;mut T</code>, never both. A reference can't outlive its value.</li>
+    <li>A borrow lasts until its last use, not until the end of its scope. That is NLL, short for non-lexical lifetimes.</li>
+    <li>E0502 and E0499 mean a conflicting borrow is still used later: end the earlier borrow first. E0506 means you assigned while borrowed, and E0505 means you moved while borrowed. E0106 means the compiler cannot tell which input a returned reference borrows from: there is none, or there are several. Chapter 15 covers the several-input case. E0515 means you returned a reference to a local. For both, return the owned value. E0597 means a borrow outlives its value.</li>
+    <li>A pattern can take a reference apart. <code>for &amp;x in &amp;v</code> and <code>|&amp;x|</code> copy each number out, which works only for <code>Copy</code> types. The keyword <code>ref</code> borrows the value instead of moving it.</li>
+  </ul>
+</div>
+
+<div class="ox-deck" data-chapter="7"></div>
+
+<details class="ox-think">
+  <summary>Explain it back: explain to a PHP developer why Rust rejects reading v[0] across a push.</summary>
+  <div class="ox-think-body">
+    <p>One good answer: "In PHP, <code>$first = $v[0];</code> copies the value, so the array can grow freely. In Rust, <code>let first = &amp;v[0];</code> points into the Vec's heap buffer. A push that finds the buffer full moves every element to a new buffer, so <code>first</code> would point at freed memory. The compiler rejects the push because <code>first</code> is still used afterwards, so the bug can never reach a running program."</p>
+    <p>If your version mentions <em>the buffer can move</em>, <em>the reference would dangle</em> and <em>the borrow lasts until its last use</em>, you've got it.</p>
+  </div>
+</details>
+
+<div class="ox-complete-host"></div>
+</section>
+
+</main>
+</div>
+</body>
+</html>

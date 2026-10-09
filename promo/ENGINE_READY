@@ -1,0 +1,1 @@
+Preview one frame: node promo/frame.mjs 12.5 <out.png> | contact sheet: node promo/sheet.mjs 0 24 48 <out.png> | live: node promo/serve.mjs, then promo/index.html?t=12.5 or ?play&from=24

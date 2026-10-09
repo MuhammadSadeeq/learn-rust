@@ -1,0 +1,263 @@
+/* Oxidize cast: colors, poses and idle motion for cast-art.js.
+   Each character sets --c-body (main color) and optional --c-ink, --c-accent.
+   Poses are classes on the .ca wrapper. Every loop is subtle and stops
+   under reduced motion. */
+
+:root {
+  --st-blush: #ff8fa3;
+  --st-fluff: #fff6ea;
+  --st-fluff-ink: #b07a3a;
+  --ca-line: #12171c;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --st-blush: #ff7d95; --st-fluff: #f1e2cc; --st-fluff-ink: #c9955c; --ca-dark-edge: rgba(255, 255, 255, 0.35); --ca-ghost: #8a95a1; }
+}
+:root[data-theme="dark"] { --st-blush: #ff7d95; --st-fluff: #f1e2cc; --st-fluff-ink: #c9955c; --ca-dark-edge: rgba(255, 255, 255, 0.35); --ca-ghost: #8a95a1; }
+
+.ca { --c-body: var(--oxide); --c-ink: var(--oxide-ink); --c-accent: #f2b632; display: inline-block; line-height: 0; vertical-align: middle; }
+.ca-svg { width: 100%; height: 100%; overflow: visible; }
+
+/* ---------------------------------------------------------- palettes */
+.ca-inspector { --c-body: #3b4a5a; --c-ink: #26313c; }
+.ca-forge { --c-body: #4b5563; --c-ink: #2f3742; }
+.ca-semi { --c-body: #7c5cd6; --c-ink: #5a3fb0; }
+.ca-alloc { --c-body: #8e6ad8; --c-ink: #6b4bb5; }
+.ca-fluffy { --c-body: var(--st-fluff); --c-ink: var(--st-fluff-ink); }
+.ca-glyph { --c-body: #3f9b55; --c-ink: #2b7a3f; }
+.ca-mold { --c-body: #64748b; --c-ink: #475569; }
+.ca-octo { --c-body: #d9719b; --c-ink: #b4507a; }
+.ca-switchman { --c-body: #2f8f5b; --c-ink: #1f6b42; }
+.ca-bouncer { --c-body: #4c3a73; --c-ink: #33264f; }
+.ca-clo { --c-body: #0f9d8a; --c-ink: #0b7569; }
+.ca-press { --c-body: #4f6d8f; --c-ink: #37506d; }
+.ca-tick { --c-body: #a0703c; --c-ink: #7a5229; }
+.ca-cargo { --c-body: #d64545; --c-ink: #a83232; }
+.ca-guard { --c-body: #2c3e66; --c-ink: #1d2a47; }
+.ca-keeper { --c-body: #b7791f; --c-ink: #8a5a12; }
+.ca-waiter { --c-body: #e76f51; --c-ink: #c2543a; }
+.ca-postie { --c-body: #2f6fd0; --c-ink: #2153a3; }
+.ca.is-ref { --c-body: var(--borrow); --c-ink: color-mix(in srgb, var(--borrow) 70%, #000); }
+.ca.is-mutref { --c-body: var(--mut); --c-ink: color-mix(in srgb, var(--mut) 70%, #000); }
+.ca.is-ghost, .ca.is-ended { --c-body: var(--ca-ghost, var(--ghost)); --c-ink: var(--ca-ghost, var(--ghost)); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) :is(.ca-inspector) { --c-body: #7d8fa3; --c-ink: #5b6b7c; }
+  :root:not([data-theme="light"]) :is(.ca-forge) { --c-body: #6b7684; --c-ink: #4b5563; }
+  :root:not([data-theme="light"]) :is(.ca-bouncer) { --c-body: #7a62ad; --c-ink: #5a4685; }
+  :root:not([data-theme="light"]) :is(.ca-guard) { --c-body: #5873ad; --c-ink: #3d5488; }
+  :root:not([data-theme="light"]) :is(.ca-mold) { --c-body: #7d8ca3; --c-ink: #5e6c82; }
+  :root:not([data-theme="light"]) :is(.ca-press) { --c-body: #6d8bb0; --c-ink: #4f6d8f; }
+}
+:root[data-theme="dark"] .ca-inspector { --c-body: #7d8fa3; --c-ink: #5b6b7c; }
+:root[data-theme="dark"] .ca-forge { --c-body: #6b7684; --c-ink: #4b5563; }
+:root[data-theme="dark"] .ca-bouncer { --c-body: #7a62ad; --c-ink: #5a4685; }
+:root[data-theme="dark"] .ca-guard { --c-body: #5873ad; --c-ink: #3d5488; }
+:root[data-theme="dark"] .ca-mold { --c-body: #7d8ca3; --c-ink: #5e6c82; }
+:root[data-theme="dark"] .ca-press { --c-body: #6d8bb0; --c-ink: #4f6d8f; }
+
+/* ---------------------------------------------------------- parts */
+.ca-body { fill: var(--c-body); }
+.ca-fluffy .ca-body { stroke: var(--c-ink); stroke-width: 2; }
+.ca-limb { stroke: var(--c-body); stroke-width: 4; stroke-linecap: round; fill: none; }
+.ca-light { fill: #fff; opacity: 0.2; stroke: #fff; stroke-opacity: 0.2; }
+.ca-shade { fill: var(--c-ink); }
+.ca-white { fill: #fff; stroke: var(--c-ink); stroke-width: 1.5; }
+.ca-pupil, .ca-dot { fill: var(--ca-line); }
+.ca-glint { fill: #fff; }
+.ca-line { stroke: var(--ca-line); stroke-width: 2.2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.ca-cheek { fill: var(--st-blush); opacity: 0.5; }
+.ca-sweat { fill: #7cc7f5; }
+.ca-q { fill: var(--oxide); font: 900 22px var(--font-display); }
+.ca-label { fill: var(--ink); font: 600 9.5px var(--font-mono); text-anchor: middle; }
+.ca-label.ca-left { text-anchor: start; }
+.ca-label.is-big { font-size: 20px; }
+.ca-label.is-glyph { font-size: 15px; }
+.ca-prop .ca-label { fill: #2b2a26; }
+.ca-prop .ca-label.is-err { fill: var(--bad); }
+.ca-prop .ca-label.is-light, .ca-prop-badge .ca-label { fill: #fff; }
+/* Crab eyes sit on stalks against the page, so their eye lines follow the
+   page ink instead of the body. */
+.ca-stalked .ca-shut, .ca-stalked .ca-joy, .ca-stalked .ca-xeye { stroke: var(--ink); }
+.ca-label.is-err { fill: var(--bad); font-weight: 800; }
+.ca-label.is-light { fill: #fff; }
+.ca-label.is-q { fill: var(--oxide); font: 900 16px var(--font-display); }
+.ca-title { fill: #fff; font: 800 13px var(--font-mono); }
+
+/* gear */
+.ca-hat { fill: #f2b632; stroke: #8a5a12; stroke-width: 1.5; }
+.ca-hat-line { stroke: #8a5a12; stroke-width: 1.5; }
+.ca-brim { stroke: #8a5a12; stroke-width: 4; stroke-linecap: round; }
+.ca-cap { fill: #26313c; stroke: var(--ca-dark-edge, transparent); stroke-width: 1; }
+.ca-switchman .ca-cap { fill: #1f3a5f; }
+.ca-postie .ca-cap { fill: #1d3f7a; }
+.ca-band { fill: #d64545; }
+.ca-badge-dot { fill: #f0c674; }
+.ca-wood { fill: #a0703c; }
+.ca-wood-line { stroke: #7a5229; stroke-width: 2; fill: none; }
+.ca-stamp { fill: var(--bad); }
+.ca-metal { fill: #9aa7b5; }
+.ca-shades { fill: #12171c; stroke: var(--ca-dark-edge, transparent); stroke-width: 1; } .ca-shades-bar { stroke: #12171c; stroke-width: 2.5; }
+.ca-pack { fill: #9a6a3a; } .ca-pack-flap { fill: #7a5229; }
+.ca-beam { fill: #f7e27a; opacity: 0.45; }
+.ca-gold-line { stroke: #d4a017; stroke-width: 2.6; fill: none; stroke-linecap: round; }
+.ca-bow { fill: #12171c; }
+.ca-paper { fill: #fffdf7; stroke: #c9bfa8; stroke-width: 1; }
+.ca-paper-line { stroke: #b9ae95; stroke-width: 1.5; }
+.ca-parcel { fill: #c9955c; } .ca-tape { stroke: #f0d9a8; stroke-width: 3; }
+.ca-grad { fill: #12171c; stroke: var(--ca-dark-edge, transparent); stroke-width: 1; } .ca-tassel { stroke: #f2b632; stroke-width: 2; } .ca-tassel-end { fill: #f2b632; }
+.ca-specs { stroke: var(--ca-line); stroke-width: 2; fill: rgba(255, 255, 255, 0.12); }
+.ca-pebble { fill: var(--surface-3); stroke: var(--ghost); stroke-width: 1.5; }
+/* Optional gear that a widget switches on with a class on the wrapper. */
+.ca[data-toggle-gear] .ca-pebble, .ca[data-toggle-gear] .ca-specs { display: none; }
+.ca[data-toggle-gear].has-pebble .ca-pebble, .ca[data-toggle-gear].is-ref .ca-specs { display: inline; }
+
+/* other characters */
+.ca-smoke { fill: var(--line); opacity: 0.8; }
+.ca-firebox { fill: #2a1a12; }
+.ca-fire { fill: #ff8a3d; } .ca-fire-2 { fill: #ffd166; }
+.ca-maw { fill: #2a1f45; }
+.ca-shell { fill: #f3dfc0; stroke: #b0844a; stroke-width: 2; }
+.ca-shell-line { fill: none; stroke: #b0844a; stroke-width: 2.2; stroke-linecap: round; }
+.ca-seg { stroke: var(--c-ink); stroke-width: 1.5; }
+.ca-seg.is-a { fill: #6cc07a; } .ca-seg.is-b { fill: #f2c14e; }
+.ca-tie { stroke: var(--c-ink); stroke-width: 2; stroke-dasharray: 3 3; }
+.ca-cut { stroke: var(--bad); stroke-width: 4; stroke-linecap: round; }
+.ca-cavity { fill: color-mix(in srgb, #000 22%, var(--c-body)); stroke: color-mix(in srgb, #fff 25%, var(--c-body)); stroke-width: 1; }
+.ca-mold .ca-label { fill: #fff; }
+.ca-tentacle { stroke: var(--c-body); stroke-width: 7; stroke-linecap: round; fill: none; }
+.ca-sign { fill: var(--surface); stroke: var(--c-ink); stroke-width: 1.5; }
+.ca-spot { fill: #fff; opacity: 0.35; }
+.ca-plate { fill: #f2b632; }
+.ca-glass { fill: color-mix(in srgb, #9fd3f5 35%, transparent); stroke: #7aa7c7; stroke-width: 2; }
+.ca-sand { fill: #e8b864; }
+.ca-stream { stroke: #e8b864; stroke-width: 2; stroke-dasharray: 3 3; }
+.ca-cabin { fill: #fff3e3; stroke: #c9bfa8; stroke-width: 1; }
+.ca-accent { fill: var(--c-accent); }
+.ca-water { stroke: var(--borrow); stroke-width: 2.5; fill: none; opacity: 0.6; }
+
+/* props */
+.pr-paper { fill: #fffdf7; stroke: #c9bfa8; stroke-width: 1.2; }
+.pr-paper.is-err { fill: #fff0ee; stroke: var(--bad); }
+.pr-roll { fill: #efe4cc; stroke: #c9bfa8; stroke-width: 1.2; }
+.pr-roll.is-err { fill: #f7d2cc; stroke: var(--bad); }
+.pr-ink { stroke: #b9ae95; stroke-width: 2.5; stroke-linecap: round; }
+.pr-gold { fill: #e3b23c; stroke: #a87d18; stroke-width: 1.5; }
+.pr-gold-top { fill: #f5d77a; }
+.pr-shine { stroke: #fff; stroke-width: 2.5; stroke-linecap: round; opacity: 0.7; fill: #fff; }
+.pr-stone { fill: #b8c0c8; stroke: #7e8994; stroke-width: 1.5; }
+.pr-stone.is-small { fill: #c9cfd6; } .pr-stone.is-big { fill: #a7b0ba; } .pr-stone.is-float { fill: #a9c6dc; stroke: #6e93ad; }
+.pr-coin { fill: #e3b23c; stroke: #a87d18; stroke-width: 1.5; } .pr-coin-rim { fill: none; stroke: #f5d77a; stroke-width: 1.5; }
+.pr-tile { fill: #fdf6e3; stroke: #b9ae95; stroke-width: 1.5; }
+.pr-box { fill: #c9955c; } .pr-box-2 { fill: #b07f48; } .pr-box-in { fill: #7a5229; }
+.pr-badge { fill: var(--oxide); } .pr-stitch { fill: none; stroke: #fff; stroke-width: 1.5; stroke-dasharray: 3 3; }
+.ca-prop-badge .ca-label { fill: #fff; }
+.pr-hole { fill: var(--surface); }
+.pr-ticket { fill: #fff3d6; stroke: #c9a54e; stroke-width: 1.5; } .pr-perf { stroke: #c9a54e; stroke-dasharray: 3 3; }
+.pr-parcel { fill: #c9955c; stroke: #8a5a12; stroke-width: 1.2; } .pr-tape { stroke: #f0d9a8; stroke-width: 5; }
+.pr-frame { fill: var(--surface-3); stroke: var(--ghost); stroke-width: 1.5; } .pr-door { fill: #a0703c; } .pr-gap { fill: #12171c; }
+.pr-car.is-ok { fill: var(--ok); } .pr-car.is-err { fill: var(--bad); } .pr-wheel { fill: #2b3440; stroke: #9aa7b5; stroke-width: 2; }
+.pr-stick { stroke: #6b7684; stroke-width: 5; stroke-linecap: round; } .pr-knob { fill: var(--bad); }
+.pr-lever { transform-box: view-box; transform-origin: 32px 58px; transform: rotate(-30deg); transition: transform 0.35s cubic-bezier(.3, 1.5, .5, 1); }
+.pr-lever.is-on { transform: rotate(30deg); }
+.pr-rope { stroke: var(--oxide); stroke-width: 5; fill: none; stroke-linecap: round; }
+.pr-rope-twist { stroke: #fff; stroke-opacity: 0.55; stroke-width: 1.8; stroke-dasharray: 2 7; fill: none; }
+.pr-ring { fill: var(--surface); stroke: var(--oxide); stroke-width: 3; }
+.pr-specs { stroke: var(--borrow); stroke-width: 3.5; fill: color-mix(in srgb, var(--borrow) 12%, transparent); stroke-linecap: round; }
+.pr-shackle { stroke: var(--mut); stroke-width: 5; fill: none; }
+.pr-lock { fill: var(--mut); }
+.pr-shell { fill: var(--oxide-soft); stroke: var(--oxide); stroke-width: 2; stroke-dasharray: 5 3; }
+.pr-crack { stroke: var(--oxide-ink); stroke-width: 2.5; fill: none; stroke-linecap: round; }
+
+/* ---------------------------------------------------------- poses */
+.ca-shut, .ca-joy, .ca-xeye, .ca-sad, .ca-o, .ca-sweat, .ca-q, .ca-maw, .ca-brow { display: none; }
+.ca.is-happy .ca-eye { display: none; } .ca.is-happy .ca-joy { display: inline; }
+.ca.is-oops .ca-smile, .ca.is-ouch .ca-smile, .ca.is-wow .ca-smile { display: none; }
+.ca.is-oops .ca-sad, .ca.is-ouch .ca-sad { display: inline; }
+.ca.is-oops .ca-sweat { display: inline; }
+.ca.is-oops .ca-brow, .ca.is-ouch .ca-brow { display: inline; }
+.ca.is-wow .ca-o { display: inline; }
+.ca.is-think .ca-q { display: inline; }
+.ca.is-think .ca-pupil { transform: translate(1px, -2px); }
+.ca.is-sleep .ca-eye, .ca.is-ghost .ca-eye, .ca.is-ended .ca-eye { display: none; }
+.ca.is-sleep .ca-shut, .ca.is-ended .ca-shut { display: inline; }
+.ca.is-ghost .ca-xeye, .ca.is-ouch .ca-xeye { display: inline; }
+.ca.is-ouch .ca-eye { display: none; }
+.ca.is-ghost .ca-smile { display: none; } .ca.is-ghost .ca-sad { display: inline; }
+.ca.is-ghost .ca-svg { opacity: 0.55; }
+.ca.is-chomp .ca-maw { display: inline; }
+
+/* ---------------------------------------------------------- motion */
+.ca-eye { transform-box: fill-box; transform-origin: center; animation: ca-blink 5.2s infinite; animation-delay: var(--phase, 0s); }
+.ca.is-happy .ca-svg { animation: ca-hop 0.55s cubic-bezier(.3, 1.6, .5, 1) 2; }
+.ca.is-oops .ca-svg { animation: ca-tilt 0.6s ease-out both; }
+.ca.is-oops .ca-sweat { animation: ca-drip 1s ease-in 0.2s both; }
+.ca.is-ouch .ca-svg { animation: ca-shake 0.45s ease-in-out 2; }
+.ca.is-think .ca-q { animation: ca-pop 0.4s ease-out both; transform-box: fill-box; transform-origin: center; }
+.ca.is-talk .ca-smile { animation: ca-talk 0.18s ease-in-out 5; transform-box: fill-box; transform-origin: center; }
+.ca-smoke { animation: ca-smoke 2.8s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+.ca-smoke-2 { animation-delay: 1.4s; }
+.ca-fire, .ca-fire-2 { transform-box: fill-box; transform-origin: 50% 100%; animation: ca-flicker 0.9s ease-in-out infinite alternate; }
+.ca-fire-2 { animation-duration: 0.7s; }
+.ca-forge.is-chomp .ca-door { transform-box: fill-box; transform-origin: center; animation: ca-chomp 0.3s ease-in-out 3; }
+.ca-forge.is-happy .ca-fire { fill: #ffb347; } .ca-forge.is-oops .ca-fire { fill: #e05050; }
+.ca-stream { animation: ca-stream 0.6s linear infinite; }
+.ca-press.is-stamp .ca-ram { animation: ca-ram 0.6s cubic-bezier(.5, 0, .3, 1) 1; }
+.ca-octo.is-catch .ca-tentacle { animation: ca-wiggle 0.5s ease-in-out 2; transform-box: fill-box; transform-origin: 50% 0; }
+.ca-water { animation: ca-wave 2.4s linear infinite; }
+
+@keyframes ca-blink { 0%, 95%, 100% { transform: scaleY(1); } 97% { transform: scaleY(0.12); } }
+@keyframes ca-hop { 0%, 100% { transform: none; } 45% { transform: translateY(-12px) rotate(-4deg); } }
+@keyframes ca-tilt { to { transform: rotate(-9deg); } }
+@keyframes ca-drip { 0% { transform: translateY(-4px); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(8px); opacity: 0; } }
+@keyframes ca-shake { 0%, 100% { transform: none; } 25% { transform: translateX(-4px) rotate(-3deg); } 75% { transform: translateX(4px) rotate(3deg); } }
+@keyframes ca-pop { 0% { transform: scale(0); } 70% { transform: scale(1.2); } 100% { transform: scale(1); } }
+@keyframes ca-talk { 50% { transform: scaleY(1.9); } }
+@keyframes ca-smoke { 0% { transform: translateY(6px) scale(0.6); opacity: 0; } 30% { opacity: 0.8; } 100% { transform: translateY(-14px) scale(1.3); opacity: 0; } }
+@keyframes ca-flicker { from { transform: scaleY(0.92); } to { transform: scaleY(1.06); } }
+@keyframes ca-chomp { 50% { transform: scaleY(0.6); } }
+@keyframes ca-stream { to { stroke-dashoffset: -6; } }
+@keyframes ca-ram { 50% { transform: translateY(26px); } }
+@keyframes ca-wiggle { 25% { transform: rotate(-4deg); } 75% { transform: rotate(4deg); } }
+@keyframes ca-wave { to { transform: translateX(-20px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ca *, .ca *::before, .ca *::after, .ca .ca-svg { animation: none !important; transition: none !important; }
+}
+
+/* ---------------------------------------------------------- bosses */
+.ca-golem { --c-body: #5b7083; --c-ink: #3d4d5c; --c-accent: #f2b632; }
+.ca-beetle { --c-body: #2f7d6d; --c-ink: #1f5a4e; }
+.ca-dragon { --c-body: #6d4fb0; --c-ink: #4e3787; }
+.ca-mimic { --c-body: #9a6a3a; --c-ink: #6e4622; }
+.ca-hydra { --c-body: #3d5a99; --c-ink: #2a4070; }
+.bo-screen { fill: #c9f2d0; stroke: #3d4d5c; stroke-width: 2; }
+.bo-paper { fill: #fffdf7; stroke: #c9bfa8; stroke-width: 1.2; }
+.bo-ink { stroke: #9c9178; stroke-width: 2.2; stroke-linecap: round; }
+.bo-arm { stroke-width: 9; }
+.bo-leg { stroke: var(--c-ink); stroke-width: 4; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.bo-quote { fill: var(--c-ink); font: 900 22px var(--font-display); }
+.bo-split { stroke: var(--c-ink); stroke-width: 3; }
+.bo-glyph { fill: #f3ead2; font: 800 19px var(--font-mono); text-anchor: middle; opacity: 0.9; }
+.bo-glyph.is-small { font-size: 13px; opacity: 0.7; }
+.bo-wing { fill: color-mix(in srgb, var(--c-body) 70%, #fff); stroke: var(--c-ink); stroke-width: 1.5; stroke-linejoin: round; }
+.bo-belly { fill: #e9c46a; }
+.bo-belly-line { stroke: #c9a04a; stroke-width: 2; stroke-linecap: round; }
+.bo-horn { fill: #f3ead2; stroke: var(--c-ink); stroke-width: 1.2; stroke-linejoin: round; }
+.bo-ledger { fill: var(--ok); font: 900 14px var(--font-mono); text-anchor: middle; }
+.bo-chest { fill: #7a5229; }
+.bo-trim { fill: #e3b23c; } .bo-trim-line { stroke: #e3b23c; stroke-width: 3; fill: none; }
+.bo-hole { fill: #2a1408; }
+.bo-mouth { fill: #2a1408; }
+.bo-tooth { fill: #fffdf7; }
+.bo-brace { fill: #fffdf7; font: 900 15px var(--font-mono); text-anchor: middle; }
+.bo-tongue { fill: #e07a8f; }
+.bo-string { stroke: #9aa7b5; stroke-width: 1.5; }
+.bo-tag { fill: #2b2a26; font: 700 7.5px var(--font-mono); text-anchor: middle; }
+.bo-neck { stroke: var(--c-body); stroke-width: 15; fill: none; stroke-linecap: round; }
+.ca-brow.is-angry { display: inline; }
+.ca-boss .ca-svg { animation: ca-loom 3.4s ease-in-out infinite; transform-origin: 50% 100%; }
+@keyframes ca-loom { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.03) translateY(-2px); } }
+/* Defeated: X eyes, a frown, knocked sideways and drained of color. */
+.ca.is-defeated .ca-eye, .ca.is-defeated .ca-brow { display: none; }
+.ca.is-defeated .ca-xeye, .ca.is-defeated .ca-sad { display: inline; }
+.ca.is-defeated .ca-smile { display: none; }
+.ca.is-defeated .ca-svg { animation: none; transform: rotate(-8deg) translateY(6px); filter: saturate(0.3); opacity: 0.75; }

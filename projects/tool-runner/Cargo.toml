@@ -1,0 +1,30 @@
+[package]
+name = "tool-runner"
+version = "0.1.0"
+edition = "2024"
+# The locked dependencies need 1.88 (checked with `cargo metadata`).
+rust-version = "1.88"
+
+# Standalone: not part of the Oxidize workspace at the repo root.
+[workspace]
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4.6", features = ["derive"] }
+futures = "0.3.34"
+reqwest = { version = "0.12.28", default-features = false, features = ["json", "stream", "rustls-tls"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1.53", features = ["full"] }
+tokio-util = "0.7.20"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+
+# The mock server and its tests need axum. Dev-only: the CLI does not ship it.
+[dev-dependencies]
+axum = "0.8.9"
+
+[lints.rust]
+# The whole harness is safe Rust. The compiler will refuse an `unsafe` block.
+unsafe_code = "forbid"

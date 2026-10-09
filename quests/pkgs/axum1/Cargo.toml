@@ -1,0 +1,20 @@
+# A quest package: one crate, checked with `cargo test`.
+# The empty [workspace] makes it its own workspace, so the course's root
+# workspace leaves it alone.
+[package]
+name = "axum1"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+axum = "0.8.9"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+# The tests call the router directly with tower's oneshot, so no port is needed.
+tokio = { version = "1.53", features = ["full"] }
+tower = { version = "0.5.3", features = ["util"] }

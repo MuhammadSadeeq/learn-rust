@@ -1,0 +1,2477 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rust on the Web · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<link rel="stylesheet" href="../assets/cast-art.css">
+<link rel="stylesheet" href="../assets/cast.css">
+<link rel="stylesheet" href="../assets/motion.css">
+<link rel="stylesheet" href="../assets/story.css">
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/quests-data.js" defer></script>
+<script src="../assets/cards/ch20.js" defer></script>
+<script src="../assets/motion/ch20.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+<script src="../assets/cast-art.js"></script>
+<script src="../assets/cast.js" defer></script>
+<script src="../assets/motion.js" defer></script>
+<script src="../assets/xray.js" defer></script>
+<script src="../assets/story.js" defer></script>
+</head>
+<body data-chapter="20">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<div class="ox-page">
+<aside class="ox-rail" aria-label="Chapter contents"></aside>
+<main class="ox-main" id="main">
+
+<header class="ox-hero" data-auto>
+  <ul>
+    <li>Map Laravel's request lifecycle onto an axum app.</li>
+    <li>Build JSON endpoints with routing, extractors, shared state and typed errors.</li>
+    <li>Validate input and turn errors into HTTP responses.</li>
+    <li>Test HTTP handlers without starting a server.</li>
+    <li>Call other APIs with reqwest, and read logs and config you can trust.</li>
+  </ul>
+</header>
+
+<section>
+<h2 id="map">Laravel, translated</h2>
+
+<p>You already know how a Laravel request moves. It enters <code>public/index.php</code>, passes through middleware, matches a route, runs a controller and returns a response. An axum app moves a request through the same stages. Most of the names change. The jobs stay the same.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Laravel</th><th>axum and the Rust ecosystem</th><th>What is different</th></tr></thead>
+  <tbody>
+    <tr><td><code>Route::apiResource('notes', NoteController::class)</code> in <code>routes/api.php</code></td><td><code>.route("/notes", get(index).post(store))</code></td><td>Routes are values you build in code. Invalid route syntax panics when the router is built, so the mistake shows up at startup.</td></tr>
+    <tr><td>Controller method</td><td>An <code>async fn</code> handler</td><td>A plain function. Its parameters list everything it needs.</td></tr>
+    <tr><td>API resource (<code>JsonResource</code>)</td><td>A struct that derives <code>Serialize</code>, or a view struct built from the model</td><td>You choose the output fields by writing a struct. A type that derives <code>Serialize</code> writes every field it has.</td></tr>
+    <tr><td>Form Request and <code>$request-&gt;validate()</code></td><td>Extractors such as <code>Json&lt;T&gt;</code> and <code>Path&lt;T&gt;</code>, with serde, plus your own checks</td><td>The arguments do the validation. If an extractor fails, the function body never runs.</td></tr>
+    <tr><td>Middleware</td><td>tower layers, such as <code>TraceLayer</code> and <code>TimeoutLayer</code></td><td>Same idea, with one catch: where the layer runs is different. Section 2 shows where.</td></tr>
+    <tr><td>Service container and <code>app()</code></td><td><code>State&lt;AppState&gt;</code></td><td>Shared state is passed in explicitly. Nothing is resolved by name.</td></tr>
+    <tr><td>Eloquent</td><td>sqlx, SeaORM or Diesel</td><td>Rust has no built-in ORM, so you choose a library. The database section introduces sqlx.</td></tr>
+    <tr><td>Migrations</td><td><code>sqlx migrate</code></td><td>Versioned SQL files, applied in order.</td></tr>
+    <tr><td>Blade</td><td>askama, maud or minijinja</td><td>askama and maud compile templates into Rust code. minijinja renders templates at runtime.</td></tr>
+    <tr><td>Queues and Horizon</td><td>tokio tasks, or the apalis crate</td><td>Background work runs on the same async runtime that serves requests.</td></tr>
+    <tr><td>Artisan commands</td><td>clap</td><td>A struct with derive attributes describes the arguments, and clap parses them.</td></tr>
+    <tr><td><code>.env</code> and <code>config/</code></td><td>dotenvy and a typed config struct</td><td>Values are parsed once, at startup. A wrong type fails there, not on the first request that needs it.</td></tr>
+    <tr><td>The <code>Log</code> facade and Monolog</td><td>tracing</td><td>Events and spans with levels. <code>RUST_LOG</code> filters them.</td></tr>
+    <tr><td><code>$this-&gt;postJson()</code> in a feature test</td><td><code>tower::ServiceExt::oneshot</code></td><td>Send one request into the router. No port, no server. The testing section shows it.</td></tr>
+    <tr><td>Deploying behind PHP-FPM and nginx</td><td>One compiled binary</td><td>Copy the binary into a small container image, often with a multi-stage Docker build. No interpreter is needed at runtime.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Two rows need a closer look. Rust has no built-in ORM, so the database choice is yours. The middleware row hides a real difference in timing, and the next section is about that.</p>
+
+<p>Laravel 13 gets its API routes from <code>routes/api.php</code>, which <code>php artisan install:api</code> creates. One line registers the five resource routes, and each route calls one method on the controller:</p>
+
+<pre class="php">
+// routes/api.php, created by `php artisan install:api`
+use App\Http\Controllers\NoteController;
+use Illuminate\Support\Facades\Route;
+
+Route::apiResource('notes', NoteController::class);</pre>
+
+<p>The <code>show</code> method is the one that matches the Rust handler below:</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+final class NoteController extends Controller
+{
+    public function show(Note $note): JsonResponse
+    {
+        return response()-&gt;json($note);
+    }
+}</pre>
+<pre class="rs" data-check="skip" data-title="src/handlers.rs">/// GET /api/notes/{id}
+pub async fn show(
+    State(state): State&lt;AppState&gt;,
+    Path(id): Path&lt;u64&gt;,
+) -&gt; Result&lt;Json&lt;Note&gt;, AppError&gt; {
+    let db = state.db.read().await;
+    let note = db.find(id).ok_or(AppError::NotFound(id))?;
+    Ok(Json(note.clone()))
+}</pre>
+  <div class="ox-bridge-note"><p>Route model binding is the big difference. <code>Note $note</code> made Laravel load the model before <code>show</code> ran. Axum has no implicit binding. The handler takes the id, looks the note up, and returns an error when it is missing.</p></div>
+</div>
+
+<aside class="ox-callout" data-kind="php">
+  <p>Laravel resolves the controller, the model and the response for you. In axum, each of those steps is a function parameter or a return type, so you can read them in the signature.</p>
+</aside>
+
+<details class="ox-think">
+  <summary>Which row in the table has no counterpart in axum at all?</summary>
+  <div class="ox-think-body">
+    <p>Eloquent. Routes, controllers, the container and middleware all have direct counterparts. axum does not ship a database layer, so you pick a library such as sqlx. The database section covers that choice.</p>
+  </div>
+</details>
+</section>
+
+<section>
+<h2 id="lifecycle">Request lifecycle</h2>
+
+<p>Laravel builds the application for every request. <code>public/index.php</code> loads the framework, the service providers register their bindings, and then the middleware, router and controller run. With PHP-FPM, the next request starts from scratch.</p>
+
+<p>An axum app is built once. <code>main</code> builds the router and the state, binds a port, and starts serving. After that, each request runs only the per-request stages. The two lanes below handle the same request. Press a button and watch each lane walk its stages. A request stops at the first stage that fails, and the stages after it are skipped.</p>
+
+<div class="ox-meet" data-cast="postie" data-say="Every parcel passes each layer on the way in, and every answer passes back out the same way."></div>
+
+<style>
+#lc-widget .lc-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 16px; }
+#lc-widget .lc-controls .ox-label { margin-right: 4px; }
+#lc-widget .lc-startup { margin: 0 0 14px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: var(--radius); background: var(--surface-2); }
+#lc-widget .lc-startup ol { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; padding: 0; list-style: none; }
+#lc-widget .lc-startup li { flex: 1 1 180px; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); font-size: 0.86rem; }
+#lc-widget .lc-startup li b { display: block; font: 700 0.8rem/1.3 var(--font-mono); }
+#lc-widget .lc-startup li span { color: var(--ok); font-weight: 700; margin-right: 4px; }
+#lc-widget .lc-lane { margin: 0 0 14px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); }
+#lc-widget .lc-lane-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+#lc-widget .lc-result { margin-left: auto; padding: 0 8px; border-radius: 4px; font: 700 0.8rem/1.7 var(--font-mono); }
+#lc-widget .lc-result:empty { display: none; }
+#lc-widget .lc-result.is-ok { color: var(--ok); background: var(--ok-soft); }
+#lc-widget .lc-result.is-bad { color: var(--bad); background: var(--bad-soft); }
+#lc-widget .lc-track { position: relative; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 44px 8px; margin: 40px 0 0; padding: 0; list-style: none; }
+#lc-widget .lc-postie { position: absolute; top: -40px; right: 10px; width: 46px; z-index: 2; }
+#lc-widget .lc-postie .ca-postie { display: block; width: 100%; }
+#lc-widget .lc-postie .ca-postie svg { height: auto; }
+#lc-widget .lc-postie .ca-prop-parcel { position: absolute; left: 30px; top: 14px; width: 26px; }
+#lc-widget .lc-postie .ca-prop-parcel svg { height: auto; }
+#lc-widget .lc-stage { position: relative; min-height: 88px; padding: 8px 10px; border: 1.5px solid var(--line); border-radius: var(--radius); background: var(--surface-2); font-size: 0.84rem; line-height: 1.35; transition: border-color 0.2s, background 0.2s, opacity 0.2s; }
+#lc-widget .lc-stage b { display: block; font: 700 0.8rem/1.3 var(--font-mono); margin: 2px 0; }
+#lc-widget .lc-n { font: 700 0.72rem/1 var(--font-mono); color: var(--muted); }
+#lc-widget .lc-stage.is-done { border-color: var(--ok); }
+#lc-widget .lc-stage.is-done::after { content: "✓"; position: absolute; right: 8px; bottom: 4px; color: var(--ok); font-weight: 700; }
+#lc-widget .lc-stage.is-on { border-color: var(--oxide); background: var(--oxide-soft); }
+#lc-widget .lc-stage.is-stop { border-color: var(--bad); background: var(--bad-soft); }
+#lc-widget .lc-stage.is-skip { opacity: 0.45; border-style: dashed; }
+#lc-widget .lc-say { min-height: 3.4em; margin: 12px 0 0; font-size: 0.92rem; color: var(--ink-2); }
+#lc-widget .lc-status { margin: 0; font-weight: 600; }
+</style>
+
+<div class="ox-figure ox-wide" id="lc-widget">
+  <div class="lc-controls" role="group" aria-label="Send a request">
+    <span class="ox-label">Send one request</span>
+    <button type="button" class="ox-btn is-small" data-req="show">GET /api/notes/1</button>
+    <button type="button" class="ox-btn is-small" data-req="bad">POST /api/notes, no title</button>
+    <button type="button" class="ox-btn is-small" data-req="miss">GET /nope</button>
+    <button type="button" class="ox-btn is-small" data-req="reset">Reset</button>
+  </div>
+
+  <div class="lc-startup">
+    <span class="ox-label">Axum startup · runs once, before any request</span>
+    <ol>
+      <li><span aria-hidden="true">✓</span><b>Build the router</b>app(AppState::default())</li>
+      <li><span aria-hidden="true">✓</span><b>Bind the port</b>TcpListener::bind</li>
+      <li><span aria-hidden="true">✓</span><b>Serve</b>axum::serve loops over connections</li>
+    </ol>
+  </div>
+
+  <div class="lc-lane" data-lane="laravel">
+    <div class="lc-lane-head"><span class="ox-label">Laravel · every request</span><span class="lc-result"></span></div>
+    <ol class="lc-track">
+      <li class="lc-stage" data-stage="index"><span class="lc-n">1</span><b>public/index.php</b>Loads the framework.</li>
+      <li class="lc-stage" data-stage="boot"><span class="lc-n">2</span><b>Bootstrap</b>Builds the app and its providers.</li>
+      <li class="lc-stage" data-stage="kernel"><span class="lc-n">3</span><b>HTTP kernel</b>Starts the middleware pipeline.</li>
+      <li class="lc-stage" data-stage="global"><span class="lc-n">4</span><b>Global middleware</b>Runs before routing.</li>
+      <li class="lc-stage" data-stage="router"><span class="lc-n">5</span><b>Router</b>Matches the URL to a controller.</li>
+      <li class="lc-stage" data-stage="route"><span class="lc-n">6</span><b>Route middleware</b>Per-route checks and model binding.</li>
+      <li class="lc-stage" data-stage="controller"><span class="lc-n">7</span><b>Controller</b>Resolves its arguments, then runs.</li>
+      <li class="lc-stage" data-stage="response"><span class="lc-n">8</span><b>Response</b>Sent to the client.</li>
+      <li class="lc-stage" data-stage="terminate"><span class="lc-n">9</span><b>terminate()</b>Runs after the response.</li>
+    </ol>
+    <p class="lc-say">Nothing sent yet.</p>
+  </div>
+
+  <div class="lc-lane" data-lane="axum">
+    <div class="lc-lane-head"><span class="ox-label">Axum · every request, after startup</span><span class="lc-result"></span></div>
+    <ol class="lc-track">
+      <li class="lc-stage" data-stage="accept"><span class="lc-n">1</span><b>Accept</b>Read the HTTP request.</li>
+      <li class="lc-stage" data-stage="router"><span class="lc-n">2</span><b>Router</b>Pick the route, or the fallback.</li>
+      <li class="lc-stage" data-stage="layers"><span class="lc-n">3</span><b>Layers</b>TraceLayer and TimeoutLayer wrap the route.</li>
+      <li class="lc-stage" data-stage="extract"><span class="lc-n">4</span><b>Extractors</b>State, then Path, then the body last.</li>
+      <li class="lc-stage" data-stage="handler"><span class="lc-n">5</span><b>Handler</b>Your async fn runs.</li>
+      <li class="lc-stage" data-stage="into"><span class="lc-n">6</span><b>IntoResponse</b>The return value becomes a Response.</li>
+      <li class="lc-stage" data-stage="out"><span class="lc-n">7</span><b>Response out</b>Back through the layers, then sent.</li>
+    </ol>
+    <p class="lc-say">Nothing sent yet.</p>
+  </div>
+
+  <p class="lc-status" aria-live="polite">Nothing sent yet. Pick a request above and watch both stacks.</p>
+</div>
+
+<script>
+(function () {
+  function boot() {
+    var root = document.getElementById("lc-widget");
+    if (!root || !window.OxCast) return;
+    var STEP = 700;
+    var run = 0;
+    var timers = [];
+    var line = root.querySelector(".lc-status");
+
+    // Each step: [stage id, narration, optional kind]. "stop" marks the stage
+    // that fails, "skip" marks a stage that never runs for this request.
+    // A scene's `back` says where the response travels back through the
+    // layers that wrap the handler, before the step named in `before`.
+    var SHARED = {
+      index: "public/index.php receives the request and loads the framework. Laravel does this for every request.",
+      boot: "The application and its service providers are built again, and the providers register their bindings.",
+      kernel: "The HTTP kernel starts the middleware pipeline.",
+      global: "Global middleware runs first, before anything has matched the URL.",
+      accept: "axum::serve has accepted the connection, and hyper has read the request line and headers."
+    };
+
+    var SCENES = {
+      show: {
+        verb: "GET",
+        title: "GET /api/notes/1",
+        summary: "Note 1 was created earlier. Both stacks find it and answer 200 OK. Laravel built its application for this one request. Axum built its router once, at startup.",
+        laravel: {
+          result: ["200 OK", "ok"],
+          steps: [
+            ["index", SHARED.index],
+            ["boot", SHARED.boot],
+            ["kernel", SHARED.kernel],
+            ["global", SHARED.global],
+            ["router", "The router matches GET api/notes/{note} to NoteController@show."],
+            ["route", "Route middleware runs. SubstituteBindings loads Note 1 from the database. That is route model binding."],
+            ["controller", "show() receives the model and returns it as JSON."],
+            ["response", "The 200 response goes out."],
+            ["terminate", "terminate() runs after the response has been sent."]
+          ],
+          back: { before: "response", stages: [
+            ["route", "On the way back, route middleware sees the 200 response."],
+            ["global", "Global middleware sees it last, before anything is sent."]
+          ] }
+        },
+        axum: {
+          result: ["200 OK", "ok"],
+          steps: [
+            ["accept", SHARED.accept],
+            ["router", "The router matches GET /api/notes/1 against /{id} and chooses show. Routing comes before the layers."],
+            ["layers", "TraceLayer starts a span for the request. TimeoutLayer starts its 10-second clock."],
+            ["extract", "State gives show a clone of AppState. Path<u64> parses 1. Both succeed."],
+            ["handler", "show finds note 1 and returns Ok(Json(note))."],
+            ["into", "IntoResponse turns the value into a Response. Json sets the content type, and Ok means status 200."],
+            ["out", "TraceLayer logs status 200, and the response is sent."]
+          ],
+          back: { before: "out", stages: [
+            ["layers", "The response passes back out through TraceLayer and TimeoutLayer."]
+          ] }
+        }
+      },
+      bad: {
+        verb: "POST",
+        title: "POST /api/notes, no title",
+        summary: "The body has no title, and the request sends Accept: application/json. Both stacks answer 422 without running the handler. Laravel answers with JSON because of that header. Without it, a failed validation redirects back with the errors. A body that is not JSON at all gets a 400 at the same stage in axum.",
+        laravel: {
+          result: ["422 Unprocessable Entity", "bad"],
+          steps: [
+            ["index", SHARED.index],
+            ["boot", SHARED.boot],
+            ["kernel", SHARED.kernel],
+            ["global", SHARED.global],
+            ["router", "The router matches POST api/notes to NoteController@store."],
+            ["route", "Route middleware runs. Nothing here inspects the body."],
+            ["controller", "Before store() runs, StoreNoteRequest checks its rules. There is no title, so it throws a ValidationException. store() never runs.", "stop"],
+            ["response", "Because the request asks for JSON, the exception handler turns the exception into a JSON 422 with an errors object."],
+            ["terminate", "terminate() runs after the response has been sent."]
+          ]
+        },
+        axum: {
+          result: ["422 Unprocessable Entity", "bad"],
+          steps: [
+            ["accept", SHARED.accept],
+            ["router", "The router matches POST /api/notes and chooses store."],
+            ["layers", "TraceLayer and TimeoutLayer wrap the route, as they did for the GET."],
+            ["extract", "State is fine. ValidJson<CreateNote> reads the body with Json, and serde reports a missing field `title`. The rejection becomes an AppError, and the extractor stops here.", "stop"],
+            ["handler", "store() is skipped. Nothing is inserted.", "skip"],
+            ["into", "AppError implements IntoResponse, so it renders a JSON body with status 422."],
+            ["out", "TraceLayer logs status 422."]
+          ],
+          back: { before: "out", stages: [
+            ["layers", "The 422 passes back out through the same layers."]
+          ] }
+        }
+      },
+      miss: {
+        verb: "GET",
+        title: "GET /nope",
+        summary: "No route matches /nope. Both stacks answer with a JSON 404, because this request sends Accept: application/json. Neither runs a controller, because the URL matches no route.",
+        laravel: {
+          result: ["404 Not Found", "bad"],
+          steps: [
+            ["index", SHARED.index],
+            ["boot", SHARED.boot],
+            ["kernel", SHARED.kernel],
+            ["global", SHARED.global],
+            ["router", "No route matches /nope, so the router throws NotFoundHttpException.", "stop"],
+            ["route", "Route middleware is skipped, because there is no route.", "skip"],
+            ["controller", "No controller runs.", "skip"],
+            ["response", "With Accept: application/json, the exception handler renders a JSON 404. Without that header, Laravel renders its HTML 404 page."],
+            ["terminate", "terminate() runs after the response has been sent."]
+          ]
+        },
+        axum: {
+          result: ["404 Not Found", "bad"],
+          steps: [
+            ["accept", SHARED.accept],
+            ["router", "No route matches /nope, so the router picks the fallback.", "stop"],
+            ["layers", "The layers still wrap the fallback, so TraceLayer logs this request too."],
+            ["extract", "Skipped. The fallback takes no arguments, and no notes handler is chosen.", "skip"],
+            ["handler", "The fallback runs and returns AppError::NoRoute."],
+            ["into", "AppError renders a JSON 404 with the message Route not found."],
+            ["out", "TraceLayer logs status 404."]
+          ],
+          back: { before: "out", stages: [
+            ["layers", "The 404 passes back out through the same layers."]
+          ] }
+        }
+      }
+    };
+
+    // The flat list of moves for one lane: the steps, with the way back
+    // through the layers spliced in before the step it belongs to.
+    function plan(def) {
+      var out = [];
+      def.steps.forEach(function (step) {
+        if (def.back && step[0] === def.back.before) {
+          def.back.stages.forEach(function (b) { out.push({ stage: b[0], text: b[1], kind: "back" }); });
+        }
+        out.push({ stage: step[0], text: step[1], kind: step[2] || "" });
+      });
+      return out;
+    }
+
+    function stopTimers() {
+      timers.forEach(function (t) { clearTimeout(t); });
+      timers = [];
+    }
+
+    // One Postie per lane. It lives on the stage it is visiting, so it is
+    // always beside the step that is running, at phone width too.
+    function postieOf(lane) {
+      var postie = lane.querySelector(".lc-postie");
+      if (!postie) {
+        postie = document.createElement("span");
+        postie.className = "lc-postie";
+        postie.setAttribute("aria-hidden", "true");
+        lane.querySelector(".lc-track").firstElementChild.appendChild(postie);
+      }
+      return postie;
+    }
+
+    // Postie, with the parcel in hand, is redrawn for each lane and request.
+    function setPostie(lane, verb) {
+      var postie = postieOf(lane);
+      postie.innerHTML = OxCast.el("postie") + OxCast.prop("parcel", { label: verb });
+      OxCast.pose(postie.querySelector(".ca-postie"), "sleep");
+    }
+
+    // Postie hops onto a stage, above its top-right corner.
+    function park(lane, li, pose) {
+      var postie = postieOf(lane);
+      li.appendChild(postie);
+      OxCast.pose(postie.querySelector(".ca-postie"), pose);
+    }
+
+    function clearLanes() {
+      root.querySelectorAll(".lc-track .lc-stage").forEach(function (li) {
+        li.classList.remove("is-on", "is-done", "is-stop", "is-skip");
+      });
+      root.querySelectorAll(".lc-lane").forEach(function (lane) {
+        lane.querySelector(".lc-say").textContent = "Nothing sent yet.";
+        var res = lane.querySelector(".lc-result");
+        res.textContent = "";
+        res.className = "lc-result";
+        lane.querySelector(".lc-track").firstElementChild.appendChild(postieOf(lane));
+        setPostie(lane, " ");
+      });
+    }
+
+    function walk(lane, def, verb, id) {
+      var track = lane.querySelector(".lc-track");
+      var say = lane.querySelector(".lc-say");
+      var res = lane.querySelector(".lc-result");
+      var list = plan(def);
+      var current = null;
+
+      function settle() {
+        if (!current) return;
+        current.classList.remove("is-on");
+        if (!current.classList.contains("is-stop")) current.classList.add("is-done");
+      }
+
+      list.forEach(function (item, i) {
+        timers.push(setTimeout(function () {
+          if (id !== run) return;
+          var li = track.querySelector('[data-stage="' + item.stage + '"]');
+          if (item.kind === "skip") {
+            li.classList.add("is-skip");
+            say.textContent = item.text;
+            return;
+          }
+          settle();
+          current = li;
+          li.classList.add("is-on");
+          if (item.kind === "stop") li.classList.add("is-stop");
+          park(lane, li, item.kind === "stop" ? "oops" : "talk");
+          say.textContent = item.text;
+        }, i * STEP));
+      });
+
+      timers.push(setTimeout(function () {
+        if (id !== run) return;
+        settle();
+        res.textContent = def.result[0];
+        res.classList.add("is-" + def.result[1]);
+        var postie = lane.querySelector(".ca-postie");
+        if (def.result[1] === "ok") OxCast.pose(postie, "happy", 1600);
+        else OxCast.pose(postie, "oops");
+      }, list.length * STEP));
+    }
+
+    function send(key) {
+      stopTimers();
+      clearLanes();
+      run += 1;
+      var id = run;
+      var scene = SCENES[key];
+      line.textContent = "Sending " + scene.title + ".";
+      root.querySelectorAll(".lc-lane").forEach(function (lane) {
+        setPostie(lane, scene.verb);
+        walk(lane, scene[lane.getAttribute("data-lane")], scene.verb, id);
+      });
+      var longest = Math.max(plan(scene.laravel).length, plan(scene.axum).length);
+      timers.push(setTimeout(function () {
+        if (id === run) line.textContent = scene.summary;
+      }, longest * STEP));
+    }
+
+    function reset() {
+      stopTimers();
+      clearLanes();
+      run += 1;
+      line.textContent = "Nothing sent yet. Pick a request above and watch both stacks.";
+    }
+
+    root.querySelectorAll(".lc-lane").forEach(function (lane) { setPostie(lane, " "); });
+    root.querySelectorAll("button[data-req]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var key = btn.getAttribute("data-req");
+        if (key === "reset") reset(); else send(key);
+      });
+    });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
+</script>
+
+<p>Read the axum lane again, and notice the order. The router chooses the route first. Only then do the layers run, and they wrap the route that was chosen. Laravel's global middleware runs before the router. Axum's <code>Router::layer</code> runs after it, which makes it closer to Laravel's route middleware. You can check this from inside a layer. A layer added with <code>.layer()</code> can read <code>MatchedPath</code> from the request. For a URL that matched nothing, the value is missing, and the layer still runs for the fallback.</p>
+
+<aside class="ox-callout" data-kind="trap">
+  <p>If some code must see the raw URL before the router does, wrap the whole router in a tower service instead. That wrapper runs before routing. Changing the URL inside a <code>.layer()</code> cannot change which route runs, because the route is already chosen.</p>
+</aside>
+
+<p>Laravel registers global middleware in <code>bootstrap/app.php</code>. The same file configures routing and exceptions, so there is no HTTP Kernel to edit. Here is a global middleware next to the axum layers:</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+&lt;?php
+
+use App\Http\Middleware\LogRequests;
+use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Configuration\Middleware;
+
+return Application::configure(basePath: dirname(__DIR__))
+    -&gt;withRouting(
+        api: __DIR__.'/../routes/api.php',
+        health: '/up',
+    )
+    -&gt;withMiddleware(function (Middleware $middleware): void {
+        $middleware-&gt;append(LogRequests::class);  // global: runs before routing
+    })-&gt;create();</pre>
+  <pre class="rs" data-check="skip">
+let app = Router::new()
+    .route("/api/notes", get(index).post(store))
+    .layer(TraceLayer::new_for_http());</pre>
+  <div class="ox-bridge-note"><p><code>append</code> adds <code>LogRequests</code> to the global stack, so it runs for every request before the router picks a route. The axum <code>.layer()</code> runs after the router has chosen the route, so it wraps the route that was picked. The row in the table above is about this difference. To run code before routing in axum, wrap the whole router, as the trap above says.</p></div>
+</div>
+
+<details class="ox-think">
+  <summary>A POST body has no <code>title</code>. Which stage stops the request, and does <code>store</code> run?</summary>
+  <div class="ox-think-body">
+    <p>The extractor stage. <code>ValidJson</code> reads the body, and serde fails on the missing field. The rejection becomes a 422 before <code>store</code> is called. Nothing is inserted.</p>
+  </div>
+</details>
+
+<p class="ox-pull">The request stops at the first stage that fails. Later stages never run.</p>
+</section>
+
+<section>
+<h2 id="hello-axum">Hello, axum</h2>
+
+<p>Start with <code>cargo new hello-axum</code>, then add the dependencies. Pin the versions. Axum 0.8 changed the path syntax and removed several APIs, so older examples often fail to compile. A pinned version also tells you which API you are reading.</p>
+
+<pre class="toml" data-title="Cargo.toml">[dependencies]
+axum = "0.8.9"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+tokio = { version = "1.53.2", features = ["full"] }
+tower-http = { version = "0.7.1", features = ["trace", "timeout"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }</pre>
+
+<p>The project uses every line above. The hello program below needs only <code>axum</code> and <code>tokio</code>.</p>
+
+<pre class="rs" data-check="skip" data-title="src/main.rs">use axum::Router;
+use axum::extract::Path;
+use axum::routing::get;
+use tokio::net::TcpListener;
+
+#[tokio::main]
+async fn main() {
+    let app = Router::new()
+        .route("/", get(|| async { "Hello, axum\n" }))
+        .route("/hello/{name}", get(greet));
+
+    let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    axum::serve(listener, app).await.unwrap();
+}
+
+async fn greet(Path(name): Path&lt;String&gt;) -&gt; String {
+    format!("Hello, {name}\n")
+}</pre>
+
+<ul>
+  <li><code>#[tokio::main]</code> turns <code>main</code> into the entry point of the tokio runtime. Axum runs on tokio, so the server needs it.</li>
+  <li><code>Router::new().route(path, handler)</code> registers a path. <code>get(greet)</code> says that the function answers GET.</li>
+  <li><code>{name}</code> is a path parameter. <code>Path(name): Path&lt;String&gt;</code> pulls the value out of the URL.</li>
+  <li><code>TcpListener::bind</code> opens the port. <code>0.0.0.0</code> listens on every network interface. <code>127.0.0.1</code> listens only on this machine, which is the safer choice while you learn.</li>
+  <li><code>axum::serve</code> runs the server. The <code>.await</code> keeps <code>main</code> running until the server stops.</li>
+</ul>
+
+<p>Run it, and send a request from another terminal:</p>
+
+<pre class="sh">cargo run
+curl http://127.0.0.1:3000/hello/Ana</pre>
+
+<pre class="text">Hello, Ana</pre>
+
+<p>Path parameters use braces in axum 0.8. You will still find <code>/:name</code> in older posts. In 0.8 that form panics as soon as the router is built. The panic message says what to do:</p>
+
+<pre class="text">Path segments must not start with `:`. For capture groups, use `{capture}`. If you meant to literally match a segment starting with a colon, call `without_v07_checks` on the router.</pre>
+
+<details class="ox-think">
+  <summary>A blog post shows <code>.route("/hello/:name", get(greet))</code>. You paste it in and run <code>cargo run</code>. What happens?</summary>
+  <div class="ox-think-body">
+    <p>The program panics while the router is built, before it binds the port. The message names the fix: use <code>{name}</code>.</p>
+  </div>
+</details>
+</section>
+
+<section>
+<h2 id="notes-api">Build a notes API</h2>
+
+<p>The companion project lives in <code>projects/notes-api/</code>. Its README, <code>projects/notes-api/README.md</code> in your clone, has the run instructions, the curl examples, and a table that maps each file to its Laravel counterpart. This section walks through the code in dependency order: the data, the shared state, the handlers, the errors, the routes, and the startup.</p>
+
+<pre class="text" data-title="projects/notes-api">notes-api/
+  Cargo.toml, Cargo.lock
+  src/
+    main.rs        starts the server
+    lib.rs         exposes app() so tests can build it
+    routes.rs      routes, the fallback, and the layers
+    handlers.rs    the five handlers
+    models.rs      Note, CreateNote, UpdateNote
+    state.rs       the shared, in-memory table
+    validation.rs  the rules and the ValidJson extractor
+    error.rs       AppError, rendered as JSON
+  tests/
+    api.rs         HTTP tests with oneshot
+  README.md</pre>
+
+<h3>The data</h3>
+
+<p>The models come first, because everything else passes them around.</p>
+
+<pre class="rs" data-check="skip" data-title="src/models.rs">//! The data shapes. Laravel counterpart: the Eloquent model, the request
+//! payloads a Form Request would accept, and the API resource. `Note`
+//! serializes every field, so it also serves as the resource.
+
+use serde::{Deserialize, Serialize};
+
+/// A stored note. `Serialize` turns it into JSON for responses.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Note {
+    pub id: u64,
+    pub title: String,
+    pub body: String,
+    pub pinned: bool,
+}
+
+/// Body of `POST /api/notes`. Missing `body` and `pinned` fall back to
+/// their defaults; a missing `title` is a deserialization error.
+#[derive(Debug, Deserialize)]
+pub struct CreateNote {
+    pub title: String,
+    #[serde(default)]
+    pub body: String,
+    #[serde(default)]
+    pub pinned: bool,
+}
+
+/// Body of `PATCH /api/notes/{id}`. Every field is optional: `None` means
+/// "leave this field alone".
+#[derive(Debug, Default, Deserialize)]
+pub struct UpdateNote {
+    pub title: Option&lt;String&gt;,
+    pub body: Option&lt;String&gt;,
+    pub pinned: Option&lt;bool&gt;,
+}</pre>
+
+<p><code>Note</code> derives <code>Serialize</code>, so it can become JSON, and <code>Deserialize</code>, so it can be read from JSON. The request types leave out <code>id</code>, because the server assigns it. <code>CreateNote</code> marks its optional fields with <code>#[serde(default)]</code>. <code>UpdateNote</code> makes every field an <code>Option</code>, where <code>None</code> means leave the field alone. That is how PATCH works.</p>
+
+<h3>Output shapes</h3>
+
+<p>A Laravel API resource decides which fields leave the server. <code>Note</code> serializes every field it has, so the notes API has no such step. If a field must stay private, add a view struct:</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+namespace App\Http\Resources;
+
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+final class NoteResource extends JsonResource
+{
+    public function toArray(Request $request): array
+    {
+        return [
+            'id' => $this-&gt;id,
+            'title' => $this-&gt;title,
+            'pinned' => $this-&gt;pinned,
+        ];
+    }
+}</pre>
+  <pre class="rs" data-check="skip" data-title="src/models.rs">#[derive(Serialize)]
+pub struct NoteView {
+    pub id: u64,
+    pub title: String,
+    pub pinned: bool,
+}
+
+impl From&lt;&amp;Note&gt; for NoteView {
+    fn from(note: &amp;Note) -&gt; Self {
+        Self { id: note.id, title: note.title.clone(), pinned: note.pinned }
+    }
+}</pre>
+  <div class="ox-bridge-note"><p>Both classes decide the output in one place. The resource's <code>toArray</code> lists the fields, and the Rust <code>From</code> impl must set every field of <code>NoteView</code>, or the code will not compile. A column added to <code>Note</code> stays out of the response until you add it to the view.</p></div>
+</div>
+
+<h3>Shared state</h3>
+
+<pre class="rs" data-check="skip" data-title="src/state.rs">//! Shared application state. Laravel counterpart: a singleton bound in the
+//! service container, plus the repository that owns the data.
+
+use std::collections::BTreeMap;
+use std::sync::Arc;
+
+use tokio::sync::RwLock;
+
+use crate::models::{CreateNote, Note, UpdateNote};
+
+/// Cloned into every handler that asks for `State&lt;AppState&gt;`.
+/// Cloning only bumps the `Arc` counter: every clone sees the same notes.
+#[derive(Clone, Default)]
+pub struct AppState {
+    pub db: Arc&lt;RwLock&lt;Db&gt;&gt;,
+}
+
+/// An in-memory table. A `BTreeMap` keeps the ids sorted, so listing the
+/// notes always returns them in creation order.
+#[derive(Debug, Default)]
+pub struct Db {
+    notes: BTreeMap&lt;u64, Note&gt;,
+    last_id: u64,
+}
+
+impl Db {
+    pub fn all(&amp;self) -&gt; Vec&lt;Note&gt; {
+        self.notes.values().cloned().collect()
+    }
+
+    pub fn find(&amp;self, id: u64) -&gt; Option&lt;&amp;Note&gt; {
+        self.notes.get(&amp;id)
+    }
+
+    pub fn insert(&amp;mut self, input: CreateNote) -&gt; Note {
+        self.last_id += 1;
+        let note = Note {
+            id: self.last_id,
+            title: input.title.trim().to_string(),
+            body: input.body,
+            pinned: input.pinned,
+        };
+        self.notes.insert(note.id, note.clone());
+        note
+    }
+
+    /// Applies only the fields that are `Some`. Returns `None` if the id
+    /// doesn't exist.
+    pub fn update(&amp;mut self, id: u64, patch: UpdateNote) -&gt; Option&lt;Note&gt; {
+        let note = self.notes.get_mut(&amp;id)?;
+        if let Some(title) = patch.title {
+            note.title = title.trim().to_string();
+        }
+        if let Some(body) = patch.body {
+            note.body = body;
+        }
+        if let Some(pinned) = patch.pinned {
+            note.pinned = pinned;
+        }
+        Some(note.clone())
+    }
+
+    pub fn remove(&amp;mut self, id: u64) -&gt; Option&lt;Note&gt; {
+        self.notes.remove(&amp;id)
+    }
+}</pre>
+
+<p>Axum clones the state for every handler that asks for it. A clone of <code>AppState</code> only bumps the <code>Arc</code> counter, so each clone points at the same table. The <code>RwLock</code> applies the borrowing rule from Chapter 07 at runtime: many readers, or one writer. <code>BTreeMap</code> keeps the notes sorted by id, so the list comes out in creation order with no extra sort.</p>
+
+<h3>Handlers</h3>
+
+<pre class="rs" data-check="skip" data-title="src/handlers.rs">//! The handlers. Laravel counterpart: a resource controller
+//! (`index`, `store`, `show`, `update`, `destroy`).
+//!
+//! Each handler is a plain async fn. Its arguments are extractors (they run
+//! before the body), and its return type implements `IntoResponse`.
+
+use axum::Json;
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
+
+use crate::error::AppError;
+use crate::models::{CreateNote, Note, UpdateNote};
+use crate::state::AppState;
+use crate::validation::ValidJson;
+
+/// GET /api/notes
+pub async fn index(State(state): State&lt;AppState&gt;) -&gt; Json&lt;Vec&lt;Note&gt;&gt; {
+    let db = state.db.read().await;
+    Json(db.all())
+}
+
+/// POST /api/notes
+pub async fn store(
+    State(state): State&lt;AppState&gt;,
+    ValidJson(input): ValidJson&lt;CreateNote&gt;,
+) -&gt; (StatusCode, Json&lt;Note&gt;) {
+    let note = state.db.write().await.insert(input);
+    tracing::info!(id = note.id, "note created");
+    (StatusCode::CREATED, Json(note))
+}
+
+/// GET /api/notes/{id}
+pub async fn show(
+    State(state): State&lt;AppState&gt;,
+    Path(id): Path&lt;u64&gt;,
+) -&gt; Result&lt;Json&lt;Note&gt;, AppError&gt; {
+    let db = state.db.read().await;
+    let note = db.find(id).ok_or(AppError::NotFound(id))?;
+    Ok(Json(note.clone()))
+}
+
+/// PATCH /api/notes/{id}
+pub async fn update(
+    State(state): State&lt;AppState&gt;,
+    Path(id): Path&lt;u64&gt;,
+    ValidJson(patch): ValidJson&lt;UpdateNote&gt;,
+) -&gt; Result&lt;Json&lt;Note&gt;, AppError&gt; {
+    let note = state
+        .db
+        .write()
+        .await
+        .update(id, patch)
+        .ok_or(AppError::NotFound(id))?;
+    Ok(Json(note))
+}
+
+/// DELETE /api/notes/{id}
+pub async fn destroy(
+    State(state): State&lt;AppState&gt;,
+    Path(id): Path&lt;u64&gt;,
+) -&gt; Result&lt;StatusCode, AppError&gt; {
+    state
+        .db
+        .write()
+        .await
+        .remove(id)
+        .ok_or(AppError::NotFound(id))?;
+    Ok(StatusCode::NO_CONTENT)
+}</pre>
+
+<p>Each handler is an ordinary async function. Its parameters are extractors, and axum runs them in order before the body starts. Put the extractor that reads the request body last, because it consumes the body. The return type is what the client receives. <code>store</code> returns a status code and JSON, so the client gets a 201. <code>show</code> returns a <code>Result</code>. When <code>ok_or(...)</code> finds no note, the <code>?</code> sends the error down the error track, and <code>AppError</code> turns it into a 404. The <code>tracing::info!</code> call in <code>store</code> writes a log line. The section on logs, after this one, explains it.</p>
+
+<p>The order rule is easy to break, so here is what the compiler says when you break it. In this version the body extractor comes first:</p>
+
+<pre class="rs" data-check="skip" data-title="src/main.rs">use axum::Json;
+use axum::Router;
+use axum::extract::State;
+use axum::routing::post;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct NewNote {
+    title: String,
+}
+
+async fn store(Json(input): Json&lt;NewNote&gt;, State(prefix): State&lt;String&gt;) -&gt; String {
+    format!("{prefix}{}", input.title)
+}
+
+fn main() {
+    let _app: Router = Router::new()
+        .route("/notes", post(store))
+        .with_state(String::from("note: "));
+}</pre>
+
+<p>Compiling the route gives this error:</p>
+
+<pre class="rustc">error[E0277]: the trait bound `fn(Json&lt;NewNote&gt;, State&lt;String&gt;) -&gt; impl Future&lt;Output = String&gt; {store}: Handler&lt;_, _&gt;` is not satisfied
+   --&gt; src/main.rs:18:31
+    |
+ 18 |         .route("/notes", post(store))
+    |                          ---- ^^^^^ the trait `Handler&lt;_, _&gt;` is not implemented for fn item `fn(Json&lt;NewNote&gt;, State&lt;String&gt;) -&gt; impl Future&lt;Output = String&gt; {store}`
+    |                          |
+    |                          required by a bound introduced by this call
+    |
+    = note: Consider using `#[axum::debug_handler]` to improve the error message
+note: required by a bound in `post`
+   --&gt; ~/.cargo/registry/…/axum-0.8.9/src/routing/method_routing.rs:167:16
+    |
+167 |             H: Handler&lt;T, S&gt;,
+    |                ^^^^^^^^^^^^^ required by this bound in `post`
+...
+445 | top_level_handler_fn!(post, POST);
+    | ---------------------------------
+    | |                     |
+    | |                     required by a bound in this function
+    | in this macro invocation
+    = note: this error originates in the macro `top_level_handler_fn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+For more information about this error, try `rustc --explain E0277`.</pre>
+
+<p>The message is vague. It says that <code>store</code> does not implement <code>Handler</code>, which is axum's trait for any function that can answer a route. It does not mention the order. The note suggests <code>#[axum::debug_handler]</code>, but that attribute needs axum's <code>macros</code> feature, which this project does not enable. The fix is to put <code>State</code> first: <code>async fn store(State(prefix): State&lt;String&gt;, Json(input): Json&lt;NewNote&gt;)</code>. Now the body extractor is last, as it is in <code>handlers.rs</code>.</p>
+
+<h3>Errors</h3>
+
+<pre class="rs" data-check="skip" data-title="src/error.rs">//! One error type for the whole API. Laravel counterpart: the exception
+//! handler (`bootstrap/app.php` -&gt; `withExceptions`) that renders every
+//! exception as a JSON response.
+
+use axum::Json;
+use axum::extract::rejection::JsonRejection;
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
+use serde_json::json;
+
+#[derive(Debug)]
+pub enum AppError {
+    /// 404: no note with this id.
+    NotFound(u64),
+    /// 404: no route matches the URL. Laravel: the router's
+    /// `NotFoundHttpException`, rendered by the exception handler.
+    NoRoute,
+    /// 422: the JSON was well-formed but a rule failed.
+    Validation {
+        field: &amp;'static str,
+        message: String,
+    },
+    /// 400/415/422: axum could not turn the body into our type.
+    BadJson(JsonRejection),
+}
+
+impl AppError {
+    pub fn validation(field: &amp;'static str, message: impl Into&lt;String&gt;) -&gt; Self {
+        AppError::Validation {
+            field,
+            message: message.into(),
+        }
+    }
+}
+
+/// Lets `?` turn axum's JSON rejection into our error type.
+impl From&lt;JsonRejection&gt; for AppError {
+    fn from(rejection: JsonRejection) -&gt; Self {
+        AppError::BadJson(rejection)
+    }
+}
+
+impl IntoResponse for AppError {
+    fn into_response(self) -&gt; Response {
+        let (status, body) = match self {
+            AppError::NotFound(id) =&gt; (
+                StatusCode::NOT_FOUND,
+                json!({ "message": format!("Note {id} not found.") }),
+            ),
+            AppError::NoRoute =&gt; (
+                StatusCode::NOT_FOUND,
+                json!({ "message": "Route not found." }),
+            ),
+            AppError::Validation { field, message } =&gt; (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                json!({ "message": message, "errors": { field: [message] } }),
+            ),
+            AppError::BadJson(rejection) =&gt; (
+                rejection.status(),
+                json!({ "message": rejection.body_text() }),
+            ),
+        };
+        (status, Json(body)).into_response()
+    }
+}</pre>
+
+<p>Every failure in this API is an <code>AppError</code>. <code>IntoResponse</code> maps each variant to a status code and a JSON body. <code>From&lt;JsonRejection&gt;</code> lets <code>?</code> convert axum's rejection into an <code>AppError</code>. That is how <code>ValidJson</code> can return a JSON 422 instead of axum's plain-text message. In Laravel, this job belongs to the exception handler in <code>bootstrap/app.php</code>. Here it is one type.</p>
+
+<h3>Validation</h3>
+
+<pre class="rs" data-check="skip" data-title="src/validation.rs">// … the rules and their unit tests are in the rest of the file
+/// Like `Json&lt;T&gt;`, but also runs `T::validate`, and rejects with our
+/// `AppError` (always a JSON body) instead of axum's plain-text rejection.
+pub struct ValidJson&lt;T&gt;(pub T);
+
+impl&lt;S, T&gt; FromRequest&lt;S&gt; for ValidJson&lt;T&gt;
+where
+    S: Send + Sync,
+    T: DeserializeOwned + Validate,
+{
+    type Rejection = AppError;
+
+    async fn from_request(req: Request, state: &amp;S) -&gt; Result&lt;Self, Self::Rejection&gt; {
+        let Json(value) = Json::&lt;T&gt;::from_request(req, state).await?;
+        value.validate()?;
+        Ok(ValidJson(value))
+    }
+}</pre>
+
+<p><code>ValidJson</code> is a Form Request in extractor form. It deserializes the body the same way <code>Json</code> does, then calls <code>validate()</code>. A failed rule returns an <code>AppError</code>, so the handler only ever sees input that passed.</p>
+
+<h3>Routes and startup</h3>
+
+<pre class="rs" data-check="skip" data-title="src/routes.rs">//! The router. Laravel counterpart: `routes/api.php` plus the middleware
+//! registered in `bootstrap/app.php`.
+
+use std::time::Duration;
+
+use axum::Router;
+use axum::http::StatusCode;
+use axum::routing::get;
+use tower_http::timeout::TimeoutLayer;
+use tower_http::trace::TraceLayer;
+
+use crate::error::AppError;
+use crate::handlers;
+use crate::state::AppState;
+
+pub fn app(state: AppState) -&gt; Router {
+    // Route::apiResource('notes', NoteController::class), spelled out.
+    let notes = Router::new()
+        .route("/", get(handlers::index).post(handlers::store))
+        .route(
+            "/{id}",
+            get(handlers::show)
+                .patch(handlers::update)
+                .delete(handlers::destroy),
+        );
+
+    Router::new()
+        .route("/health", get(|| async { "ok" }))
+        .nest("/api/notes", notes)
+        // Any URL that matched nothing above. Without this, axum answers
+        // with an empty 404 instead of the JSON body every other error uses.
+        .fallback(|| async { AppError::NoRoute })
+        // `Router::layer` wraps each route (and the fallback) AFTER the router
+        // has picked it, so these layers can see `MatchedPath`. Laravel's
+        // global middleware runs before routing; this is closer to route
+        // middleware. The last layer added is the outermost: a request meets
+        // TraceLayer first.
+        .layer(TimeoutLayer::with_status_code(
+            StatusCode::REQUEST_TIMEOUT,
+            Duration::from_secs(10),
+        ))
+        .layer(TraceLayer::new_for_http())
+        .with_state(state)
+}</pre>
+
+<p><code>nest</code> mounts the notes router under <code>/api/notes</code>, so <code>/{id}</code> inside it becomes <code>/api/notes/{id}</code>. The fallback catches every URL that matched nothing. The layers come last. <code>TimeoutLayer</code> gives up after 10 seconds and answers 408. <code>TraceLayer</code> logs each request and its status. The last layer added is the outermost, so a request meets <code>TraceLayer</code> first.</p>
+
+<pre class="rs" data-check="skip" data-title="src/main.rs">//! Boots the server. Laravel counterpart: `public/index.php` plus
+//! `bootstrap/app.php`, except this runs once, not once per request.
+
+use notes_api::{AppState, app};
+use tokio::net::TcpListener;
+use tracing_subscriber::EnvFilter;
+
+#[tokio::main]
+async fn main() -&gt; std::io::Result&lt;()&gt; {
+    // Log/Monolog: RUST_LOG=debug cargo run shows more.
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| EnvFilter::new("notes_api=info,tower_http=debug")),
+        )
+        .init();
+
+    let addr = std::env::var("APP_ADDR").unwrap_or_else(|_| "127.0.0.1:3000".to_string());
+    let listener = TcpListener::bind(&amp;addr).await?;
+    tracing::info!("listening on http://{}", listener.local_addr()?);
+
+    axum::serve(listener, app(AppState::default()))
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
+    tracing::info!("server stopped");
+    Ok(())
+}
+
+/// Finish in-flight requests on Ctrl+C (SIGINT) or SIGTERM, the signal that
+/// Docker and Kubernetes send when they stop a container.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("could not listen for Ctrl+C");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("could not listen for SIGTERM")
+            .recv()
+            .await;
+    };
+
+    // Windows has no SIGTERM. This future never finishes, so Ctrl+C is the only trigger there.
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::&lt;()&gt;();
+
+    // Whichever signal comes first wins. The other future is dropped.
+    tokio::select! {
+        _ = ctrl_c =&gt; {}
+        _ = terminate =&gt; {}
+    }
+    tracing::info!("shutdown signal received, finishing in-flight requests");
+}</pre>
+
+<p><code>main</code> runs once. It sets up logging, reads the address from <code>APP_ADDR</code>, and hands <code>app(AppState::default())</code> to <code>axum::serve</code>. <code>with_graceful_shutdown</code> lets in-flight requests finish when the server is asked to stop. <code>shutdown_signal</code> waits for whichever comes first, Ctrl+C or SIGTERM. Ctrl+C is SIGINT. Docker and Kubernetes send SIGTERM when they stop a container, so a server that listened only for Ctrl+C would cut off in-flight requests on every deploy. Laravel's <code>public/index.php</code> repeats this work for every request. Here it happens once, and the same router serves every request after that.</p>
+
+<h3>Try it</h3>
+
+<p>Start the server with <code>cargo run</code>, then create a note and read it back:</p>
+
+<pre class="sh">curl -i -X POST http://127.0.0.1:3000/api/notes \
+  -H 'Content-Type: application/json' \
+  -d '{"title": "Learn axum"}'</pre>
+
+<pre class="text">HTTP/1.1 201 Created
+content-type: application/json
+…
+
+{"id":1,"title":"Learn axum","body":"","pinned":false}</pre>
+
+<pre class="sh">curl http://127.0.0.1:3000/api/notes/1</pre>
+
+<pre class="text">{"id":1,"title":"Learn axum","body":"","pinned":false}</pre>
+
+<div class="ox-quiz" data-id="20:show-missing" data-label="Check yourself">
+  <p class="ox-q">A client sends <code>GET /api/notes/7</code>, and note 7 does not exist. Which line produces the response?</p>
+  <ol class="ox-choices">
+    <li>Axum returns a 404 before <code>show</code> runs, because no route matches.</li>
+    <li>The <code>Path</code> extractor returns a 404, because the id is missing from the table.</li>
+    <li data-correct>The <code>ok_or(AppError::NotFound(id))?</code> line in <code>show</code> returns an error, and <code>IntoResponse</code> turns it into a 404.</li>
+    <li>The <code>Json</code> extractor rejects the request, because a GET has no body.</li>
+  </ol>
+  <div class="ox-why"><p>The route matches, and the id parses as a number, so <code>show</code> runs. It looks the note up, and <code>ok_or(...)?</code> returns early with <code>AppError::NotFound(7)</code>. The <code>Path</code> extractor fails only when the id is not a number, and that case is a 400. <code>show</code> has no <code>Json</code> extractor at all.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="observe" data-toc="Logs and config">Logs you can search, config you can trust</h2>
+
+<p>The notes API already writes log lines and reads <code>APP_ADDR</code> at startup. This section explains both. Logs tell you what a running service did. Settings decide whether it starts at all. A bad setting is one of the most common reasons a deploy fails, so it should fail early, and it should say which setting is wrong.</p>
+
+<h3 id="events-spans">Events and spans</h3>
+
+<p>An <strong>event</strong> is one log line at one moment. <code>tracing::info!(id = note.id, "note created")</code> writes an event with one field, <code>id</code>. A <strong>span</strong> covers a period of work. It has a name and fields of its own. Every event inside the span carries those fields, so a line deep in a handler still says which request it belongs to.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+Log::info('note created', ['id' => $note-&gt;id]);</pre>
+  <pre class="rs" data-check="skip" data-crates="tracing">tracing::info!(id = note.id, "note created");</pre>
+  <div class="ox-bridge-note"><p>The Log facade attaches a context array to one line. A tracing field is typed, so <code>id = note.id</code> records a number, not text. A span is shared context with a start and an end. Because it has an end, it can also time the work it covers.</p></div>
+</div>
+
+<h3 id="levels">Levels and filters</h3>
+
+<p>Every event has a level. From most to least severe, the levels are <code>error</code>, <code>warn</code>, <code>info</code>, <code>debug</code> and <code>trace</code>. Choosing a level also shows every level before it in that list, so <code>debug</code> shows <code>info</code>, <code>warn</code> and <code>error</code> as well. The <code>RUST_LOG</code> variable chooses the level. <code>EnvFilter</code> reads it, and the notes API uses a default when it is not set.</p>
+
+<h3 id="config">Typed config</h3>
+
+<p>Laravel's <code>config/</code> files read <code>env()</code> values and hand them out by key. The Rust version gives each setting a type. <code>Config::from_env()</code> reads every setting when the program starts. It returns a <code>Config</code>, or a <code>ConfigError</code> that names the variable at fault. Nothing is left to fail later, on the first request that needs the value.</p>
+
+<p>A plain <code>unwrap()</code> on a bad value panics with a message like <code>ParseIntError { kind: InvalidDigit }</code>. That message does not say which variable was wrong. The error type does.</p>
+
+<p>This small program reads its settings, logs what it does, and then shows what a bad setting looks like:</p>
+
+<pre class="rs" data-check="skip" data-crates="tracing,tracing-subscriber" data-title="src/main.rs">use std::env;
+use std::fmt;
+use std::net::SocketAddr;
+use std::str::FromStr;
+use std::time::Duration;
+
+use tracing_subscriber::EnvFilter;
+
+/// Settings for the service. They are read once, at startup.
+#[derive(Debug)]
+pub struct Config {
+    pub addr: SocketAddr,
+    pub database_url: String,
+    pub request_timeout: Duration,
+}
+
+#[derive(Debug)]
+pub enum ConfigError {
+    /// A required variable is not set.
+    Missing(&amp;'static str),
+    /// The variable is set, but its value does not parse.
+    Invalid {
+        key: &amp;'static str,
+        value: String,
+        reason: String,
+    },
+}
+
+impl fmt::Display for ConfigError {
+    fn fmt(&amp;self, f: &amp;mut fmt::Formatter&lt;'_&gt;) -&gt; fmt::Result {
+        match self {
+            ConfigError::Missing(key) =&gt; write!(f, "{key} is not set"),
+            ConfigError::Invalid { key, value, reason } =&gt; {
+                write!(f, "{key}={value:?} is invalid: {reason}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ConfigError {}
+
+/// Reads `key` and parses it, or uses `default` when the variable is not set.
+fn read_or&lt;T&gt;(key: &amp;'static str, default: &amp;str) -&gt; Result&lt;T, ConfigError&gt;
+where
+    T: FromStr,
+    T::Err: fmt::Display,
+{
+    let raw = match env::var(key) {
+        Ok(value) =&gt; value,
+        Err(env::VarError::NotPresent) =&gt; default.to_string(),
+        Err(env::VarError::NotUnicode(_)) =&gt; {
+            return Err(ConfigError::Invalid {
+                key,
+                value: String::new(),
+                reason: "not valid Unicode".to_string(),
+            });
+        }
+    };
+    raw.parse::&lt;T&gt;().map_err(|err| ConfigError::Invalid {
+        key,
+        value: raw.clone(),
+        reason: err.to_string(),
+    })
+}
+
+impl Config {
+    pub fn from_env() -&gt; Result&lt;Config, ConfigError&gt; {
+        tracing::debug!("reading settings from the environment");
+        let database_url =
+            env::var("DATABASE_URL").map_err(|_| ConfigError::Missing("DATABASE_URL"))?;
+        let timeout_secs: u64 = read_or("REQUEST_TIMEOUT_SECS", "10")?;
+        Ok(Config {
+            addr: read_or("APP_ADDR", "127.0.0.1:3000")?,
+            database_url,
+            request_timeout: Duration::from_secs(timeout_secs),
+        })
+    }
+}
+
+/// `#[instrument]` opens a span named after the function. Its arguments
+/// become fields, and every event inside the function carries them.
+#[tracing::instrument]
+fn load_note(id: u64) {
+    tracing::info!("loading the note");
+}
+
+fn main() {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
+        .with_target(false)
+        .without_time()
+        .with_ansi(false)
+        .init();
+
+    match Config::from_env() {
+        Ok(config) =&gt; {
+            // `%` formats a value with Display, `?` with Debug.
+            tracing::info!(addr = %config.addr, timeout = ?config.request_timeout, "config loaded");
+            load_note(1);
+        }
+        Err(err) =&gt; tracing::error!(%err, "could not start"),
+    }
+}</pre>
+
+<p>Run it three ways. The first run uses the defaults. The second turns on debug logging. The third sets a timeout that is not a number.</p>
+
+<pre class="sh">DATABASE_URL=sqlite::memory: cargo run</pre>
+<pre class="text" data-title="output"> INFO config loaded addr=127.0.0.1:3000 timeout=10s
+ INFO load_note{id=1}: loading the note</pre>
+
+<pre class="sh">RUST_LOG=debug DATABASE_URL=sqlite::memory: cargo run</pre>
+<pre class="text" data-title="output">DEBUG reading settings from the environment
+ INFO config loaded addr=127.0.0.1:3000 timeout=10s
+ INFO load_note{id=1}: loading the note</pre>
+
+<pre class="sh">REQUEST_TIMEOUT_SECS=soon DATABASE_URL=sqlite::memory: cargo run</pre>
+<pre class="text" data-title="output">ERROR could not start err=REQUEST_TIMEOUT_SECS="soon" is invalid: invalid digit found in string</pre>
+
+<p>The prefix <code>load_note{id=1}:</code> is a span. <code>#[instrument]</code> opened it around <code>load_note</code>, and it recorded the argument as the field <code>id</code>. Use <code>#[instrument(skip(...))]</code> for an argument that is large or secret, such as a database pool or a token.</p>
+
+<p>In the first run, <code>addr = %config.addr</code> prints <code>127.0.0.1:3000</code>, which is the text <code>Display</code> gives. <code>timeout = ?config.request_timeout</code> prints <code>10s</code>, which is the <code>Debug</code> form. The <code>%</code> sigil uses <code>Display</code>, and <code>?</code> uses <code>Debug</code>. The error in the third run is logged with <code>%err</code>, so the line shows the error's own message, not its <code>Debug</code> form.</p>
+
+<p>This program logs the error and returns. A real service should also exit with a non-zero code. Chapter 11 shows how to return one with <code>ExitCode</code>.</p>
+
+<aside class="ox-callout" data-kind="insight">
+  <p>The <code>dotenvy</code> crate reads a <code>.env</code> file into the environment. You can call it before <code>Config::from_env()</code>, so local settings do not have to be exported in the shell. It is optional. The config code uses only the standard library, so you can skip dotenvy and still run it.</p>
+</aside>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Agents write services with <code>println!</code> for logs and <code>unwrap()</code> for settings. Both compile, and both look finished. In review, check two things. Are the logs tracing events with fields, so a search can filter them? Does every setting come through a <code>Result</code> that names the variable?</p>
+</aside>
+
+<div class="ox-quiz" data-id="20:quiz-rust-log" data-label="Check yourself">
+  <p class="ox-q">Your service runs with <code>RUST_LOG=warn</code>. Which lines print?</p>
+  <ol class="ox-choices">
+    <li>Only <code>warn</code> lines.</li>
+    <li data-correct><code>error</code> and <code>warn</code> lines.</li>
+    <li>Every line, from <code>trace</code> up.</li>
+    <li>Only the lines that sit inside a span.</li>
+  </ol>
+  <div class="ox-why"><p>A level includes every level before it in the list, so <code>warn</code> shows <code>error</code> too. <code>info</code>, <code>debug</code> and <code>trace</code> are quieter than <code>warn</code>, so they stay hidden. Spans do not change the level.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="serde">serde: JSON in, JSON out</h2>
+
+<p>serde converts in both directions. <code>#[derive(Serialize)]</code> writes the code that turns a Rust value into JSON. <code>#[derive(Deserialize)]</code> writes the code that reads JSON back into a Rust value. Attributes adjust the result. The struct below is not part of the project. Its field names are longer than one word, which is where the attributes start to matter.</p>
+
+<pre class="rs" data-check="skip" data-title="src/main.rs">use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NoteDto {
+    id: u64,
+    title: String,
+    created_at: String,
+    #[serde(default)]
+    pinned: bool,
+    body: Option&lt;String&gt;,
+}
+
+fn main() {
+    let input = r#"{"id": 1, "title": "x", "createdAt": "2026-10-09"}"#;
+    let note: NoteDto = serde_json::from_str(input).unwrap();
+    println!("{note:?}");
+    println!("{}", serde_json::to_string(&amp;note).unwrap());
+
+    let snake: Result&lt;NoteDto, _&gt; =
+        serde_json::from_str(r#"{"id": 1, "title": "x", "created_at": "x"}"#);
+    println!("snake_case key: {}", snake.unwrap_err());
+
+    let null_body: NoteDto = serde_json::from_str(
+        r#"{"id": 2, "title": "y", "createdAt": "z", "body": null, "pinned": true}"#,
+    )
+    .unwrap();
+    println!("{}", serde_json::to_string(&amp;null_body).unwrap());
+}</pre>
+
+<p>The output:</p>
+
+<pre class="text" data-title="output">NoteDto { id: 1, title: "x", created_at: "2026-10-09", pinned: false, body: None }
+{"id":1,"title":"x","createdAt":"2026-10-09","pinned":false,"body":null}
+snake_case key: missing field `createdAt` at line 1 column 42
+{"id":2,"title":"y","createdAt":"z","pinned":true,"body":null}</pre>
+
+<p>Read the output line by line. <code>rename_all</code> maps <code>created_at</code> to <code>createdAt</code> in both directions, so the Rust name stays snake_case. A missing <code>Option</code> field becomes <code>None</code>, and <code>None</code> is written as <code>null</code>. <code>#[serde(default)]</code> fills a missing <code>bool</code> with <code>false</code>. The snake_case key is rejected, because serde looks only for the renamed key.</p>
+
+<h3>Unknown fields</h3>
+
+<style>
+.ox-motion .mo-text.is-val .mo-text-body { color: var(--ink); font-weight: 700; }
+</style>
+
+<div class="ox-motion" data-scene="ch20-extract"></div>
+
+<p>serde ignores keys it does not know, unless you tell it not to. The notes API works that way. Laravel ignores them by default too. A key that no rule mentions is never validated. Both frameworks have an opt-in that rejects extra keys. In Laravel 13 you add the <code>#[FailOnUnknownFields]</code> attribute to the Form Request:</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+use Illuminate\Foundation\Http\Attributes\FailOnUnknownFields;
+use Illuminate\Foundation\Http\FormRequest;
+
+#[FailOnUnknownFields]
+class StoreNoteRequest extends FormRequest
+{
+    public function rules(): array
+    {
+        return [
+            'title' => ['required', 'string'],
+            'body' => ['nullable', 'string'],
+            'pinned' => ['boolean'],
+        ];
+    }
+}</pre>
+  <pre class="rs" data-check="skip" data-title="src/models.rs">#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CreateNote {
+    pub title: String,
+    #[serde(default)]
+    pub body: String,
+    #[serde(default)]
+    pub pinned: bool,
+}</pre>
+  <div class="ox-bridge-note"><p>The idea is the same in both: name the fields you accept, and reject the rest. The serde version fails while the JSON is parsed. The error names the key that broke the rule: <code>unknown field `color`, expected one of `title`, `body`, `pinned`</code>. Laravel's check is part of the Form Request, so it runs with your other rules. Add <code>deny_unknown_fields</code> to <code>CreateNote</code> and a request with an extra key gets a 422 instead of a 201. <code>StoreNoteRequest</code> is a sketch, not a file in this project.</p></div>
+</div>
+
+<h3>Bad input becomes a status code</h3>
+
+<p>The <code>Json</code> extractor turns every problem with a body into a rejection. These are the responses the notes API returns for each kind of bad request, checked against the running server:</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Request</th><th>Status</th><th>Where it stops</th></tr></thead>
+  <tbody>
+    <tr><td>Body <code>{ not json</code></td><td>400</td><td>serde_json cannot parse the syntax at all.</td></tr>
+    <tr><td>Body <code>{"body": "x"}</code></td><td>422</td><td>Valid JSON, but <code>title</code> is missing.</td></tr>
+    <tr><td>Body <code>{"title": 42}</code></td><td>422</td><td><code>title</code> is a number, not a string.</td></tr>
+    <tr><td>Body <code>{"title": "   "}</code></td><td>422</td><td>The shape is right, but the <code>validate()</code> rule rejects the blank title.</td></tr>
+    <tr><td>No <code>Content-Type</code> header</td><td>415</td><td><code>Json</code> refuses the request before it reads the body.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>The rule to remember: a body that does not fit the type becomes a 422, and the handler never runs. A 400 means the body is not JSON at all.</p>
+
+<div class="ox-quiz" data-id="20:quiz-rename" data-label="Check yourself">
+  <p class="ox-q">A struct has a field named <code>created_at</code>, and the attribute <code>#[serde(rename_all = "camelCase")]</code>. What key does serde write to JSON?</p>
+  <ol class="ox-choices">
+    <li><code>created_at</code></li>
+    <li data-correct><code>createdAt</code></li>
+    <li><code>CreatedAt</code></li>
+    <li><code>created-at</code></li>
+  </ol>
+  <div class="ox-why"><p><code>rename_all</code> applies one naming rule to every field. <code>camelCase</code> turns <code>created_at</code> into <code>createdAt</code>. The Rust field keeps its name, so your code does not change.</p></div>
+</div>
+<h3 id="json-enums">Enums as JSON</h3>
+
+<p>Model APIs send a message as a list of blocks. Each block has a <code>type</code>, and the fields that go with that type. An enum fits that shape: each variant is one kind of block. serde can read the variant from the <code>type</code> key, and it writes the same key back when you serialize.</p>
+
+<pre class="rs" data-check="skip" data-crates="serde,serde_json" data-title="src/main.rs">use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+
+/// One block of a message. The `type` key picks the variant.
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum Block {
+    Text {
+        text: String,
+    },
+    ToolUse {
+        id: String,
+        name: String,
+        input: Value,
+    },
+    ToolResult {
+        tool_use_id: String,
+        content: String,
+        #[serde(default)]
+        is_error: bool,
+    },
+}
+
+/// Either a plain string or a list of blocks. `untagged` tries each variant in order.
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+enum Content {
+    Plain(String),
+    Blocks(Vec&lt;Block&gt;),
+}
+
+/// A tool definition. A missing description is left out of the JSON, not written as null.
+#[derive(Debug, Serialize, Deserialize)]
+struct ToolDef {
+    name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option&lt;String&gt;,
+    input_schema: Value,
+}
+
+#[derive(Debug, Deserialize)]
+struct AddArgs {
+    a: i64,
+    b: i64,
+}
+
+fn main() {
+    // Serialize: the tag comes first, and the variant name is snake_case.
+    let call = Block::ToolUse {
+        id: "toolu_1".into(),
+        name: "add".into(),
+        input: json!({ "a": 2, "b": 3 }),
+    };
+    println!("{}", serde_json::to_string(&amp;call).unwrap());
+
+    // Deserialize: the "type" key picks the variant.
+    let incoming = r#"{"type":"tool_use","id":"toolu_2","name":"add","input":{"a":40,"b":2}}"#;
+    let block: Block = serde_json::from_str(incoming).unwrap();
+    println!("{block:?}");
+
+    // An unknown tag is an error that lists the tags you accept.
+    let unknown = serde_json::from_str::&lt;Block&gt;(r#"{"type":"image"}"#);
+    println!("{}", unknown.unwrap_err());
+
+    // untagged: a string, or a list of blocks.
+    let plain: Content = serde_json::from_str(r#""hello""#).unwrap();
+    let blocks: Content = serde_json::from_str(r#"[{"type":"text","text":"hi"}]"#).unwrap();
+    println!("{plain:?} / {blocks:?}");
+    let neither = serde_json::from_str::&lt;Content&gt;("42");
+    println!("{}", neither.unwrap_err());
+
+    // Value holds any JSON. from_value turns it into a typed struct when a tool runs.
+    let input: Value = json!({ "a": 2, "b": 3 });
+    let args: AddArgs = serde_json::from_value(input).unwrap();
+    println!("sum = {}", args.a + args.b);
+    println!("{}", serde_json::to_value(&amp;call).unwrap());
+
+    // The optional description is left out when it is None.
+    let def = ToolDef {
+        name: "add".into(),
+        description: None,
+        input_schema: json!({ "type": "object" }),
+    };
+    println!("{}", serde_json::to_string(&amp;def).unwrap());
+
+    // A missing bool falls back to its default.
+    let result: Block = serde_json::from_str(
+        r#"{"type":"tool_result","tool_use_id":"toolu_1","content":"5"}"#,
+    )
+    .unwrap();
+    println!("{result:?}");
+}</pre>
+
+<pre class="text" data-title="output">{"type":"tool_use","id":"toolu_1","name":"add","input":{"a":2,"b":3}}
+ToolUse { id: "toolu_2", name: "add", input: Object {"a": Number(40), "b": Number(2)} }
+unknown variant `image`, expected one of `text`, `tool_use`, `tool_result` at line 1 column 15
+Plain("hello") / Blocks([Text { text: "hi" }])
+data did not match any variant of untagged enum Content
+sum = 5
+{"id":"toolu_1","input":{"a":2,"b":3},"name":"add","type":"tool_use"}
+{"name":"add","input_schema":{"type":"object"}}
+ToolResult { tool_use_id: "toolu_1", content: "5", is_error: false }</pre>
+
+<ul>
+  <li><code>tag = "type"</code> makes the <code>type</code> key pick the variant. The other keys are that variant's fields.</li>
+  <li><code>rename_all = "snake_case"</code> writes <code>ToolUse</code> as <code>tool_use</code>, both when it reads and when it writes.</li>
+  <li><code>untagged</code> has no key at all. serde tries each variant in order, and the first one that fits wins. Use it for a value with two shapes, such as a string or a list. When nothing fits, the error says so, and it does not name a variant.</li>
+  <li><code>Value</code> holds any JSON. Tool inputs arrive as a <code>Value</code>, because each tool has its own shape. A tool turns its input into a typed struct with <code>serde_json::from_value</code> when it runs. <code>to_value</code> goes the other way.</li>
+  <li><code>#[serde(default)]</code> fills a missing field with its default. <code>skip_serializing_if</code> leaves a field out of the output when its check is true. <code>Option::is_none</code> leaves out a <code>None</code>, instead of writing <code>null</code>.</li>
+</ul>
+
+<p>The keys in the <code>to_value</code> line come out sorted. A <code>Value</code> keeps its keys in a sorted map, unless serde_json's <code>preserve_order</code> feature is on. Do not depend on key order when you read a <code>Value</code>.</p>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>A model can send a block type you do not know, or a tool input that does not fit the tool. Both come from outside your program, so both should become errors you can read. Never <code>unwrap()</code> a value that came from a model. The registry below returns an error for both.</p>
+</aside>
+
+<div class="ox-quiz" data-id="20:quiz-rename-variant" data-label="Check yourself">
+  <p class="ox-q">Your enum has a variant <code>ToolUse</code>, and the JSON key is <code>tool_use</code>. Which attribute makes them match?</p>
+  <ol class="ox-choices">
+    <li><code>#[serde(untagged)]</code></li>
+    <li data-correct><code>#[serde(rename_all = "snake_case")]</code></li>
+    <li><code>#[serde(default)]</code></li>
+    <li><code>#[serde(skip_serializing_if = "Option::is_none")]</code></li>
+  </ol>
+  <div class="ox-why"><p><code>rename_all</code> applies one naming rule to every variant. <code>untagged</code> removes the key altogether. <code>default</code> and <code>skip_serializing_if</code> work on fields, not on variant names.</p></div>
+</div>
+
+<h3 id="tool-registry">A registry of tools</h3>
+
+<p>A tool registry looks up a tool by name and calls it. The first version most people write is a trait with an <code>async fn</code>. It compiles, until you store the tools as <code>Box&lt;dyn Tool&gt;</code>, which is what a registry needs:</p>
+
+<pre class="rs" data-check="E0038" data-badge="error" data-title="src/main.rs">trait Tool {
+    async fn run(&amp;self, input: &amp;str) -&gt; String;
+}
+
+struct Echo;
+
+impl Tool for Echo {
+    async fn run(&amp;self, input: &amp;str) -&gt; String {
+        input.to_string()
+    }
+}
+
+fn main() {
+    let tools: Vec&lt;Box&lt;dyn Tool&gt;&gt; = vec![Box::new(Echo)];
+    println!("{}", tools.len());
+}</pre>
+
+<pre class="rustc">error[E0038]: the trait `Tool` is not dyn compatible
+  --&gt; src/main.rs:14:28
+   |
+14 |     let tools: Vec&lt;Box&lt;dyn Tool&gt;&gt; = vec![Box::new(Echo)];
+   |                            ^^^^ `Tool` is not dyn compatible
+   |
+note: for a trait to be dyn compatible it needs to allow building a vtable
+      for more information, visit &lt;https://doc.rust-lang.org/reference/items/traits.html#dyn-compatibility&gt;
+  --&gt; src/main.rs:2:14
+   |
+ 1 | trait Tool {
+   |       ---- this trait is not dyn compatible...
+ 2 |     async fn run(&amp;self, input: &amp;str) -&gt; String;
+   |              ^^^ ...because method `run` is `async`
+   = help: consider moving `run` to another trait
+   = help: only type `Echo` implements `Tool`; consider using it directly instead.
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0038`.</pre>
+
+<p>A <code>dyn</code> value calls each trait method through a table of function pointers. That table needs one return type for each method. Every <code>async fn</code> returns its own anonymous future type, so there is no single type to put in the table. The fix is one boxed future type, <code>Pin&lt;Box&lt;dyn Future&lt;Output = ...&gt; + Send + 'a&gt;&gt;</code>. Each tool boxes its own future, and the registry only ever sees that one type.</p>
+
+<pre class="rs" data-check="skip" data-crates="serde,serde_json,tokio" data-title="src/main.rs">use std::collections::HashMap;
+use std::fmt;
+use std::future::Future;
+use std::pin::Pin;
+
+use serde::Deserialize;
+use serde_json::{Value, json};
+
+#[derive(Debug)]
+pub enum ToolError {
+    UnknownTool(String),
+    BadInput(String),
+}
+
+impl fmt::Display for ToolError {
+    fn fmt(&amp;self, f: &amp;mut fmt::Formatter&lt;'_&gt;) -&gt; fmt::Result {
+        match self {
+            ToolError::UnknownTool(name) =&gt; write!(f, "unknown tool: {name}"),
+            ToolError::BadInput(reason) =&gt; write!(f, "bad input: {reason}"),
+        }
+    }
+}
+
+/// A tool takes JSON and returns JSON. `call` returns a boxed future, so the
+/// trait has no `async fn` and stays dyn compatible.
+pub trait Tool: Send + Sync {
+    fn name(&amp;self) -&gt; &amp;str;
+
+    fn call&lt;'a&gt;(
+        &amp;'a self,
+        input: Value,
+    ) -&gt; Pin&lt;Box&lt;dyn Future&lt;Output = Result&lt;Value, ToolError&gt;&gt; + Send + 'a&gt;&gt;;
+}
+
+#[derive(Deserialize)]
+struct AddArgs {
+    a: i64,
+    b: i64,
+}
+
+async fn add(input: Value) -&gt; Result&lt;Value, ToolError&gt; {
+    let args: AddArgs =
+        serde_json::from_value(input).map_err(|err| ToolError::BadInput(err.to_string()))?;
+    Ok(json!({ "sum": args.a + args.b }))
+}
+
+pub struct Add;
+
+impl Tool for Add {
+    fn name(&amp;self) -&gt; &amp;str {
+        "add"
+    }
+
+    fn call&lt;'a&gt;(
+        &amp;'a self,
+        input: Value,
+    ) -&gt; Pin&lt;Box&lt;dyn Future&lt;Output = Result&lt;Value, ToolError&gt;&gt; + Send + 'a&gt;&gt; {
+        Box::pin(add(input))
+    }
+}
+
+pub struct Echo;
+
+impl Tool for Echo {
+    fn name(&amp;self) -&gt; &amp;str {
+        "echo"
+    }
+
+    fn call&lt;'a&gt;(
+        &amp;'a self,
+        input: Value,
+    ) -&gt; Pin&lt;Box&lt;dyn Future&lt;Output = Result&lt;Value, ToolError&gt;&gt; + Send + 'a&gt;&gt; {
+        Box::pin(async move { Ok(input) })
+    }
+}
+
+/// The registry owns one boxed tool per name.
+#[derive(Default)]
+pub struct Registry {
+    tools: HashMap&lt;String, Box&lt;dyn Tool&gt;&gt;,
+}
+
+impl Registry {
+    pub fn add(&amp;mut self, tool: Box&lt;dyn Tool&gt;) {
+        self.tools.insert(tool.name().to_string(), tool);
+    }
+
+    pub async fn run(&amp;self, name: &amp;str, input: Value) -&gt; Result&lt;Value, ToolError&gt; {
+        let tool = self
+            .tools
+            .get(name)
+            .ok_or_else(|| ToolError::UnknownTool(name.to_string()))?;
+        tool.call(input).await
+    }
+}
+
+/// The enum alternative. Nothing is a trait object here, so `async fn` is fine.
+pub enum Builtin {
+    Add,
+    Echo,
+}
+
+impl Builtin {
+    pub async fn run(&amp;self, input: Value) -&gt; Result&lt;Value, ToolError&gt; {
+        match self {
+            Builtin::Add =&gt; add(input).await,
+            Builtin::Echo =&gt; Ok(input),
+        }
+    }
+}
+
+#[tokio::main]
+async fn main() {
+    let mut registry = Registry::default();
+    registry.add(Box::new(Add));
+    registry.add(Box::new(Echo));
+
+    let calls = [
+        ("add", json!({ "a": 40, "b": 2 })),
+        ("echo", json!({ "text": "hi" })),
+        ("add", json!({ "a": "x" })),
+        ("sleep", json!({})),
+    ];
+    for (name, input) in calls {
+        match registry.run(name, input).await {
+            Ok(output) =&gt; println!("{name} -&gt; {output}"),
+            Err(err) =&gt; println!("{name} failed: {err}"),
+        }
+    }
+
+    let direct = Builtin::Add.run(json!({ "a": 1, "b": 2 })).await.unwrap();
+    println!("builtin add -&gt; {direct}");
+    let echoed = Builtin::Echo.run(json!([1, 2])).await.unwrap();
+    println!("builtin echo -&gt; {echoed}");
+}</pre>
+
+<pre class="text" data-title="output">add -&gt; {"sum":42}
+echo -&gt; {"text":"hi"}
+add failed: bad input: invalid type: string "x", expected i64
+sleep failed: unknown tool: sleep
+builtin add -&gt; {"sum":3}
+builtin echo -&gt; [1,2]</pre>
+
+<p>The trait takes a <code>Value</code> and returns a <code>Result</code> that holds a <code>Value</code>, so every tool speaks the same JSON. <code>Add</code> hands its work to a plain <code>async fn</code>, and <code>Box::pin</code> turns that future into the boxed form. The registry owns one <code>Box&lt;dyn Tool&gt;</code> for each name. <code>run</code> looks the name up, and returns <code>UnknownTool</code> when nothing matches.</p>
+
+<p>When the set of tools is fixed at compile time, an enum is simpler. Nothing is a trait object, so <code>async fn</code> works directly, and nothing is boxed. You add a tool by adding a variant. The <code>Builtin</code> type at the end of the file shows that shape. The <code>async-trait</code> crate writes the boxed-future version for you, so you can also let it do the work.</p>
+
+<div class="ox-quiz" data-id="20:quiz-dyn-async" data-label="Check yourself">
+  <p class="ox-q">Why can't a trait with <code>async fn call(&amp;self, input: Value) -&gt; Result&lt;Value, ToolError&gt;</code> be used as <code>Box&lt;dyn Tool&gt;</code>?</p>
+  <ol class="ox-choices">
+    <li>An <code>async fn</code> cannot take <code>&amp;self</code>.</li>
+    <li data-correct>Each implementation returns its own future type, so a trait object has no single return type to call.</li>
+    <li><code>Value</code> is not <code>Send</code>, so the trait cannot be boxed.</li>
+    <li>Trait objects can hold only functions, not methods.</li>
+  </ol>
+  <div class="ox-why"><p>A trait object needs one return type for each method. A boxed future, <code>Pin&lt;Box&lt;dyn Future&lt;...&gt; + Send + 'a&gt;&gt;</code>, is that one type. Methods can take <code>&amp;self</code>, and <code>Value</code> is <code>Send</code>, so neither is the problem.</p></div>
+</div>
+
+</section>
+
+<section>
+<h2 id="client">Calling other APIs</h2>
+
+<p>Your Laravel app calls other services with the <code>Http</code> facade. In Rust, the usual client is the reqwest crate. A call is ordinary async code. You send the request, await the response, check its status, and only then read the body. Each step can fail, and the types show where.</p>
+
+<pre class="toml" data-title="Cargo.toml">[dependencies]
+axum = "0.8.9"
+futures = "0.3.34"
+reqwest = { version = "0.12.28", default-features = false, features = ["json", "stream", "rustls-tls"] }
+serde = { version = "1.0.229", features = ["derive"] }
+tokio = { version = "1.53.2", features = ["full"] }</pre>
+
+<p>The features on the reqwest line matter. reqwest turns off JSON and streaming by default, so <code>.json()</code> and <code>bytes_stream()</code> do not exist until you list <code>json</code> and <code>stream</code>. <code>default-features = false</code> turns off the default TLS library, and <code>rustls-tls</code> picks rustls for HTTPS. Chapter 16 explains features. The axum line is for the local mock in the example below.</p>
+
+<h3 id="one-client">One client, reused</h3>
+
+<p>Build a <code>reqwest::Client</code> once, when the program starts, and keep it. The client holds a connection pool, so a reused client can send the next request over a connection that is already open. A new client for each call throws that pool away. The reqwest docs say to create one and reuse it. Cloning a client is cheap, because the clones share one pool, so you do not need an <code>Arc</code> around it.</p>
+
+<p>reqwest also sets no request timeout by default. A server that never answers keeps the call open. Laravel's HTTP client waits 30 seconds by default. Set a timeout on the builder for every client, and override it on one request when a call needs a different limit.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+$note = Http::withToken($token)
+    -&gt;timeout(3)
+    -&gt;retry(3, 100)
+    -&gt;post('https://notes.example.com/api/notes', ['title' => 'Call an API'])
+    -&gt;throw()
+    -&gt;json();</pre>
+  <pre class="rs" data-check="skip" data-crates="reqwest,serde">let note = client
+    .post("https://notes.example.com/api/notes")
+    .bearer_auth(token)
+    .timeout(Duration::from_secs(3))
+    .json(&amp;NewNote { title: "Call an API".to_string() })
+    .send()
+    .await?
+    .error_for_status()?
+    .json::&lt;Note&gt;()
+    .await?;</pre>
+  <div class="ox-bridge-note"><p><code>withToken</code>, <code>timeout</code> and <code>throw</code> have direct counterparts: <code>bearer_auth</code>, <code>timeout</code> and <code>error_for_status</code>. Laravel's <code>retry(3, 100)</code> repeats the request after an error status as well. reqwest's default retry covers only low-level failures that are safe to repeat, so the loop is yours to write. <code>json()</code> becomes <code>json::&lt;Note&gt;()</code>, because Rust needs the shape of the body at compile time.</p></div>
+</div>
+
+<h3 id="status-errors">Status codes and typed errors</h3>
+
+<p>A 404 is a normal HTTP response, so reqwest does not treat it as an error. <code>error_for_status()</code> turns a 4xx or 5xx response into an error. Without it, the call returns the response, and <code>.json::&lt;Note&gt;()</code> reads the body as if the call had worked. The error keeps the status, so <code>err.status()</code> tells you which code it was.</p>
+
+<p>The example keeps every failure in one enum. Each variant is a case your caller can act on. <code>From</code> lets <code>?</code> turn a <code>reqwest::Error</code> into the enum. The <code>map_err</code> after <code>error_for_status()</code> turns a 404 into <code>NotFound</code>, and leaves every other status as <code>Status</code>.</p>
+
+<pre class="rs" data-check="skip" data-crates="reqwest,serde" data-title="src/client.rs">//! A small client for the notes API. Laravel counterpart: a service class
+//! that wraps `Http::withToken(...)` and turns failures into exceptions.
+
+use std::fmt;
+use std::time::Duration;
+
+use reqwest::{Client, StatusCode};
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Note {
+    pub id: u64,
+    pub title: String,
+    pub pinned: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NewNote {
+    pub title: String,
+}
+
+/// Every way a call to the notes API can fail, in one type.
+#[derive(Debug)]
+pub enum ApiError {
+    /// The server answered 404 for this id.
+    NotFound(u64),
+    /// The server answered with another error status, such as 401.
+    Status(StatusCode),
+    /// The request did not finish within its timeout.
+    Timeout,
+    /// Anything else: no connection, or a body that is not the JSON we expect.
+    Transport(reqwest::Error),
+}
+
+impl fmt::Display for ApiError {
+    fn fmt(&amp;self, f: &amp;mut fmt::Formatter&lt;'_&gt;) -&gt; fmt::Result {
+        match self {
+            ApiError::NotFound(id) =&gt; write!(f, "note {id} was not found"),
+            ApiError::Status(code) =&gt; write!(f, "the server answered {code}"),
+            ApiError::Timeout =&gt; write!(f, "the request timed out"),
+            ApiError::Transport(err) =&gt; write!(f, "request failed: {err}"),
+        }
+    }
+}
+
+impl std::error::Error for ApiError {}
+
+/// Lets `?` turn a reqwest error into an ApiError.
+impl From&lt;reqwest::Error&gt; for ApiError {
+    fn from(err: reqwest::Error) -&gt; Self {
+        if err.is_timeout() {
+            ApiError::Timeout
+        } else if let Some(status) = err.status() {
+            ApiError::Status(status)
+        } else {
+            ApiError::Transport(err)
+        }
+    }
+}
+
+/// GET /api/notes/{id}. The client is built once and passed in.
+pub async fn fetch_note(
+    client: &amp;Client,
+    base: &amp;str,
+    id: u64,
+    token: &amp;str,
+) -&gt; Result&lt;Note, ApiError&gt; {
+    let note = client
+        .get(format!("{base}/api/notes/{id}"))
+        .bearer_auth(token)
+        .timeout(Duration::from_secs(2))
+        .send()
+        .await?
+        .error_for_status()
+        .map_err(|err| match err.status() {
+            Some(StatusCode::NOT_FOUND) =&gt; ApiError::NotFound(id),
+            _ =&gt; ApiError::from(err),
+        })?
+        .json::&lt;Note&gt;()
+        .await?;
+    Ok(note)
+}
+
+/// POST /api/notes with a JSON body.
+pub async fn create_note(
+    client: &amp;Client,
+    base: &amp;str,
+    token: &amp;str,
+    title: &amp;str,
+) -&gt; Result&lt;Note, ApiError&gt; {
+    let note = client
+        .post(format!("{base}/api/notes"))
+        .bearer_auth(token)
+        .json(&amp;NewNote {
+            title: title.to_string(),
+        })
+        .send()
+        .await?
+        .error_for_status()?
+        .json::&lt;Note&gt;()
+        .await?;
+    Ok(note)
+}</pre>
+
+<p>The program below starts a local axum server as a mock. It answers the way the real API would, and it listens on a free port that the OS picks. The client then makes four calls and one slow call:</p>
+
+<pre class="rs" data-check="skip" data-crates="axum,reqwest,serde,tokio" data-title="src/main.rs">//! Runs the client against a local axum mock. The mock listens on a free
+//! port that the OS picks, so this example never leaves your machine.
+
+mod client;
+
+use std::error::Error;
+use std::time::Duration;
+
+use axum::extract::Path;
+use axum::http::{HeaderMap, StatusCode};
+use axum::routing::{get, post};
+use axum::{Json, Router};
+use tokio::net::TcpListener;
+
+use client::{ApiError, NewNote, Note};
+
+async fn show(headers: HeaderMap, Path(id): Path&lt;u64&gt;) -&gt; Result&lt;Json&lt;Note&gt;, StatusCode&gt; {
+    let authorized =
+        headers.get("authorization").and_then(|value| value.to_str().ok()) == Some("Bearer secret");
+    if !authorized {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    if id == 1 {
+        Ok(Json(Note {
+            id,
+            title: "Learn reqwest".to_string(),
+            pinned: false,
+        }))
+    } else {
+        Err(StatusCode::NOT_FOUND)
+    }
+}
+
+async fn create(Json(input): Json&lt;NewNote&gt;) -&gt; (StatusCode, Json&lt;Note&gt;) {
+    let note = Note {
+        id: 2,
+        title: input.title,
+        pinned: false,
+    };
+    (StatusCode::CREATED, Json(note))
+}
+
+async fn slow() -&gt; &amp;'static str {
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    "late"
+}
+
+fn mock_api() -&gt; Router {
+    Router::new()
+        .route("/api/notes", post(create))
+        .route("/api/notes/{id}", get(show))
+        .route("/slow", get(slow))
+}
+
+#[tokio::main]
+async fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let base = format!("http://{}", listener.local_addr()?);
+    tokio::spawn(async move { axum::serve(listener, mock_api()).await.unwrap() });
+
+    // One client for the whole program. It holds the connection pool.
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()?;
+
+    match client::fetch_note(&amp;client, &amp;base, 1, "secret").await {
+        Ok(note) =&gt; println!("note 1: {}", note.title),
+        Err(err) =&gt; println!("note 1 failed: {err}"),
+    }
+    match client::fetch_note(&amp;client, &amp;base, 9, "secret").await {
+        Ok(note) =&gt; println!("note 9: {}", note.title),
+        Err(err) =&gt; println!("note 9: {err}"),
+    }
+    match client::fetch_note(&amp;client, &amp;base, 1, "wrong").await {
+        Ok(note) =&gt; println!("note 1: {}", note.title),
+        Err(err) =&gt; println!("with a wrong token: {err}"),
+    }
+
+    let created = client::create_note(&amp;client, &amp;base, "secret", "Call an API").await?;
+    println!("created note {}: {}", created.id, created.title);
+
+    let slow_result = client
+        .get(format!("{base}/slow"))
+        .timeout(Duration::from_millis(100))
+        .send()
+        .await;
+    if let Err(err) = slow_result {
+        println!("slow endpoint: {}", ApiError::from(err));
+    }
+    Ok(())
+}</pre>
+
+<pre class="text" data-title="output">note 1: Learn reqwest
+note 9: note 9 was not found
+with a wrong token: the server answered 401 Unauthorized
+created note 2: Call an API
+slow endpoint: the request timed out</pre>
+
+<h3 id="client-streams">Streams</h3>
+
+<p>A model API often answers with server-sent events, which arrive in pieces over one long response. <code>bytes_stream()</code> hands you the body as chunks, with the <code>stream</code> feature on. A chunk can end in the middle of a line. Feed each chunk to the SSE parser from Chapter 19, which keeps the partial line until the rest arrives. The loop uses <code>StreamExt::next</code> from the futures crate:</p>
+
+<pre class="rs" data-check="skip" data-crates="reqwest,futures" data-title="src/main.rs">use futures::StreamExt;
+
+async fn read_events(client: &amp;reqwest::Client, url: &amp;str, parser: &amp;mut SseParser) -&gt; Result&lt;Vec&lt;Event&gt;, reqwest::Error&gt; {
+    let response = client.get(url).send().await?.error_for_status()?;
+    let mut stream = response.bytes_stream();
+    let mut events = Vec::new();
+    while let Some(chunk) = stream.next().await {
+        let bytes = chunk?;
+        events.extend(parser.push(&amp;bytes)); // SseParser and Event are from Chapter 19
+    }
+    Ok(events)
+}</pre>
+
+<p>When the body ends, <code>read_events</code> returns every event it finished. A failed chunk ends the loop with an error, the same way a failed response does. The <code>?</code> returns that error to the caller.</p>
+
+<h3 id="retry">Retry with care</h3>
+
+<p>Retry only what is safe to repeat. A GET that reads a note can run twice with no harm. A POST that creates a note may create two. Chapter 19 shows how to compute the waits (doubling, capped, with jitter). Wrap a loop around your call that sleeps for them; the Chapter 21 harness does this in <code>send_with_retry</code>.</p>
+
+<div class="ox-quiz" data-id="20:quiz-blocking-reqwest" data-label="Check yourself">
+  <p class="ox-q">A tutorial calls <code>reqwest::blocking::get(url)</code>. Your Cargo.toml says <code>reqwest = "0.12"</code> and nothing else. Why does the compiler say it cannot find <code>blocking</code>?</p>
+  <ol class="ox-choices">
+    <li data-correct>The <code>blocking</code> module is behind the <code>blocking</code> feature, and reqwest does not turn that feature on by default.</li>
+    <li>reqwest 0.12 removed the blocking client, so the tutorial is out of date.</li>
+    <li>The blocking client works only inside <code>#[tokio::main]</code>, so the compiler hides it.</li>
+    <li>The module is named <code>sync</code> in reqwest, not <code>blocking</code>.</li>
+  </ol>
+  <div class="ox-why"><p>Features are switches. Each one adds code and dependencies, and most are off by default. To use the blocking client, add <code>features = ["blocking"]</code> to the reqwest line. This chapter uses the async client, which is the default one.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="testing">Testing handlers without a server</h2>
+
+<p>A Laravel feature test sends a request through the framework and checks the response. The axum test does the same thing. A <code>Router</code> is a tower service, and <code>oneshot</code> sends one request into it and returns the response. No port opens, but every layer and handler runs.</p>
+
+<p>The helper and the first test come from <code>tests/api.rs</code>:</p>
+
+<pre class="rs" data-check="skip" data-title="tests/api.rs">/// Sends a request and returns the status and the body: parsed JSON,
+/// `Value::Null` when empty, or a JSON string when the body isn't JSON.
+async fn send(app: &amp;Router, method: &amp;str, uri: &amp;str, body: Option&lt;Value&gt;) -&gt; (StatusCode, Value) {
+    let mut request = Request::builder().method(method).uri(uri);
+    let body = match body {
+        Some(json) =&gt; {
+            request = request.header(header::CONTENT_TYPE, "application/json");
+            Body::from(json.to_string())
+        }
+        None =&gt; Body::empty(),
+    };
+    // Router is cheap to clone (it is reference counted inside), and the
+    // clones share the same AppState, so data survives between requests.
+    let response = app
+        .clone()
+        .oneshot(request.body(body).unwrap())
+        .await
+        .unwrap();
+    let status = response.status();
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body = if bytes.is_empty() {
+        Value::Null
+    } else {
+        serde_json::from_slice(&amp;bytes)
+            .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&amp;bytes).into_owned()))
+    };
+    (status, body)
+}</pre>
+
+<pre class="rs" data-check="skip" data-title="tests/api.rs">#[tokio::test]
+async fn create_then_show_a_note() {
+    let app = app(AppState::default());
+
+    let (status, created) = send(
+        &amp;app,
+        "POST",
+        "/api/notes",
+        Some(json!({ "title": "  Learn axum  " })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(
+        created,
+        json!({ "id": 1, "title": "Learn axum", "body": "", "pinned": false })
+    );
+
+    let (status, shown) = send(&amp;app, "GET", "/api/notes/1", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(shown, created);
+}</pre>
+
+<p>Here is the Laravel version of one step of that test, next to the Rust version:</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+$this->postJson('/api/notes', ['title' => 'Learn axum'])
+    ->assertCreated()
+    ->assertJsonPath('title', 'Learn axum');</pre>
+<pre class="rs" data-check="skip" data-title="tests/api.rs">    let (status, created) = send(
+        &amp;app,
+        "POST",
+        "/api/notes",
+        Some(json!({ "title": "  Learn axum  " })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);</pre>
+  <div class="ox-bridge-note"><p>The PHP helper hides the request, the response and the assertions. In Rust they are separate values: a status code, a parsed body, and a plain <code>assert_eq!</code>. Nothing is hidden behind a helper method.</p></div>
+</div>
+
+<p>Each test calls <code>app(AppState::default())</code>, so each test starts with an empty table. Inside one test, the helper sends every request through <code>app.clone()</code>. Cloning a router is cheap, and the clones share one <code>AppState</code>. That is why a note created by one request can be read back by the next.</p>
+
+<aside class="ox-callout" data-kind="insight">
+  <p><strong>Mocking HTTP you call.</strong> The same idea works for a client. Start a small axum server inside the test, on <code>127.0.0.1:0</code>. Port 0 asks the OS for a free port, so tests that run at the same time never clash. Point the real client at that address, and assert on what comes back. Laravel's <code>Http::fake()</code> returns canned responses without calling anything. This mock is a real server, so reqwest's status check, its timeouts and its parsing all run.</p>
+</aside>
+
+<pre class="rs" data-check="skip" data-crates="axum,reqwest,tokio" data-title="tests/mock_http.rs">use axum::Router;
+use axum::http::StatusCode;
+use axum::routing::get;
+use tokio::net::TcpListener;
+
+#[tokio::test]
+async fn a_missing_note_becomes_a_404_error() {
+    // The mock answers 404 for every request. Port 0 asks the OS for a free port.
+    let app = Router::new().route(
+        "/api/notes/{id}",
+        get(|| async { StatusCode::NOT_FOUND }),
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+
+    // Point the real client at the mock, and check what it returns.
+    let client = reqwest::Client::new();
+    let err = client
+        .get(format!("{base}/api/notes/7"))
+        .send()
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap_err();
+    assert_eq!(err.status(), Some(StatusCode::NOT_FOUND));
+}</pre>
+
+
+<div class="ox-quiz" data-id="20:testing-state" data-label="Check yourself">
+  <p class="ox-q">Two tests run at the same time, and each one calls <code>app(AppState::default())</code>. Can one test see the other test's notes?</p>
+  <ol class="ox-choices">
+    <li>Yes, because the state is a global variable.</li>
+    <li data-correct>No. Each call builds a new <code>AppState</code> with its own empty table.</li>
+    <li>Only if both tests use the same port.</li>
+    <li>Yes, when the tests share a router with <code>app.clone()</code>.</li>
+  </ol>
+  <div class="ox-why"><p><code>AppState::default()</code> creates a new <code>Arc&lt;RwLock&lt;Db&gt;&gt;</code>, so two calls make two tables. Clones of one router share one table. That is why <code>create</code> followed by <code>show</code> works inside a single test, and why tests cannot see each other's data.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="database">Where Eloquent would go</h2>
+
+<p>The project keeps notes in a <code>BTreeMap</code>, so a restart clears them. A real API stores its data in a database. The usual choices in Rust are sqlx, which lets you write the SQL yourself, and the ORMs SeaORM and Diesel. The example below is a working sqlx program. It uses an in-memory SQLite database, so it needs no database server.</p>
+
+<pre class="toml" data-title="Cargo.toml">[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+sqlx = { version = "0.9.0", features = ["runtime-tokio", "sqlite"] }
+tokio = { version = "1.53.2", features = ["full"] }</pre>
+
+<p>Two features do the work. <code>runtime-tokio</code> picks tokio as the async runtime, and <code>sqlite</code> turns on the SQLite driver. Without <code>sqlite</code>, the import <code>sqlx::sqlite</code> does not compile. Chapter 16 explains features.</p>
+
+<p><strong>The MSRV note.</strong> sqlx 0.9 declares <code>rust-version = "1.94.0"</code>, so it needs Rust 1.94 or newer. This course asks for Rust 1.88 in most chapters. Run <code>rustup update</code> first. If you must stay on 1.88 to 1.93, pin an older sqlx release and read the docs for that version. The code on this page was checked with sqlx 0.9 on rustc 1.97.</p>
+
+<p>The table comes from a migration: a SQL file in <code>migrations/</code>. <code>sqlx::migrate!</code> embeds those files in the program when it compiles, and runs each migration that has not run yet.</p>
+
+<pre class="text" data-title="migrations/0001_create_notes.sql">CREATE TABLE notes (
+    id INTEGER PRIMARY KEY,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL DEFAULT '',
+    pinned INTEGER NOT NULL DEFAULT 0
+);</pre>
+
+<pre class="rs" data-check="skip" data-crates="sqlx,serde,serde_json,tokio" data-title="src/main.rs">use serde::Serialize;
+use sqlx::FromRow;
+use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
+
+#[derive(Debug, Serialize, FromRow)]
+struct Note {
+    id: i64,
+    title: String,
+    body: String,
+    pinned: bool,
+}
+
+#[derive(Clone)]
+struct AppState {
+    pool: SqlitePool,
+}
+
+/// Opens the database and runs the migrations in `migrations/`.
+async fn connect() -&gt; Result&lt;SqlitePool, sqlx::Error&gt; {
+    // An in-memory database lives inside one connection. A second connection
+    // would open a new, empty database, so the pool gets exactly one. The idle
+    // and lifetime limits are off, so that connection is never closed.
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .idle_timeout(None)
+        .max_lifetime(None)
+        .connect("sqlite::memory:")
+        .await?;
+    sqlx::migrate!("./migrations").run(&amp;pool).await?;
+    Ok(pool)
+}
+
+async fn find(state: &amp;AppState, id: i64) -&gt; Result&lt;Option&lt;Note&gt;, sqlx::Error&gt; {
+    sqlx::query_as::&lt;_, Note&gt;("SELECT id, title, body, pinned FROM notes WHERE id = ?")
+        .bind(id)
+        .fetch_optional(&amp;state.pool)
+        .await
+}
+
+/// Inserts two notes in one transaction. If the second insert fails, the
+/// function returns early, the transaction is dropped without a commit, and
+/// the first insert is rolled back.
+async fn add_pair(state: &amp;AppState, first: &amp;str, second: Option&lt;&amp;str&gt;) -&gt; Result&lt;(), sqlx::Error&gt; {
+    let mut tx = state.pool.begin().await?;
+    sqlx::query("INSERT INTO notes (title) VALUES (?)")
+        .bind(first)
+        .execute(&amp;mut *tx)
+        .await?;
+    sqlx::query("INSERT INTO notes (title) VALUES (?)")
+        .bind(second)
+        .execute(&amp;mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+#[tokio::main]
+async fn main() -&gt; Result&lt;(), sqlx::Error&gt; {
+    let state = AppState {
+        pool: connect().await?,
+    };
+
+    sqlx::query("INSERT INTO notes (title) VALUES (?)")
+        .bind("Learn sqlx")
+        .execute(&amp;state.pool)
+        .await?;
+    println!("{}", serde_json::to_string(&amp;find(&amp;state, 1).await?).unwrap());
+    println!("{}", serde_json::to_string(&amp;find(&amp;state, 999).await?).unwrap());
+
+    add_pair(&amp;state, "Write a transaction", Some("Commit it")).await?;
+
+    // The second title is NULL, which breaks NOT NULL. The first insert is undone.
+    let failed = add_pair(&amp;state, "Never saved", None).await;
+    println!("second pair failed: {}", failed.is_err());
+
+    let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM notes")
+        .fetch_one(&amp;state.pool)
+        .await?;
+    println!("notes in the table: {count}");
+    Ok(())
+}</pre>
+
+<pre class="text" data-title="output">{"id":1,"title":"Learn sqlx","body":"","pinned":false}
+null
+second pair failed: true
+notes in the table: 3</pre>
+
+<ul>
+  <li><strong>The pool lives in the state.</strong> <code>SqlitePool</code> manages the connections. Cloning it is cheap, because the clones share one pool, just as the <code>Arc</code> in our table shares the notes.</li>
+  <li><strong>Rows become structs.</strong> <code>query_as::&lt;_, Note&gt;</code> maps each row to a <code>Note</code> by column name, using <code>FromRow</code>. A tuple such as <code>(i64,)</code> works for a query that returns one column.</li>
+  <li><strong>Not found is <code>None</code>.</strong> <code>fetch_optional</code> returns an <code>Option&lt;Note&gt;</code>. A missing row is not an error. A handler turns the <code>None</code> into <code>AppError::NotFound</code>.</li>
+  <li><strong>A transaction is all or nothing.</strong> <code>begin()</code> starts one, and <code>commit()</code> saves it. If the function returns early with <code>?</code>, the transaction is dropped without a commit, and sqlx rolls it back. You never write that rollback yourself. It is the drop rule from Chapter 6: a value cleans up when its owner goes out of scope.</li>
+  <li><strong>Do not hold a lock across a query.</strong> A <code>Mutex</code> or <code>RwLock</code> guard blocks other tasks until it is dropped. If you keep one while you wait on a query, every request that needs the lock waits for the database too. Read what you need, drop the guard, and then query.</li>
+  <li><strong>Compile-time checks need a database.</strong> <code>query_as!</code> checks the SQL against a real database while your code compiles. Without <code>DATABASE_URL</code> set, the build stops and asks you to set it, or to run <code>cargo sqlx prepare</code> to save the query cache. The example uses the plain functions, so it needs neither.</li>
+</ul>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Agents write axum code from whichever version they saw most often. You will meet <code>axum::Server::bind</code>, which was removed in 0.7. You will meet <code>/:id</code> routes, which panic in 0.8. You will meet <code>#[async_trait]</code> on every trait. Native <code>async fn</code> in traits made it unnecessary for generic code. A <code>dyn</code> trait object still needs a boxed future, and the registry above shows the fix. You will also meet blocking database drivers called from async handlers.</p>
+  <p>Pin the versions in <code>Cargo.toml</code>, and paste them into your prompt. Then let the compiler and the tests decide whether the code is right. A test that sends a real request fails at once on stale route syntax, because the router panics when it is built.</p>
+</aside>
+
+<div class="ox-quiz" data-id="20:quiz-blocking" data-label="Check yourself">
+  <p class="ox-q">A handler calls a synchronous database driver, and that call waits for the query to finish. What happens to the other requests on the same worker thread?</p>
+  <ol class="ox-choices">
+    <li>Tokio moves them to another thread, so nothing changes.</li>
+    <li data-correct>They wait too, because the thread is blocked until the query returns.</li>
+    <li>They are answered first, because async code runs before blocking code.</li>
+    <li>Axum cancels them after one second.</li>
+  </ol>
+  <div class="ox-why"><p>Tokio runs many tasks on a few worker threads. A blocking call holds its thread, so the other tasks on that thread wait. Use an async driver such as sqlx. If you must call blocking code, move it to <code>tokio::task::spawn_blocking</code>.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="20:quiz-transaction" data-label="Check yourself">
+  <p class="ox-q">A handler calls <code>begin()</code>, inserts a row, and then returns early with <code>?</code> before <code>commit()</code>. What happens to the row?</p>
+  <ol class="ox-choices">
+    <li>It is saved, because the insert already ran.</li>
+    <li data-correct>It is rolled back, because the transaction was dropped without a commit.</li>
+    <li>It stays in the table until the next migration.</li>
+    <li>It is saved only if the handler returns <code>Ok</code>.</li>
+  </ol>
+  <div class="ox-why"><p>Only <code>commit()</code> saves a transaction. Dropping it before then rolls back everything it did. The early return is what drops it, so the error path needs no rollback call of its own.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="when-laravel">When Laravel still wins</h2>
+
+<p>Rust is not the right answer for every API. Laravel gives you an admin panel ecosystem, queues, mail, auth, and a mature ORM in one place. A team that knows PHP can ship CRUD features faster in Laravel, and it is easier to hire for.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Keep Laravel when</th><th>Consider Rust when</th></tr></thead>
+  <tbody>
+    <tr><td>The product is CRUD with an admin panel, such as Filament or Nova</td><td>The API is high-throughput, and CPU or memory per request matters</td></tr>
+    <tr><td>You are iterating quickly on product features</td><td>The service runs for a long time: a worker, a stream consumer, or an agent harness</td></tr>
+    <tr><td>Your team knows PHP, and the packages you need, such as Cashier or Horizon, fit</td><td>A CLI or tool must start instantly and ship as one file</td></tr>
+    <tr><td>Most of the app is forms, views and email</td><td>You deploy to small machines or the edge, where memory is tight</td></tr>
+    <tr><td>You rely on PHP packages that have no Rust equivalent</td><td>You want a PHP extension written in Rust, with ext-php-rs</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Many teams run both. The Laravel app keeps the admin side and the business rules. One hot path moves into a Rust service, which the app calls over HTTP or through a queue. Each part stays in the tool that fits it.</p>
+
+<details class="ox-think">
+  <summary>Name one part of your current Laravel work that you would keep, and one part you might move to Rust. Why?</summary>
+  <div class="ox-think-body">
+    <p>One good answer: keep the admin panel and the forms, because Laravel already has the packages and the team knows them. Consider a webhook receiver or an import worker. Those run for a long time, need little memory, and gain nothing from a fresh boot on every request.</p>
+    <p>If your answer also named the hot path and why it is hot, you have the right test for the choice.</p>
+  </div>
+</details>
+</section>
+
+<section>
+<h2 id="practice">Practice</h2>
+
+<p>These checks use the ideas from the chapter. The first one is about order. The rest are about the code you have just read.</p>
+
+<div class="ox-order" data-id="20:order" data-label="Put the request stages in order">
+  <ol>
+    <li>axum::serve accepts the connection and parses the request.</li>
+    <li>The router picks the route for the method and the path.</li>
+    <li>The route's layers wrap the handler: TraceLayer first, then TimeoutLayer.</li>
+    <li>Extractors run in argument order, with the body extractor last.</li>
+    <li>The handler body runs.</li>
+    <li>The return value becomes a Response through IntoResponse.</li>
+    <li>The response passes back out through the layers, and TraceLayer logs its status.</li>
+  </ol>
+  <div class="ox-why"><p>Routing comes before the route's layers, because <code>Router::layer</code> wraps the route that the router has already chosen. Extractors run before the handler, so a failed extractor stops the request before any handler code runs. The response travels back out through the layers, which is why TraceLayer sees the final status.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="20:quiz-extractor" data-label="Check yourself">
+  <p class="ox-q">Which handler argument reads the JSON body?</p>
+  <ol class="ox-choices">
+    <li><code>State&lt;AppState&gt;</code></li>
+    <li><code>Path&lt;u64&gt;</code></li>
+    <li data-correct><code>Json&lt;CreateNote&gt;</code></li>
+    <li><code>Query&lt;Filter&gt;</code></li>
+  </ol>
+  <div class="ox-why"><p>Only the body extractor reads the body. <code>ValidJson&lt;CreateNote&gt;</code> works the same way and also runs validation. <code>State</code> gives shared state, <code>Path</code> reads the URL, and <code>Query</code> reads the query string after the <code>?</code>.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="20:quiz-422" data-label="Check yourself">
+  <p class="ox-q">A POST body is valid JSON, but <code>title</code> is the number <code>42</code>. What happens?</p>
+  <ol class="ox-choices">
+    <li>201 Created, with the number converted to a string.</li>
+    <li data-correct>422 Unprocessable Entity, before the handler runs.</li>
+    <li>400 Bad Request, because the body is malformed.</li>
+    <li>500 Internal Server Error, from a panic inside the handler.</li>
+  </ol>
+  <div class="ox-why"><p>serde refuses the number, and the extractor rejects the request. The handler never starts, so nothing is stored. A 400 would mean the body was not JSON at all.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="20:quiz-path" data-label="Check yourself">
+  <p class="ox-q">Which route path is correct in axum 0.8 for a note id?</p>
+  <ol class="ox-choices">
+    <li><code>/notes/:id</code></li>
+    <li data-correct><code>/notes/{id}</code></li>
+    <li><code>/notes/&lt;id&gt;</code></li>
+    <li><code>/notes/*id</code></li>
+  </ol>
+  <div class="ox-why"><p>Axum 0.8 uses braces for captures. <code>/notes/:id</code> is the 0.7 syntax, and it panics now. <code>/notes/*id</code> panics too. The wildcard form is <code>{*rest}</code>. <code>/&lt;id&gt;</code> is accepted without a panic. It is a literal segment, so it captures nothing. A URL cannot contain a bare <code>&lt;</code>, so no request can match it.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="20:quiz-state" data-label="Check yourself">
+  <p class="ox-q">A handler needs the notes table. What is the axum way to give it access?</p>
+  <ol class="ox-choices">
+    <li>Declare a <code>static mut</code> variable, and read it from the handler.</li>
+    <li data-correct>Ask for <code>State&lt;AppState&gt;</code>. The state is built once and cloned into each handler.</li>
+    <li>Store it in a thread-local variable that a middleware sets for each request.</li>
+    <li>Call a global function that opens a new database connection every time.</li>
+  </ol>
+  <div class="ox-why"><p><code>with_state</code> attaches the state to the router. Each handler that asks for <code>State&lt;AppState&gt;</code> gets a clone. The clones share one <code>Arc</code>, so every handler sees the same table.</p></div>
+</div>
+
+<div class="ox-match" data-id="20:match" data-left-label="Laravel" data-right-label="axum">
+  <ul>
+    <li data-left="Route::get('/notes', [NoteController::class, 'index'])">.route("/notes", get(index))</li>
+    <li data-left="$request-&gt;input('title')">Json(input): Json&lt;CreateNote&gt;</li>
+    <li data-left="Note $note, bound by the router">Path(id): Path&lt;u64&gt;, then a lookup in the handler</li>
+    <li data-left="-&gt;middleware(...)">.layer(TraceLayer::new_for_http())</li>
+    <li data-left="app()-&gt;make(NoteRepository::class)">State(state): State&lt;AppState&gt;</li>
+    <li data-left="response()-&gt;json($note, 201)">(StatusCode::CREATED, Json(note))</li>
+  </ul>
+</div>
+
+<div class="ox-fill" data-id="20:fill-status">
+  <p class="ox-q">Complete the function, so that each error maps to its status code.</p>
+  <pre class="rs">
+#[derive(Clone, Copy)]
+enum AppError {
+    NotFound,
+    Validation,
+}
+
+fn status_code(error: AppError) -&gt; u16 {
+    match error {
+        AppError::NotFound =&gt; [[404]],
+        AppError::Validation =&gt; [[422]],
+    }
+}
+
+fn main() {
+    println!("{}", status_code(AppError::NotFound));
+}</pre>
+  <div class="ox-why"><p>The mapping mirrors <code>error.rs</code>. A missing note is a 404, and a failed rule is a 422. The <code>match</code> must cover every variant. Add a variant without a status code, and the program does not compile until you add one.</p></div>
+</div>
+<div class="ox-quiz" data-id="20:quiz-private-fn" data-label="Check yourself">
+  <p class="ox-q">Chapter 16 taught visibility. Does this compile?</p>
+  <pre class="rs" data-check="E0603">
+mod notes {
+    fn list() -&gt; usize {
+        3
+    }
+}
+
+fn main() {
+    println!("{}", notes::list());
+}
+</pre>
+  <ol class="ox-choices">
+    <li>Yes, and it prints <code>3</code>.</li>
+    <li data-correct>No, E0603. A function is private to its module unless it is marked <code>pub</code>.</li>
+    <li>No, E0425, because <code>notes::list</code> does not exist.</li>
+  </ol>
+  <div class="ox-why"><p>Handlers, helpers and types that another module uses need <code>pub</code>. Without it, the path is refused at compile time, which is the same rule as Chapter 16.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="quests">Forge quests</h2>
+<p>Reading builds recognition. Writing code builds the skill. These quests run locally against the real compiler. <code>serde1</code>, <code>client1</code> and <code>axum1</code> are small cargo packages. Their first check downloads and builds their crates, which takes a few minutes.</p>
+<div class="ox-quests" data-chapter="20"></div>
+</section>
+
+<section>
+<h2 id="recap">Recap</h2>
+
+<div class="ox-recap">
+  <h3>One request, many stages</h3>
+  <ul>
+    <li>Laravel builds the application for every request. Axum builds the router and the state once, at startup, and then runs only the per-request stages.</li>
+    <li>Axum chooses the route first, and then the route's layers run. Laravel's global middleware runs before routing.</li>
+    <li>Extractors run in argument order, before the handler. The body extractor goes last. A failed extractor returns its error, and the handler never runs.</li>
+    <li><code>State&lt;T&gt;</code> shares one value. Each handler gets a clone, and an <code>Arc</code> keeps a single copy of the data.</li>
+    <li><code>AppError</code> implements <code>IntoResponse</code>, so <code>?</code> can return a JSON 404 or 422 from anywhere in a handler.</li>
+    <li>serde maps JSON keys to fields. <code>rename_all</code> sets the naming rule. A body that does not fit the type becomes a 422.</li>
+    <li><code>oneshot</code> tests the router without a server. The tests are fast, and they run the real layers and handlers.</li>
+    <li>reqwest::Client is built once and reused. Each call returns a Result, and error_for_status() makes a 404 or a 500 an error.</li>
+    <li>serde enums use a tag, such as type, to pick the variant. A Value holds any JSON until a tool turns it into a typed struct.</li>
+    <li>A dyn trait cannot have an async fn. Return a boxed future, or use an enum when the set of tools is fixed.</li>
+    <li>Events are log lines. Spans carry their fields into the events inside them. RUST_LOG chooses the level, and a bad setting fails at startup with the name of the variable.</li>
+    <li>A sqlx transaction rolls back when it is dropped without commit().</li>
+    <li>A Rust API ships as one binary.</li>
+  </ul>
+</div>
+
+<div class="ox-deck" data-chapter="20"></div>
+
+<details class="ox-think">
+  <summary>Explain it back: trace one POST /api/notes request through the axum app.</summary>
+  <div class="ox-think-body">
+    <p>One good answer: "The request arrives on a connection that <code>axum::serve</code> accepted. The router matches POST <code>/api/notes</code> to <code>store</code>, and the route's layers start. <code>TraceLayer</code> opens a span, and <code>TimeoutLayer</code> starts its 10-second clock. Then the extractors run in order. <code>State</code> gives a clone of the state, and <code>ValidJson</code> reads the body and validates it. A bad body returns an <code>AppError</code>, and <code>store</code> never runs. A good body is inserted, and <code>store</code> returns <code>(StatusCode::CREATED, Json(note))</code>. That value becomes the response. It passes back out through the layers, and <code>TraceLayer</code> logs the status."</p>
+    <p>If your version had <em>the router picks the route first</em>, <em>extractors run before the handler</em>, and <em>a failure returns early</em>, you have the core of the chapter.</p>
+  </div>
+</details>
+
+<div class="ox-complete-host"></div>
+</section>
+
+</main>
+</div>
+</body>
+</html>

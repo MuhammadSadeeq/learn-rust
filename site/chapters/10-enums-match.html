@@ -1,0 +1,1403 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Enums &amp; Pattern Matching · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<link rel="stylesheet" href="../assets/cast-art.css">
+<link rel="stylesheet" href="../assets/cast.css">
+<link rel="stylesheet" href="../assets/motion.css">
+<link rel="stylesheet" href="../assets/story.css">
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/quests-data.js" defer></script>
+<script src="../assets/cards/ch10.js" defer></script>
+<script src="../assets/scenarios/ch10.js" defer></script>
+<script src="../assets/motion/ch10.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+<script src="../assets/cast-art.js"></script>
+<script src="../assets/cast.js" defer></script>
+<script src="../assets/motion.js" defer></script>
+<script src="../assets/xray.js" defer></script>
+<script src="../assets/story.js" defer></script>
+</head>
+<body data-chapter="10">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<div class="ox-page">
+<aside class="ox-rail" aria-label="Chapter contents"></aside>
+<main class="ox-main" id="main">
+
+<header class="ox-hero" data-auto>
+  <ul>
+    <li>Model data with enums whose variants carry different data.</li>
+    <li>Write exhaustive <code>match</code> expressions with bindings, guards and <code>|</code>.</li>
+    <li>Replace <code>null</code> with <code>Option</code> and handle it without <code>unwrap</code>.</li>
+    <li>Make invalid states impossible to represent.</li>
+  </ul>
+</header>
+
+<section>
+<h2 id="sum-types">One of several shapes</h2>
+
+<p>Most values are one kind of thing: a <code>User</code>, a number, a <code>String</code>. Some values are one of several kinds, and each kind needs different data. A message off a websocket might be a ping with no payload, a move with two coordinates, or a chat line with some text. In PHP you would probably store that as one array with a <code>type</code> key, and trust every reader to check the right keys.</p>
+
+<p>An <code>enum</code> says that a value is exactly one of a fixed list of variants. Each variant can carry its own data, and the shape of that data can differ from one variant to the next:</p>
+
+<pre class="rs">enum Message {
+    // no data
+    Quit,
+    // named fields
+    Move { x: i32, y: i32 },
+    // one unnamed field
+    Write(String),
+    // three unnamed fields
+    Color(u8, u8, u8),
+}</pre>
+
+<p>There are three shapes of variant. <code>Quit</code> carries nothing. <code>Move</code> has named fields, which read well when there are several. <code>Write</code> and <code>Color</code> list their types by position, which is fine for one or two.</p>
+
+<div class="ox-bridge">
+  <pre class="php">final readonly class Message
+{
+    public function __construct(
+        public string  $kind,          // 'quit', 'move', 'write' or 'color'
+        public ?int    $x = null,      // only set for 'move'
+        public ?int    $y = null,      // only set for 'move'
+        public ?string $text = null,   // only set for 'write'
+        public ?array  $rgb = null,    // only set for 'color'
+    ) {}
+}</pre>
+  <pre class="rs">enum Message {
+    // no data
+    Quit,
+    // named fields
+    Move { x: i32, y: i32 },
+    // one unnamed field
+    Write(String),
+    // three unnamed fields
+    Color(u8, u8, u8),
+}</pre>
+  <div class="ox-bridge-note"><p>PHP enums can have methods, constants and interfaces, but a case can't carry data. A backed case such as <code>case Hearts = 'H';</code> holds one fixed value and nothing else. Without per-case data, the PHP habit is one class with nullable fields and a kind column that says which ones matter, or a class hierarchy with one subclass per case. A Rust enum does both jobs: one type, and each variant has only the fields it needs.</p></div>
+</div>
+
+<p>The compiler is strict about the shape you build a value with. Try this one:</p>
+
+<div class="ox-quiz" data-id="10:variant" data-xp="10" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0533">enum Message {
+    Quit,
+    Move { x: i32, y: i32 },
+}
+
+fn main() {
+    let m = Message::Move(3, -1);
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. A variant that holds data is always called like a function.</li>
+    <li data-correct>No. <code>Move</code> has named fields, so you build it with braces: <code>Message::Move { x: 3, y: -1 }</code>.</li>
+    <li>No. Enums can't have struct-like variants.</li>
+  </ol>
+  <div class="ox-why">
+    <p>The error is E0533, and its help line writes the braces form for you. A variant can only be built in the shape it was declared with.</p>
+    <pre class="rustc">error[E0533]: expected value, found struct variant `Message::Move`
+ --&gt; src/main.rs:7:13
+  |
+7 |     let m = Message::Move(3, -1);
+  |             ^^^^^^^^^^^^^ not a value
+  |
+help: you might have meant to create a new value of the struct
+  |
+7 -     let m = Message::Move(3, -1);
+7 +     let m = Message::Move { x: /* value */, y: /* value */ };
+  |
+
+For more information about this error, try `rustc --explain E0533`.</pre>
+  </div>
+</div>
+
+<p>PHP enums and Rust enums are closest on one point: both can have methods. Here is the same small enum in each language, with a method that matches on the value:</p>
+
+<div class="ox-bridge">
+  <pre class="php">enum Suit: string
+{
+    case Hearts = 'H';
+    case Spades = 'S';
+
+    public function color(): string
+    {
+        return match ($this) {
+            self::Hearts =&gt; 'red',
+            self::Spades =&gt; 'black',
+        };
+    }
+}
+
+echo Suit::from('H')-&gt;color(), "\n";   // red</pre>
+  <pre class="rs" data-stdout="red\nblack">
+enum Suit {
+    Hearts,
+    Spades,
+}
+
+impl Suit {
+    fn color(&amp;self) -&gt; &amp;'static str {
+        match self {
+            Suit::Hearts =&gt; "red",
+            Suit::Spades =&gt; "black",
+        }
+    }
+}
+
+fn main() {
+    println!("{}", Suit::Hearts.color());
+    println!("{}", Suit::Spades.color());
+}</pre>
+  <div class="ox-bridge-note"><p>PHP enums can implement interfaces, which is the PHP counterpart of a Rust trait (Chapter 14). The gap that remains is data. A PHP case is a named singleton with a fixed value, and it can't carry anything else. A Rust variant can carry its own fields, as <code>Move { x, y }</code> did above.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="match">match: handle every case</h2>
+
+<p>A <code>match</code> compares a value against a list of patterns, one arm at a time, from the top. The first arm whose pattern fits runs, and the rest are skipped. A <code>match</code> is also an expression, so it produces a value you can store, return or print.</p>
+
+<div class="ox-meet" data-cast="octo" data-say="An arm for every shape, or I won't start."></div>
+
+<pre class="rs" data-run data-stdout="move to (3, -1)">enum Message {
+    Quit,
+    Move { x: i32, y: i32 },
+    Write(String),
+    Color(u8, u8, u8),
+}
+
+fn main() {
+    let msg = Message::Move { x: 3, y: -1 };
+    let text = match msg {
+        Message::Quit =&gt; String::from("quit"),
+        Message::Move { x, y } =&gt; format!("move to ({x}, {y})"),
+        Message::Write(text) =&gt; text,
+        Message::Color(r, g, b) =&gt; format!("#{r:02x}{g:02x}{b:02x}"),
+    };
+    println!("{text}");
+}</pre>
+
+<p>Read an arm as <em>pattern</em> <code>=&gt;</code> <em>result</em>. <code>x</code> and <code>y</code> in <code>Message::Move { x, y }</code> are bindings: they take the numbers out of the variant and give them names for the result. Arms are separated by commas. All the arms produce one type, because the whole <code>match</code> has one type.</p>
+
+<div class="ox-quiz" data-id="10:arm-type" data-xp="10" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0308">fn main() {
+    let n = 1;
+    let label = match n {
+        1 =&gt; "one",
+        _ =&gt; 0,
+    };
+    println!("{label}");
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. The <code>_</code> arm catches everything, so its type doesn't matter.</li>
+    <li data-correct>No. The first arm makes the match a <code>&amp;str</code>, so every other arm has to produce a <code>&amp;str</code> too.</li>
+    <li>Yes. Rust converts the number to text.</li>
+  </ol>
+  <div class="ox-why">
+    <p>A <code>match</code> has one type, and the compiler takes it from the first arm. Here that is <code>&amp;str</code>, so <code>0</code> is an error. Rust never converts between text and numbers on its own.</p>
+    <pre class="rustc">error[E0308]: `match` arms have incompatible types
+ --&gt; src/main.rs:5:14
+  |
+3 |       let label = match n {
+  |  _________________-
+4 | |         1 =&gt; "one",
+  | |              ----- this is found to be of type `&amp;str`
+5 | |         _ =&gt; 0,
+  | |              ^ expected `&amp;str`, found integer
+6 | |     };
+  | |_____- `match` arms have incompatible types
+
+For more information about this error, try `rustc --explain E0308`.</pre>
+  </div>
+</div>
+
+<p>The next rule is the important one. A <code>match</code> has to handle every possible value. If you leave a case out, the program doesn't compile, and the compiler says exactly what is missing.</p>
+
+<div class="ox-motion" data-scene="ch10-arms"></div>
+
+<p>The machine below is a real <code>match</code>. It is the <code>describe</code> function, written over the same <code>Message</code> enum. Pick a value and run it. Then use the <em>remove</em> box next to an arm to delete that arm.</p>
+
+<div class="ox-figure ox-wide" id="matchmachine">
+  <style>
+    #matchmachine .mm-top { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; margin-bottom: 14px; }
+    #matchmachine .mm-top p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+    #matchmachine .mm-grid { display: grid; gap: 16px; }
+    @media (min-width: 680px) { #matchmachine .mm-grid { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.3fr); align-items: start; } }
+    #matchmachine .mm-panel { min-width: 0; }
+    #matchmachine .mm-kinds { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+    #matchmachine .mm-kinds button[aria-pressed="true"] { border-color: var(--oxide); background: var(--oxide-soft); color: var(--ink); }
+    #matchmachine .mm-fields { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; min-height: 3.4rem; }
+    #matchmachine .mm-fields label { display: grid; gap: 4px; font-size: 0.85rem; color: var(--muted); }
+    #matchmachine .mm-fields input { font-family: var(--font-mono); font-size: 0.95rem; width: 8ch; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); }
+    #matchmachine .mm-fields input[type="text"] { width: 14ch; }
+    #matchmachine .mm-nodata { margin: 0; color: var(--muted); font-size: 0.9rem; }
+    #matchmachine .mm-value { margin: 12px 0 0; font-size: 0.9rem; overflow-wrap: anywhere; }
+    #matchmachine .mm-code { background: var(--code-bg); color: var(--code-ink); font-family: var(--font-mono); font-size: 0.84rem; line-height: 1.6; border-radius: var(--radius-lg); padding: 12px 0; overflow-x: auto; }
+    #matchmachine .mm-line { padding: 0 16px; white-space: pre; }
+    #matchmachine .mm-arms { list-style: none; margin: 0; padding: 0; }
+    #matchmachine .mm-arm { display: grid; grid-template-columns: auto auto minmax(0, 1fr); column-gap: 10px; align-items: baseline; padding: 4px 16px 4px 12px; border-left: 3px solid transparent; transition: background 0.25s, border-color 0.25s, opacity 0.25s; }
+    #matchmachine .mm-n { color: var(--code-dim); text-align: right; min-width: 1.6ch; }
+    #matchmachine .mm-rm { display: inline-flex; align-items: center; gap: 4px; color: var(--code-dim); font-family: var(--font-body); font-size: 0.78rem; white-space: nowrap; cursor: pointer; }
+    #matchmachine .mm-rm input { margin: 0; accent-color: var(--oxide); }
+    #matchmachine .mm-src { white-space: pre-wrap; overflow-wrap: anywhere; }
+    #matchmachine .mm-note { grid-column: 2 / 4; min-height: 0; color: var(--code-dim); font-size: 0.8rem; font-family: var(--font-body); }
+    #matchmachine .mm-note:empty { display: none; }
+    #matchmachine .mm-arm.is-removed { opacity: 0.4; }
+    #matchmachine .mm-arm.is-removed .mm-src { text-decoration: line-through; }
+    #matchmachine .mm-arm.is-try { background: var(--c-hl); border-left-color: var(--c-kw); }
+    #matchmachine .mm-arm.is-miss { opacity: 0.4; }
+    #matchmachine .mm-arm.is-guard { border-left-color: var(--warn); }
+    #matchmachine .mm-arm.is-hit { background: color-mix(in srgb, var(--ok) 26%, var(--code-bg)); border-left-color: var(--ok); }
+    #matchmachine .mm-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; }
+    #matchmachine .mm-status { font-family: var(--font-mono); font-size: 0.8rem; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+    #matchmachine .mm-status.is-ok { color: var(--ok); border-color: var(--ok); background: var(--ok-soft); }
+    #matchmachine .mm-status.is-bad { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); }
+    #matchmachine .mm-out { margin-top: 12px; min-height: 3rem; font-size: 0.95rem; }
+    #matchmachine .mm-out p { margin: 0 0 8px; }
+    #matchmachine .mm-rustc { background: var(--code-bg); color: var(--code-ink); font-family: var(--font-mono); font-size: 0.78rem; line-height: 1.5; padding: 12px 14px; border-radius: var(--radius-lg); overflow-x: auto; white-space: pre; margin: 6px 0 0; }
+    #matchmachine .mm-octo { position: relative; width: min(100%, 270px); margin: 4px auto 14px; }
+    #matchmachine .mm-octo .ca { display: block; width: 100%; }
+    #matchmachine .mm-octo .ca-svg { display: block; width: 100%; height: auto; }
+    #matchmachine .mm-octo .ca-arm.is-caught .ca-sign { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 2.5; }
+    #matchmachine .mm-octo .ca-arm.is-lost .ca-sign { fill: var(--bad-soft); stroke: var(--bad); stroke-dasharray: 4 3; }
+    #matchmachine .mm-octo .ca-arm.is-lost .ca-label { fill: var(--bad); }
+    #matchmachine .mm-ticket { position: absolute; top: -18%; left: 0; width: 30%; transform: translate(-50%, -50%); opacity: 0; pointer-events: none; transition: top 0.5s cubic-bezier(.3, 1.2, .5, 1), opacity 0.3s; }
+    #matchmachine .mm-ticket.is-in { top: 88%; opacity: 1; }
+    #matchmachine .mm-ticket.is-gone { opacity: 0; }
+    #matchmachine .mm-ticket .ca-svg { display: block; width: 100%; height: auto; }
+    @media (prefers-reduced-motion: reduce) { #matchmachine .mm-ticket { transition: none; } }
+  </style>
+  <div class="mm-top">
+    <span class="ox-label">Match Machine</span>
+    <p>Pick a value and run the match. Then remove one arm at a time and see what rustc says.</p>
+  </div>
+  <div class="mm-grid">
+    <div class="mm-panel">
+      <span class="ox-label">The value</span>
+      <div class="mm-kinds" role="group" aria-label="Choose the value">
+        <button type="button" class="ox-btn is-small" data-kind="quit" aria-pressed="false">Quit</button>
+        <button type="button" class="ox-btn is-small" data-kind="move" aria-pressed="true">Move { x, y }</button>
+        <button type="button" class="ox-btn is-small" data-kind="write" aria-pressed="false">Write(text)</button>
+        <button type="button" class="ox-btn is-small" data-kind="color" aria-pressed="false">Color(r, g, b)</button>
+      </div>
+      <div class="mm-fields"></div>
+      <p class="mm-value"></p>
+    </div>
+    <div class="mm-panel">
+      <span class="ox-label">describe(&amp;msg)</span>
+      <div class="mm-octo" aria-hidden="true"></div>
+      <div class="mm-code">
+        <div class="mm-line">fn describe(msg: &amp;Message) -&gt; String {</div>
+        <div class="mm-line">    match msg {</div>
+        <ol class="mm-arms" aria-label="Arms of the match, from the top">
+          <li class="mm-arm" data-arm="0"><span class="mm-n">1</span><label class="mm-rm"><input type="checkbox" aria-label="Remove arm 1"> remove</label><span class="mm-src">Message::Quit =&gt; String::from("quit"),</span><span class="mm-note"></span></li>
+          <li class="mm-arm" data-arm="1"><span class="mm-n">2</span><label class="mm-rm"><input type="checkbox" aria-label="Remove arm 2"> remove</label><span class="mm-src">Message::Move { x: 0, y: 0 } =&gt; String::from("stay put"),</span><span class="mm-note"></span></li>
+          <li class="mm-arm" data-arm="2"><span class="mm-n">3</span><label class="mm-rm"><input type="checkbox" aria-label="Remove arm 3"> remove</label><span class="mm-src">Message::Move { x, y: 0 } =&gt; format!("slide {x} along x"),</span><span class="mm-note"></span></li>
+          <li class="mm-arm" data-arm="3"><span class="mm-n">4</span><label class="mm-rm"><input type="checkbox" aria-label="Remove arm 4"> remove</label><span class="mm-src">Message::Move { x, y } if x == y =&gt; format!("diagonal {x}"),</span><span class="mm-note"></span></li>
+          <li class="mm-arm" data-arm="4"><span class="mm-n">5</span><label class="mm-rm"><input type="checkbox" aria-label="Remove arm 5"> remove</label><span class="mm-src">Message::Move { x, y } =&gt; format!("go to ({x}, {y})"),</span><span class="mm-note"></span></li>
+          <li class="mm-arm" data-arm="5"><span class="mm-n">6</span><label class="mm-rm"><input type="checkbox" aria-label="Remove arm 6"> remove</label><span class="mm-src">Message::Write(text) if text.is_empty() =&gt; String::from("silence"),</span><span class="mm-note"></span></li>
+          <li class="mm-arm" data-arm="6"><span class="mm-n">7</span><label class="mm-rm"><input type="checkbox" aria-label="Remove arm 7"> remove</label><span class="mm-src">Message::Write(text) =&gt; format!("say {text:?}"),</span><span class="mm-note"></span></li>
+          <li class="mm-arm" data-arm="7"><span class="mm-n">8</span><label class="mm-rm"><input type="checkbox" aria-label="Remove arm 8"> remove</label><span class="mm-src">Message::Color(r @ 200..=255, _, _) =&gt; format!("reddish ({r})"),</span><span class="mm-note"></span></li>
+          <li class="mm-arm" data-arm="8"><span class="mm-n">9</span><label class="mm-rm"><input type="checkbox" aria-label="Remove arm 9"> remove</label><span class="mm-src">Message::Color(..) =&gt; String::from("some color"),</span><span class="mm-note"></span></li>
+        </ol>
+        <div class="mm-line">    }</div>
+        <div class="mm-line">}</div>
+      </div>
+    </div>
+  </div>
+  <div class="mm-bar">
+    <button type="button" class="ox-btn is-primary is-small mm-run">Run match</button>
+    <span class="mm-status" role="status">compiles</span>
+  </div>
+  <div class="mm-out" aria-live="polite"></div>
+</div>
+
+<p>Here is what rustc says when the <code>Quit</code> arm is removed. It is the same output the machine shows for that arm. Read it from the top.</p>
+
+<pre class="rustc">error[E0004]: non-exhaustive patterns: `&amp;Message::Quit` not covered
+  --&gt; src/main.rs:9:11
+   |
+ 9 |     match msg {
+   |           ^^^ pattern `&amp;Message::Quit` not covered
+   |
+note: `Message` defined here
+  --&gt; src/main.rs:1:6
+   |
+ 1 | enum Message {
+   |      ^^^^^^^
+ 2 |     Quit,
+   |     ---- not covered
+   = note: the matched value is of type `&amp;Message`
+help: ensure that all possible cases are being handled by adding a match arm with a wildcard pattern or an explicit pattern as shown
+   |
+17 ~         Message::Color(..) =&gt; String::from("some color"),
+18 ~         &amp;Message::Quit =&gt; todo!(),
+   |
+
+For more information about this error, try `rustc --explain E0004`.</pre>
+
+<ol class="ox-steps">
+  <li><div><p><strong>error[E0004]</strong> names the rule that broke: non-exhaustive patterns. The code has a number, so you can look it up with <code>rustc --explain E0004</code>.</p></div></li>
+  <li><div><p>The line under it names the missing case: <code>&amp;Message::Quit</code> is not covered. The <code>&amp;</code> is there because <code>describe</code> takes a reference, <code>&amp;Message</code>. Chapter 07 covers references. For now, read it as <code>Message::Quit</code>.</p></div></li>
+  <li><div><p>The <code>note</code> points at the variant in the enum and marks <code>Quit</code> as not covered, so you can go straight to the definition.</p></div></li>
+  <li><div><p>The <code>help</code> is the compiler's own suggested fix. It offers <code>todo!()</code>, which compiles, and panics if that case is ever reached. Write the real arm instead.</p></div></li>
+</ol>
+
+<h3>The same mistake in PHP</h3>
+
+<p>PHP's <code>match</code> is an expression too, and it has no compile-time check. Add a case to the enum and forget its arm, and the file still loads. The error waits for the code path that reaches the missing case:</p>
+
+<div class="ox-bridge">
+  <pre class="php">enum Suit: string
+{
+    case Hearts = 'H';
+    case Spades = 'S';
+    case Clubs = 'C';   // new case, with no arm below
+
+    public function color(): string
+    {
+        return match ($this) {
+            self::Hearts =&gt; 'red',
+            self::Spades =&gt; 'black',
+        };
+    }
+}
+
+try {
+    echo Suit::Clubs-&gt;color();
+} catch (UnhandledMatchError $e) {
+    echo $e-&gt;getMessage(), "\n";
+}</pre>
+  <pre class="rs" data-check="E0004">
+enum Suit {
+    Hearts,
+    Spades,
+    Clubs,
+}
+
+impl Suit {
+    fn color(&amp;self) -&gt; &amp;'static str {
+        match self {
+            Suit::Hearts =&gt; "red",
+            Suit::Spades =&gt; "black",
+        }
+    }
+}
+
+fn main() {
+    println!("{}", Suit::Clubs.color());
+}</pre>
+  <div class="ox-bridge-note"><p>The PHP file loads and runs, and it fails only when <code>Clubs</code> reaches <code>color()</code>. A test that never builds a club still passes. The Rust version doesn't compile, so the missing arm is reported before any test runs.</p></div>
+</div>
+
+<p>PHP prints this when the code reaches the missing case:</p>
+
+<pre class="text">Unhandled match case Suit::Clubs</pre>
+
+<p>rustc reports the same mistake before the program exists:</p>
+
+<pre class="rustc">error[E0004]: non-exhaustive patterns: `&amp;Suit::Clubs` not covered
+  --&gt; src/main.rs:9:15
+   |
+ 9 |         match self {
+   |               ^^^^ pattern `&amp;Suit::Clubs` not covered
+   |
+note: `Suit` defined here
+  --&gt; src/main.rs:1:6
+   |
+ 1 | enum Suit {
+   |      ^^^^
+...
+ 4 |     Clubs,
+   |     ----- not covered
+   = note: the matched value is of type `&amp;Suit`
+help: ensure that all possible cases are being handled by adding a match arm with a wildcard pattern or an explicit pattern as shown
+   |
+11 ~             Suit::Spades =&gt; "black",
+12 ~             &amp;Suit::Clubs =&gt; todo!(),
+   |
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0004`.</pre>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>When an agent hits E0004, it often adds <code>_ =&gt; todo!()</code> or <code>_ =&gt; {}</code> and moves on. On an enum you own, a <code>_</code> arm means the next variant you add will fall into it silently. The compiler will never point at this <code>match</code> again.</p>
+  <p>In review, ask whether the wildcard is meant to catch future variants. If it isn't, list the variants by name.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="patterns">Patterns in depth</h2>
+
+<p>A pattern can be a literal, a range, a set of alternatives, a wildcard, a binding, or a destructuring of a struct or a tuple. One program with several matches shows them all:</p>
+
+<pre class="rs" data-run data-stdout="negative\nzero\ndigit 7\nround\neven 12\nodd\norigin\nleft of the axis\non the x axis\nstarts at the origin\nends on the x axis\n1 true z">struct Point {
+    x: i32,
+    y: i32,
+}
+
+struct Line {
+    start: Point,
+    end: Point,
+}
+
+fn classify(n: i32) -&gt; String {
+    match n {
+        i32::MIN..=-1 =&gt; String::from("negative"),
+        0 =&gt; String::from("zero"),
+        d @ 1..=9 =&gt; format!("digit {d}"),
+        10 | 20 | 30 =&gt; String::from("round"),
+        x if x % 2 == 0 =&gt; format!("even {x}"),
+        _ =&gt; String::from("odd"),
+    }
+}
+
+fn corner(p: &amp;Point) -&gt; &amp;'static str {
+    match p {
+        Point { x: 0, y: 0 } =&gt; "origin",
+        Point { x, .. } if *x &lt; 0 =&gt; "left of the axis",
+        Point { y: 0, .. } =&gt; "on the x axis",
+        _ =&gt; "somewhere else",
+    }
+}
+
+fn describe_line(line: &amp;Line) -&gt; &amp;'static str {
+    match line {
+        Line { start: Point { x: 0, y: 0 }, .. } =&gt; "starts at the origin",
+        Line { end: Point { y: 0, .. }, .. } =&gt; "ends on the x axis",
+        _ =&gt; "somewhere",
+    }
+}
+
+fn main() {
+    for n in [-4, 0, 7, 20, 12, 15] {
+        println!("{}", classify(n));
+    }
+    println!("{}", corner(&amp;Point { x: 0, y: 0 }));
+    println!("{}", corner(&amp;Point { x: -2, y: 5 }));
+    println!("{}", corner(&amp;Point { x: 4, y: 0 }));
+
+    let line = Line { start: Point { x: 0, y: 0 }, end: Point { x: 5, y: 5 } };
+    println!("{}", describe_line(&amp;line));
+    let line = Line { start: Point { x: 1, y: 1 }, end: Point { x: 4, y: 0 } };
+    println!("{}", describe_line(&amp;line));
+
+    let ((a, b), c) = ((1, true), 'z');
+    println!("{a} {b} {c}");
+}</pre>
+
+<p>Patterns nest. <code>Line { start: Point { x: 0, y: 0 }, .. }</code> reaches inside a struct that sits inside another struct, and <code>((a, b), c)</code> does the same for tuples. The <code>..</code> skips every field you don't name.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Pattern</th><th>Matches</th></tr></thead>
+  <tbody>
+    <tr><td><code>0</code>, <code>"quit"</code></td><td>one exact value</td></tr>
+    <tr><td><code>1..=9</code></td><td>a range, with both ends included</td></tr>
+    <tr><td><code>10 | 20 | 30</code></td><td>any one of several patterns</td></tr>
+    <tr><td><code>d @ 1..=9</code></td><td>a range, and binds the value to <code>d</code> at the same time</td></tr>
+    <tr><td><code>Point { x, .. }</code></td><td>a struct, binding <code>x</code> and ignoring the other fields</td></tr>
+    <tr><td><code>x if x &lt; 0</code></td><td>a pattern plus a guard: the arm runs only when the guard is true</td></tr>
+    <tr><td><code>_</code></td><td>anything, and binds nothing</td></tr>
+    <tr><td><code>&amp;x</code></td><td>a reference: copies a <code>Copy</code> value out of it, as in <code>for &amp;n in &amp;v</code> or <code>|&amp;x| x &gt; 2</code>. Chapter 7 explains it.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>A guard looks like an extra check on the value, but it is not part of the pattern. The compiler checks the pattern first, then the guard. One consequence matters a great deal for exhaustiveness. Try to predict the first line first:</p>
+
+<div class="ox-quiz" data-id="10:guard" data-xp="10" data-label="What does this print?">
+  <p class="ox-q">What does this program print?</p>
+  <pre class="rs" data-stdout="big 7">fn main() {
+    let n = 7;
+    match n {
+        x if x &gt; 5 =&gt; println!("big {x}"),
+        1..=9 =&gt; println!("digit {n}"),
+        _ =&gt; println!("other"),
+    }
+}</pre>
+  <ol class="ox-choices">
+    <li data-correct><code>big 7</code></li>
+    <li><code>big 7</code>, then <code>digit 7</code></li>
+    <li><code>digit 7</code></li>
+    <li>Nothing. Overlapping arms are a compile error.</li>
+  </ol>
+  <div class="ox-why"><p>Only the first arm that fits runs. <code>7</code> fits <code>x if x &gt; 5</code>, so the match is finished before the <code>1..=9</code> arm is looked at. Overlapping arms are allowed. The compiler only warns about an arm that can never run, as the next check shows.</p></div>
+</div>
+
+<p>A guard can't be counted on to cover a case. These two guarded arms look like they cover every integer. They don't:</p>
+
+<pre class="rs" data-check="E0004">fn sign(n: i32) -&gt; &amp;'static str {
+    match n {
+        x if x &gt; 0 =&gt; "positive",
+        x if x &lt; 0 =&gt; "negative",
+        0 =&gt; "zero",
+    }
+}
+
+fn main() {
+    println!("{}", sign(3));
+}</pre>
+<pre class="rustc">error[E0004]: non-exhaustive patterns: `i32::MIN..=-1_i32` and `1_i32..=i32::MAX` not covered
+ --&gt; src/main.rs:2:11
+  |
+2 |     match n {
+  |           ^ patterns `i32::MIN..=-1_i32` and `1_i32..=i32::MAX` not covered
+  |
+  = note: the matched value is of type `i32`
+  = note: match arms with guards don't count towards exhaustivity
+help: ensure that all possible cases are being handled by adding a match arm with a wildcard pattern, a match arm with multiple or-patterns as shown, or multiple match arms
+  |
+5 ~         0 =&gt; "zero",
+6 ~         i32::MIN..=-1_i32 | 1_i32..=i32::MAX =&gt; todo!(),
+  |
+
+For more information about this error, try `rustc --explain E0004`.</pre>
+
+<p>The compiler states the rule directly: match arms with guards don't count towards exhaustivity. A guard might be false, so the compiler counts only the arms without one. The fix is a plain catch-all arm, or patterns that cover what is left. The help line suggests the second.</p>
+
+<div class="ox-quiz" data-id="10:order" data-xp="10" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="ok">fn main() {
+    let n = 4;
+    match n {
+        _ =&gt; println!("any"),
+        0 =&gt; println!("zero"),
+    }
+}</pre>
+  <ol class="ox-choices">
+    <li>No. A <code>_</code> arm has to come last, or the match is an error.</li>
+    <li data-correct>Yes, with a warning. The <code>0</code> arm can never run, because <code>_</code> has already matched every value.</li>
+    <li>Yes, and silently. Rust never looks at an arm that comes after a catch-all.</li>
+  </ol>
+  <div class="ox-why">
+    <p>An arm after a catch-all can never be reached. That is a warning, not an error, so the program still builds. Warnings like this often point at a bug, because the code you wrote will never run. Here is the real output:</p>
+    <pre class="rustc">warning: unreachable pattern
+ --&gt; src/main.rs:5:9
+  |
+4 |         _ =&gt; println!("any"),
+  |         - matches any value
+5 |         0 =&gt; println!("zero"),
+  |         ^ no value can reach this
+  |
+  = note: `#[warn(unreachable_patterns)]` (part of `#[warn(unused)]`) on by default</pre>
+  </div>
+</div>
+<h3>Slice patterns</h3>
+
+<p>A slice pattern matches a list by its shape. <code>[first, .., last]</code> matches a list with at least two items, and names the two ends. <code>[x, rest @ ..]</code> takes the first item, and binds the rest of the list to <code>rest</code>. The <code>..</code> stands for any number of items, and <code>rest @ ..</code> gives those items a name.</p>
+
+<pre class="rs" data-check="ok" data-stdout="first 1, last 4\nSome((7, [8, 9]))">fn describe(v: &amp;[i32]) -&gt; String {
+    match v {
+        [] =&gt; "empty".to_string(),
+        [only] =&gt; format!("one: {only}"),
+        [first, .., last] =&gt; format!("first {first}, last {last}"),
+    }
+}
+
+fn head_and_rest(v: &amp;[i32]) -&gt; Option&lt;(i32, &amp;[i32])&gt; {
+    match v {
+        [x, rest @ ..] =&gt; Some((*x, rest)),
+        [] =&gt; None,
+    }
+}
+
+fn main() {
+    println!("{}", describe(&amp;[1, 2, 3, 4]));
+    println!("{:?}", head_and_rest(&amp;[7, 8, 9]));
+}</pre>
+
+<p>Both functions take <code>&amp;[i32]</code>, so they accept any list, and the caller keeps ownership.</p>
+
+</section>
+
+<section>
+<h2 id="option">Option: null you have to check</h2>
+
+<p>In PHP, any reference can be <code>null</code>, and a function declared to return a <code>User</code> may return <code>null</code> anyway. You find out at runtime, when <code>Call to a member function name() on null</code> stops the request. Rust's ordinary types can't be null. When a value might be missing, its type is <code>Option&lt;T&gt;</code>, and the type says so.</p>
+
+<pre class="rs" data-check="ok">// Simplified from the standard library.
+enum Option&lt;T&gt; {
+    None,
+    Some(T),
+}</pre>
+
+<p>The standard library defines <code>Option</code> much like this (the real one also derives some traits). It is built in, so you never import it: <code>Some</code> and <code>None</code> are always in scope. Think of <code>None</code> as an empty box, and <code>Some</code> as a box with a value in it. (<code>Box&lt;T&gt;</code>, from Chapter 5, is a different thing: a pointer to heap memory.) The value inside a <code>Some</code> stays out of reach until you open the box, and the compiler won't let you use it as if the box were already open:</p>
+
+<pre class="rs" data-check="E0369">fn main() {
+    let n: Option&lt;i32&gt; = Some(5);
+    let m = n + 1;
+    println!("{m}");
+}</pre>
+<pre class="rustc">error[E0369]: cannot add `{integer}` to `Option&lt;i32&gt;`
+ --&gt; src/main.rs:3:15
+  |
+3 |     let m = n + 1;
+  |             - ^ - {integer}
+  |             |
+  |             Option&lt;i32&gt;
+  |
+note: `Option&lt;i32&gt;` does not implement `Add&lt;{integer}&gt;`
+ --&gt; /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/option.rs:597:0
+  |
+  = note: `Option&lt;i32&gt;` is defined in another crate
+
+For more information about this error, try `rustc --explain E0369`.</pre>
+
+<p>The compiler knows <code>n</code> might be <code>None</code>, so it refuses to add to it. The fix is to decide what should happen when the box is empty. The methods in the next part do exactly that.</p>
+
+<div class="ox-motion" data-scene="ch10-option"></div>
+
+<h3 id="closure-preview">Closures and iterator chains in one minute</h3>
+
+<p>A closure is a small function written inline, <code>|x| x * 2</code>: parameters between the bars, then the body. You pass closures to methods that need a bit of behavior, like <code>.map</code>, <code>.filter</code> or <code>.unwrap_or_else</code>.</p>
+
+<pre class="rs" data-stdout="[240, 160, 600] 1">
+fn main() {
+    let prices = vec![120, 80, 300];
+    let doubled: Vec&lt;i32&gt; = prices.iter().map(|p| p * 2).collect();
+    let cheap = prices.iter().filter(|p| **p &lt; 100).count();
+    println!("{doubled:?} {cheap}");
+}
+</pre>
+
+<p><code>.iter()</code> walks a collection, <code>.map</code> and <code>.filter</code> transform the walk, and <code>.collect()</code> or <code>.count()</code> finish it. That is enough to read the next chapters. Chapter 13 explains iterators and what a closure captures.</p>
+
+<div class="ox-quiz" data-id="10:closure-count" data-label="Check yourself">
+  <p class="ox-q">What does this print?</p>
+  <pre class="rs" data-stdout="1">
+fn main() {
+    let prices = vec![120, 80, 300];
+    let cheap = prices.iter().filter(|p| **p &lt; 100).count();
+    println!("{cheap}");
+}
+</pre>
+  <ol class="ox-choices">
+    <li>0</li>
+    <li data-correct>1</li>
+    <li>2</li>
+  </ol>
+  <div class="ox-why"><p>Only 80 is under 100. <code>filter</code> keeps the items where the closure returns <code>true</code>, and <code>count</code> counts what is left. In <code>|p| **p &lt; 100</code>, <code>p</code> is a reference to a reference, so the two stars reach the number.</p></div>
+</div>
+
+<div class="ox-bridge">
+  <pre class="php">final class UserRepository
+{
+    public function __construct(
+        private array $users,
+    ) {}
+
+    // The return type is the only hint that the result may be null.
+    public function findUser(int $id): ?User
+    {
+        return $this-&gt;users[$id] ?? null;
+    }
+}
+
+$name = $repo-&gt;findUser(1)?-&gt;name ?? 'guest';</pre>
+  <pre class="rs" data-check="skip">let user: Option&lt;User&gt; = find_user(1);
+let name = user.map(|u| u.name).unwrap_or(String::from("guest"));</pre>
+  <div class="ox-bridge-note"><p><code>?-&gt;</code> and <code>??</code> are two PHP operators for one job, and <code>map</code> and <code>unwrap_or</code> are the Rust methods for it. The Rust versions work on any <code>Option</code>, and the compiler makes sure the <code>None</code> case was handled. The analogy breaks at one point: in PHP a missing value quietly flows on as <code>null</code>. In Rust it stays an <code>Option</code> until you turn it back into a plain value.</p></div>
+</div>
+
+<p>These are the methods you will use most. Each one takes an <code>Option</code> and says what to do when the box is empty.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Method</th><th>What you get</th></tr></thead>
+  <tbody>
+    <tr><td><code>unwrap_or(v)</code></td><td>the value inside, or <code>v</code> when empty</td></tr>
+    <tr><td><code>unwrap_or_else(f)</code></td><td>the value inside, or the result of closure <code>f</code>, which runs only when empty</td></tr>
+    <tr><td><code>unwrap_or_default()</code></td><td>the value inside, or the type's default: <code>0</code>, <code>""</code>, an empty <code>Vec</code></td></tr>
+    <tr><td><code>map(f)</code></td><td><code>Some(f(value))</code>, or <code>None</code> stays <code>None</code></td></tr>
+    <tr><td><code>and_then(f)</code></td><td>runs <code>f</code> on the value; <code>f</code> returns an <code>Option</code> itself, so the result is not nested</td></tr>
+    <tr><td><code>filter(p)</code></td><td>keeps the value only if <code>p</code> returns true</td></tr>
+    <tr><td><code>is_some_and(p)</code></td><td>true only when it is <code>Some</code> and <code>p</code> returns true</td></tr>
+    <tr><td><code>ok_or(e)</code></td><td><code>Ok(v)</code> for <code>Some(v)</code>, <code>Err(e)</code> for <code>None</code>. Chapter 11 covers <code>Result</code>.</td></tr>
+    <tr><td><code>take()</code></td><td>moves the value out and leaves <code>None</code> in its place. Needs a <code>mut</code> binding.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<pre class="rs" data-run data-stdout="4\n0\n42\nSome(40)\nNone\ntrue\nSome(3) None">fn main() {
+    let some: Option&lt;i32&gt; = Some(4);
+    let none: Option&lt;i32&gt; = None;
+
+    println!("{}", some.unwrap_or(0));
+    println!("{}", none.unwrap_or(0));
+    println!("{}", none.unwrap_or_else(|| 6 * 7));
+    println!("{:?}", some.map(|n| n * 10));
+    println!("{:?}", some.filter(|n| *n &gt; 10));
+    println!("{}", some.is_some_and(|n| n % 2 == 0));
+
+    let mut slot = Some(3);
+    let taken = slot.take();
+    println!("{taken:?} {slot:?}");
+}</pre>
+
+<p><code>some</code> is still usable after <code>map</code> and <code>filter</code>. An <code>Option&lt;i32&gt;</code> is <code>Copy</code>, because the number inside is. An <code>Option&lt;String&gt;</code> is not, and it follows the same move rules as the <code>String</code> from Chapter 06.</p>
+
+<div class="ox-quiz" data-id="10:option" data-xp="10" data-label="What does this print?">
+  <p class="ox-q">What does this program print?</p>
+  <pre class="rs" data-stdout="8\n-1">fn main() {
+    let a: Option&lt;i32&gt; = Some(4);
+    let b: Option&lt;i32&gt; = None;
+    println!("{}", a.map(|n| n * 2).unwrap_or(-1));
+    println!("{}", b.map(|n| n * 2).unwrap_or(-1));
+}</pre>
+  <ol class="ox-choices">
+    <li data-correct><code>8</code>, then <code>-1</code></li>
+    <li><code>8</code>, then <code>8</code></li>
+    <li><code>8</code>, then <code>0</code></li>
+    <li>It panics on the second line, because <code>map</code> can't run on <code>None</code>.</li>
+  </ol>
+  <div class="ox-why"><p><code>map</code> runs its closure only for <code>Some</code>. On <code>None</code> it returns <code>None</code> without calling the closure, and <code>unwrap_or(-1)</code> supplies the fallback. Nothing panics.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="if-let">if let, let else, while let</h2>
+
+<p>A <code>match</code> that cares about one case gets noisy: an arm for the case you want, and an arm that says <code>_ =&gt; {}</code>. These forms say what you mean.</p>
+
+<pre class="rs" data-run data-stdout="hello Ana\nno user 9\nwelcome Bo\nstopping at 9\npop 3\npop 2\npop 1">struct User {
+    name: String,
+}
+
+fn find_user(id: u32) -&gt; Option&lt;User&gt; {
+    match id {
+        1 =&gt; Some(User { name: String::from("Ana") }),
+        2 =&gt; Some(User { name: String::from("Bo") }),
+        _ =&gt; None,
+    }
+}
+
+fn greet(id: u32) {
+    if let Some(user) = find_user(id) {
+        println!("hello {}", user.name);
+    } else {
+        println!("no user {id}");
+    }
+}
+
+fn greet_or_stop(id: u32) {
+    let Some(user) = find_user(id) else {
+        println!("stopping at {id}");
+        return;
+    };
+    println!("welcome {}", user.name);
+}
+
+fn main() {
+    greet(1);
+    greet(9);
+    greet_or_stop(2);
+    greet_or_stop(9);
+
+    let mut queue = vec![1, 2, 3];
+    while let Some(next) = queue.pop() {
+        println!("pop {next}");
+    }
+}</pre>
+
+<div class="ox-rules">
+  <div class="ox-rule"><div><p><code>if let PATTERN = value { … } else { … }</code></p><p>One case, with an optional <code>else</code> for everything else.</p></div></div>
+  <div class="ox-rule"><div><p><code>let PATTERN = value else { … };</code></p><p>When the pattern fits, its bindings stay in scope for the rest of the block. When it doesn't, the <code>else</code> block runs, and it has to leave the block.</p></div></div>
+  <div class="ox-rule"><div><p><code>while let PATTERN = value { … }</code></p><p>Loops for as long as the pattern fits. <code>pop()</code> returns an <code>Option</code>, so the loop ends when the stack is empty.</p></div></div>
+  <div class="ox-rule"><div><p><code>matches!(value, PATTERN)</code></p><p>The same pattern test, answered as a <code>bool</code>.</p></div></div>
+</div>
+
+<pre class="rs" data-run data-stdout="false\ntrue">enum Message {
+    Quit,
+    Move { x: i32, y: i32 },
+    Write(String),
+    Color(u8, u8, u8),
+}
+
+fn main() {
+    let msg = Message::Move { x: 3, y: -1 };
+    println!("{}", matches!(msg, Message::Quit));
+    println!("{}", matches!(msg, Message::Move { x, .. } if x &gt; 0));
+}</pre>
+
+<div class="ox-quiz" data-id="10:letelse" data-xp="10" data-label="Does this compile?">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0308">fn main() {
+    let Some(n) = "42".parse::&lt;i32&gt;().ok() else {
+        println!("not a number");
+    };
+    println!("{n}");
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. The <code>else</code> block prints a message, and the program goes on.</li>
+    <li data-correct>No. The <code>else</code> block of a <code>let</code> must diverge. It has to leave the block with <code>return</code>, <code>break</code>, <code>continue</code> or <code>panic!</code>.</li>
+    <li>No. <code>let ... else</code> doesn't exist in Rust.</li>
+  </ol>
+  <div class="ox-why">
+    <p>After the <code>let</code>, the code expects <code>n</code> to exist. If the <code>else</code> block could finish normally, the code after it would run with no <code>n</code>. So the compiler requires the <code>else</code> block to never finish normally.</p>
+    <pre class="rustc">error[E0308]: `else` clause of `let...else` does not diverge
+ --&gt; src/main.rs:2:49
+  |
+2 |       let Some(n) = "42".parse::&lt;i32&gt;().ok() else {
+  |  _________________________________________________^
+3 | |         println!("not a number");
+4 | |     };
+  | |_____^ expected `!`, found `()`
+  |
+  = note:   expected type `!`
+          found unit type `()`
+  = help: try adding a diverging expression, such as `return` or `panic!(..)`
+  = help: ...or use `match` instead of `let...else`
+
+For more information about this error, try `rustc --explain E0308`.</pre>
+  </div>
+</div>
+
+<p>Now write one yourself. Fill in the two blanks so this function uses a <code>let</code> that returns early when the parse fails. <code>parse</code> returns a <code>Result</code>, and <code>.ok()</code> turns it into an <code>Option</code>, so the pattern is <code>Some(n)</code>.</p>
+
+<div class="ox-fill" data-id="10:fill-letelse">
+  <p class="ox-q">Fill in the blanks. The first is the pattern. The second is the keyword that starts the else block.</p>
+  <pre class="rs">fn double(s: &amp;str) -&gt; i32 {
+    let [[Some(n)]] = s.parse::&lt;i32&gt;().ok() [[else]] { return 0; };
+    n * 2
+}
+
+fn main() {
+    println!("{}", double("21"));
+}</pre>
+  <div class="ox-why"><p><code>parse</code> returns a <code>Result</code>, and <code>.ok()</code> turns it into an <code>Option</code>: <code>Some(n)</code> on success and <code>None</code> on failure (Chapter 11 covers <code>Result</code>). The pattern <code>Some(n)</code> says the parse worked, and <code>n</code> stays in scope for the rest of the function. The <code>else</code> block returns <code>0</code>, so it diverges and the compiler is satisfied. <code>main</code> prints <code>42</code>.</p></div>
+</div>
+
+<aside class="ox-callout" data-kind="insight" data-label="When unwrap is fine">
+  <p><code>unwrap()</code> takes the value out of a <code>Some</code>, and panics on <code>None</code>. That is a crash you wrote on purpose. It is fine in tests, in quick experiments, and where you can state why the value must be there. Then say that reason in the message, where the next reader will see it:</p>
+  <pre class="rs" data-check="ok">let port: u16 = "8080".parse().expect("config was validated at startup");</pre>
+  <p>Everywhere else, use the methods from the section above.</p>
+</aside>
+<h3>Let chains, and the if let rescope</h3>
+
+<p>Earlier in this chapter, <code>if let</code> handled one pattern. Edition 2024 adds let chains. A let chain joins several conditions with <code>&amp;&amp;</code> in one <code>if</code>, and some of those conditions can be <code>let</code> patterns. Each <code>let</code> narrows the value for the conditions after it. Let chains arrived in Rust 1.88, and only edition 2024 accepts them.</p>
+
+<pre class="rs" data-check="ok" data-stdout="skip\nskip\nbig 12">fn main() {
+    let values = vec![Some(4), None, Some(12)];
+    for value in &amp;values {
+        if let Some(n) = value &amp;&amp; *n &gt; 5 {
+            println!("big {n}");
+        } else {
+            println!("skip");
+        }
+    }
+}</pre>
+
+<p>The same edition also changed where a temporary ends. In an <code>if let</code>, a temporary made in the scrutinee (the value after <code>if let</code> or <code>match</code> that is being matched) used to live until the whole <code>if let ... else</code> ended. On edition 2024 it is dropped before the <code>else</code> block runs. This matters for locks. A guard made in the scrutinee used to stay held inside <code>else</code>.</p>
+
+<pre class="rs" data-check="ok" data-stdout="drop scrutinee\nelse">struct Noisy(&amp;'static str);
+
+impl Drop for Noisy {
+    fn drop(&amp;mut self) {
+        println!("drop {}", self.0);
+    }
+}
+
+impl Noisy {
+    fn get(&amp;self) -&gt; Option&lt;i32&gt; {
+        None
+    }
+}
+
+fn main() {
+    if let Some(x) = Noisy("scrutinee").get() {
+        println!("then {x}");
+    } else {
+        println!("else");
+    }
+}</pre>
+
+<p>The value is <code>None</code>, so the <code>else</code> block runs. On edition 2024 the drop message appears first. On 2021 it appears last.</p>
+</section>
+
+<section>
+<h2 id="memory">How big is an enum?</h2>
+
+<p>An enum needs room for its largest variant, plus a tag that says which variant is live. Padding adds bytes so each field starts at an aligned address, and the total is the size. The <code>#[allow(dead_code)]</code> line below tells the compiler not to warn about variants this program never builds. Measure rather than guess:</p>
+
+<pre class="rs" data-run data-stdout="Option&lt;u8&gt;       2\nOption&lt;u32&gt;      8\nOption&lt;bool&gt;     1\nOption&lt;char&gt;     4\nOption&lt;&amp;i32&gt;     8\nOption&lt;Box&lt;i32&gt;&gt; 8\nString           24\nMessage          24">use std::mem::size_of;
+
+#[allow(dead_code)]
+enum Message {
+    Quit,
+    Move { x: i32, y: i32 },
+    Write(String),
+    Color(u8, u8, u8),
+}
+
+fn main() {
+    println!("Option&lt;u8&gt;       {}", size_of::&lt;Option&lt;u8&gt;&gt;());
+    println!("Option&lt;u32&gt;      {}", size_of::&lt;Option&lt;u32&gt;&gt;());
+    println!("Option&lt;bool&gt;     {}", size_of::&lt;Option&lt;bool&gt;&gt;());
+    println!("Option&lt;char&gt;     {}", size_of::&lt;Option&lt;char&gt;&gt;());
+    println!("Option&lt;&amp;i32&gt;     {}", size_of::&lt;Option&lt;&amp;i32&gt;&gt;());
+    println!("Option&lt;Box&lt;i32&gt;&gt; {}", size_of::&lt;Option&lt;Box&lt;i32&gt;&gt;&gt;());
+    println!("String           {}", size_of::&lt;String&gt;());
+    println!("Message          {}", size_of::&lt;Message&gt;());
+}</pre>
+
+<p><code>Option&lt;u8&gt;</code> is 2 bytes: a tag and the value. <code>Option&lt;&amp;i32&gt;</code> is the same size as a plain pointer, and has no tag at all. A reference can never be null in safe Rust, so the compiler uses the zero address to mean <code>None</code>. The same trick gives <code>Option&lt;bool&gt;</code> one byte, because a <code>bool</code> is only ever 0 or 1 and the spare value 2 can stand for <code>None</code>.</p>
+
+<figure class="ox-figure">
+<svg viewBox="0 0 640 262" width="640" role="img" aria-label="Three layouts. Option of u32: a one byte tag, three bytes of padding, then a four byte value. Option of a reference: one eight byte pointer, where zero means None, with no tag. Option of bool: one byte, where 0 and 1 are real values and 2 means None.">
+  <text x="20" y="22" font-size="13" class="t-muted">Option&lt;u32&gt;: 8 bytes, with a tag</text>
+  <rect x="20" y="32" width="90" height="48" rx="6" class="f-own" stroke-width="1.5"/>
+  <text x="65" y="52" font-size="13" font-weight="700" text-anchor="middle" class="t-own">tag</text>
+  <text x="65" y="70" font-size="11" text-anchor="middle" class="t-muted">1 byte</text>
+  <rect x="118" y="32" width="180" height="48" rx="6" class="f-ghost" stroke-width="1.5"/>
+  <text x="208" y="52" font-size="13" text-anchor="middle" class="t-muted">padding</text>
+  <text x="208" y="70" font-size="11" text-anchor="middle" class="t-muted">3 bytes, unused</text>
+  <rect x="306" y="32" width="170" height="48" rx="6" class="f-stack" stroke-width="1.5"/>
+  <text x="391" y="52" font-size="13" font-weight="700" text-anchor="middle">u32 value</text>
+  <text x="391" y="70" font-size="11" text-anchor="middle" class="t-muted">4 bytes</text>
+  <text x="20" y="110" font-size="13" class="t-muted">Option&lt;&amp;i32&gt;: 8 bytes, no tag</text>
+  <rect x="20" y="120" width="456" height="48" rx="6" class="f-heap" stroke-width="1.5"/>
+  <text x="248" y="140" font-size="13" font-weight="700" text-anchor="middle">pointer</text>
+  <text x="248" y="158" font-size="11" text-anchor="middle" class="t-muted">address 0 means None, any other address means Some</text>
+  <text x="20" y="200" font-size="13" class="t-muted">Option&lt;bool&gt;: 1 byte, no tag</text>
+  <rect x="20" y="210" width="220" height="40" rx="6" class="f-heap" stroke-width="1.5"/>
+  <text x="130" y="234" font-size="12" text-anchor="middle">0 or 1: a real bool</text>
+  <rect x="246" y="210" width="130" height="40" rx="6" class="f-ok" stroke-width="1.5"/>
+  <text x="311" y="234" font-size="12" text-anchor="middle" class="t-ok">2: None</text>
+</svg>
+<figcaption>The <code>u32</code> uses every bit pattern, so its <code>None</code> needs a tag and padding. A pointer and a <code>bool</code> have spare values, so the compiler stores <code>None</code> in one of those instead.</figcaption>
+</figure>
+
+<p><code>Message</code> has four variants and is 24 bytes, the same size as a <code>String</code>. Its <code>Write</code> variant holds a <code>String</code>, so that variant sets the size. Rust can store the tag in a spare value of the String's capacity field, because a capacity can never be larger than <code>isize::MAX</code>. The other variants store their fields in the rest of those 24 bytes. This is also why <code>Option&lt;String&gt;</code> is 24 bytes.</p>
+
+<div class="ox-quiz" data-id="10:size" data-xp="10" data-label="Check yourself">
+  <p class="ox-q">How many bytes is <code>Option&lt;&amp;i32&gt;</code> on a 64-bit machine?</p>
+  <ol class="ox-choices">
+    <li>16: a tag, then the pointer</li>
+    <li>9: one tag byte, then the pointer</li>
+    <li data-correct>8: <code>None</code> is the all-zero address, so no tag is needed</li>
+    <li>4: the size of an <code>i32</code></li>
+  </ol>
+  <div class="ox-why"><p>A reference is never null in safe Rust, so the compiler uses the zero address for <code>None</code>. <code>Option&lt;&amp;i32&gt;</code> then costs the same as <code>&amp;i32</code>. Rust guarantees this one. <code>Option&lt;&amp;T&gt;</code>, <code>Option&lt;&amp;mut T&gt;</code> and <code>Option&lt;Box&lt;T&gt;&gt;</code> are the same size as the pointer, for a sized <code>T</code>, and the standard library documents that guarantee in the <code>Option</code> docs under Representation. The same holds for the <code>NonZero</code> integer types, so <code>Option&lt;NonZeroU32&gt;</code> is 4 bytes. It does not promise the same for every enum, such as <code>Option&lt;bool&gt;</code> or <code>Message</code>, so use <code>size_of</code> when it matters.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="modeling">Make invalid states unrepresentable</h2>
+
+<p>Here is an <code>orders</code> table, built the way most of us build one first:</p>
+
+<pre class="php">$order-&gt;status          = 'shipped';
+$order-&gt;paid_at         = null;
+$order-&gt;tracking_number = null;
+$order-&gt;save();   // the database accepts this row</pre>
+
+<p>Nothing stops a shipped order with no tracking number. The database stores it without a complaint, and you find out when a customer asks where their parcel is. You could add a <code>CHECK</code> constraint or a validator, but each rule lives somewhere else, and the code can still forget to call it.</p>
+
+<p>In Rust you describe the states themselves. Each variant carries exactly what that state needs:</p>
+
+<pre class="rs" data-run data-stdout="shipped, tracking 1Z999\ncannot ship a pending order">enum OrderStatus {
+    Pending,
+    Paid { at: u64 },
+    Shipped { at: u64, tracking: String },
+    Cancelled { reason: String },
+}
+
+impl OrderStatus {
+    // Only a paid order can ship. Any other state gives None.
+    fn ship(self, tracking: String) -&gt; Option&lt;OrderStatus&gt; {
+        match self {
+            OrderStatus::Paid { at } =&gt; Some(OrderStatus::Shipped { at, tracking }),
+            _ =&gt; None,
+        }
+    }
+}
+
+fn main() {
+    let paid = OrderStatus::Paid { at: 1_700_000_000 };
+    match paid.ship(String::from("1Z999")) {
+        Some(OrderStatus::Shipped { tracking, .. }) =&gt; println!("shipped, tracking {tracking}"),
+        _ =&gt; println!("cannot ship"),
+    }
+
+    let pending = OrderStatus::Pending;
+    match pending.ship(String::from("1Z000")) {
+        Some(_) =&gt; println!("shipped"),
+        None =&gt; println!("cannot ship a pending order"),
+    }
+}</pre>
+
+<p>A <code>Shipped</code> order can't exist without a <code>tracking</code> string, because its only constructor needs one. <code>ship</code> accepts a paid order, and any other state gives <code>None</code>. There is no way to write a status that says shipped while the tracking number is missing, because the enum has no such value.</p>
+
+<div class="ox-bridge">
+  <pre class="php">enum OrderStatus: string
+{
+    case Pending = 'pending';
+    case Paid = 'paid';
+    case Shipped = 'shipped';
+    case Cancelled = 'cancelled';
+}
+
+final class Order
+{
+    public OrderStatus $status = OrderStatus::Pending;
+    public ?int $paid_at = null;              // only meaningful once paid
+    public ?string $tracking_number = null;   // only meaningful once shipped
+}</pre>
+  <pre class="rs">enum OrderStatus {
+    Pending,
+    Paid { at: u64 },
+    Shipped { at: u64, tracking: String },
+    Cancelled { reason: String },
+}</pre>
+  <div class="ox-bridge-note"><p>A backed enum helps. A misspelled status fails at the assignment with a <code>TypeError</code>. Still, a class always has every property, and nullable ones can be set in any combination, so nothing ties <code>tracking_number</code> to the <code>Shipped</code> case. A Rust enum has one shape per state. The PHP model asks you to remember which fields belong together. The Rust model makes you say it once, in the type, so the mistake can't be written.</p></div>
+</div>
+
+<p>Before the next section, match these PHP habits to their Rust forms:</p>
+
+<div class="ox-match" data-id="10:match" data-left-label="PHP" data-right-label="Rust" data-xp="15">
+  <ul>
+    <li data-left="null"><code>None</code></li>
+    <li data-left="$user?->name"><code>user.map(|u| u.name)</code></li>
+    <li data-left="$x ?? 'default'"><code>x.unwrap_or("default")</code></li>
+    <li data-left="enum Suit: string"><code>enum Suit</code> with an <code>impl</code> block</li>
+    <li data-left="match (true) { ... }"><code>match n { x if x &lt; 0 =&gt; … }</code></li>
+    <li data-left="UnhandledMatchError at runtime">E0004 from rustc, before the program runs</li>
+  </ul>
+</div>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Agents tend to model state as a <code>String</code> status with <code>Option</code> fields beside it, because that is the shape of most code they have read. Ask for an enum instead. Then, when a new state is added later, every <code>match</code> over the enum that has no wildcard stops compiling until it handles the new state. That list of errors is the list of places to update.</p>
+  <p>The list only works if the compiler can check every case. A <code>_</code> arm in one of those matches quietly removes that check.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="quests">Forge quests</h2>
+<p>Reading builds recognition. Writing the matches yourself builds the skill. These quests run locally against the real compiler.</p>
+<div class="ox-quests" data-chapter="10"></div>
+</section>
+
+<section>
+<h2 id="recap">Recap</h2>
+
+<div class="ox-recap">
+  <h3>Enums hold one shape, and match covers every shape</h3>
+  <ul>
+    <li>An enum is exactly one of its variants. A variant can carry nothing (<code>Quit</code>), named fields (<code>Move { x, y }</code>), or positional fields (<code>Write(String)</code>).</li>
+    <li><code>match</code> is an expression. It tests arms from the top and takes the first one that fits. Every case needs an arm, or the compiler reports E0004.</li>
+    <li>Patterns can be literals, ranges, <code>|</code> alternatives, <code>..</code> to skip fields, <code>@</code> bindings and guards. A guard doesn't count toward exhaustiveness.</li>
+    <li><code>Option&lt;T&gt;</code> is <code>Some(value)</code> or <code>None</code>. Reach for <code>map</code>, <code>unwrap_or</code> and <code>and_then</code> first. Use <code>unwrap()</code> only when you can say why it can't panic.</li>
+    <li><code>if let</code>, <code>while let</code> and <code>let ... else</code> handle one case. The <code>else</code> of <code>let ... else</code> must diverge.</li>
+    <li>An enum costs its largest variant plus a tag, and the compiler can hide the tag in spare values. That is why an <code>Option</code> of a reference costs nothing extra.</li>
+    <li>Model each state as a variant, so each state carries only the data that belongs to it.</li>
+    <li>A closure is a small function written inline, such as <code>|x| x * 2</code>. Pass one to <code>map</code>, <code>filter</code> or <code>unwrap_or_else</code>. Chapter 13 covers closures in full.</li>
+    <li>A let chain joins conditions with <code>&amp;&amp;</code> in one <code>if</code>, and a condition can be a <code>let</code> pattern: <code>if let Some(x) = a &amp;&amp; x &gt; 0</code>. Edition 2024 allows it from Rust 1.88.</li>
+  </ul>
+</div>
+
+<div class="ox-deck" data-chapter="10"></div>
+
+<details class="ox-think">
+  <summary>Explain it back: why is Option better than null? Answer in two sentences.</summary>
+  <div class="ox-think-body">
+    <p>One good answer: "With <code>null</code>, any reference might be empty, and nothing in the type says so, so the failure shows up at runtime. <code>Option</code> puts the empty case into the type, so you can't use the value until you have handled <code>None</code>, and the compiler checks that you did."</p>
+    <p>If your version mentioned <em>the type says so</em> and <em>the compiler checks it</em>, you have the core of it.</p>
+  </div>
+</details>
+
+<div class="ox-complete-host"></div>
+</section>
+
+</main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  function start() {
+    var box = document.getElementById("matchmachine");
+    var data = window.OX_CH10_MACHINE || [];
+    if (!box || !data.length) return;
+
+    // Rust's {:?} for a string: quotes and backslashes are escaped, and so are
+    // control, invisible, unassigned and separator characters, as \u{..}.
+    var RUST_ESCAPED = /^(?:\p{Grapheme_Extend}|\p{Cc}|\p{Cf}|\p{Cs}|\p{Co}|\p{Cn}|\p{Zl}|\p{Zp}|\p{Zs})$/u;
+    function rustStr(s) {
+      var out = "";
+      for (var ch of s) {
+        if (ch === "\"") out += "\\\"";
+        else if (ch === "\\") out += "\\\\";
+        else if (ch === "\n") out += "\\n";
+        else if (ch === "\r") out += "\\r";
+        else if (ch === "\t") out += "\\t";
+        else if (ch === "\0") out += "\\0";
+        else if (ch !== " " && RUST_ESCAPED.test(ch)) out += "\\u{" + ch.codePointAt(0).toString(16) + "}";
+        else out += ch;
+      }
+      return "\"" + out + "\"";
+    }
+
+    var esc = function (s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); };
+    var hl = function (src, lang) { return window.Ox && Ox.highlight ? Ox.highlight(src, lang) : esc(src); };
+    var reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+    // Real rustc output for each single-arm removal, and the checked program.
+    var byArm = {};
+    data.forEach(function (v) { if (typeof v.arm === "number") byArm[v.arm] = v; });
+
+    var arms = Array.prototype.slice.call(box.querySelectorAll(".mm-arm"));
+    var N = arms.length;
+    var runBtn = box.querySelector(".mm-run");
+    var statusEl = box.querySelector(".mm-status");
+    var out = box.querySelector(".mm-out");
+    var fieldsEl = box.querySelector(".mm-fields");
+    var valueEl = box.querySelector(".mm-value");
+    var kindBtns = Array.prototype.slice.call(box.querySelectorAll(".mm-kinds button"));
+
+    // Octo sits on top. Its four arms are the variants, and a value is caught
+    // by the arm of its variant. If a removed arm leaves a variant with no arm,
+    // that arm shows as lost.
+    var VARIANT_NAMES = ["Quit", "Move", "Write", "Color"];
+    var VARIANT_OF = [0, 1, 1, 1, 1, 2, 2, 3, 3];   // arm index -> variant index
+    var LOST_OF = { 0: 0, 4: 1, 6: 2, 8: 3 };       // removed arm -> variant with no arm left
+    var SIGN_X = [39, 97, 155, 213].map(function (x) { return (x / 252 * 100) + "%"; }); // arm centres in art units
+    var octoHost = box.querySelector(".mm-octo");
+    var octoNode = null, ticket = null;
+    if (octoHost && window.OxCast) {
+      octoHost.innerHTML = OxCast.el("octo", { arms: VARIANT_NAMES });
+      octoNode = octoHost.querySelector(".ca");
+      ticket = document.createElement("span");
+      ticket.className = "mm-ticket";
+      ticket.setAttribute("aria-hidden", "true");
+      octoHost.appendChild(ticket);
+    }
+
+    var val = { kind: "move", x: 3, y: -1, text: "hi", r: 255, g: 0, b: 0 };
+    var removed = -1;   // at most one arm is removed at a time
+    var timers = [];
+    var busy = false;
+
+    // One test per arm, in the order the arms appear in describe().
+    // pat: the pattern fits. guard: the guard (if any) is true.
+    // bind: what the pattern binds. out: the string the arm returns.
+    var ARMS = [
+      function (v) { return { pat: v.kind === "quit", guard: true, bind: "", out: "quit" }; },
+      function (v) { return { pat: v.kind === "move" && v.x === 0 && v.y === 0, guard: true, bind: "", out: "stay put" }; },
+      function (v) { var p = v.kind === "move" && v.y === 0; return { pat: p, guard: true, bind: p ? "x = " + v.x : "", out: "slide " + v.x + " along x" }; },
+      function (v) { var p = v.kind === "move"; return { pat: p, guard: v.x === v.y, bind: p ? "x = " + v.x + ", y = " + v.y : "", out: "diagonal " + v.x }; },
+      function (v) { var p = v.kind === "move"; return { pat: p, guard: true, bind: p ? "x = " + v.x + ", y = " + v.y : "", out: "go to (" + v.x + ", " + v.y + ")" }; },
+      function (v) { var p = v.kind === "write"; return { pat: p, guard: v.text === "", bind: p ? "text = " + rustStr(v.text) : "", out: "silence" }; },
+      function (v) { var p = v.kind === "write"; return { pat: p, guard: true, bind: p ? "text = " + rustStr(v.text) : "", out: "say " + rustStr(v.text) }; },
+      function (v) { var p = v.kind === "color" && v.r >= 200 && v.r <= 255; return { pat: p, guard: true, bind: p ? "r = " + v.r : "", out: "reddish (" + v.r + ")" }; },
+      function (v) { return { pat: v.kind === "color", guard: true, bind: "", out: "some color" }; }
+    ];
+
+    arms.forEach(function (li) {
+      var src = li.querySelector(".mm-src");
+      src.innerHTML = hl(src.textContent, "rust");
+      var cb = li.querySelector("input");
+      cb.addEventListener("change", function () {
+        removed = cb.checked ? +li.getAttribute("data-arm") : -1;
+        arms.forEach(function (o) { var c = o.querySelector("input"); if (c !== cb) c.checked = false; });
+        changed();
+      });
+    });
+
+    function num(v, lo, hi) { var n = parseInt(v, 10); if (isNaN(n)) n = 0; return Math.max(lo, Math.min(hi, n)); }
+    function field(label, name, value, type, extra) {
+      return '<label>' + label + ' <input type="' + type + '" data-f="' + name + '" value="' + esc(value) + '"' + (extra || "") + '></label>';
+    }
+    function renderFields() {
+      var html;
+      if (val.kind === "quit") html = '<p class="mm-nodata">Quit has no data.</p>';
+      else if (val.kind === "move") html = field("x", "x", val.x, "number", ' step="1"') + field("y", "y", val.y, "number", ' step="1"');
+      else if (val.kind === "write") html = field("text", "text", val.text, "text", ' maxlength="20"');
+      else html = field("r", "r", val.r, "number", ' min="0" max="255" step="1"') + field("g", "g", val.g, "number", ' min="0" max="255" step="1"') + field("b", "b", val.b, "number", ' min="0" max="255" step="1"');
+      fieldsEl.innerHTML = html;
+    }
+    kindBtns.forEach(function (b) {
+      b.addEventListener("click", function () {
+        val.kind = b.getAttribute("data-kind");
+        kindBtns.forEach(function (o) { o.setAttribute("aria-pressed", o === b ? "true" : "false"); });
+        renderFields();
+        changed();
+      });
+    });
+    fieldsEl.addEventListener("input", function (e) {
+      var f = e.target.getAttribute("data-f");
+      if (!f) return;
+      if (f === "text") val.text = e.target.value.slice(0, 20);
+      else if (f === "x" || f === "y") val[f] = num(e.target.value, -2147483648, 2147483647);
+      else val[f] = num(e.target.value, 0, 255);
+      changed();
+    });
+
+    function valueText() {
+      if (val.kind === "quit") return "Message::Quit";
+      if (val.kind === "move") return "Message::Move { x: " + val.x + ", y: " + val.y + " }";
+      if (val.kind === "write") return "Message::Write(" + rustStr(val.text) + ")";
+      return "Message::Color(" + val.r + ", " + val.g + ", " + val.b + ")";
+    }
+    function present() {
+      var list = [];
+      for (var k = 0; k < N; k++) if (k !== removed) list.push(k);
+      return list;
+    }
+    // Walk the arms top to bottom, the way match does, and stop at the first hit.
+    function trace() {
+      var steps = [], list = present();
+      for (var j = 0; j < list.length; j++) {
+        var k = list[j], r = ARMS[k](val);
+        if (!r.pat) steps.push({ arm: k, cls: "is-miss", note: "does not fit" });
+        else if (!r.guard) steps.push({ arm: k, cls: "is-guard", note: "pattern fits, but the guard is false" });
+        else { steps.push({ arm: k, cls: "is-hit", note: "matches" + (r.bind ? ": " + r.bind : ""), out: r.out, bind: r.bind }); break; }
+      }
+      return steps;
+    }
+    function isError() { return removed >= 0 && !!byArm[removed] && byArm[removed].check === "E0004"; }
+
+    function paintArms(steps) {
+      var map = {};
+      (steps || []).forEach(function (s) { map[s.arm] = s; });
+      arms.forEach(function (li) {
+        var k = +li.getAttribute("data-arm"), s = map[k];
+        li.classList.remove("is-try", "is-miss", "is-guard", "is-hit");
+        li.classList.toggle("is-removed", k === removed);
+        li.querySelector("input").checked = k === removed;
+        li.querySelector(".mm-note").textContent = s ? s.note : (k === removed ? "removed" : "");
+        if (s) li.classList.add(s.cls);
+      });
+    }
+    function setArm(k, cls, note) {
+      arms.forEach(function (li) {
+        if (+li.getAttribute("data-arm") !== k) return;
+        li.classList.remove("is-try", "is-miss", "is-guard", "is-hit");
+        if (cls) li.classList.add(cls);
+        li.querySelector(".mm-note").textContent = note;
+      });
+    }
+    function paintStatus() {
+      paintOcto();
+      if (isError()) {
+        statusEl.textContent = "won't compile: E0004";
+        statusEl.className = "mm-status is-bad";
+        runBtn.disabled = true;
+      } else {
+        statusEl.textContent = "compiles";
+        statusEl.className = "mm-status is-ok";
+        runBtn.disabled = busy;
+      }
+    }
+    function paintValue() { valueEl.innerHTML = "<code>msg = " + esc(valueText()) + "</code>"; }
+    function idle() {
+      if (isError()) {
+        out.innerHTML = '<p>Arm ' + (removed + 1) + ' is removed, so the match no longer covers every value. rustc stops before the program runs. This is its real output:</p><pre class="mm-rustc">' + hl(byArm[removed].rustc, "rustc") + '</pre>';
+        return;
+      }
+      var p = document.createElement("p");
+      p.textContent = removed >= 0
+        ? "Arm " + (removed + 1) + " is removed. The arms below it still cover its values, so the match compiles. Press Run match."
+        : "Press Run match. The arms are tested from the top, and the first one that fits wins.";
+      out.innerHTML = "";
+      out.appendChild(p);
+    }
+    function resultView(steps) {
+      var hit = null, guard = null, list = present();
+      steps.forEach(function (s) { if (s.cls === "is-hit") hit = s; if (s.cls === "is-guard" && !guard) guard = s; });
+      if (!hit) { out.innerHTML = "<p>No arm matched.</p>"; return; }
+      var html = "<p>Arm " + (hit.arm + 1) + " matched" + (hit.bind ? " with " + esc(hit.bind) : "") + ", so <code>describe</code> returns <code>" + esc(rustStr(hit.out)) + "</code>.</p>";
+      if (guard) html += "<p>Arm " + (guard.arm + 1) + " fits the pattern, but its guard is false, so testing goes on.</p>";
+      if (list.some(function (k) { return k > hit.arm; })) html += "<p>The arms after arm " + (hit.arm + 1) + " are never tested.</p>";
+      out.innerHTML = html;
+    }
+    function resetTicket() {
+      if (!ticket) return;
+      ticket.style.transition = "none";
+      ticket.classList.remove("is-in", "is-gone");
+      void ticket.offsetWidth;
+      ticket.style.transition = "";
+    }
+    function resetOcto() {
+      if (!octoNode) return;
+      resetTicket();
+      octoHost.querySelectorAll(".ca-arm.is-caught").forEach(function (g) { g.classList.remove("is-caught"); });
+      OxCast.pose(octoNode, "");
+    }
+    // Octo marks the lost arm and thinks while the match does not compile.
+    function paintOcto() {
+      if (!octoNode) return;
+      var lost = isError() ? LOST_OF[removed] : -1;
+      octoHost.querySelectorAll(".ca-arm").forEach(function (g) {
+        g.classList.toggle("is-lost", +g.getAttribute("data-arm") === lost);
+      });
+      if (lost >= 0) OxCast.pose(octoNode, "think");
+      else if (octoNode.classList.contains("is-think")) OxCast.pose(octoNode, "");
+    }
+    // The value drops into the arm that matched, and Octo catches it.
+    function catchValue(v) {
+      if (!octoNode) return;
+      octoHost.querySelectorAll(".ca-arm").forEach(function (g) {
+        g.classList.toggle("is-caught", +g.getAttribute("data-arm") === v);
+      });
+      resetTicket();
+      ticket.innerHTML = OxCast.prop("ticket", { label: VARIANT_NAMES[v] });
+      ticket.style.left = SIGN_X[v];
+      ticket.classList.add("is-in");
+      if (!reduce) timers.push(setTimeout(function () { ticket.classList.add("is-gone"); }, 900));
+      OxCast.pose(octoNode, "catch", 1400);
+    }
+    function clearTimers() { timers.forEach(clearTimeout); timers = []; }
+    function changed() {
+      clearTimers();
+      busy = false;
+      resetOcto();
+      paintArms(null);
+      paintStatus();
+      paintValue();
+      idle();
+    }
+    function run() {
+      if (busy || isError()) return;
+      clearTimers();
+      var steps = trace(), gap = reduce ? 0 : 340;
+      busy = true;
+      runBtn.disabled = true;
+      paintArms(null);
+      steps.forEach(function (s, i) {
+        if (!reduce) timers.push(setTimeout(function () { setArm(s.arm, "is-try", "testing"); }, i * gap));
+        timers.push(setTimeout(function () { setArm(s.arm, s.cls, s.note); }, i * gap + (reduce ? 0 : 240)));
+      });
+      var hitStep = null;
+      steps.forEach(function (s) { if (s.cls === "is-hit") hitStep = s; });
+      timers.push(setTimeout(function () {
+        busy = false;
+        paintStatus();
+        resultView(steps);
+        if (hitStep) catchValue(VARIANT_OF[hitStep.arm]);
+      }, steps.length * gap + (reduce ? 0 : 150)));
+    }
+
+    runBtn.addEventListener("click", run);
+    renderFields();
+    changed();
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+  else start();
+})();
+</script>
+</body>
+</html>

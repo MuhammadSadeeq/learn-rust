@@ -1,0 +1,20 @@
+# A quest package: one crate, checked with `cargo test`.
+# The empty [workspace] makes it its own workspace, so the course's root
+# workspace leaves it alone.
+[package]
+name = "client1"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+# Default features are off on purpose: this is the minimum for JSON over HTTPS.
+reqwest = { version = "0.12.28", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1.0.229", features = ["derive"] }
+
+[dev-dependencies]
+# The tests start a local axum server as a mock API.
+axum = "0.8.9"
+tokio = { version = "1.53", features = ["full"] }

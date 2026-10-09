@@ -1,0 +1,1371 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Traits &amp; Generics · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<link rel="stylesheet" href="../assets/cast-art.css">
+<link rel="stylesheet" href="../assets/cast.css">
+<link rel="stylesheet" href="../assets/motion.css">
+<link rel="stylesheet" href="../assets/story.css">
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/quests-data.js" defer></script>
+<script src="../assets/cards/ch14.js" defer></script>
+<script src="../assets/motion/ch14.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+<script src="../assets/cast-art.js"></script>
+<script src="../assets/cast.js" defer></script>
+<script src="../assets/motion.js" defer></script>
+<script src="../assets/xray.js" defer></script>
+<script src="../assets/story.js" defer></script>
+</head>
+<body data-chapter="14">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<div class="ox-page">
+<aside class="ox-rail" aria-label="Chapter contents"></aside>
+<main class="ox-main" id="main">
+
+<header class="ox-hero" data-auto>
+  <ul>
+    <li>Define a trait with required and default methods, and implement it for your own types and for types you did not write.</li>
+    <li>Write generic functions and structs with trait bounds, and recognize the error you get when a bound is missing.</li>
+    <li>Choose between <code>impl Trait</code>, generics and <code>dyn Trait</code>, and explain what each one costs.</li>
+    <li>Implement the standard traits that users of your types expect, starting with <code>Display</code> and <code>From</code>.</li>
+  </ul>
+</header>
+
+<section>
+<h2 id="traits">A trait is a capability</h2>
+
+<p>Chapter 09 gave your structs methods. A <strong>trait</strong> is a named set of methods, and a type <em>implements</em> the trait by writing those methods. Once a type has done that, code can ask for anything that can do the job, using the trait's name as the requirement.</p>
+
+<p>Here is the smallest useful trait. It declares a method with no body. Each type writes the body in its own <code>impl</code> block.</p>
+
+<pre class="rs" data-run data-stdout="@ferris: Hello, crab!">
+trait Summary {
+    fn summarize(&amp;self) -&gt; String;
+}
+
+struct Tweet {
+    user: String,
+    text: String,
+}
+
+impl Summary for Tweet {
+    fn summarize(&amp;self) -&gt; String {
+        format!("@{}: {}", self.user, self.text)
+    }
+}
+
+fn main() {
+    let t = Tweet {
+        user: "ferris".to_string(),
+        text: "Hello, crab!".to_string(),
+    };
+    println!("{}", t.summarize());
+}
+</pre>
+
+<p>The trait is the list. <code>impl Summary for Tweet</code> is the promise that Tweet provides every method the list names. The body lives in the <code>impl</code>, not in the struct. A struct can implement as many traits as it needs, and each one adds its own methods.</p>
+
+<details class="ox-think">
+  <summary>Predict first: if you delete the <code>impl Summary for Tweet</code> block, does <code>t.summarize()</code> still compile?</summary>
+  <div class="ox-think-body">
+    <p>No. The method exists only because the impl promises it. Without the block, the compiler reports <code>error[E0599]: no method named `summarize` found for struct `Tweet` in the current scope</code>, and it points at the <code>Summary</code> trait as the place that defines the method.</p>
+  </div>
+</details>
+
+<h3>Default methods</h3>
+
+<p>A trait method can have a body. That body is the default. Every type that implements the trait gets it, and a type can replace it with its own version. A default can call the required methods, because every implementor is guaranteed to have them.</p>
+
+<pre class="rs" data-run data-stdout="Ownership (26 bytes)\n@ferris: Hello, crab!\n@ferris: Hello, crab…\nOwnership (26 bytes)…">
+trait Summary {
+    fn summarize(&amp;self) -&gt; String;
+
+    // Default: written once, here. It calls the required method.
+    fn preview(&amp;self) -&gt; String {
+        let short: String = self.summarize().chars().take(20).collect();
+        format!("{short}…")
+    }
+}
+
+struct Article {
+    headline: String,
+    body: String,
+}
+
+struct Tweet {
+    user: String,
+    text: String,
+}
+
+impl Summary for Article {
+    fn summarize(&amp;self) -&gt; String {
+        format!("{} ({} bytes)", self.headline, self.body.len())
+    }
+}
+
+impl Summary for Tweet {
+    fn summarize(&amp;self) -&gt; String {
+        format!("@{}: {}", self.user, self.text)
+    }
+}
+
+fn main() {
+    let a = Article {
+        headline: "Ownership".to_string(),
+        body: "Every value has one owner.".to_string(),
+    };
+    let t = Tweet {
+        user: "ferris".to_string(),
+        text: "Hello, crab!".to_string(),
+    };
+    println!("{}", a.summarize());
+    println!("{}", t.summarize());
+    println!("{}", t.preview());
+    println!("{}", a.preview());
+}
+</pre>
+
+<p>Only <code>summarize</code> is required. <code>preview</code> is written once, in the trait, and neither type has its own copy of it.</p>
+
+<aside class="ox-callout" data-kind="trap">
+  <p>This is the trap that catches almost every PHP developer. In PHP, <code>trait</code> is a copy-paste mixin. <code>use Loggable;</code> pastes the methods into the class body. A Rust <code>trait</code> pastes nothing. It has no fields, and it does not change the layout of your struct. It is a contract: a list of methods a type has to provide, with optional default bodies.</p>
+  <p>The closest PHP thing to a Rust trait is an <strong>interface</strong>. The difference that matters is that PHP interfaces cannot hold a method body, and Rust traits can.</p>
+</aside>
+
+<div class="ox-bridge">
+  <pre class="php">
+interface Summary {
+    public function summarize(): string;
+}
+
+final readonly class Tweet implements Summary {
+    public function __construct(
+        public string $user,
+        public string $text,
+    ) {}
+
+    #[\Override]
+    public function summarize(): string {
+        return "@{$this-&gt;user}: {$this-&gt;text}";
+    }
+}</pre>
+  <pre class="rs">
+trait Summary {
+    fn summarize(&amp;self) -&gt; String;
+}
+
+struct Tweet {
+    user: String,
+    text: String,
+}
+
+impl Summary for Tweet {
+    fn summarize(&amp;self) -&gt; String {
+        format!("@{}: {}", self.user, self.text)
+    }
+}</pre>
+  <div class="ox-bridge-note"><p>The <code>implements</code> clause sits on the class. In Rust the <code>impl</code> block stands beside the struct, and it can be written later or in another file. That is the next section. PHP interfaces have no place for a default body, so the default-method half of a Rust trait has no PHP equivalent at all.</p></div>
+</div>
+
+<p>PHP 8.3 added <code>#[\Override]</code> for part of this check. Put it on a method, and PHP verifies that a parent or an interface really declares a method with that name. If the method is spelled <code>summarise</code>, the class fails to load. Rust checks every impl at compile time. A misspelled method is error E0407, and a missing required method is E0046.</p>
+<h3>Supertraits: a trait that needs another</h3>
+
+<p>A trait can require another trait. <code>trait Tool: Named</code> means every type that implements <code>Tool</code> must also implement <code>Named</code>. A default method on <code>Tool</code> can then call <code>Named</code>'s methods, because the compiler knows they exist. You can list <code>Send</code> and <code>Sync</code> the same way, as in <code>trait Job: Send + Sync</code>. Then every type that implements <code>Job</code> must be both: it can move to another thread, and a shared <code>&amp;Job</code> can be used from several threads. Chapter 18 explains both markers.</p>
+
+<pre class="rs" data-check="ok" data-stdout="running clock">trait Named {
+    fn name(&amp;self) -&gt; String;
+}
+
+trait Tool: Named {
+    fn run(&amp;self) -&gt; String {
+        format!("running {}", self.name())
+    }
+}
+
+struct Clock;
+
+impl Named for Clock {
+    fn name(&amp;self) -&gt; String {
+        "clock".into()
+    }
+}
+
+impl Tool for Clock {}
+
+fn main() {
+    println!("{}", Clock.run());
+}</pre>
+</section>
+
+<section>
+<h2 id="foreign">Traits for types you didn't write</h2>
+
+<p>PHP has no direct equivalent of this. You can implement your trait for a type from the standard library, such as <code>String</code>, <code>Vec&lt;i32&gt;</code> or <code>str</code>. After that, the method works on those values like any other method.</p>
+
+<pre class="rs" data-run data-stdout="HELLO!\ntext of 5 bytes\n3 numbers, sum 6">
+trait Shout {
+    fn shout(&amp;self) -&gt; String;
+}
+
+impl Shout for str {
+    fn shout(&amp;self) -&gt; String {
+        format!("{}!", self.to_uppercase())
+    }
+}
+
+trait Summary {
+    fn summarize(&amp;self) -&gt; String;
+}
+
+impl Summary for String {
+    fn summarize(&amp;self) -&gt; String {
+        format!("text of {} bytes", self.len())
+    }
+}
+
+impl Summary for Vec&lt;i32&gt; {
+    fn summarize(&amp;self) -&gt; String {
+        format!("{} numbers, sum {}", self.len(), self.iter().sum::&lt;i32&gt;())
+    }
+}
+
+fn main() {
+    println!("{}", "hello".shout());
+    let s = String::from("hello");
+    let v = vec![1, 2, 3];
+    println!("{}", s.summarize());
+    println!("{}", v.summarize());
+}
+</pre>
+
+<p>The call <code>"hello".shout()</code> works because <code>shout</code> takes <code>&amp;self</code> and the impl is for <code>str</code>. A string literal is a <code>&amp;str</code>, which is exactly the receiver the method expects. A trait written to add methods to types you don't own is called an <strong>extension trait</strong>. The itertools crate uses the same idea to add methods to every iterator.</p>
+
+<h3>The orphan rule: one side must be yours</h3>
+
+<p>You may implement a trait for a type only when the trait is defined in your crate, or when a type you define appears in the impl, including as a type parameter of the trait. This is the <strong>orphan rule</strong>. For example, <code>impl From&lt;Local&gt; for Vec&lt;u8&gt;</code> is allowed when <code>Local</code> is yours, because <code>Local</code> appears in the impl. Without it, two crates could each implement <code>Display</code> for <code>Vec&lt;i32&gt;</code> in different ways, and nothing would say which one a program should use.</p>
+
+<details class="ox-think">
+  <summary>Predict first: this impl sits in your own crate. Is it allowed?</summary>
+  <div class="ox-think-body">
+    <p>No. <code>Display</code> is defined in the standard library, and <code>Vec</code> is too. Neither type is yours. Read the compiler's answer below.</p>
+  </div>
+</details>
+
+<pre class="rs" data-check="E0117">
+use std::fmt;
+
+impl fmt::Display for Vec&lt;i32&gt; {
+    fn fmt(&amp;self, f: &amp;mut fmt::Formatter) -&gt; fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+fn main() {
+    println!("{}", vec![1, 2, 3]);
+}
+</pre>
+
+<pre class="rustc">
+error[E0117]: only traits defined in the current crate can be implemented for types defined outside of the crate
+ --&gt; src/main.rs:3:1
+  |
+3 | impl fmt::Display for Vec&lt;i32&gt; {
+  | ^^^^^^^^^^^^^^^^^^^^^^--------
+  |                       |
+  |                       `Vec` is not defined in the current crate
+  |
+  = note: impl doesn't have any local type before any uncovered type parameters
+  = note: for more information see https://doc.rust-lang.org/reference/items/implementations.html#orphan-rules
+  = note: define and implement a trait or new type instead
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0117`.</pre>
+
+<p>The message says it plainly: <code>Vec</code> is not defined in this crate. Wrapping your own type inside a <code>Vec</code> does not help. <code>impl fmt::Display for Vec&lt;Stock&gt;</code> is refused with the same code. The fix is a <strong>newtype</strong>: a tuple struct you own, which holds the foreign value. The wrapper is local, so the impl is allowed.</p>
+
+<pre class="rs" data-run data-stdout="[1, 2, 3]">
+use std::fmt;
+
+struct Numbers(Vec&lt;i32&gt;);
+
+impl fmt::Display for Numbers {
+    fn fmt(&amp;self, f: &amp;mut fmt::Formatter) -&gt; fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
+
+fn main() {
+    let n = Numbers(vec![1, 2, 3]);
+    println!("{n}");
+}
+</pre>
+
+<aside class="ox-callout" data-kind="php">
+  <p>Laravel's <code>Collection::macro('total', ...)</code> is the nearest thing you already know. It adds a method to a class you did not write. Rust does the same job, with two differences that matter:</p>
+  <ul>
+    <li>A macro is registered at runtime, usually in a service provider's <code>boot</code> method. A Rust <code>impl</code> is part of the compiled program. There is nothing to register, and nothing to forget to register.</li>
+    <li>A trait method is visible only where the trait is in scope. Call it from a module that did not import the trait and you get <code>error[E0599]</code>, with the note that items from traits can only be used if the trait is in scope.</li>
+  </ul>
+</aside>
+</section>
+
+<section>
+<h2 id="params">Accepting anything that can do it</h2>
+
+<p>A function can ask for a trait instead of a concrete type. This program uses the four spellings you will meet most often:</p>
+
+<pre class="rs" data-run data-stdout="Breaking: @ana: hi\nTweet { user: &quot;ana&quot;, text: &quot;hi&quot; } -&gt; @ana: hi\nTweet { user: &quot;ana&quot;, text: &quot;hi&quot; } =&gt; @ana: hi\n@ferris: hello\n[5]">
+use std::fmt::{Debug, Display};
+
+trait Summary {
+    fn summarize(&amp;self) -&gt; String;
+}
+
+#[derive(Debug)]
+struct Tweet {
+    user: String,
+    text: String,
+}
+
+impl Summary for Tweet {
+    fn summarize(&amp;self) -&gt; String {
+        format!("@{}: {}", self.user, self.text)
+    }
+}
+
+fn notify(item: &amp;impl Summary) {
+    println!("Breaking: {}", item.summarize());
+}
+
+fn notify_bounds&lt;T: Summary + Debug&gt;(item: &amp;T) {
+    println!("{:?} -&gt; {}", item, item.summarize());
+}
+
+fn notify_where&lt;T&gt;(item: &amp;T)
+where
+    T: Summary + Debug,
+{
+    println!("{:?} =&gt; {}", item, item.summarize());
+}
+
+fn make_tweet() -&gt; impl Summary {
+    Tweet { user: "ferris".to_string(), text: "hello".to_string() }
+}
+
+fn show&lt;T: Display&gt;(item: T) -&gt; String {
+    format!("[{item}]")
+}
+
+fn main() {
+    let t = Tweet { user: "ana".to_string(), text: "hi".to_string() };
+    notify(&amp;t);
+    notify_bounds(&amp;t);
+    notify_where(&amp;t);
+    println!("{}", make_tweet().summarize());
+    println!("{}", show(5));
+}
+</pre>
+
+<p>Each spelling below puts a <strong>trait bound</strong> on a type: a requirement that the type implement a trait. <code>T: Summary</code> means T must implement <code>Summary</code>. The spellings differ in where the bound is written, not in what it asks for.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Spelling</th><th>Read it as</th></tr></thead>
+  <tbody>
+    <tr><td><code>item: &amp;impl Summary</code></td><td>Some type that implements <code>Summary</code>. Short and clear for one parameter.</td></tr>
+    <tr><td><code>fn notify&lt;T: Summary&gt;(item: &amp;T)</code></td><td>The same thing with a name for the type. Use it when two parameters must share one type, or when the type must be named in the return type.</td></tr>
+    <tr><td><code>T: Summary + Debug</code></td><td>Several bounds joined with <code>+</code>. The type must have both traits.</td></tr>
+    <tr><td><code>where T: Summary + Debug</code></td><td>The same bounds, moved after the signature. Use it when the bounds get long.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Here the bound is a door, and the badge is the ticket through it. Watch the program above as motion: Post passes, and Note is turned away at the call.</p>
+
+<div class="ox-motion" data-scene="ch14-badges"></div>
+
+<p>A return type can be <code>-&gt; impl Summary</code>. The caller can call the trait's methods, but it cannot name the concrete type. There is one limit. The function must return the same concrete type on every path. If one branch returns a <code>Tweet</code> and the other an <code>Article</code>, the compiler reports <code>error[E0308]: `if` and `else` have incompatible types</code>. For that you need a trait object, which is section 6.</p>
+
+<h3>A missing bound</h3>
+
+<p>The compiler checks a generic body once, for any <code>T</code>. The body may use only what the bounds promise. Here the bound is missing, so the method call is not allowed.</p>
+
+<pre class="rs" data-check="E0599">
+trait Summary {
+    fn summarize(&amp;self) -&gt; String;
+}
+
+fn notify&lt;T&gt;(item: &amp;T) {
+    println!("Breaking news! {}", item.summarize());
+}
+
+fn main() {}
+</pre>
+
+<pre class="rustc">
+error[E0599]: no method named `summarize` found for reference `&amp;T` in the current scope
+ --&gt; src/main.rs:6:40
+  |
+6 |     println!("Breaking news! {}", item.summarize());
+  |                                        ^^^^^^^^^ method not found in `&amp;T`
+  |
+  = help: items from traits can only be used if the type parameter is bounded by the trait
+help: the following trait defines an item `summarize`, perhaps you need to restrict type parameter `T` with it:
+  |
+5 | fn notify&lt;T: Summary&gt;(item: &amp;T) {
+  |            +++++++++
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0599`.</pre>
+
+<p>Read the error from the top. The code <code>E0599</code> says a method is missing. The arrow points at <code>summarize</code>, and the help line names the fix: add <code>: Summary</code> to <code>T</code>. Notice that <code>fn main() {}</code> is empty. The error appears even though nothing calls <code>notify</code>.</p>
+
+<div class="ox-quiz" data-id="14:quiz-call">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0277">
+trait Summary {
+    fn summarize(&amp;self) -&gt; String;
+}
+
+fn notify(item: &amp;impl Summary) {
+    println!("Breaking: {}", item.summarize());
+}
+
+fn main() {
+    notify(&amp;5);
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. Integers have every method a trait could ask for.</li>
+    <li data-correct>No. <code>i32</code> doesn't implement <code>Summary</code>, so the bound fails at the call site with E0277.</li>
+  </ol>
+  <div class="ox-why"><p>The bound is checked where you call the function as well as inside it. The call <code>notify(&amp;5)</code> asks the compiler for a <code>Summary</code> impl for an integer, and no such impl exists.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="generics">Generics: one body, many types</h2>
+
+<p>A generic function has type parameters in angle brackets. The classic example finds the largest item in a slice. The bound <code>PartialOrd</code> gives you <code>&gt;</code>. The bound <code>Copy</code> lets the function copy values out of the slice, which is what <code>list[0]</code> and <code>for &amp;item in list</code> do.</p>
+
+<pre class="rs" data-run data-stdout="100\ny">
+fn largest&lt;T: PartialOrd + Copy&gt;(list: &amp;[T]) -&gt; T {
+    let mut largest = list[0];
+    for &amp;item in list {
+        if item &gt; largest {
+            largest = item;
+        }
+    }
+    largest
+}
+
+fn main() {
+    println!("{}", largest(&amp;[34, 50, 25, 100, 65]));
+    println!("{}", largest(&amp;['y', 'm', 'a', 'q']));
+}
+</pre>
+
+<p>Nothing in the body mentions <code>i32</code> or <code>char</code>. The compiler checks the body against the bounds, then makes a specialized copy for each type it is used with. Section 5 explains that step.</p>
+
+<aside class="ox-callout" data-kind="php">
+  <p>PHP 8.5 has no generics. Its syntax has no type parameters, so <code>function first&lt;T&gt;(array $xs): T</code> is a parse error. The closest tool is a docblock: <code>@template T</code> and <code>@param list&lt;User&gt; $users</code>. PHPStan and Psalm read those comments. PHP itself ignores them, so a wrong element type goes unnoticed until you run the analyzer.</p>
+  <p>Rust generics are part of the language. The compiler checks the body against the bounds, and it checks each call against the concrete types.</p>
+</aside>
+
+<h3>Leave out a bound and the body fails</h3>
+
+<p>Remove <code>PartialOrd</code> and <code>&gt;</code> stops working on <code>T</code>. The compiler cannot assume that every <code>T</code> can be compared.</p>
+
+<pre class="rs" data-check="E0369">
+fn largest&lt;T: Copy&gt;(list: &amp;[T]) -&gt; T {
+    let mut largest = list[0];
+    for &amp;item in list {
+        if item &gt; largest {
+            largest = item;
+        }
+    }
+    largest
+}
+
+fn main() {
+    println!("{}", largest(&amp;[34, 50, 25, 100, 65]));
+}
+</pre>
+
+<pre class="rustc">
+error[E0369]: binary operation `&gt;` cannot be applied to type `T`
+ --&gt; src/main.rs:4:17
+  |
+4 |         if item &gt; largest {
+  |            ---- ^ ------- T
+  |            |
+  |            T
+  |
+help: consider further restricting type parameter `T` with trait `PartialOrd`
+  |
+1 | fn largest&lt;T: Copy + std::cmp::PartialOrd&gt;(list: &amp;[T]) -&gt; T {
+  |                    ++++++++++++++++++++++
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0369`.</pre>
+
+<p>The fix is in the help line: add <code>std::cmp::PartialOrd</code>. The arrow points at the operator inside the body, not at the call in <code>main</code>. That is where you will look for a missing bound.</p>
+
+<div class="ox-quiz" data-id="14:quiz-copy">
+  <p class="ox-q">Does this compile? The only change from the working version is the bound.</p>
+  <pre class="rs" data-check="E0508,E0507">
+fn largest&lt;T: PartialOrd&gt;(list: &amp;[T]) -&gt; T {
+    let mut largest = list[0];
+    for &amp;item in list {
+        if item &gt; largest {
+            largest = item;
+        }
+    }
+    largest
+}
+
+fn main() {
+    println!("{}", largest(&amp;[34, 50, 25, 100, 65]));
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. <code>PartialOrd</code> is all the comparison needs.</li>
+    <li data-correct>No. Without <code>Copy</code> the body cannot move values out of a borrowed slice, so rustc reports E0508 and E0507.</li>
+  </ol>
+  <div class="ox-why"><p>Comparing values doesn't move them, so <code>PartialOrd</code> is enough for <code>&gt;</code>. Taking the first item out of the slice, and each <code>item</code> in the loop, is a move unless <code>T</code> is <code>Copy</code>. You cannot move a value out of a borrowed slice, and a generic <code>T</code> might not be <code>Copy</code>. Chapter 06 covered moves. This is the same rule, applied to a type parameter.</p></div>
+</div>
+
+<h3>Generic structs and specific impls</h3>
+
+<p>Structs take type parameters the same way. An <code>impl&lt;T&gt;</code> block covers every <code>T</code>. An <code>impl Point&lt;f64&gt;</code> block covers only the points whose fields are <code>f64</code>, so a method can exist for one concrete type and not for the others.</p>
+
+<pre class="rs" data-run data-stdout="5\n3">
+struct Point&lt;T&gt; {
+    x: T,
+    y: T,
+}
+
+impl&lt;T&gt; Point&lt;T&gt; {
+    fn x(&amp;self) -&gt; &amp;T {
+        &amp;self.x
+    }
+}
+
+impl Point&lt;f64&gt; {
+    fn dist_from_origin(&amp;self) -&gt; f64 {
+        (self.x * self.x + self.y * self.y).sqrt()
+    }
+}
+
+fn main() {
+    let p = Point { x: 3.0, y: 4.0 };
+    println!("{}", p.dist_from_origin());
+    let q = Point { x: 3, y: 4 };
+    println!("{}", q.x());
+}
+</pre>
+
+<p>Calling <code>q.dist_from_origin()</code> on a <code>Point&lt;i32&gt;</code> is an error. The compiler reports that the method was found for <code>Point&lt;f64&gt;</code>, which is exactly the point of the specific impl.</p>
+
+<p><code>Option&lt;T&gt;</code> and <code>Result&lt;T, E&gt;</code> are generic enums built the same way. You have used them since Chapters 10 and 11. Your own enums can take type parameters too.</p>
+<h3>Const generics: a number as a parameter</h3>
+
+<p>A type parameter stands for a type. A const generic parameter stands for a value, usually a length. <code>[i32; N]</code> is an array of exactly <code>N</code> items, so <code>sum</code> accepts an array of any length. The compiler makes one copy of the function for each length it sees, the same way it stamps out copies for type parameters.</p>
+
+<pre class="rs" data-check="ok" data-stdout="6\n40">fn sum&lt;const N: usize&gt;(a: [i32; N]) -&gt; i32 {
+    let mut total = 0;
+    for x in a {
+        total += x;
+    }
+    total
+}
+
+fn main() {
+    println!("{}", sum([1, 2, 3]));
+    println!("{}", sum([10; 4]));
+}</pre>
+</section>
+
+<section>
+<h2 id="mono">Monomorphization: the compiler stamps out copies</h2>
+
+<p>How does a generic function run at full speed? The compiler does not pass around a value that could be any type. At build time it finds every concrete type that each generic function is used with, and it generates a specialized copy for each one. That step is called <strong>monomorphization</strong>. Picture a stamp: one template, one stamped copy per type.</p>
+
+<div class="ox-meet" data-cast="press" data-say="One template, and one stamped copy for each type you use. I do the stamping before the program runs."></div>
+
+<p>In a debug build you can see the copies. Take a program that calls <code>describe</code> six times with five different types. Two of the calls pass an <code>i32</code>, so the binary holds five copies, not six. This is the list <code>nm -C</code> prints for that program:</p>
+
+<pre class="text">
+main::describe::&lt;&amp;str&gt;
+main::describe::&lt;bool&gt;
+main::describe::&lt;char&gt;
+main::describe::&lt;f64&gt;
+main::describe::&lt;i32&gt;
+</pre>
+
+<p>The exact names depend on the compiler version, and a release build may inline the copies away. The idea holds either way. Each copy is more machine code. Each call goes straight to its copy, with no lookup at runtime. The press below shows the same process one call at a time.</p>
+
+<p>Here is the stamping for two calls to one generic function, as motion. The template is written once, and each type it is called with gets its own plate.</p>
+
+<div class="ox-motion" data-scene="ch14-stamp"></div>
+
+<style>
+#press [hidden] { display: none !important; }
+#press .press-modes { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+#press .press-modes .ox-btn[aria-pressed="true"] { background: var(--oxide); border-color: var(--oxide); color: var(--surface); }
+#press .press-calls { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 14px; }
+#press .press-calls .ox-btn code { font-family: var(--font-mono); font-size: 0.85rem; background: none; padding: 0; color: inherit; }
+#press .press-stage { min-height: 150px; padding: 12px; border: 1px dashed var(--line); border-radius: var(--radius); background: var(--surface-2); }
+#press .press-empty { margin: 0; color: var(--muted); font-size: 0.92rem; }
+#press .press-copies { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 10px; }
+#press .press-card { display: grid; gap: 4px; padding: 9px 11px; background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--oxide); border-radius: var(--radius); transition: box-shadow 0.25s, border-color 0.25s; }
+#press .press-card small, #press .press-slot > span, #press .press-target > span { font: 600 0.78rem/1.3 var(--font-mono); color: var(--muted); }
+#press .press-card code, #press .press-slot code, #press .press-target code, #press .press-fn code { font-family: var(--font-mono); font-size: 0.84rem; color: var(--ink); background: none; padding: 0; overflow-wrap: anywhere; }
+#press .press-card.is-new { animation: press-stamp 0.45s ease both; }
+#press .press-card.is-hit { border-color: var(--borrow); box-shadow: 0 0 0 2px var(--borrow-soft); }
+#press .press-fn { margin-bottom: 12px; padding: 9px 11px; background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--borrow); border-radius: var(--radius); }
+#press .press-ptrs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 10px; align-items: start; }
+#press .press-fat, #press .press-side { display: grid; gap: 10px; }
+#press .press-slot, #press .press-target { display: grid; gap: 4px; padding: 9px 11px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); transition: background 0.25s, border-color 0.25s; }
+#press .press-target.press-value { border-left: 4px solid var(--heap); }
+#press .press-target.press-vtable { border-left: 4px solid var(--borrow); }
+#press .press-vtable ul { margin: 2px 0 0; padding: 0; list-style: none; font-family: var(--font-mono); font-size: 0.82rem; display: grid; gap: 4px; }
+#press .press-vtable li { padding: 3px 6px; border-radius: 4px; transition: background 0.25s; }
+#press .is-live { background: var(--oxide-soft); border-color: var(--oxide); }
+#press .press-meter { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 12px; align-items: center; margin-top: 14px; }
+#press .press-count { font-size: 0.92rem; font-weight: 700; color: var(--ink); }
+#press .press-bar { height: 10px; background: var(--surface-3); border-radius: 999px; overflow: hidden; }
+#press .press-fill { height: 100%; width: 0%; background: var(--oxide); border-radius: 999px; transition: width 0.4s ease; }
+#press .press-meter small { grid-column: 1 / -1; color: var(--muted); font-size: 0.82rem; }
+#press .press-log { margin: 12px 0 0; min-height: 2.6em; font-size: 0.95rem; color: var(--ink-2); }
+#press .press-top { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; margin: 0 0 12px; }
+#press .press-top > pre { flex: 1 1 260px; min-width: 0; margin: 0; }
+#press .press-desk { flex: 0 0 136px; min-height: 120px; display: grid; place-items: center; }
+#press .press-art .ca { display: block; width: 124px; }
+@media (max-width: 560px) { #press .press-desk { flex: 1 1 100%; min-height: 0; } }
+@keyframes press-stamp { 0% { opacity: 0; transform: scale(1.08); } 100% { opacity: 1; transform: scale(1); } }
+@media (max-width: 560px) { #press .press-ptrs { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { #press * { animation: none !important; transition: none !important; } }
+</style>
+
+<figure class="ox-figure ox-wide" id="press">
+  <div class="press-modes" role="group" aria-label="Choose how the calls are compiled">
+    <button type="button" class="ox-btn is-small" data-mode="generic" aria-pressed="true">Generic: one copy per type</button>
+    <button type="button" class="ox-btn is-small" data-mode="dyn" aria-pressed="false">dyn Display: one copy</button>
+  </div>
+
+  <div class="press-top">
+    <pre class="rs">use std::fmt::Display;
+
+fn describe&lt;T: Display&gt;(x: T) -&gt; String {
+    format!("&lt;{x}&gt;")
+}</pre>
+    <div class="press-desk" aria-hidden="true"><span class="press-art"></span></div>
+  </div>
+
+  <p class="press-label">Press a call. Each button is a call in your program.</p>
+  <div class="press-calls">
+    <button type="button" class="ox-btn" data-call="0"><code>describe(42)</code></button>
+    <button type="button" class="ox-btn" data-call="1"><code>describe(3.5)</code></button>
+    <button type="button" class="ox-btn" data-call="2"><code>describe("hi")</code></button>
+    <button type="button" class="ox-btn" data-call="3"><code>describe('x')</code></button>
+    <button type="button" class="ox-btn" data-call="4"><code>describe(true)</code></button>
+  </div>
+
+  <div class="press-stage">
+    <p class="press-empty">No calls yet, so the compiler has stamped out no copies.</p>
+    <div class="press-copies"></div>
+    <div class="press-dyn" hidden>
+      <div class="press-fn"><code>fn describe_dyn(x: &amp;dyn Display) -&gt; String</code></div>
+      <div class="press-ptrs">
+        <div class="press-fat">
+          <div class="press-slot" data-slot="data"><span>data pointer</span><code data-out="data">waits for a call</code></div>
+          <div class="press-slot" data-slot="vtable"><span>vtable pointer</span><code data-out="vt">waits for a call</code></div>
+        </div>
+        <div class="press-side">
+          <div class="press-target press-value" data-target="value"><span>the value</span><code data-out="value">-</code></div>
+          <div class="press-target press-vtable" data-target="vtable"><span data-out="vtname">vtable</span>
+            <ul>
+              <li data-entry="size">size <b data-out="size">-</b></li>
+              <li data-entry="align">align <b data-out="align">-</b></li>
+              <li data-entry="fmt">fmt: <code data-out="fmt">-</code></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="press-meter">
+    <span class="press-count">Copies in the binary: <b data-out="count">0</b></span>
+    <div class="press-bar" aria-hidden="true"><div class="press-fill" data-out="fill"></div></div>
+    <small>Illustrative. The bar is scaled to the five types on the buttons. Each copy adds machine code, and the real size depends on the function.</small>
+  </div>
+  <p class="press-log" aria-live="polite" data-out="log">Press a call to see what the compiler does with it.</p>
+  <figcaption>Generics: faster calls, more code. Each type gets its own copy. dyn: one copy, and every call follows two pointers, an indirect call.</figcaption>
+</figure>
+
+<details class="ox-think">
+  <summary>Predict first: a loop calls <code>describe(42)</code> a thousand times, and calls <code>describe(3.5)</code> once. How many copies are in the binary?</summary>
+  <div class="ox-think-body">
+    <p>Two. One copy for <code>i32</code> and one for <code>f64</code>. The number of calls doesn't matter. Only the number of distinct types does.</p>
+  </div>
+</details>
+</section>
+
+<section>
+<h2 id="dyn">Trait objects: dyn Trait</h2>
+
+<p>Generics fix the type at compile time. Sometimes one collection has to hold different types, and the choice is only known at runtime. For that you use a <strong>trait object</strong>. <code>dyn Shape</code> means "some value that implements <code>Shape</code>, and I don't know which one." A trait object always sits behind a pointer, usually <code>Box&lt;dyn Shape&gt;</code> or <code>&amp;dyn Shape</code>.</p>
+
+<pre class="rs" data-run data-stdout="3.14\n4.00">
+trait Shape {
+    fn area(&amp;self) -&gt; f64;
+}
+
+struct Circle {
+    r: f64,
+}
+
+struct Square {
+    side: f64,
+}
+
+impl Shape for Circle {
+    fn area(&amp;self) -&gt; f64 {
+        std::f64::consts::PI * self.r * self.r
+    }
+}
+
+impl Shape for Square {
+    fn area(&amp;self) -&gt; f64 {
+        self.side * self.side
+    }
+}
+
+fn main() {
+    let shapes: Vec&lt;Box&lt;dyn Shape&gt;&gt; = vec![
+        Box::new(Circle { r: 1.0 }),
+        Box::new(Square { side: 2.0 }),
+    ];
+    for s in &amp;shapes {
+        println!("{:.2}", s.area());
+    }
+}
+</pre>
+
+<p>The vector holds a circle and a square. The loop calls <code>area()</code> on each element without knowing its type. The call still works, because each box carries a pointer to the table of methods for its own type.</p>
+
+<h3>What a trait object is made of</h3>
+
+<p>A <code>&amp;dyn Shape</code> is not one pointer. It is two: a <strong>data pointer</strong> to the value, and a <strong>vtable pointer</strong> to a table built for that type's implementation of <code>Shape</code>. The table holds the size, the alignment, a drop entry and one pointer per method. A call to <code>area</code> reads the method pointer from the table, then jumps to it.</p>
+
+<figure class="ox-figure">
+<svg viewBox="0 0 640 246" width="640" role="img" aria-label="A Box of dyn Shape is two pointers. The data pointer leads to the Circle value. The vtable pointer leads to a vtable for Circle that holds size, align, drop and the area method.">
+  <text x="20" y="22" class="t-muted" font-size="12">THE POINTER</text>
+  <text x="380" y="22" class="t-muted" font-size="12">WHAT THEY POINT TO</text>
+  <rect x="20" y="36" width="230" height="130" rx="8" class="f-own" stroke-width="1.5"/>
+  <text x="36" y="62" font-size="15" font-weight="700" class="t-own">Box&lt;dyn Shape&gt;</text>
+  <rect x="36" y="76" width="198" height="34" rx="5" class="f-plain" stroke-width="1"/>
+  <text x="48" y="97" font-size="12">data pointer</text>
+  <rect x="36" y="118" width="198" height="34" rx="5" class="f-plain" stroke-width="1"/>
+  <text x="48" y="139" font-size="12">vtable pointer</text>
+  <rect x="380" y="44" width="240" height="56" rx="6" class="f-heap" stroke-width="1.5"/>
+  <text x="396" y="68" font-size="14" font-weight="700">Circle { r: 1.0 }</text>
+  <text x="396" y="88" font-size="11" class="t-muted">the value, 8 bytes</text>
+  <rect x="380" y="128" width="240" height="108" rx="6" class="f-ref" stroke-width="1.5"/>
+  <text x="396" y="150" font-size="13" font-weight="700" class="t-ref">vtable for Circle</text>
+  <text x="396" y="168" font-size="12">size 8</text>
+  <text x="396" y="186" font-size="12">align 8</text>
+  <text x="396" y="204" font-size="12">drop</text>
+  <text x="396" y="222" font-size="12">area → Circle::area</text>
+  <path d="M256 93 C 310 93, 330 72, 378 72" class="s-own" stroke-width="2.5" fill="none"/>
+  <path d="M256 135 C 310 135, 330 170, 378 170" class="s-ref" stroke-width="2.5" fill="none"/>
+</svg>
+<figcaption>A trait object is two pointers. The data pointer finds the value. The vtable pointer finds the method table for that type.</figcaption>
+</figure>
+
+<p>You can measure the extra word. On a 64-bit machine, <code>&amp;i32</code> is 8 bytes and <code>&amp;dyn Display</code> is 16. The extra 8 bytes are the vtable pointer. <code>Box&lt;dyn Display&gt;</code> is 16 bytes for the same reason.</p>
+
+<h3>When a trait can't become dyn</h3>
+
+<p>Not every trait can be made into a trait object. The vtable needs one fixed entry for each method. A method that returns <code>Self</code> would force the caller to know the size of the concrete type, and the caller holds only the trait object. A method with its own type parameter would need a separate entry for every type it is ever called with. The compiler refuses such a trait. Older books call this <em>object safety</em>. The compiler now calls it <strong>dyn compatibility</strong>.</p>
+
+<pre class="rs" data-check="E0038">
+trait Cloner {
+    fn dup(&amp;self) -&gt; Self;
+}
+
+struct A;
+
+impl Cloner for A {
+    fn dup(&amp;self) -&gt; Self {
+        A
+    }
+}
+
+fn main() {
+    let items: Vec&lt;Box&lt;dyn Cloner&gt;&gt; = vec![Box::new(A)];
+    println!("{}", items.len());
+}
+</pre>
+
+<pre class="rustc">
+error[E0038]: the trait `Cloner` is not dyn compatible
+  --&gt; src/main.rs:14:28
+   |
+14 |     let items: Vec&lt;Box&lt;dyn Cloner&gt;&gt; = vec![Box::new(A)];
+   |                            ^^^^^^ `Cloner` is not dyn compatible
+   |
+note: for a trait to be dyn compatible it needs to allow building a vtable
+      for more information, visit &lt;https://doc.rust-lang.org/reference/items/traits.html#dyn-compatibility&gt;
+  --&gt; src/main.rs:2:22
+   |
+ 1 | trait Cloner {
+   |       ------ this trait is not dyn compatible...
+ 2 |     fn dup(&amp;self) -&gt; Self;
+   |                      ^^^^ ...because method `dup` references the `Self` type in its return type
+   = help: consider moving `dup` to another trait
+   = help: only type `A` implements `Cloner`; consider using it directly instead.
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0038`.</pre>
+
+<details class="ox-think">
+  <summary>Predict first: could you make a <code>Vec&lt;Box&lt;dyn Named&gt;&gt;</code> from this trait?</summary>
+  <div class="ox-think-body">
+    <pre class="rs">
+trait Named {
+    fn name(&amp;self) -&gt; String;
+    fn rename&lt;T: std::fmt::Display&gt;(&amp;mut self, t: T);
+}</pre>
+    <p>No. <code>rename</code> has its own type parameter, so the trait is not dyn compatible, and the compiler reports E0038 with the note "method <code>rename</code> has generic type parameters". Remove the generic method and <code>name</code> alone would be fine.</p>
+  </div>
+</details>
+
+<div class="ox-bridge">
+  <pre class="php">
+// AppServiceProvider::register()
+$this-&gt;app-&gt;bind(
+    PaymentGateway::class,
+    StripeGateway::class,
+);
+
+final readonly class Checkout {
+    public function __construct(
+        private PaymentGateway $gateway,
+    ) {}
+}</pre>
+  <pre class="rs">
+trait PaymentGateway {
+    fn charge(&amp;self, cents: u32) -&gt; String;
+}
+
+struct Checkout {
+    gateway: Box&lt;dyn PaymentGateway&gt;,
+}</pre>
+  <div class="ox-bridge-note"><p>The container chooses the implementation at runtime, from configuration. In Rust the choice is made where the value is built, for example <code>Checkout { gateway: Box::new(StripeGateway) }</code>. The field's type is the contract. If you don't want the indirect call, make the struct generic instead, <code>struct Checkout&lt;G: PaymentGateway&gt; { gateway: G }</code>. The compiler then makes one copy of <code>Checkout</code> for each gateway type.</p></div>
+</div>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th></th><th>Generics (<code>T: Trait</code>)</th><th><code>dyn Trait</code> behind a pointer</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Type is known</strong></td><td>At compile time, one copy per type used</td><td>At runtime, any type that implements the trait</td></tr>
+    <tr><td><strong>Method call</strong></td><td>Direct, and the compiler can inline it</td><td>Indirect, through the vtable</td></tr>
+    <tr><td><strong>Code in the binary</strong></td><td>One copy per concrete type</td><td>One copy in total</td></tr>
+    <tr><td><strong>Mixed types in one list</strong></td><td>No. A <code>Vec&lt;T&gt;</code> holds one <code>T</code></td><td>Yes. <code>Vec&lt;Box&lt;dyn Shape&gt;&gt;</code></td></tr>
+    <tr><td><strong>Trait rules</strong></td><td>Any trait</td><td>The trait must be dyn compatible</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Choose <code>dyn</code> when the set of types is open or mixed: a registry of handlers, a list of plugins, a collection of heterogeneous items. Choose generics on a hot path where the types are known and you want the fastest calls. The iterator adapters from Chapter 13 are generic, which is why the compiler can specialize a whole chain for your types.</p>
+<h3>Trait objects that cross threads</h3>
+
+<p>A trait object that a thread will own needs the marker traits as well. <code>Box&lt;dyn Job + Send + Sync + 'static&gt;</code> is a boxed job that can move to another thread, can be shared between threads, and holds no borrowed data. Leave out <code>Send</code>, and <code>thread::spawn</code> refuses the box with E0277, because the trait object might not be safe to send. If the trait already requires <code>Send</code>, as <code>trait Job: Send + Sync</code> does in the section above, the box is <code>Send</code> without the extra word.</p>
+
+<pre class="rs" data-check="ok" data-stdout="8">trait Job {
+    fn run(&amp;self) -&gt; u32;
+}
+
+struct Double(u32);
+
+impl Job for Double {
+    fn run(&amp;self) -&gt; u32 {
+        self.0 * 2
+    }
+}
+
+fn main() {
+    let jobs: Vec&lt;Box&lt;dyn Job + Send + Sync + 'static&gt;&gt; = vec![Box::new(Double(4))];
+    let handle = std::thread::spawn(move || {
+        for job in &amp;jobs {
+            println!("{}", job.run());
+        }
+    });
+    handle.join().unwrap();
+}</pre>
+
+<h3>Trait upcasting</h3>
+
+<p>Since Rust 1.86, a <code>&amp;dyn Pet</code> can become a <code>&amp;dyn Animal</code> when <code>Pet</code> requires <code>Animal</code>. This is trait upcasting. You get the supertrait's methods through the same pointer, with a plain assignment and no helper method.</p>
+
+<pre class="rs" data-check="ok" data-stdout="dog sam">trait Animal {
+    fn name(&amp;self) -&gt; String;
+}
+
+trait Pet: Animal {
+    fn owner(&amp;self) -&gt; String;
+}
+
+struct Dog;
+
+impl Animal for Dog {
+    fn name(&amp;self) -&gt; String {
+        "dog".into()
+    }
+}
+
+impl Pet for Dog {
+    fn owner(&amp;self) -&gt; String {
+        "sam".into()
+    }
+}
+
+fn show(a: &amp;dyn Animal) -&gt; String {
+    a.name()
+}
+
+fn main() {
+    let pet: &amp;dyn Pet = &amp;Dog;
+    let animal: &amp;dyn Animal = pet;
+    println!("{} {}", show(animal), pet.owner());
+}</pre>
+</section>
+
+<section>
+<h2 id="std-traits">The traits everyone expects</h2>
+
+<p>Most types you write should implement a handful of standard traits, because the people who use them expect those traits to exist. Some you can get from <code>#[derive(...)]</code>. Others you write by hand.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Trait</th><th>What it enables</th><th>Derive?</th></tr></thead>
+  <tbody>
+    <tr><td><code>Debug</code></td><td><code>{:?}</code> output, for developers</td><td>Yes, <code>#[derive(Debug)]</code></td></tr>
+    <tr><td><code>Display</code></td><td><code>{}</code> output, for users</td><td>No. Write <code>impl fmt::Display</code></td></tr>
+    <tr><td><code>Clone</code></td><td><code>.clone()</code>, an explicit copy that may allocate</td><td>Yes</td></tr>
+    <tr><td><code>Copy</code></td><td>Implicit copies on assignment, for cheap types only</td><td>Yes, when <code>Clone</code> is derived too</td></tr>
+    <tr><td><code>PartialEq</code>, <code>Eq</code></td><td><code>==</code> and <code>!=</code></td><td>Yes</td></tr>
+    <tr><td><code>PartialOrd</code>, <code>Ord</code></td><td><code>&lt;</code>, <code>&gt;</code>, <code>sort()</code>, <code>max()</code></td><td>Yes</td></tr>
+    <tr><td><code>Hash</code></td><td>Use the type as a key in a <code>HashMap</code> or <code>HashSet</code> (with <code>Eq</code>)</td><td>Yes</td></tr>
+    <tr><td><code>Default</code></td><td><code>T::default()</code> and <code>..Default::default()</code></td><td>Yes</td></tr>
+    <tr><td><code>From</code>, <code>Into</code></td><td>Conversions that cannot fail. <code>Into</code> comes free with <code>From</code></td><td>No. Write <code>From</code></td></tr>
+    <tr><td><code>TryFrom</code></td><td>Conversions that can fail, returning a <code>Result</code></td><td>No</td></tr>
+    <tr><td><code>AsRef</code></td><td>A cheap borrowed view, such as <code>&amp;str</code> from a <code>String</code></td><td>No</td></tr>
+    <tr><td><code>Iterator</code>, <code>IntoIterator</code></td><td><code>for</code> loops and adapters such as <code>map</code> and <code>filter</code></td><td>No. Write <code>next</code></td></tr>
+    <tr><td><code>Drop</code></td><td>Cleanup code that runs when the value is dropped (Chapter 06)</td><td>No. Write <code>drop</code></td></tr>
+    <tr><td><code>Deref</code></td><td><code>*x</code> and method calls through a wrapper, such as <code>String</code> to <code>str</code></td><td>No</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Two of these you will write by hand more often than the rest: <code>Display</code> and <code>From</code>. <code>Display</code> is what <code>{}</code> prints. <code>From</code> is the conversion. Here is a <code>Money</code> type with both.</p>
+
+<details class="ox-think">
+  <summary>Predict first: if you implement <code>From&lt;i64&gt;</code> for <code>Money</code>, can an <code>i64</code> call <code>.into()</code> to become a <code>Money</code>?</summary>
+  <div class="ox-think-body">
+    <p>Yes. Implementing <code>From</code> gives you <code>Into</code> in the other direction for free. The program below uses it.</p>
+  </div>
+</details>
+
+<pre class="rs" data-run data-stdout="$19.99\n$2.50">
+use std::fmt;
+
+struct Money {
+    cents: i64,
+}
+
+impl fmt::Display for Money {
+    fn fmt(&amp;self, f: &amp;mut fmt::Formatter) -&gt; fmt::Result {
+        write!(f, "${}.{:02}", self.cents / 100, self.cents % 100)
+    }
+}
+
+impl From&lt;i64&gt; for Money {
+    fn from(cents: i64) -&gt; Self {
+        Money { cents }
+    }
+}
+
+fn main() {
+    let price: Money = 1999.into();
+    println!("{price}");
+    println!("{}", Money::from(250));
+}
+</pre>
+
+<p><code>let price: Money = 1999.into();</code> compiles because the standard library has a blanket implementation: any type with <code>From&lt;A&gt; for B</code> also gets <code>Into&lt;B&gt; for A</code>. You write <code>From</code> once and get both spellings of the conversion.</p>
+
+<details class="ox-callout" data-kind="deep">
+  <summary>Associated types or generic parameters?</summary>
+  <p>Some traits take a generic parameter, such as <code>From&lt;T&gt;</code>. Others declare an <strong>associated type</strong>, such as <code>Iterator</code> with its <code>type Item</code>. The rule of thumb: use an associated type when each implementing type has exactly one right answer. An iterator yields one kind of item, so <code>Item</code> is chosen by the impl. Use a generic parameter when one type may implement the trait several ways. <code>Money</code> can implement <code>From&lt;i64&gt;</code> and <code>From&lt;&amp;str&gt;</code> at the same time, and the compiler picks the impl from the argument's type.</p>
+</details>
+
+<p>Operators are traits too. <code>a + b</code> calls <code>Add::add</code>, and the <code>Output</code> associated type says what <code>+</code> returns.</p>
+
+<pre class="rs" data-run data-stdout="Money { cents: 1649 }">
+use std::ops::Add;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Money {
+    cents: i64,
+}
+
+impl Add for Money {
+    type Output = Money;
+
+    fn add(self, other: Money) -&gt; Money {
+        Money { cents: self.cents + other.cents }
+    }
+}
+
+fn main() {
+    let total = Money { cents: 1250 } + Money { cents: 399 };
+    println!("{:?}", total);
+}
+</pre>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Agents over-generalize. Ask one for a helper and you may get this: <code>fn f&lt;T: AsRef&lt;str&gt; + Into&lt;String&gt; + Clone&gt;(x: T)</code>. Three bounds, and a reader has to work out what the function actually needs. Agents also reach for <code>Box&lt;dyn Trait&gt;</code> everywhere, which adds indirection that nothing asked for.</p>
+  <p>In review, ask two questions. First, what actually varies here? If the answer is one concrete type, use that type. Second, what does the function call on the value? Bound only for those methods. Usually one concrete type, or one generic parameter with one bound, is enough. Keep the API simple until the caller needs more.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="practice">Practice</h2>
+
+<p>Seven checks. Try each one before you open the answer. They cover trait-versus-PHP ideas, the orphan rule, missing bounds, trait objects, and the standard bounds you will write most often.</p>
+
+<div class="ox-quiz" data-id="14:php-trait" data-label="Check yourself">
+  <p class="ox-q">A colleague says: "Rust traits are just PHP traits." What is the most accurate reply?</p>
+  <ol class="ox-choices">
+    <li>Yes. <code>use</code> in PHP and <code>impl</code> in Rust both paste methods into the class.</li>
+    <li data-correct>Not quite. A Rust trait is a contract, closer to a PHP interface. The type writes its own <code>impl</code>, and nothing is pasted in.</li>
+    <li>Rust has no equivalent of interfaces. Its only tool for this is generics.</li>
+    <li>Yes, except Rust traits can also hold properties.</li>
+  </ol>
+  <div class="ox-why"><p>A PHP trait copies methods into the class body. A Rust trait describes methods and holds no fields. The type provides the methods with its own <code>impl</code>. The nearest PHP tool is the interface, and a PHP interface can't contain a method body.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="14:orphan-quiz" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0117">
+use std::fmt;
+
+impl fmt::Display for Option&lt;i32&gt; {
+    fn fmt(&amp;self, f: &amp;mut fmt::Formatter) -&gt; fmt::Result {
+        write!(f, "maybe")
+    }
+}
+
+fn main() {
+    println!("{}", Some(1));
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. The compiler accepts any impl for a type in the standard library.</li>
+    <li data-correct>No. Neither <code>Display</code> nor <code>Option</code> is defined in this crate, so the orphan rule rejects it with E0117.</li>
+    <li>Yes. It's a Display impl, and every Display impl is allowed.</li>
+  </ol>
+  <div class="ox-why"><p>This is the same rule as the <code>Vec</code> example, with a different foreign type. The fix is a newtype you own, such as <code>struct Maybe(Option&lt;i32&gt;);</code>, with the impl written for <code>Maybe</code>.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="14:bound-quiz" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0369">
+fn bigger&lt;T&gt;(a: T, b: T) -&gt; bool {
+    a &gt; b
+}
+
+fn main() {
+    println!("{}", bigger(1, 2));
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. Every type can be compared with <code>&gt;</code>.</li>
+    <li data-correct>No. <code>&gt;</code> needs <code>T: PartialOrd</code>, and <code>T</code> has no bounds, so the body fails with E0369.</li>
+    <li>Yes. The call passes integers, so <code>T</code> is <code>i32</code> inside the body.</li>
+  </ol>
+  <div class="ox-why"><p>The body is checked for any <code>T</code>, not for the integers in <code>main</code>. The fix is <code>fn bigger&lt;T: PartialOrd&gt;</code>.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="14:dyn-loop" data-label="What does it print?">
+  <p class="ox-q">What does this print?</p>
+  <pre class="rs" data-run data-stdout="woof\nmeow\nwoof">
+trait Speak {
+    fn speak(&amp;self) -&gt; String;
+}
+
+struct Dog;
+struct Cat;
+
+impl Speak for Dog {
+    fn speak(&amp;self) -&gt; String {
+        "woof".to_string()
+    }
+}
+
+impl Speak for Cat {
+    fn speak(&amp;self) -&gt; String {
+        "meow".to_string()
+    }
+}
+
+fn main() {
+    let animals: Vec&lt;Box&lt;dyn Speak&gt;&gt; = vec![Box::new(Dog), Box::new(Cat), Box::new(Dog)];
+    for a in animals.iter() {
+        println!("{}", a.speak());
+    }
+}</pre>
+  <ol class="ox-choices">
+    <li>The compiler rejects the vector, because <code>Dog</code> and <code>Cat</code> are different types.</li>
+    <li data-correct><code>woof</code>, <code>meow</code>, <code>woof</code>, one per line.</li>
+    <li><code>woof</code>, <code>woof</code>, <code>meow</code>, one per line.</li>
+    <li><code>meow</code>, <code>woof</code>, <code>woof</code>, one per line.</li>
+  </ol>
+  <div class="ox-why"><p>Each element is a <code>Box&lt;dyn Speak&gt;</code>, so the vector holds one type, and the box decides which <code>speak</code> runs. The loop visits the elements in order. The first choice describes a different situation: a plain <code>vec![Dog, Cat]</code> with two struct types fails with E0308, because a <code>Vec&lt;T&gt;</code> has one <code>T</code>. The boxes are what make the mix legal.</p></div>
+</div>
+
+<div class="ox-fill" data-id="14:fill-bound">
+  <p class="ox-q">Fill in the bound so <code>print_all</code> accepts any type that can be shown with <code>{}</code>.</p>
+  <pre class="rs">
+use std::fmt::Display;
+
+fn print_all&lt;T: [[Display|std::fmt::Display]]&gt;(items: &amp;[T]) {
+    for item in items {
+        println!("{item}");
+    }
+}
+
+fn main() {
+    print_all(&amp;[1, 2, 3]);
+}</pre>
+  <div class="ox-why"><p>The body prints with <code>{item}</code>, which uses <code>Display</code>, so the bound must name <code>Display</code>. Without the bound the body fails with E0277: <code>T</code> doesn't implement <code>Display</code>. The answer <code>std::fmt::Display</code> is the same trait with the full path, which works without the <code>use</code> line.</p></div>
+</div>
+
+<div class="ox-match" data-id="14:match" data-left-label="PHP" data-right-label="Rust">
+  <ul>
+    <li data-left="interface">trait</li>
+    <li data-left="class X implements I">impl I for X</li>
+    <li data-left="abstract method">required method (no body)</li>
+    <li data-left="default method in an interface (PHP has none)">default method</li>
+    <li data-left="$x instanceof Circle">match on an enum variant, or a generic bound</li>
+    <li data-left="__toString()">impl fmt::Display</li>
+  </ul>
+</div>
+
+<div class="ox-order" data-id="14:order" data-label="Put the steps in order">
+  <ol>
+    <li>Check the body of <code>describe&lt;T: Display&gt;</code> against its bound alone.</li>
+    <li>Find each concrete type it is called with: <code>i32</code>, <code>f64</code>, <code>&amp;str</code>.</li>
+    <li>Generate one specialized copy for each of those types.</li>
+    <li>Point every call at the copy for its type.</li>
+  </ol>
+  <div class="ox-why"><p>The generic body is checked first, once, against its bounds. That is why a missing bound is an error even when nothing calls the function. Only then does the compiler look at the call sites and stamp out the copies. The last step is what makes a generic call as direct as an ordinary one.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="quests">Forge quests</h2>
+<p>Five quests use the traits and generics from this chapter. <code>traits1</code> and <code>traits2</code> cover implementing and sharing behavior, <code>generics1</code> covers bounds, <code>traits3</code> builds trait objects, and <code>traits4</code> implements the standard traits.</p>
+<div class="ox-quests" data-chapter="14"></div>
+</section>
+
+<section>
+<h2 id="recap">Recap</h2>
+
+<div class="ox-recap">
+  <h3>Capabilities and generics</h3>
+  <ul>
+    <li>A <strong>trait</strong> is a set of methods a type promises to provide. <code>impl Trait for Type</code> is the promise. Default methods are shared bodies, and they can call the required methods.</li>
+    <li>You may implement a trait for a type only when the trait is defined in your crate, or when a type you define appears in the impl. That is the <strong>orphan rule</strong>. A newtype is the usual way around it.</li>
+    <li><code>impl Trait</code>, <code>&lt;T: Trait&gt;</code> and <code>where</code> all accept any type with the trait. A missing bound fails inside the generic body, with E0599 for a method or E0369 for an operator.</li>
+    <li>Generics are <strong>monomorphized</strong>: the compiler makes one specialized copy per concrete type. Calls are direct, and the binary holds more code.</li>
+    <li><code>dyn Trait</code> behind a pointer is one copy of the code plus a <strong>fat pointer</strong>, the data pointer and the vtable pointer. Calls go through the vtable. The trait must be dyn compatible, so no method may return <code>Self</code> or take its own type parameters, unless that method is excluded with <code>where Self: Sized</code>.</li>
+    <li>Implement <code>Display</code> for <code>{}</code> and <code>From</code> for conversions. <code>Into</code> comes free from <code>From</code>.</li>
+    <li><code>trait Tool: Named</code> makes <code>Named</code> a requirement of <code>Tool</code>. A const generic, such as <code>const N: usize</code> in <code>[i32; N]</code>, takes a number as a parameter.</li>
+  </ul>
+</div>
+
+<div class="ox-deck" data-chapter="14"></div>
+
+<details class="ox-think">
+  <summary>Explain it back: generics or <code>dyn Trait</code>? How do you decide?</summary>
+  <div class="ox-think-body">
+    <p>One good answer: "Start with generics. The compiler makes a specialized copy for each type, so calls are direct, can be inlined, and are checked at compile time. Use <code>dyn Trait</code> when one collection or field has to hold different types, or when the set of types isn't known until runtime. Then you pay one indirect call per method, and you get one copy of the code."</p>
+    <p>If your version mentioned <em>compile time or runtime</em>, <em>one copy or many</em>, and <em>mixed types in one collection</em>, you've got it.</p>
+  </div>
+</details>
+
+<div class="ox-complete-host"></div>
+</section>
+
+</main>
+</div>
+
+<script>
+(function () {
+  function init() {
+    var fig = document.getElementById("press");
+    if (!fig) return;
+
+    var TYPES = [
+      { ty: "i32",  arg: "42",     val: "42",     shown: "42",   fn: "describe_i32",  size: 4,  align: 4 },
+      { ty: "f64",  arg: "3.5",    val: "3.5",    shown: "3.5",  fn: "describe_f64",  size: 8,  align: 8 },
+      { ty: "&str", arg: "\"hi\"", val: "\"hi\"", shown: "hi",   fn: "describe_str",  size: 16, align: 8 },
+      { ty: "char", arg: "'x'",    val: "'x'",    shown: "x",    fn: "describe_char", size: 4,  align: 4 },
+      { ty: "bool", arg: "true",   val: "true",   shown: "true", fn: "describe_bool", size: 1,  align: 1 }
+    ];
+    var reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    var later = function (ms, fn) { if (reduce) fn(); else setTimeout(fn, ms); };
+    var q = function (sel) { return fig.querySelector(sel); };
+    var qa = function (sel) { return Array.prototype.slice.call(fig.querySelectorAll(sel)); };
+    var out = function (name) { return fig.querySelector('[data-out="' + name + '"]'); };
+
+    var copies = q(".press-copies");
+    var pressArt = q(".press-art");
+
+    // The Press character sits beside the code. It is drawn with the label of the
+    // type it is working on; a generic call stamps a plate, the dyn mode does not.
+    function drawPress(label) {
+      if (!pressArt || !window.OxCast) return null;
+      pressArt.innerHTML = OxCast.el("press", { label: label });
+      return pressArt.querySelector(".ca");
+    }
+    function stampPress(label) {
+      var node = drawPress(label);
+      if (node) OxCast.pose(node, "stamp", 700);
+    }
+    var dynBox = q(".press-dyn");
+    var empty = q(".press-empty");
+    var log = out("log");
+    var mode = "generic";
+    var stamped = [];   // type names that already have a copy, in order
+    var cards = {};     // type name -> card element
+    var seq = 0;        // newer presses cancel older timed steps
+
+    function setCount() {
+      var n = mode === "generic" ? stamped.length : 1;
+      out("count").textContent = String(n);
+      out("fill").style.width = (n / TYPES.length * 100) + "%";
+    }
+
+    function setMode(m) {
+      mode = m;
+      drawPress(m === "generic" ? "<T>" : "dyn");
+      qa("[data-mode]").forEach(function (b) {
+        b.setAttribute("aria-pressed", String(b.getAttribute("data-mode") === m));
+      });
+      copies.hidden = m !== "generic";
+      dynBox.hidden = m !== "dyn";
+      empty.hidden = m !== "generic" || stamped.length > 0;
+      log.textContent = m === "generic"
+        ? "Press a call to see what the compiler does with it."
+        : "One function serves every type. Each press follows the two pointers to the value and its vtable.";
+      setCount();
+    }
+
+    function callGeneric(i) {
+      var t = TYPES[i];
+      var shown = "<" + t.shown + ">";
+      seq++;
+      stampPress(t.ty);
+      if (stamped.indexOf(t.ty) === -1) {
+        stamped.push(t.ty);
+        var card = document.createElement("div");
+        card.className = "press-card is-new";
+        var label = document.createElement("small");
+        label.textContent = "copy for T = " + t.ty;
+        var code = document.createElement("code");
+        code.textContent = "fn " + t.fn + "(x: " + t.ty + ") -> String";
+        card.appendChild(label);
+        card.appendChild(code);
+        copies.appendChild(card);
+        cards[t.ty] = card;
+        log.textContent = "describe(" + t.arg + ") printed " + shown + ". The compiler stamps out " + t.fn + " for T = " + t.ty + ".";
+      } else {
+        var old = cards[t.ty];
+        old.classList.remove("is-hit");
+        void old.offsetWidth;
+        old.classList.add("is-hit");
+        later(900, function () { old.classList.remove("is-hit"); });
+        log.textContent = "describe(" + t.arg + ") printed " + shown + ". " + t.fn + " is already generated, so the compiler reuses it and stamps nothing new.";
+      }
+      empty.hidden = true;
+      setCount();
+    }
+
+    function callDyn(i) {
+      var t = TYPES[i];
+      var my = ++seq;
+      var dn = drawPress("dyn");
+      if (dn) OxCast.pose(dn, "think", 900);
+      var shown = "<" + t.shown + ">";
+      qa(".is-live").forEach(function (n) { n.classList.remove("is-live"); });
+      out("data").textContent = "points to the value";
+      out("vt").textContent = "points to vtable for " + t.ty;
+      out("value").textContent = t.val;
+      out("vtname").textContent = "vtable for " + t.ty;
+      out("size").textContent = String(t.size);
+      out("align").textContent = String(t.align);
+      out("fmt").textContent = "<" + t.ty + " as Display>::fmt";
+      later(0, function () {
+        if (my !== seq) return;
+        q('[data-slot="data"]').classList.add("is-live");
+        q('[data-target="value"]').classList.add("is-live");
+      });
+      later(350, function () {
+        if (my !== seq) return;
+        q('[data-slot="vtable"]').classList.add("is-live");
+        q('[data-target="vtable"]').classList.add("is-live");
+      });
+      later(700, function () {
+        if (my !== seq) return;
+        q('[data-entry="fmt"]').classList.add("is-live");
+      });
+      later(1000, function () {
+        if (my !== seq) return;
+        log.textContent = "describe_dyn(&" + t.val + ") printed " + shown + ". One copy of the code ran, with one indirect call through the vtable.";
+      });
+    }
+
+    qa("[data-mode]").forEach(function (b) {
+      b.addEventListener("click", function () { setMode(b.getAttribute("data-mode")); });
+    });
+    qa("[data-call]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var i = parseInt(b.getAttribute("data-call"), 10);
+        if (mode === "generic") callGeneric(i); else callDyn(i);
+      });
+    });
+    setMode("generic");
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
+</script>
+</body>
+</html>

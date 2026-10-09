@@ -1,0 +1,1140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Structs &amp; Methods · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<link rel="stylesheet" href="../assets/cast-art.css">
+<link rel="stylesheet" href="../assets/cast.css">
+<link rel="stylesheet" href="../assets/motion.css">
+<link rel="stylesheet" href="../assets/story.css">
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/quests-data.js" defer></script>
+<script src="../assets/cards/ch09.js" defer></script>
+<script src="../assets/scenarios/ch09.js" defer></script>
+<script src="../assets/motion/ch09.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+<script src="../assets/cast-art.js"></script>
+<script src="../assets/cast.js" defer></script>
+<script src="../assets/motion.js" defer></script>
+<script src="../assets/xray.js" defer></script>
+<script src="../assets/story.js" defer></script>
+</head>
+<body data-chapter="9">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<div class="ox-page">
+<aside class="ox-rail" aria-label="Chapter contents"></aside>
+<main class="ox-main" id="main">
+
+<header class="ox-hero" data-auto>
+  <ul>
+    <li>Define structs and create values of them, including tuple and unit structs.</li>
+    <li>Write methods and choose between <code>&amp;self</code>, <code>&amp;mut self</code> and <code>self</code>.</li>
+    <li>Write constructors as associated functions.</li>
+    <li>Derive <code>Debug</code>, <code>Clone</code>, <code>PartialEq</code> and <code>Default</code>, and know what each one gives you.</li>
+  </ul>
+</header>
+
+<section>
+<h2 id="define">A struct is a named shape</h2>
+
+<p>A struct groups related values under one name, and gives each piece a field name. If you have written a PHP class that only holds data, you have already written something like a struct. Here is one for a user account, with a program that creates a value, changes a field and reads the fields back.</p>
+
+<div class="ox-meet" data-cast="mold" data-say="Pour a value through me and it comes out with exactly my fields. Leave one out, and I won't let it through."></div>
+
+<pre class="rs" data-run data-stdout="Ana &lt;ana@x.io&gt;, active: true, logins: 1">
+struct User {
+    name: String,
+    email: String,
+    active: bool,
+    logins: u64,
+}
+
+fn main() {
+    let mut u = User {
+        name: String::from("Ana"),
+        email: String::from("ana@x.io"),
+        active: true,
+        logins: 0,
+    };
+    u.logins += 1;
+    println!("{} &lt;{}&gt;, active: {}, logins: {}", u.name, u.email, u.active, u.logins);
+}
+</pre>
+
+<p>A struct literal names the type, then sets every field inside braces. The fields can appear in any order, but each one has to appear exactly once. Read a field with a dot, as in <code>u.name</code>. Change a field with an assignment, but only through a binding declared <code>mut</code>.</p>
+
+<aside class="ox-callout" data-kind="insight">
+  <p><code>mut</code> belongs to the binding, not to the fields. With ordinary fields there is no way to make <code>logins</code> changeable while <code>name</code> stays fixed. Declare <code>u</code> as <code>mut</code> and every field can change. Leave it out and none of them can. The exception is a field such as <code>Cell</code>, which changes through a shared reference. Chapter 17 explains <code>Cell</code> and <code>RefCell</code>.</p>
+</aside>
+
+<p>Pour a few literals through the Mold and watch what comes out. The next question is about the one that leaves a field out.</p>
+
+<div class="ox-motion" data-scene="ch09-pour"></div>
+
+<p>When a local variable has the same name as a field, you can write the name once. This is called field init shorthand. The bridge below puts it next to the PHP constructor you already know.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+class User {
+    public function __construct(
+        public string $name,
+        public string $email,
+        public bool $active = true,
+        public int $logins = 0,
+    ) {}
+}
+
+$u = new User('Ana', 'ana@x.io');</pre>
+  <pre class="rs">
+struct User {
+    name: String,
+    email: String,
+    active: bool,
+    logins: u64,
+}
+
+fn new_user(name: String, email: String) -> User {
+    User { name, email, active: true, logins: 0 }
+}
+
+fn main() {
+    let u = new_user(String::from("Ana"), String::from("ana@x.io"));
+    println!("{} {} {} {}", u.name, u.email, u.active, u.logins);
+}</pre>
+  <div class="ox-bridge-note"><p>Constructor promotion declares the fields and the parameters in one place. A Rust struct declares each field once, and every literal has to name every field. A forgotten PHP argument fails when the code runs. A forgotten Rust field fails when the code compiles. Rust also has no default parameter values, so the function supplies the defaults itself.</p></div>
+</div>
+
+<p>PHP 8.2 added the <code>readonly class</code>. Every property of such a class is read-only, and the check happens when the code runs. Rust has no class-level keyword for this. A struct value is read-only unless its binding is <code>mut</code>, and the check happens at compile time:</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+declare(strict_types=1);
+
+final readonly class User
+{
+    public function __construct(
+        public string $name,
+        public int $logins = 0,
+    ) {}
+}
+
+$u = new User('Ana');
+$u-&gt;logins += 1;   // Error at runtime: Cannot modify readonly property User::$logins</pre>
+  <pre class="rs" data-check="E0594">
+struct User {
+    name: String,
+    logins: u64,
+}
+
+fn main() {
+    let u = User { name: String::from("Ana"), logins: 0 };
+    u.logins += 1;
+    println!("{} {}", u.name, u.logins);
+}</pre>
+  <div class="ox-bridge-note"><p>Both languages stop the write, but at different times. PHP's <code>Error</code> comes when the request reaches that line, so a test has to hit it. Rust's error comes before the program exists. Rust also decides per binding: <code>let mut u</code> makes the same write legal, while PHP fixes the rule for the whole class.</p></div>
+</div>
+
+<pre class="rustc">error[E0594]: cannot assign to `u.logins`, as `u` is not declared as mutable
+ --&gt; src/main.rs:8:5
+  |
+8 |     u.logins += 1;
+  |     ^^^^^^^^^^^^^ cannot assign
+  |
+help: consider changing this to be mutable
+  |
+7 |     let mut u = User { name: String::from("Ana"), logins: 0 };
+  |         +++
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0594`.</pre>
+
+<div class="ox-quiz" data-id="09:missing-field">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0063">
+struct User {
+    name: String,
+    email: String,
+    active: bool,
+    logins: u64,
+}
+
+fn main() {
+    let u = User {
+        name: String::from("Ana"),
+        email: String::from("ana@x.io"),
+        active: true,
+    };
+    println!("{}", u.name);
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. <code>logins</code> starts at 0 by default.</li>
+    <li data-correct>No. A struct literal must set every field. The compiler reports E0063 and names <code>logins</code>.</li>
+    <li>Yes, with a warning. <code>logins</code> is null until you set it.</li>
+  </ol>
+  <div class="ox-why"><p>Rust has no default field values and no implicit null. Every field has to appear in the literal. The check runs at compile time, so the program never runs with a half-built <code>User</code>.</p></div>
+</div>
+
+<p>Here is what rustc prints for that program:</p>
+
+<pre class="rustc">
+error[E0063]: missing field `logins` in initializer of `User`
+ --> src/main.rs:9:13
+  |
+9 |     let u = User {
+  |             ^^^^ missing `logins`
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0063`.
+</pre>
+</section>
+
+<section>
+<h2 id="update">Struct update syntax</h2>
+
+<p>Often a new value is an old value with one or two fields changed. The <code>..</code> form fills in every field you did not write from another value of the same struct. The program below uses it. Predict what the compiler does with the last line, which reads a field of <code>u1</code>, the value the update was taken from.</p>
+
+<div class="ox-quiz" data-id="09:update-move">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0382">
+struct User {
+    name: String,
+    email: String,
+    active: bool,
+    logins: u64,
+}
+
+fn main() {
+    let u1 = User {
+        name: String::from("Ana"),
+        email: String::from("ana@x.io"),
+        active: true,
+        logins: 0,
+    };
+    let u2 = User {
+        email: String::from("bo@x.io"),
+        ..u1
+    };
+    println!("{} {}", u2.name, u2.email);
+    println!("{}", u1.name);
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. The update replaced <code>email</code>, so <code>u1.name</code> is untouched.</li>
+    <li data-correct>No. <code>..u1</code> moved the <code>String</code> in <code>name</code> out of <code>u1</code> and into <code>u2</code>. <code>u1.name</code> is gone.</li>
+    <li>No. A struct with a <code>bool</code> field can't use update syntax.</li>
+  </ol>
+  <div class="ox-why"><p>Only <code>name</code> moved. <code>active</code> and <code>logins</code> are <code>Copy</code>, so <code>u2</code> copied them and <code>u1</code> keeps its own. <code>email</code> was written in the literal, so <code>u2</code> never took <code>u1</code>'s email. Change the last line to <code>println!("{}", u1.email);</code> and the program compiles.</p></div>
+</div>
+
+<p>Here is what rustc says about the last line:</p>
+
+<pre class="rustc">
+error[E0382]: borrow of moved value: `u1.name`
+  --> src/main.rs:20:20
+   |
+15 |       let u2 = User {
+   |  ______________-
+16 | |         email: String::from("bo@x.io"),
+17 | |         ..u1
+18 | |     };
+   | |_____- value moved here
+19 |       println!("{} {}", u2.name, u2.email);
+20 |       println!("{}", u1.name);
+   |                      ^^^^^^^ value borrowed here after move
+   |
+   = note: move occurs because `u1.name` has type `String`, which does not implement the `Copy` trait
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0382`.
+</pre>
+
+<aside class="ox-callout" data-kind="compiler">
+  <p>The arrow <em>value moved here</em> covers the whole update, because that is where the move happens. The arrow <em>value borrowed here after move</em> points at <code>u1.name</code>, not at all of <code>u1</code>. The compiler tracks moves one field at a time.</p>
+</aside>
+
+<aside class="ox-callout" data-kind="trap">
+  <p>After <code>..u1</code>, <code>u1</code> is partly moved. Its <code>name</code> is gone, but <code>email</code>, <code>active</code> and <code>logins</code> are still usable, because the update never took them. Check which fields the update actually took before you reuse the original.</p>
+</aside>
+
+<p>The motion below uses the same idea with one change. The literal writes <code>name</code>, so the update takes <code>email</code> from <code>ana</code> and copies <code>age</code>. Watch which owner ends up holding the moved <code>email</code>.</p>
+
+<div class="ox-motion" data-scene="ch09-update"></div>
+
+<p>PHP 8.5 has a relative of struct update syntax. <code>clone($obj, [...])</code> copies an object and overwrites the named properties. Inside the class, it also works on <code>readonly</code> properties. A method that wraps it and returns a changed copy is the usual shape of a with-er:</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+declare(strict_types=1);
+
+final class Point
+{
+    public function __construct(
+        public readonly int $x,
+        public readonly int $y,
+    ) {}
+
+    public function withX(int $x): static
+    {
+        return clone($this, ['x' =&gt; $x]);
+    }
+}
+
+$p = new Point(1, 2);
+$q = $p-&gt;withX(9);   // $q-&gt;x is 9, and $p is unchanged</pre>
+  <pre class="rs" data-stdout="1 2 / 9 2">
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+fn main() {
+    let p = Point { x: 1, y: 2 };
+    let q = Point { x: 9, ..p };
+    println!("{} {} / {} {}", p.x, p.y, q.x, q.y);
+}</pre>
+  <div class="ox-bridge-note"><p>Both forms copy a value and change a few fields. Rust's <code>..p</code> is part of the struct literal, so the compiler checks that every field is either written or taken from <code>p</code>, and that each one has the right type. PHP's clone-with doesn't run the constructor, so a check that lives there is skipped, and a with-er can set any value the property type allows. If a rule matters, check it in the with-er itself.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="kinds">Tuple structs and unit structs</h2>
+
+<p>A tuple struct has fields without names. You read them by position, with <code>.0</code>, <code>.1</code> and so on. Use one when the position already says what the value is.</p>
+
+<pre class="rs" data-run data-stdout="3.5 1 5">
+struct Meters(f64);
+struct Point3(i32, i32, i32);
+struct Marker;
+
+fn main() {
+    let d = Meters(3.5);
+    let p = Point3(1, 2, 3);
+    let _m = Marker;
+    println!("{} {} {}", d.0, p.0, p.1 + p.2);
+}
+</pre>
+
+<p>A tuple struct with a single field is called a <strong>newtype</strong>. It gives a plain type its own name. <code>Meters</code> and <code>Seconds</code> can both wrap an <code>f64</code>, but the compiler treats them as different types, so a distance can't be passed where a time belongs. Predict whether this call compiles.</p>
+
+<div class="ox-quiz" data-id="09:newtype-mix">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0308">
+struct Meters(f64);
+struct Seconds(f64);
+
+fn speed(distance: Meters, time: Seconds) -&gt; f64 {
+    distance.0 / time.0
+}
+
+fn main() {
+    let d = Meters(100.0);
+    let t = Seconds(9.6);
+    println!("{}", speed(t, d));
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. Both wrap an <code>f64</code>, so the arguments match.</li>
+    <li data-correct>No. <code>speed</code> wants <code>Meters</code> first. Two newtypes around the same <code>f64</code> are still different types.</li>
+    <li>No. Tuple structs can't be passed to functions.</li>
+  </ol>
+  <div class="ox-why"><p>The compiler reports E0308, "arguments to this function are incorrect", and suggests swapping them. The mistake is caught before the program runs, and the wrapper costs nothing at runtime. <code>Meters</code> is 8 bytes, the same size as the <code>f64</code> inside it.</p></div>
+</div>
+
+<p>A unit struct has no fields at all. It is written <code>struct Marker;</code> and takes zero bytes. Use one when you need a distinct type and have nothing to store in it. You will meet unit structs again with traits in Chapter 14.</p>
+</section>
+
+<section>
+<h2 id="methods">impl: methods live next to the data</h2>
+
+<p>Behavior goes in an <code>impl</code> block for the type. A method is a function in that block whose first parameter is <code>self</code>. The program below has three methods, and each one takes <code>self</code> in a different way.</p>
+
+<pre class="rs" data-run data-stdout="6\n24\n36">
+struct Rectangle {
+    w: u32,
+    h: u32,
+}
+
+impl Rectangle {
+    fn area(&amp;self) -&gt; u32 {
+        self.w * self.h
+    }
+
+    fn scale(&amp;mut self, k: u32) {
+        self.w *= k;
+        self.h *= k;
+    }
+
+    fn into_square(self) -&gt; Rectangle {
+        let side = self.w.max(self.h);
+        Rectangle { w: side, h: side }
+    }
+}
+
+fn main() {
+    let mut r = Rectangle { w: 2, h: 3 };
+    println!("{}", r.area());
+    r.scale(2);
+    println!("{}", r.area());
+    let sq = r.into_square();
+    println!("{}", sq.area());
+}
+</pre>
+
+<p>The first parameter tells you what the method may do with the value. There are three forms:</p>
+
+<div class="ox-rules">
+  <div class="ox-rule"><div><p><code>&amp;self</code>: look.</p><p>The method borrows the value for reading. Most methods are this kind.</p></div></div>
+  <div class="ox-rule"><div><p><code>&amp;mut self</code>: change.</p><p>The method borrows the value for writing. The caller's binding has to be <code>mut</code>.</p></div></div>
+  <div class="ox-rule"><div><p><code>self</code>: consume.</p><p>The method takes the value by value. The caller's value moves in, and it is usually gone afterwards.</p></div></div>
+</div>
+
+<p class="ox-pull">The first parameter says what a method may do to the value.</p>
+
+<p>You never write the <code>&amp;</code> at the call site. The method call borrows for you. <code>r.area()</code> is the same call as <code>Rectangle::area(&amp;r)</code>, and <code>r.scale(2)</code> is <code>Rectangle::scale(&amp;mut r, 2)</code>. Step through the three forms below. The three programs share one struct and one starting value, and only the call changes.</p>
+
+<div class="ox-xray ox-wide" data-scenario="recv-ref,recv-mut,recv-owned"></div>
+
+<aside class="ox-callout" data-kind="insight">
+  <p>A method is an ordinary function with one special parameter, and the dot is shorthand for passing that parameter. Once you read <code>r.area()</code> as <code>Rectangle::area(&amp;r)</code>, the three receivers are just three different parameters.</p>
+</aside>
+
+<p>Now choose the receiver yourself. This method is meant to change a field, but it doesn't compile.</p>
+
+<div class="ox-quiz" data-id="09:receiver">
+  <p class="ox-q">Which receiver does <code>rename</code> need, so that it can change <code>name</code>?</p>
+  <pre class="rs" data-check="E0594">
+struct User {
+    name: String,
+}
+
+impl User {
+    fn rename(&amp;self, name: &amp;str) {
+        self.name = name.to_string();
+    }
+}</pre>
+  <ol class="ox-choices">
+    <li><code>&amp;self</code>. It is the default receiver, so it should work here.</li>
+    <li data-correct><code>&amp;mut self</code>. It is the one borrow that lets a method assign to fields in place.</li>
+    <li data-feedback="self does compile with mut self and a returned value, but then the caller has to take the value back from the method."><code>self</code>. It works, and the caller keeps the value.</li>
+  </ol>
+  <div class="ox-why"><p><code>&amp;self</code> is a read-only borrow, so the assignment is refused with E0594: "cannot assign to <code>self.name</code>, which is behind a <code>&amp;</code> reference". Use <code>&amp;mut self</code>. The caller's binding must then be <code>mut</code>. Reach for plain <code>self</code> only when the method should consume the value and return a new one.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="privacy">Private fields and getters</h2>
+
+<p>Fields are private to the module that defines them. Code outside that module can't read or write a field directly. It goes through the functions the module chooses to expose. Chapter 16 covers modules in full. A <code>mod</code> block is enough to show the rule here.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+declare(strict_types=1);
+
+final class Account
+{
+    public function __construct(
+        public private(set) int $balance,
+    ) {}
+
+    public function deposit(int $amount): void
+    {
+        $this-&gt;balance += $amount;
+    }
+}
+
+$acc = new Account(100);
+$acc-&gt;deposit(25);
+echo $acc-&gt;balance;   // 125
+$acc-&gt;balance = 0;    // Error at runtime: Cannot modify private(set) property</pre>
+  <pre class="rs" data-run data-stdout="125">
+mod account {
+    pub struct Account {
+        balance: i64, // private: only this module can write it
+    }
+
+    impl Account {
+        pub fn new(balance: i64) -&gt; Self {
+            Account { balance }
+        }
+
+        // The getter. Code outside the module can read the balance through it.
+        pub fn balance(&amp;self) -&gt; i64 {
+            self.balance
+        }
+
+        pub fn deposit(&amp;mut self, amount: i64) {
+            self.balance += amount;
+        }
+    }
+}
+
+fn main() {
+    let mut acc = account::Account::new(100);
+    acc.deposit(25);
+    println!("{}", acc.balance());
+}</pre>
+  <div class="ox-bridge-note"><p>PHP 8.4 asymmetric visibility gives the same split as a private field with a getter: readable everywhere, writable only inside the class. The rule matches, but the enforcement doesn't. PHP throws an <code>Error</code> when the bad write runs. Rust refuses to compile it, so the bad write never reaches a running program.</p></div>
+</div>
+
+<p>The compiler applies the same boundary to fields. Does this compile?</p>
+
+<div class="ox-quiz" data-id="09:private-field">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0616">
+mod account {
+    pub struct Account {
+        balance: i64,
+    }
+
+    impl Account {
+        pub fn new(balance: i64) -&gt; Self {
+            Account { balance }
+        }
+
+        pub fn balance(&amp;self) -&gt; i64 {
+            self.balance
+        }
+
+        pub fn deposit(&amp;mut self, amount: i64) {
+            self.balance += amount;
+        }
+    }
+}
+
+fn main() {
+    let mut acc = account::Account::new(100);
+    acc.deposit(25);
+    println!("{}", acc.balance());
+    acc.balance = 0;
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. The struct is <code>pub</code>, so its fields are too.</li>
+    <li data-correct>No. <code>balance</code> is private to module <code>account</code>, so <code>main</code> can't assign to it. That is error E0616.</li>
+  </ol>
+  <div class="ox-why">
+    <p>Being <code>pub</code> makes the struct visible, not its fields. Each field needs its own <code>pub</code>. Here the only write path is <code>deposit</code>, and it lives inside the module.</p>
+    <pre class="rustc">error[E0616]: field `balance` of struct `Account` is private
+  --&gt; src/main.rs:25:9
+   |
+25 |     acc.balance = 0;
+   |         ^^^^^^^ private field
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0616`.</pre>
+  </div>
+</div>
+
+<p>PHP 8.4 property hooks go a step further. A <code>set</code> hook runs on every write to the property, so the class can check a value on the way in:</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+declare(strict_types=1);
+
+final class Account
+{
+    public int $balance = 0 {
+        set (int $value) {
+            if ($value &lt; 0) {
+                throw new InvalidArgumentException("balance cannot be negative");
+            }
+            $this-&gt;balance = $value;
+        }
+    }
+}
+
+$acc = new Account();
+$acc-&gt;balance = 40;
+$acc-&gt;balance = -1;   // throws, and the balance stays 40</pre>
+  <pre class="rs" data-run data-stdout="40\nrejected\n40">
+mod account {
+    pub struct Account {
+        balance: i64,
+    }
+
+    impl Account {
+        pub fn new() -&gt; Self {
+            Account { balance: 0 }
+        }
+
+        // Returns false and keeps the old value when the new one is negative.
+        pub fn set_balance(&amp;mut self, value: i64) -&gt; bool {
+            if value &lt; 0 {
+                return false;
+            }
+            self.balance = value;
+            true
+        }
+
+        pub fn balance(&amp;self) -&gt; i64 {
+            self.balance
+        }
+    }
+}
+
+fn main() {
+    let mut acc = account::Account::new();
+    acc.set_balance(40);
+    println!("{}", acc.balance());
+    if !acc.set_balance(-1) {
+        println!("rejected");
+    }
+    println!("{}", acc.balance());
+}</pre>
+  <div class="ox-bridge-note"><p>A PHP hook runs on every write, so <code>$acc-&gt;balance = -1</code> looks like a plain field assignment and still runs a check. The Rust call is visibly a method call, so the check sits in the source where a reader can see it. Rust has no way to run code on a plain field access. The <code>bool</code> is a stand-in here. Chapter 11 replaces that kind of answer with a <code>Result</code>, which the caller has to handle.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="assoc">Associated functions and constructors</h2>
+
+<p>A function in an <code>impl</code> block that takes no <code>self</code> is an <strong>associated function</strong>. You call it on the type, with two colons: <code>User::new(...)</code>. Rust has no special constructor syntax. By convention, the constructor is a function named <code>new</code> that returns <code>Self</code>.</p>
+
+<pre class="rs" data-run data-stdout="Ana ana@x.io true 0">
+struct User {
+    name: String,
+    email: String,
+    active: bool,
+    logins: u64,
+}
+
+impl User {
+    fn new(name: &amp;str, email: &amp;str) -&gt; Self {
+        Self {
+            name: name.to_string(),
+            email: email.to_string(),
+            active: true,
+            logins: 0,
+        }
+    }
+}
+
+impl User {
+    fn is_active(&amp;self) -&gt; bool {
+        self.active
+    }
+}
+
+fn main() {
+    let u = User::new("Ana", "ana@x.io");
+    println!("{} {} {} {}", u.name, u.email, u.is_active(), u.logins);
+}
+</pre>
+
+<p>That example has two <code>impl</code> blocks for one type, and Rust allows as many as you like. Trait implementations are also separate <code>impl</code> blocks, which is how a type gets methods from a trait.</p>
+
+<aside class="ox-callout" data-kind="php">
+  <p>PHP 8.3 added the <code>#[\Override]</code> attribute. Put it on a method that is meant to replace a parent or interface method, and PHP checks the match as soon as it loads the class:</p>
+  <pre class="php">
+interface HasColor
+{
+    public function color(): string;
+}
+
+final class Card implements HasColor
+{
+    #[\Override]
+    public function color(): string
+    {
+        return 'red';
+    }
+}</pre>
+  <p>If the method matches nothing, PHP stops with a fatal error that names the attribute, such as <code>Card::label() has #[\Override] attribute, but no matching parent method exists</code>. Rust checks every trait impl this way, with no attribute needed. A method that the trait doesn't declare is error E0407. Chapter 14 covers traits in full.</p>
+</aside>
+
+<p>Constructors follow a few naming conventions. The standard library uses them everywhere, so learn them once:</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Name</th><th>Use it for</th><th>Real example</th></tr></thead>
+  <tbody>
+    <tr><td><code>new</code></td><td>The ordinary constructor, with no special input.</td><td><code>Vec::new()</code></td></tr>
+    <tr><td><code>with_capacity</code></td><td>A constructor that reserves room up front.</td><td><code>Vec::with_capacity(10)</code></td></tr>
+    <tr><td><code>from_x</code></td><td>A conversion from another type.</td><td><code>String::from_utf8(bytes)</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="ox-bridge">
+  <pre class="php">
+class User {
+    public function __construct(
+        public string $name,
+        public string $email,
+    ) {}
+
+    public static function fromRow(array $row): static
+    {
+        return new static($row['name'], $row['email']);
+    }
+}
+
+$u = User::fromRow($row);</pre>
+  <pre class="rs">
+struct User {
+    name: String,
+    email: String,
+}
+
+impl User {
+    fn from_row(name: &amp;str, email: &amp;str) -&gt; Self {
+        Self { name: name.to_string(), email: email.to_string() }
+    }
+}
+
+fn main() {
+    let u = User::from_row("Ana", "ana@x.io");
+    println!("{} {}", u.name, u.email);
+}</pre>
+  <div class="ox-bridge-note"><p>A PHP <code>static</code> method and a Rust associated function both hang off the class name, so <code>User::fromRow()</code> and <code>User::from_row()</code> read the same way. Rust has no <code>static</code> keyword on methods. Any function in an <code>impl</code> block without <code>self</code> belongs to the type, and its return type can be <code>Self</code>, which names that type.</p></div>
+</div>
+
+<p>Now fill in the blanks. The constructor takes two numbers and builds a <code>Rect</code>. The two blanks are the return type and the struct literal inside the body.</p>
+
+<div class="ox-fill" data-id="09:fill-new">
+  <p class="ox-q">Fill in the two blanks so that <code>new</code> returns a <code>Rect</code> built from its arguments.</p>
+  <pre class="rs" data-stdout="2 3">
+struct Rect {
+    w: u32,
+    h: u32,
+}
+
+impl Rect {
+    fn new(w: u32, h: u32) -&gt; [[Self|Rect]] {
+        [[Self|Rect]] { w, h }
+    }
+}
+
+fn main() {
+    let r = Rect::new(2, 3);
+    println!("{} {}", r.w, r.h);
+}</pre>
+  <div class="ox-why"><p><code>Self</code> means the type that the impl block is for. Inside <code>impl Rect</code>, <code>Self</code> and <code>Rect</code> name the same type, so both blanks accept either word. Prefer <code>Self</code>. If you rename the type later, the constructor body doesn't need to change with it.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="derive">derive: free abilities</h2>
+
+<p>A new struct can't be printed, compared or copied until you tell the compiler how. <code>#[derive(...)]</code> above a struct asks the compiler to write the standard version of an ability for you. These four are the ones you will use most:</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Derive</th><th>What it gives you</th></tr></thead>
+  <tbody>
+    <tr><td><code>Debug</code></td><td><code>{:?}</code> and <code>{:#?}</code> print the value, with the type name and every field.</td></tr>
+    <tr><td><code>Clone</code></td><td><code>.clone()</code> makes a new value by cloning each field.</td></tr>
+    <tr><td><code>PartialEq</code></td><td><code>==</code> and <code>!=</code> compare the fields one by one.</td></tr>
+    <tr><td><code>Default</code></td><td><code>Settings::default()</code> fills each field with its default: <code>0</code>, <code>false</code>, an empty <code>String</code>.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<pre class="rs" data-run data-stdout="Settings { name: &quot;&quot;, retries: 0, verbose: false }\nSettings {\n    name: &quot;api&quot;,\n    retries: 0,\n    verbose: false,\n}\ntrue">
+#[derive(Debug, Clone, PartialEq, Default)]
+struct Settings {
+    name: String,
+    retries: u32,
+    verbose: bool,
+}
+
+fn main() {
+    let base = Settings::default();
+    println!("{base:?}");
+    let api = Settings {
+        name: String::from("api"),
+        ..Default::default()
+    };
+    println!("{api:#?}");
+    let copy = dbg!(api.clone());
+    println!("{}", copy == api);
+}
+</pre>
+
+<p>Read the output. <code>{:?}</code> prints on one line, and <code>{:#?}</code> spreads the value over several lines with indentation. <code>..Default::default()</code> fills every field you did not write. The comparison <code>copy == api</code> works because the struct derives <code>PartialEq</code>.</p>
+
+<aside class="ox-callout" data-kind="php">
+  <p>PHP's <code>==</code> on two objects of the same class compares their properties, and <code>print_r</code> and <code>var_dump</code> print them. Rust asks you to opt in to each of those. Without <code>PartialEq</code>, <code>a == b</code> on your struct is a compile error (E0369). Without <code>Debug</code>, <code>{:?}</code> won't compile for that struct.</p>
+</aside>
+
+<p><code>dbg!</code> is for quick debugging. It prints the file, the line, the expression and its value to <strong>stderr</strong>, then returns the value. You can wrap any expression in it without changing what the program does. The line it printed went to stderr, so it doesn't appear in the stdout above.</p>
+
+<p>Without the derive, <code>{:?}</code> doesn't exist for your type, and the compiler stops:</p>
+
+<pre class="rs" data-check="E0277" data-badge="error">
+struct Rect {
+    w: u32,
+    h: u32,
+}
+
+fn main() {
+    let r = Rect { w: 2, h: 3 };
+    println!("{:?}", r);
+}</pre>
+
+<pre class="rustc">
+error[E0277]: `Rect` doesn't implement `Debug`
+ --> src/main.rs:8:22
+  |
+8 |     println!("{:?}", r);
+  |               ----   ^ `Rect` cannot be formatted using `{:?}` because it doesn't implement `Debug`
+  |               |
+  |               required by this formatting parameter
+  |
+  = help: the trait `Debug` is not implemented for `Rect`
+  = note: add `#[derive(Debug)]` to `Rect` or manually `impl Debug for Rect`
+help: consider annotating `Rect` with `#[derive(Debug)]`
+  |
+1 + #[derive(Debug)]
+2 | struct Rect {
+  |
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0277`.
+</pre>
+
+<div class="ox-quiz" data-id="09:debug-output">
+  <p class="ox-q">What does this print?</p>
+  <pre class="rs" data-stdout="Point { x: 1, y: 2 } sum 3">
+#[derive(Debug)]
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+fn main() {
+    let p = Point { x: 1, y: 2 };
+    println!("{:?} sum {}", p, p.x + p.y);
+}</pre>
+  <ol class="ox-choices">
+    <li>1 2 sum 3</li>
+    <li data-correct><code>Point { x: 1, y: 2 } sum 3</code></li>
+    <li data-feedback="That is the format for a tuple struct. Point has named fields, so Debug prints the names."><code>Point(1, 2) sum 3</code></li>
+  </ol>
+  <div class="ox-why"><p><code>{:?}</code> prints the type name, then each field with its name and value, in declaration order. <code>{:#?}</code> prints the same content with one field per line. A tuple struct prints with parentheses, because its fields have no names.</p></div>
+</div>
+
+<p>A derive can also make a struct <code>Copy</code>. Then assignment copies the value instead of moving it, the way it already does for integers. Copy is allowed only when every field is <code>Copy</code>, and it requires <code>Clone</code> as well, so you derive both. This <code>Point</code> holds two integers, so it qualifies:</p>
+
+<pre class="rs" data-run data-stdout="Point { x: 1, y: 2 } Point { x: 1, y: 2 } true">
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+fn main() {
+    let p = Point { x: 1, y: 2 };
+    let q = p;
+    println!("{p:?} {q:?} {}", p == q);
+}
+</pre>
+
+<p>Give the same struct a <code>String</code> field, and the derive fails:</p>
+
+<div class="ox-quiz" data-id="09:copy-string">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0204">
+#[derive(Clone, Copy)]
+struct Person {
+    name: String,
+}
+
+fn main() {
+    let p = Person { name: String::from("Ana") };
+    println!("{}", p.name);
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. <code>Clone</code> makes the <code>String</code> copyable.</li>
+    <li data-correct>No. <code>Copy</code> needs every field to be <code>Copy</code>, and <code>String</code> is not. The compiler reports E0204.</li>
+    <li>No. A struct with a <code>String</code> field can't derive anything.</li>
+  </ol>
+  <div class="ox-why"><p>A <code>String</code> owns heap memory, and duplicating its bits would give two owners of one buffer. Only the types that are <code>Copy</code> can be copied that way, and Chapter 6 listed them. For this struct, derive <code>Clone</code> alone and call <code>.clone()</code> when you need a second value.</p></div>
+</div>
+<h3 id="default-by-hand">Writing <code>Default</code> by hand</h3>
+
+<p><code>derive(Default)</code> fills each field with its default value. Sometimes the values you want are not zero or empty, such as a retry count of 3. Then you write the method yourself. This is the manual version of what <code>derive</code> writes.</p>
+
+<pre class="rs" data-run data-stdout="Settings { name: &quot;api&quot;, retries: 3, verbose: false }">
+#[derive(Debug)]
+struct Settings {
+    name: String,
+    retries: u32,
+    verbose: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Settings {
+            name: String::from("api"),
+            retries: 3,
+            verbose: false,
+        }
+    }
+}
+
+fn main() {
+    println!("{:?}", Settings::default());
+}
+</pre>
+
+<p>The block <code>impl Default for Settings</code> says that <code>Settings</code> has a <code>default</code> function, and <code>Self</code> means <code>Settings</code>. Chapter 14 explains the <code>impl Trait for Type</code> form in full. For now, read it as a promise: this type knows its own default, and here is the code for it.</p>
+</section>
+
+<section>
+<h2 id="layout" data-toc="Memory layout">What a struct looks like in memory</h2>
+
+<p>A struct's fields are stored inline, one after another, in a single block of memory. Each field starts at an address that suits its alignment. A <code>u32</code> wants an address that is a multiple of four, so the compiler may leave a few unused bytes before it. Those unused bytes are <strong>padding</strong>. A <code>String</code> field takes 24 bytes inside the struct: its pointer, length and capacity. Its characters stay on the heap.</p>
+
+<figure class="ox-figure">
+<svg viewBox="0 0 640 260" width="640" role="img" aria-label="A User value on the stack. Its name and email fields each hold a pointer, a length and a capacity, and arrows lead from those pointers to the characters on the heap. The active and logins fields sit beside them.">
+  <text x="20" y="22" class="t-muted" font-size="14">STACK</text>
+  <text x="400" y="22" class="t-muted" font-size="14">HEAP</text>
+  <rect x="20" y="34" width="300" height="214" rx="8" class="f-stack s-muted" stroke-width="1.5"/>
+  <text x="34" y="56" font-size="16" font-weight="700" class="t-muted">user: User</text>
+  <rect x="34" y="66" width="272" height="56" rx="6" class="f-own" stroke-width="1.5"/>
+  <text x="46" y="88" font-size="15" font-weight="700" class="t-own">name: String</text>
+  <text x="46" y="108" font-size="13" class="t-muted">ptr · len 3 · cap 3  (24 bytes)</text>
+  <rect x="34" y="132" width="272" height="56" rx="6" class="f-own" stroke-width="1.5"/>
+  <text x="46" y="154" font-size="15" font-weight="700" class="t-own">email: String</text>
+  <text x="46" y="174" font-size="13" class="t-muted">ptr · len 8 · cap 8  (24 bytes)</text>
+  <rect x="34" y="198" width="130" height="36" rx="6" class="f-plain" stroke-width="1.5"/>
+  <text x="46" y="220" font-size="14" class="t-muted">active: bool</text>
+  <rect x="176" y="198" width="130" height="36" rx="6" class="f-plain" stroke-width="1.5"/>
+  <text x="188" y="220" font-size="14" class="t-muted">logins: u64</text>
+  <path d="M306 94 C 352 94, 356 88, 398 88" class="s-own" stroke-width="2"/>
+  <path d="M306 160 C 352 160, 356 186, 398 186" class="s-own" stroke-width="2"/>
+  <rect x="400" y="70" width="24" height="36" class="f-heap" stroke-width="1.2"/>
+  <text x="412" y="94" text-anchor="middle" font-size="16" font-weight="700">A</text>
+  <rect x="424" y="70" width="24" height="36" class="f-heap" stroke-width="1.2"/>
+  <text x="436" y="94" text-anchor="middle" font-size="16" font-weight="700">n</text>
+  <rect x="448" y="70" width="24" height="36" class="f-heap" stroke-width="1.2"/>
+  <text x="460" y="94" text-anchor="middle" font-size="16" font-weight="700">a</text>
+  <text x="400" y="122" font-size="13" class="t-muted">name bytes</text>
+  <rect x="400" y="168" width="24" height="36" class="f-heap" stroke-width="1.2"/>
+  <text x="412" y="192" text-anchor="middle" font-size="16" font-weight="700">a</text>
+  <rect x="424" y="168" width="24" height="36" class="f-heap" stroke-width="1.2"/>
+  <text x="436" y="192" text-anchor="middle" font-size="16" font-weight="700">n</text>
+  <rect x="448" y="168" width="24" height="36" class="f-heap" stroke-width="1.2"/>
+  <text x="460" y="192" text-anchor="middle" font-size="16" font-weight="700">a</text>
+  <rect x="472" y="168" width="24" height="36" class="f-heap" stroke-width="1.2"/>
+  <text x="484" y="192" text-anchor="middle" font-size="16" font-weight="700">@</text>
+  <rect x="496" y="168" width="24" height="36" class="f-heap" stroke-width="1.2"/>
+  <text x="508" y="192" text-anchor="middle" font-size="16" font-weight="700">x</text>
+  <rect x="520" y="168" width="24" height="36" class="f-heap" stroke-width="1.2"/>
+  <text x="532" y="192" text-anchor="middle" font-size="16" font-weight="700">.</text>
+  <rect x="544" y="168" width="24" height="36" class="f-heap" stroke-width="1.2"/>
+  <text x="556" y="192" text-anchor="middle" font-size="16" font-weight="700">i</text>
+  <rect x="568" y="168" width="24" height="36" class="f-heap" stroke-width="1.2"/>
+  <text x="580" y="192" text-anchor="middle" font-size="16" font-weight="700">o</text>
+  <text x="400" y="222" font-size="13" class="t-muted">email bytes</text>
+</svg>
+<figcaption>A <code>User</code> is 64 bytes on the stack. Each <code>String</code> field is 24 bytes: pointer, length and capacity. The characters live on the heap, and the arrows show where each pointer leads. The fields are drawn in declaration order, but rustc may lay them out in another order.</figcaption>
+</figure>
+
+<p>Padding changes the total size, and it is easy to get wrong by hand. Predict what this program prints. The struct has a <code>u32</code> between two single bytes.</p>
+
+<div class="ox-quiz" data-id="09:layout-size">
+  <p class="ox-q">What does this print?</p>
+  <pre class="rs" data-stdout="8">
+use std::mem::size_of;
+
+struct Padded {
+    a: u8,
+    b: u32,
+    c: u8,
+}
+
+fn main() {
+    println!("{}", size_of::&lt;Padded&gt;());
+}</pre>
+  <ol class="ox-choices">
+    <li>12</li>
+    <li data-correct>8</li>
+    <li data-feedback="That is the sum of the three fields, but the u32 has to start on a four-byte boundary."><code>6</code></li>
+  </ol>
+  <div class="ox-why"><p>The fields add up to 6 bytes, but <code>b</code> needs an address that is a multiple of 4. The default layout here puts <code>b</code> first, then <code>a</code> and <code>c</code> after it. That leaves only 2 bytes of padding, so the total is 8.</p></div>
+</div>
+
+<details class="ox-callout" data-kind="deep">
+  <summary>Why the default layout is not the C layout</summary>
+  <p>With <code>#[repr(C)]</code> on the same struct, the fields keep their declaration order. <code>a</code> sits at byte 0, three bytes of padding follow, <code>b</code> starts at byte 4, <code>c</code> sits at byte 8, and three more padding bytes round the total up to 12. The default layout is not specified, so rustc may choose a different order, and that can change between versions. Don't write code that depends on field offsets. <code>#[repr(C)]</code> asks for the C layout: fields in the order you wrote them, with the padding a C compiler would add. You need it only when a C library reads the struct's memory directly.</p>
+</details>
+
+<p>The same rules explain a <code>User</code>. Two <code>String</code>s take 24 bytes each, the <code>u64</code> takes 8 and the <code>bool</code> takes 1. That totals 57. The compiler rounds up to 64, so that every <code>User</code> in an array starts on an aligned address.</p>
+
+<p>A struct can hold a reference too, but then it needs a lifetime annotation. Chapter 15 explains lifetimes. For now, own your data with <code>String</code>. Here is what happens when you store a borrowed string without one:</p>
+
+<pre class="rs" data-check="E0106" data-badge="error">
+struct Excerpt {
+    part: &amp;str,
+}
+
+fn main() {
+    let e = Excerpt { part: "call me" };
+    println!("{}", e.part);
+}</pre>
+
+<pre class="rustc">
+error[E0106]: missing lifetime specifier
+ --> src/main.rs:2:11
+  |
+2 |     part: &amp;str,
+  |           ^ expected named lifetime parameter
+  |
+help: consider introducing a named lifetime parameter
+  |
+1 ~ struct Excerpt&lt;'a&gt; {
+2 ~     part: &amp;'a str,
+  |
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0106`.
+</pre>
+</section>
+
+<section>
+<h2 id="no-inheritance">No inheritance, and that's fine</h2>
+
+<p>Rust has no <code>extends</code>. A struct cannot inherit fields or methods from another struct. You get the same kinds of reuse another way. One is <strong>composition</strong>: a struct holds another struct as a field and reaches its data through that field. The other is <strong>traits</strong>, which describe behavior that any type can implement. Traits get their own chapter, 14.</p>
+
+<pre class="rs" data-run data-stdout="Ana ana@x.io 3">
+struct User {
+    name: String,
+    email: String,
+}
+
+struct Admin {
+    user: User,
+    level: u8,
+}
+
+impl Admin {
+    fn name(&amp;self) -&gt; &amp;str {
+        &amp;self.user.name
+    }
+}
+
+fn main() {
+    let a = Admin {
+        user: User { name: String::from("Ana"), email: String::from("ana@x.io") },
+        level: 3,
+    };
+    println!("{} {} {}", a.name(), a.user.email, a.level);
+}
+</pre>
+
+<div class="ox-bridge">
+  <pre class="php">
+declare(strict_types=1);
+
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Model;
+
+#[Fillable(['title'])]
+class Post extends Model
+{
+    public function publish(): void
+    {
+        $this-&gt;published_at = now();
+    }
+
+    protected function casts(): array
+    {
+        return ['published_at' =&gt; 'datetime'];
+    }
+}</pre>
+  <pre class="rs" data-stdout="Hello Some(1700000000)">
+struct Post {
+    title: String,
+    published_at: Option&lt;u64&gt;, // Some(a number) or None. Chapter 10 covers Option.
+}
+
+impl Post {
+    fn publish(&amp;mut self, now: u64) {
+        self.published_at = Some(now);
+    }
+}
+
+fn main() {
+    let mut post = Post { title: String::from("Hello"), published_at: None };
+    post.publish(1_700_000_000);
+    println!("{} {:?}", post.title, post.published_at);
+}</pre>
+  <div class="ox-bridge-note"><p>A Laravel model gets <code>save()</code>, <code>find()</code> and the rest from <code>Model</code>, a base class it inherits from. Rust has no base class to inherit from. <code>Post</code> carries only the fields it declares and the methods in its <code>impl</code> block. The timestamp the PHP code sets becomes a field. It is null until the post is published, so the field is an <code>Option&lt;u64&gt;</code>. The <code>#[Fillable]</code> attribute controls mass assignment, and a Rust struct literal already names every field. Behavior that many types share goes into a trait, which you will write in Chapter 14.</p></div>
+</div>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Agents that learned object-oriented style often write Rust the same way: a getter and a setter for every field, <code>&amp;mut self</code> on every method, and a shared base for everything. The code compiles, but it reads badly. Idiomatic Rust uses <code>pub</code> fields for plain data, methods where a rule has to hold, and <code>&amp;self</code> unless a method really has to change the value.</p>
+  <p>When you review that code, ask one question about each <code>&amp;mut self</code>: does this method really change the value, or does it only need to read it?</p>
+</aside>
+
+<p>Here is the mapping you will use most often when you translate a PHP class:</p>
+
+<div class="ox-match" data-id="09:match" data-left-label="PHP" data-right-label="Rust">
+  <ul>
+    <li data-left="$this"><code>self</code>, the first parameter of every method</li>
+    <li data-left="new User(...)"><code>User::new(...)</code>, an associated function</li>
+    <li data-left="static function make()">A function in the impl block with no <code>self</code></li>
+    <li data-left="public string $name"><code>pub name: String</code>, visible outside its module</li>
+    <li data-left="__toString()"><code>impl Display</code> (Chapter 14)</li>
+    <li data-left="clone($p, ['x' =&gt; 9])">struct update: <code>Point { x: 9, ..p }</code></li>
+    <li data-left="public private(set) int $balance">a private field plus a getter: <code>fn balance(&amp;self)</code></li>
+    <li data-left="extends Model">Composition plus traits: the data is a field of a plain struct, and shared behavior comes from traits</li>
+  </ul>
+</div>
+
+<p>The match leaves out one rule. Fields are private to the module that defines them unless you mark them <code>pub</code>, and the section on private fields shows that with a module block. Chapter 16 covers modules in full. In a single file everything can see everything else, so this rule is easy to miss until your code grows.</p>
+</section>
+
+<section>
+<h2 id="quests">Forge quests</h2>
+<p>Reading builds recognition. Writing code builds the skill. These quests run locally against the real compiler.</p>
+<div class="ox-quests" data-chapter="9"></div>
+</section>
+
+<section>
+<h2 id="recap">Recap</h2>
+
+<div class="ox-recap">
+  <h3>Data and behavior</h3>
+  <ul>
+    <li>A struct groups named fields, and a literal has to set every one of them. <code>mut</code> belongs to the binding, so it covers all the fields at once.</li>
+    <li><code>..base</code> fills in the fields you did not write. Non-<code>Copy</code> fields move out of <code>base</code>, and the fields you wrote are untouched.</li>
+    <li>Tuple structs have positional fields. A newtype wraps one value, so the compiler can tell two types apart even when they hold the same data.</li>
+    <li>Methods live in <code>impl</code> blocks. The first parameter sets what the method may do: <code>&amp;self</code> looks, <code>&amp;mut self</code> changes, <code>self</code> consumes.</li>
+    <li>Associated functions take no <code>self</code>. You call them as <code>Type::name()</code>. Constructors are usually named <code>new</code> and return <code>Self</code>.</li>
+    <li><code>#[derive(...)]</code> writes Debug, Clone, PartialEq, Default and Copy for you. Copy needs every field to be <code>Copy</code>.</li>
+    <li>A struct's size is its fields plus padding. Rust has no inheritance, so reuse comes from composition and traits.</li>
+  </ul>
+</div>
+
+<div class="ox-deck" data-chapter="9"></div>
+
+<details class="ox-think">
+  <summary>Explain it back: when would you take <code>self</code> instead of <code>&amp;self</code>?</summary>
+  <div class="ox-think-body">
+    <p>One good answer: "Take <code>self</code> when the method has to own the value. It might consume the value, or build a new one from its fields and hand that back, the way <code>into_square</code> does. Ownership moves into the method, so the caller can't use the value afterwards. That is only right when the caller is done with it. Otherwise take <code>&amp;self</code>, and reach for <code>&amp;mut self</code> only when the method really has to change the value."</p>
+    <p>If your version mentioned <em>ownership moves into the method</em> and <em>the caller loses the value</em>, you've got it.</p>
+  </div>
+</details>
+
+<div class="ox-complete-host"></div>
+</section>
+
+</main>
+</div>
+</body>
+</html>

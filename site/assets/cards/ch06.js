@@ -1,0 +1,15 @@
+/* Recall cards — Chapter 06: One Owner */
+(window.OX_CARDS = window.OX_CARDS || []).push(
+  { id: "c06-rules", ch: 6, q: "State the three ownership rules.", a: "1. Every value has an owner.\n\n2. There is exactly one owner at a time.\n\n3. When the owner goes out of scope, the value is dropped." },
+  { id: "c06-move", ch: 6, q: "`a` is a `String`. What exactly does `let b = a;` do?", a: "It **moves**: the pointer, length and capacity (24 bytes on the stack) are copied into `b`, and `a` becomes unusable. The heap bytes are not copied." },
+  { id: "c06-double", ch: 6, q: "Why can't `a` and `b` both own the same heap buffer?", a: "Both would free it when their scope ends: a **double free**. One owner means exactly one free." },
+  { id: "c06-copy", ch: 6, q: "Name five kinds of types that are `Copy`.", a: "Integers, floats, `bool`, `char`, shared references `&T`, and tuples or arrays made only of `Copy` types.\n\n`String`, `Vec` and `Box` are **not** `Copy`." },
+  { id: "c06-copyclone", ch: 6, q: "Copy vs Clone: what is the difference?", a: "**Copy** is implicit. It only copies bits, with no allocation and no custom code, so it is cheap for small types. A large `Copy` array is still copied in full.\n\n**Clone** is explicit (`.clone()`) and may allocate and copy heap data. The cost is visible in the code." },
+  { id: "c06-fnparam", ch: 6, q: "What happens to `s` after calling `fn f(x: String)` as `f(s)`?", a: "`s` is moved into `x`. Unless `f` returns it, the String is dropped when `f` ends, and `s` can't be used again in the caller." },
+  { id: "c06-fixes", ch: 6, q: "Three ways to fix E0382 \"use of moved value\"?", a: "1. **Reorder**: use the value before you move it.\n\n2. **Clone**: if you really need two independent copies.\n\n3. **Borrow** with `&` if the other code only needs to look." },
+  { id: "c06-php", ch: 6, q: "PHP frees memory with ___ ; Rust frees memory with ___.", a: "PHP: reference counting plus a cycle collector at **runtime** (and the end of each request).\n\nRust: the **compiler** inserts a `drop` call at the end of each owner's scope." },
+  { id: "c06-for", ch: 6, q: "Why does `for n in names { }` make `names` unusable afterwards?", a: "`for` over a `Vec` by value calls `into_iter()`, which **moves** the vector into the loop. Use `for n in &names` to borrow instead." },
+  { id: "c06-borrowck", ch: 6, q: "What is the borrow checker, and what does it check?", a: "The part of the Rust compiler that checks every move, borrow and lifetime in your program before it runs. It checks mutability too, so E0384 comes from it. In this course it is the **Inspector**." },
+  { id: "c06-binding", ch: 6, q: "What is a **binding**?", a: "A name that `let` ties to a value, such as `let name = String::from(\"Ana\");`. Whether a binding owns its value depends on what it holds: `name` owns the String, and `let r = &name;` only borrows it." },
+  { id: "c06-name-term", ch: 6, q: "**Name the term.** The automatic cleanup that runs when an owner goes out of scope.", a: "**Drop**. The compiler inserts the call at the end of the owner's scope, and it frees the heap memory the value owns." }
+);

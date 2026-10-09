@@ -1,0 +1,11 @@
+[package]
+name = "forge"
+version = "1.0.0"
+edition = "2024"
+rust-version = "1.85"
+description = "The Oxidize quest trainer: watches your quest files and recompiles on every save."
+publish = false
+
+# No dependencies on purpose: the Forge is plain std Rust, and reading it is
+# part of the course (Chapter 21 asks you to).
+[dependencies]

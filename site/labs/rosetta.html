@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PHP → Rust Rosetta · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<link rel="stylesheet" href="../assets/cast-art.css">
+<link rel="stylesheet" href="../assets/cast.css">
+<link rel="stylesheet" href="../assets/motion.css">
+<link rel="stylesheet" href="../assets/story.css">
+<style>
+  .ro-tools { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 14px; margin: 0 0 14px; }
+  .ro-search { flex: 1 1 16rem; min-width: 0; display: grid; gap: 6px; }
+  .ro-search .ox-label { display: block; }
+  .ro-keys { margin: 0; font-size: 0.8rem; color: var(--muted); }
+  .ro-keys kbd { margin: 0 2px; }
+  #ro-random { min-height: 40px; }
+  .ro-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+  .ro-chip {
+    display: inline-flex; align-items: center; gap: 7px; min-height: 34px;
+    padding: 5px 11px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink-2);
+    font: 600 0.8rem/1.2 var(--font-mono); cursor: pointer;
+  }
+  .ro-chip:hover { border-color: var(--ink-2); color: var(--ink); }
+  .ro-chip b { font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ro-chip[aria-pressed="true"] { background: var(--oxide-soft); border-color: var(--oxide); color: var(--oxide-ink); }
+  .ro-chip[aria-pressed="true"] b { color: var(--oxide-ink); }
+  .ro-chip.is-empty { opacity: 0.55; }
+  .ro-count {
+    margin: 0 0 14px; font: 600 0.76rem/1.4 var(--font-mono);
+    letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted);
+  }
+  .ro-list { display: grid; gap: 16px; }
+  .ro-card {
+    min-width: 0; padding: 16px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    outline: 2px solid transparent; outline-offset: 6px;
+    transition: outline-color 0.9s ease;
+  }
+  .ro-card:focus { outline-color: transparent; }
+  .ro-card.is-target { outline-color: var(--oxide); }
+  .ro-card[hidden] { display: none; }
+  .ro-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; margin-bottom: 12px; }
+  .ro-head h2 {
+    flex: 1 1 14rem; min-width: 0; margin: 0;
+    font: 800 1.3rem/1.2 var(--font-display); color: var(--ink);
+  }
+  .ro-anchor { font: 600 0.9rem/1 var(--font-mono); color: var(--muted); text-decoration: none; padding: 4px; }
+  .ro-anchor:hover { color: var(--oxide-ink); }
+  .ro-pair { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 760px) { .ro-pair { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+  .ro-pair .ox-code { margin: 0; }
+  .ro-badge {
+    font: 700 0.68rem/1 var(--font-mono); letter-spacing: 0.04em;
+    padding: 5px 7px; border-radius: 4px;
+    color: var(--code-dim); border: 1px solid var(--code-line);
+  }
+  .ro-note { margin: 12px 0 0; max-width: 68ch; color: var(--ink-2); font-size: 0.95rem; line-height: 1.5; }
+  .ro-note .ox-label { display: block; margin-bottom: 2px; }
+  .ro-foot { margin-top: 10px; font: 600 0.8rem/1.4 var(--font-mono); }
+  .ro-empty { margin: 1.5rem 0; color: var(--muted); }
+  .ro-reset {
+    background: none; border: 0; padding: 0; cursor: pointer;
+    font: inherit; color: var(--oxide-ink); text-decoration: underline; text-underline-offset: 3px;
+  }
+  @media (prefers-reduced-motion: reduce) { .ro-card { transition: none; } }
+</style>
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/labs/rosetta-data.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+<script src="../assets/cast-art.js"></script>
+<script src="../assets/cast.js" defer></script>
+<script src="../assets/motion.js" defer></script>
+</head>
+<body data-crumb="Lab · PHP → Rust Rosetta">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<main class="ox-lab" id="main">
+  <header class="ox-lab-hero">
+    <span class="ox-label">Lab</span>
+    <h1 class="ox-title">PHP → Rust Rosetta</h1>
+    <p>Look up a PHP or Laravel habit and see the Rust that replaces it, side by side, with the point where the two stop matching. The PHP follows PHP 8.5 and Laravel 13.</p>
+    <p class="ox-label">Best after Chapter 4. Each entry names its chapter.</p>
+  </header>
+
+  <section class="ro-tools" aria-label="Find a phrase">
+    <div class="ro-search">
+      <label class="ox-label" for="ro-q">Search titles, code and notes</label>
+      <input class="ox-input" id="ro-q" type="search" autocomplete="off" spellcheck="false"
+             placeholder="Try array_map, json, null, middleware" aria-describedby="ro-count">
+      <p class="ro-keys"><kbd>/</kbd> to search, <kbd>Esc</kbd> to clear</p>
+    </div>
+    <button type="button" class="ox-btn" id="ro-random">Random phrase</button>
+  </section>
+
+  <div class="ro-chips" id="ro-chips" role="group" aria-label="Filter by category"></div>
+  <p class="ro-count" id="ro-count" aria-live="polite">Loading the phrasebook…</p>
+  <div class="ro-list" id="ro-list"></div>
+  <p class="ro-empty" id="ro-empty" hidden>No phrase matches that. Try a shorter word, or <button type="button" class="ro-reset" id="ro-reset">clear the search and filter</button>.</p>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var CATS = [
+    ["basics", "Basics"], ["strings", "Strings"], ["lists", "Lists"], ["maps", "Maps"],
+    ["control", "Control flow"], ["functions", "Functions"], ["oop", "OOP"], ["errors", "Errors"],
+    ["collections", "Collections · Laravel"], ["io", "I/O"], ["web", "Web · Laravel"],
+    ["testing", "Testing"], ["tooling", "Tooling"]
+  ];
+  var CAT_LABEL = {};
+  CATS.forEach(function (c) { CAT_LABEL[c[0]] = c[1]; });
+
+  // Same rules as the engine: strip the common indent, then wrap a bare
+  // snippet in fn main so the playground link compiles it.
+  function dedent(s) {
+    s = s.replace(/^\n+/, "").replace(/\s+$/, "");
+    var lines = s.split("\n");
+    var ind = Math.min.apply(null, lines.filter(function (l) { return l.trim(); }).map(function (l) { return l.match(/^ */)[0].length; }));
+    return lines.map(function (l) { return l.slice(ind); }).join("\n");
+  }
+  function runnable(code) {
+    return /\bfn\s+main\s*\(/.test(code) ? code : "fn main() {\n" + code.split("\n").map(function (l) { return "    " + l; }).join("\n") + "\n}";
+  }
+
+  function plate(lang, src, tools) {
+    var lines = Ox.splitLines(Ox.highlight(src, lang));
+    var body = lines.map(function (l) { return '<span class="ln">' + (l || " ") + "</span>"; }).join("");
+    return '<figure class="ox-code" data-lang="' + lang + '">' +
+      '<div class="ox-code-bar"><span class="ox-code-lang">' + (lang === "php" ? "PHP" : "Rust") + "</span>" +
+      '<div class="ox-code-tools">' + (tools || "") + "</div></div>" +
+      '<div class="ox-code-scroll"><pre><code>' + body + "</code></pre></div></figure>";
+  }
+
+  function buildCard(e) {
+    var art = document.createElement("article");
+    art.className = "ro-card";
+    art.id = e.id;
+    art.dataset.cat = e.cat;
+    art.setAttribute("aria-labelledby", "t-" + e.id);
+    var src = dedent(e.rust), php = dedent(e.php);
+    var ok = e.check === "ok";
+    var rustTools = ok
+      ? '<span class="ox-code-badge is-ok">compiles</span>' +
+        '<a href="' + Ox.esc(Ox.playgroundUrl(runnable(src))) + '" target="_blank" rel="noopener" title="Open in the Rust Playground">playground ↗</a>'
+      : '<span class="ro-badge">needs a crate</span>';
+    var ch = Ox.chapterByNum(e.chapter);
+    var chapter = ch
+      ? '<a href="' + Ox.chapterUrl(ch) + (e.anchor ? "#" + e.anchor : "") + '">Chapter ' + String(ch.n).padStart(2, "0") + " · " + Ox.esc(ch.title) + "</a>"
+      : e.std ? "Rust std docs: " + Ox.esc(e.std) : "";
+    art.innerHTML =
+      '<header class="ro-head">' +
+        '<span class="ox-label">' + Ox.esc(CAT_LABEL[e.cat] || e.cat) + "</span>" +
+        '<h2 id="t-' + e.id + '">' + Ox.esc(e.title) + "</h2>" +
+        '<a class="ro-anchor" href="#' + e.id + '" aria-label="Link to ' + Ox.esc(e.title) + '" title="Link to this phrase">#</a>' +
+      "</header>" +
+      '<div class="ro-pair">' + plate("php", php, "") + plate("rust", src, rustTools) + "</div>" +
+      '<div class="ro-note"><span class="ox-label">The difference</span><span>' + e.note + "</span></div>" +
+      '<footer class="ro-foot">' + chapter + "</footer>";
+    return art;
+  }
+
+  function isTyping(el) {
+    return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
+  }
+
+  function start() {
+    var listEl = document.getElementById("ro-list");
+    var chipsEl = document.getElementById("ro-chips");
+    var countEl = document.getElementById("ro-count");
+    var emptyEl = document.getElementById("ro-empty");
+    var qEl = document.getElementById("ro-q");
+    var randomBtn = document.getElementById("ro-random");
+    var resetBtn = document.getElementById("ro-reset");
+    var data = window.OX_ROSETTA || [];
+    if (!data.length) { countEl.textContent = "The phrasebook data did not load."; return; }
+
+    // Search text: title, PHP, Rust and the plain text of the note.
+    // A Map, not an object: ids such as "constructor" collide with Object.prototype.
+    var byId = new Map();
+    var entries = [];
+    data.forEach(function (e) {
+      if (byId.has(e.id)) return;
+      var tmp = document.createElement("div");
+      tmp.innerHTML = e.note || "";
+      var en = {
+        e: e, el: buildCard(e), visible: true,
+        hay: [e.title, e.php, e.rust, tmp.textContent].join("\n").toLowerCase()
+      };
+      byId.set(e.id, en);
+      entries.push(en);
+      listEl.appendChild(en.el);
+    });
+
+    // Category chips are built once; render() only updates their state.
+    var chipBtns = {};
+    [["all", "All"]].concat(CATS).forEach(function (c) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "ro-chip";
+      b.dataset.cat = c[0];
+      b.innerHTML = Ox.esc(c[1]) + " <b></b>";
+      chipsEl.appendChild(b);
+      chipBtns[c[0]] = b;
+    });
+
+    var state = { q: "", cat: "all" };
+    var reduceMotion = function () { return window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches; };
+
+    function terms() { return state.q.toLowerCase().split(/\s+/).filter(Boolean); }
+
+    function render() {
+      var ts = terms();
+      var counts = { all: 0 };
+      CATS.forEach(function (c) { counts[c[0]] = 0; });
+      var shown = 0;
+      entries.forEach(function (en) {
+        var matches = ts.every(function (t) { return en.hay.indexOf(t) !== -1; });
+        if (matches) {
+          counts.all++;
+          counts[en.e.cat] = (counts[en.e.cat] || 0) + 1;
+        }
+        en.visible = matches && (state.cat === "all" || en.e.cat === state.cat);
+        en.el.hidden = !en.visible;
+        if (en.visible) shown++;
+      });
+      Object.keys(chipBtns).forEach(function (k) {
+        var b = chipBtns[k], n = counts[k] || 0;
+        b.setAttribute("aria-pressed", String(state.cat === k));
+        b.querySelector("b").textContent = n;
+        b.classList.toggle("is-empty", n === 0);
+      });
+      var filtered = ts.length > 0 || state.cat !== "all";
+      countEl.textContent = filtered
+        ? shown + " of " + entries.length + " phrases" + (state.cat !== "all" ? " in " + CAT_LABEL[state.cat] : "")
+        : entries.length + " phrases";
+      emptyEl.hidden = shown > 0;
+      randomBtn.disabled = shown === 0;
+    }
+
+    // Open one phrase: clear filters if it is hidden, scroll, highlight, and
+    // keep the #id in the address bar so the link can be shared.
+    var targetTimer = null;
+    function focusEntry(id) {
+      var en = byId.get(id);
+      if (!en) return false;
+      if (!en.visible) {
+        state.q = "";
+        state.cat = "all";
+        qEl.value = "";
+        render();
+      }
+      var el = en.el;
+      el.scrollIntoView({ block: "start", behavior: reduceMotion() ? "auto" : "smooth" });
+      el.setAttribute("tabindex", "-1");
+      el.focus({ preventScroll: true });
+      el.classList.add("is-target");
+      clearTimeout(targetTimer);
+      targetTimer = setTimeout(function () { el.classList.remove("is-target"); }, 2600);
+      if (location.hash !== "#" + id) {
+        try { history.replaceState(null, "", "#" + id); } catch (err) { /* sandboxed frame: keep going */ }
+      }
+      return true;
+    }
+
+    function openFromHash() {
+      var id = decodeURIComponent((location.hash || "").slice(1));
+      if (id && byId.has(id)) focusEntry(id);
+    }
+
+    var timer = null;
+    qEl.addEventListener("input", function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () { state.q = qEl.value; render(); }, 120);
+    });
+    qEl.addEventListener("keydown", function (e) {
+      if (e.key !== "Escape") return;
+      if (qEl.value) { qEl.value = ""; state.q = ""; render(); }
+      else qEl.blur();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "/" && !isTyping(document.activeElement) && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        qEl.focus();
+      }
+    });
+    chipsEl.addEventListener("click", function (e) {
+      var b = e.target.closest(".ro-chip");
+      if (!b) return;
+      state.cat = b.dataset.cat;
+      render();
+    });
+    listEl.addEventListener("click", function (e) {
+      var a = e.target.closest(".ro-anchor");
+      if (!a) return;
+      e.preventDefault();
+      focusEntry(a.getAttribute("href").slice(1));
+    });
+    randomBtn.addEventListener("click", function () {
+      var pool = entries.filter(function (en) { return en.visible; });
+      if (!pool.length) return;
+      var current = decodeURIComponent((location.hash || "").slice(1));
+      var fresh = pool.length > 1 ? pool.filter(function (en) { return en.e.id !== current; }) : pool;
+      focusEntry(fresh[Math.floor(Math.random() * fresh.length)].e.id);
+    });
+    resetBtn.addEventListener("click", function () {
+      state.q = "";
+      state.cat = "all";
+      qEl.value = "";
+      render();
+      qEl.focus();
+    });
+    window.addEventListener("hashchange", openFromHash);
+
+    render();
+    openFromHash();
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+  else start();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,3 @@
+[alias]
+# `cargo forge` from anywhere inside the repo
+forge = "run --quiet --package forge --"

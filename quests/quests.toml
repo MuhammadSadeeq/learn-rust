@@ -1,0 +1,1161 @@
+# Oxidize Forge: the quest list.
+#
+# The order of this file is the order you play the quests in.
+# `cargo forge` reads it, `tools/sync-quests.mjs` copies it into the website.
+#
+# Fields: name, chapter, path (relative to quests/), title, summary, boss (optional),
+# kind (optional: "std" by default, or "cargo" for a small package under quests/pkgs/,
+# where path is the package directory), hint (multi-line string).
+
+[[quest]]
+name = "hello1"
+chapter = 1
+path = "01_hello/hello1.rs"
+title = "First words"
+summary = "Make the program compile and greet the world."
+hint = """
+1. Read the first error. It says Rust expected a function and found a macro.
+2. Macros are called with a `!` after their name, such as `vec!` or `format!`.
+3. Add the `!` right after `println`, the way `println!` is written. That leaves one more error: `println!` needs a format string before the value, as in `println!("{}", greeting());`.
+"""
+
+[[quest]]
+name = "hello2"
+chapter = 1
+path = "01_hello/hello2.rs"
+title = "Formatting"
+summary = "Build strings with format! and inline arguments."
+hint = """
+1. `format!` takes the same kind of template as `println!`. Return its result
+   instead of printing it.
+2. Any variable in scope can go inside the braces: `format!("Hi {name}")`. For
+   the cents, `/` gives the whole dollars and `%` gives the leftover cents.
+3. `{rest:02}` pads a number to a width of two with zeros, so 5 prints as 05.
+   Chapter 1's `{:>8}` also sets a width, and `0` is the fill.
+"""
+
+[[quest]]
+name = "vars1"
+chapter = 2
+path = "02_variables/vars1.rs"
+title = "Mutable on purpose"
+summary = "Decide which bindings really need mut."
+hint = """
+1. The error names the variable that is assigned twice: `total`. Which bindings
+   in Rust can change after they are created?
+2. Bindings are immutable by default. `mut` makes one changeable. Put it on the
+   binding that changes, and only on that one.
+3. The warning points at `label`. Remove the `mut` there, so every `mut` you
+   keep means something.
+"""
+
+[[quest]]
+name = "vars2"
+chapter = 2
+path = "02_variables/vars2.rs"
+title = "Shadowing"
+summary = "Reuse a name for a value of a different type."
+hint = """
+1. The error points at the assignment. Compare the type `number` started with
+   against the type of the value being put into it.
+2. An assignment has to keep the variable's type. A new `let` with the same
+   name creates a fresh variable, and that one can have a new type.
+3. Turn the assignment into a `let`, and drop the `mut` that the line no longer
+   needs.
+"""
+
+[[quest]]
+name = "vars3"
+chapter = 2
+path = "02_variables/vars3.rs"
+title = "Constants"
+summary = "Declare constants with explicit types."
+hint = """
+1. Read the first error. It says a const is missing its type. Compare the first
+   line with the other two.
+2. A const needs `: Type` between its name and the `=`, the same way the other
+   two lines have it.
+3. The other two use `u64`, so give the first one the same type.
+"""
+
+[[quest]]
+name = "types1"
+chapter = 3
+path = "03_types/types1.rs"
+title = "Pick the right integer"
+summary = "Choose integer types that fit the data and don't overflow."
+hint = """
+1. The panic message says "attempt to add with overflow". Which variable is
+   growing past its limit, and what type is it?
+2. A u8 holds at most 255. Choose a wider integer type for `total`, and convert
+   each age into it with `u32::from(age)` (Chapter 3 explains it). That works because every u8 fits in a u32.
+3. Divide the wide total by the count, then cast the result back to u8 with
+   `as u8`. The average of u8 values always fits in a u8.
+"""
+
+[[quest]]
+name = "types2"
+chapter = 3
+path = "03_types/types2.rs"
+title = "Tuples"
+summary = "Return several values at once and destructure them."
+hint = """
+1. A tuple is written in parentheses. A function returns its last expression,
+   so ending with `(low, high)` hands back both values.
+2. Start `low` and `high` from `v[0]`, the first value. Then compare each value
+   in the loop and update either one when you see a smaller or larger value.
+   Indexing a slice works the same way as indexing an array.
+3. `let (a, b) = pair;` takes a tuple apart. Build the reversed tuple from those
+   two names.
+"""
+
+[[quest]]
+name = "types3"
+chapter = 3
+path = "03_types/types3.rs"
+title = "Arrays"
+summary = "Fixed-size arrays, indexing and length."
+hint = """
+1. `[u32; 7]` always holds seven values. Index them from 0, with `days[0]`
+   through `days[6]`.
+2. For the total, the loop is already written. Start the total at 0, with the
+   type the function returns.
+3. For the busiest day, start with day 0 and its hours from `days[0]`. The loop
+   replaces both only for a strictly larger value, which keeps the earlier day on a tie.
+"""
+
+[[quest]]
+name = "types4"
+chapter = 3
+path = "03_types/types4.rs"
+title = "Casting with as"
+summary = "Convert between numeric types explicitly."
+hint = """
+1. `as` never fails at run time, but it can wrap. `300i32 as u8` compiles and
+   gives 44. A plain `300 as u8` does not compile, because the literal is
+   checked against u8. Decide what an out-of-range value should mean before you cast.
+2. `x.clamp(0, 255)` limits x to the range first, so the `as u8` after it cannot
+   wrap. For `low_byte`, a plain `as u8` keeps the low eight bits.
+3. For `truncate`, a plain `as i64` already does the job. It drops the fraction
+   toward zero and saturates at the limits of i64.
+"""
+
+[[quest]]
+name = "functions1"
+chapter = 4
+path = "04_control_flow/functions1.rs"
+title = "Return values"
+summary = "Fix signatures and the semicolon that swallows a return value."
+hint = """
+1. The compiler reports each function separately. Fix one error, run cargo
+   forge again, and the next error will show up.
+2. A block's value is its last line, but only when that line has no semicolon.
+3. Every parameter needs `name: Type`, and a function that returns a value needs
+   `-> Type` after its parameter list.
+"""
+
+[[quest]]
+name = "control1"
+chapter = 4
+path = "04_control_flow/control1.rs"
+title = "if is an expression"
+summary = "Use if/else to produce a value."
+hint = """
+1. An `if` produces a value, so the chain can be the function's last expression.
+   Don't add `return`, and don't put a semicolon after the chain.
+2. Test the highest band first. The first condition that is true wins, so
+   `score >= 90` already covers everything above 90.
+3. For `abs_diff`, subtract the smaller number from the larger one. An `if` can
+   decide which subtraction to run.
+"""
+
+[[quest]]
+name = "control2"
+chapter = 4
+path = "04_control_flow/control2.rs"
+title = "loop returns a value"
+summary = "Break out of a loop with a result."
+hint = """
+1. `loop` runs until it reaches a `break`. `break candidate;` ends the loop and
+   makes `candidate` the value of the whole loop.
+2. Try each number in turn, starting at `start`. If it divides evenly by `by`,
+   break with it. If not, add one and go around again.
+3. For the Collatz count, `while n != 1` keeps going until the sequence reaches
+   1. On each pass, pick the next number with an `if` and add one to the count.
+"""
+
+[[quest]]
+name = "control3"
+chapter = 4
+path = "04_control_flow/control3.rs"
+title = "FizzBuzz, the Rust way"
+summary = "Ranges, for loops and a match on a tuple."
+hint = """
+1. A `match` can take a tuple, so `match (n % 3, n % 5)` looks at both
+   remainders together.
+2. Arms are checked from the top, and `_` matches anything. Put the arm for
+   numbers that divide by both 3 and 5 first, because 15 also matches the Fizz arm.
+3. `for i in 1..=n` includes `n`. Start with `let mut lines = Vec::new();`, push
+   `fizzbuzz(i)` on each pass, and return `lines` at the end.
+"""
+
+[[quest]]
+name = "boss1_receipt"
+chapter = 4
+path = "04_control_flow/boss1_receipt.rs"
+title = "Print a receipt"
+summary = "Act I boss: totals, tax and aligned columns."
+boss = true
+hint = """
+1. Build from the bottom up. `line_total` and `subtotal` come first, and each
+   later function calls the earlier ones. In `subtotal`, `for (_, qty, unit_cents)
+   in items` gives references, so read the numbers with `*qty` and `*unit_cents`.
+2. In `tax`, do the multiplication in u64, add half of 10000, and divide by 10000
+   to round half up. `format_money` is written for you. Read it and move on.
+3. In `render`, start with `let mut text = String::new();`. For each item,
+   `text.push_str(&format!("{name:<16}{qty:>3}{price:>10}\n"))` adds one row and
+   its newline. The three summary rows use `{:<19}{:>10}` the same way.
+"""
+
+[[quest]]
+name = "memory1"
+chapter = 5
+path = "05_memory/memory1.rs"
+title = "Size it up"
+summary = "Predict how many bytes common types take on the stack."
+hint = """
+1. Size means bytes on the stack. Heap contents don't count. Start with the types you know from the chapter 05 table, then reason about the rest.
+2. A reference or a Box is one pointer, 8 bytes on a 64-bit machine. A String or a Vec is three words. A &str is a pointer and a length.
+3. An i32 must start at a multiple of 4, so (i32, u8) rounds up to 8. A Box can't be null, so Option<Box<i32>> can use the null pointer for None and needs no extra tag.
+"""
+
+[[quest]]
+name = "memory2"
+chapter = 5
+path = "05_memory/memory2.rs"
+title = "Length vs capacity"
+summary = "Watch a Vec's capacity grow and size a String once."
+hint = """
+1. with_capacity(n) reserves room for n bytes without putting any text in the String. First work out the exact byte count of the finished line.
+2. needed_capacity adds the length of every field, then one comma for each gap between two neighbors. fields.len().saturating_sub(1) counts the gaps, and it is 0 for an empty list.
+3. In grow_report, remember the capacity before the loop. After each push, compare the new capacity with the remembered one, and record it only when it changed.
+"""
+
+[[quest]]
+name = "move1"
+chapter = 6
+path = "06_ownership/move1.rs"
+title = "Use after move"
+summary = "Fix the classic E0382 without cloning."
+hint = """
+1. Read the error from the bottom up: which line uses `names` after it was moved?
+2. `let all = names;` moves the vector into `all`. Anything you need from `names`
+   has to happen before that line.
+3. Swap the two `let` lines, or drop `all` and use `names` directly.
+"""
+
+[[quest]]
+name = "move2"
+chapter = 6
+path = "06_ownership/move2.rs"
+title = "Ownership in, ownership out"
+summary = "Take a String, change it, hand it back."
+hint = """
+1. The function owns the String it receives, so it can change it in place. It doesn't need to build a new one.
+2. String has push_str, which appends a &str to the end of the String.
+3. Call push_str with the signature text, then end the function with text and no semicolon, so ownership goes back to the caller.
+"""
+
+[[quest]]
+name = "move3"
+chapter = 6
+path = "06_ownership/move3.rs"
+title = "Copy or move?"
+summary = "Know which values are copied and which are moved."
+hint = """
+1. The compiler reports E0382 twice. Each message names a variable that was used after a line that moved it.
+2. For each one you can move the use above the line that moves the value, or borrow the value with & where the function only reads it.
+3. describe takes &name, so call it before `let archived = name;`. For the Vec, iter() only borrows it, so compute the total before `let graded = scores;`.
+"""
+
+[[quest]]
+name = "move4"
+chapter = 6
+path = "06_ownership/move4.rs"
+title = "Loops consume"
+summary = "Iterate a Vec without giving it away."
+hint = """
+1. Read the error on the words.len() line. The loop before it took the Vec, so the Vec is gone when that line runs.
+2. A for loop over a Vec takes it by value. A for loop over a reference borrows it instead.
+3. Change the loop header to `for w in &words`. Then w is a &String, and w.len() works the same way.
+"""
+
+[[quest]]
+name = "borrow1"
+chapter = 7
+path = "07_borrowing/borrow1.rs"
+title = "Look, don't take"
+summary = "Pass references instead of moving values."
+hint = """
+1. Look at what each function does with its argument. If it only reads it, the parameter can be a borrow.
+2. &str accepts both a &String and a literal. &[i32] accepts both a &Vec<i32> and an array. A String parameter takes the value away from the caller.
+3. Change the two parameter types to &str and &[i32]. Then call word_count(&text) and sum(&scores) in main.
+"""
+
+[[quest]]
+name = "borrow2"
+chapter = 7
+path = "07_borrowing/borrow2.rs"
+title = "Mutable borrow"
+summary = "Modify a value through &mut."
+hint = """
+1. A `&mut` parameter lets the function change the caller's value. `for price in prices` gives each price as a `&mut u32`, and `*price = ...` writes the new value back into the caller's slice.
+2. Do the tax math in u64, because a price of one billion times 110 doesn't fit in u32. Integer division rounds the tax down. Cast the result back with `as u32`.
+3. For wrap_in_stars, `insert(0, '*')` puts a character at the start of the String, and `push('*')` adds one at the end. Both change the String the caller owns.
+"""
+
+[[quest]]
+name = "borrow3"
+chapter = 7
+path = "07_borrowing/borrow3.rs"
+title = "Readers or a writer"
+summary = "Untangle overlapping shared and mutable borrows."
+hint = """
+1. Each error names a borrow that is still alive. E0502 is the reference `&v[0]` that push_and_report keeps while it pushes. E0499 is two `&mut` borrows of elements of the same slice, alive at the same time.
+2. Copy the first value out with `v[0]`. An i32 is Copy, so the copy is a plain number, and no borrow of v remains when you push. An empty Vec has no first value, so check `is_empty()` before you index.
+3. For swap_first_two, slices have a `swap` method. It exchanges two places with a single `&mut` borrow of the slice, so no two element borrows overlap.
+"""
+
+[[quest]]
+name = "borrow4"
+chapter = 7
+path = "07_borrowing/borrow4.rs"
+title = "No dangling"
+summary = "Return owned data instead of a reference to a local."
+hint = """
+1. E0515 means the returned reference would point at greeting, which is dropped when make_greeting returns.
+2. A function can return an owned value. The caller then owns it, and it lives as long as the caller needs it.
+3. Change the return type to String, and return the format! result without the &.
+"""
+
+[[quest]]
+name = "strings1"
+chapter = 8
+path = "08_strings_slices/strings1.rs"
+title = "String or &str"
+summary = "Convert between owned and borrowed text."
+hint = """
+1. to_uppercase returns a new String. starts_with only checks a prefix and needs no allocation.
+2. &str parameters accept both a &String and a literal. A String is only needed when a function returns new text.
+3. Slices of &str have join(" ") for the words. For the prefix, s.starts_with("Hello") is case sensitive, which is what the tests expect.
+"""
+
+[[quest]]
+name = "strings2"
+chapter = 8
+path = "08_strings_slices/strings2.rs"
+title = "First word"
+summary = "Return a slice into the input."
+hint = """
+1. `trim_matches(' ')` removes spaces at both ends. Then `find(' ')` returns an Option with the byte index of the first space. `match` on it: `Some(end)` gives `&s[..end]`, and `None` means the text is one word.
+2. `rfind(' ')` finds the last space. The last word starts one byte after that space. With no space, the last word is the whole text.
+3. Use `match` on the result of `rfind`, the same way: `Some(space) => &s[space + 1..]` and `None => s`. The "Option in one minute" section in Chapter 4 explains Some and None.
+"""
+
+[[quest]]
+name = "strings3"
+chapter = 8
+path = "08_strings_slices/strings3.rs"
+title = "Characters, not bytes"
+summary = "Handle UTF-8 text correctly."
+hint = """
+1. len() counts bytes. chars() walks whole characters. "héllo" is 6 bytes and 5 characters, so count characters with a loop over `s.chars()`.
+2. `insert(0, c)` puts a character at the front of a String. Walk the characters in order and insert each one at 0, and the string comes out reversed.
+3. char_indices() gives each character with its byte position. In truncate_chars, count the characters as you go. At the first character after `max`, return the slice up to its byte position. If the loop ends, the whole string fits.
+"""
+
+[[quest]]
+name = "strings4"
+chapter = 8
+path = "08_strings_slices/strings4.rs"
+title = "Building strings"
+summary = "Title-case words and build a URL slug."
+hint = """
+1. split_whitespace() splits on any run of spaces. Push each word's characters into a String, with one space between words.
+2. char_indices() gives each character with its position. For the first character (position 0), to_uppercase() can give more than one char, so loop over it and push each one. Push the other characters as they are.
+3. For slugify, loop over the chars. Keep each ASCII letter or digit, lowercased with `to_ascii_lowercase()` (Chapter 8 explains it). For anything else, push one '-' unless the last char already is one. At the end, trim_matches('-') removes dashes at both ends.
+"""
+
+[[quest]]
+name = "boss2_text_stats"
+chapter = 8
+path = "08_strings_slices/boss2_text_stats.rs"
+title = "Text statistics"
+summary = "Act II boss: analyze text without a single unnecessary clone."
+boss = true
+hint = """
+1. Start with the loops. `for word in text.split_whitespace()` visits each word as a &str slice, so nothing is copied. Count with `let mut count = 0;` and `count += 1;`.
+2. A char is not a byte. `chars()` visits characters, and `len()` counts bytes. For longest_word, keep the best word and its character count, and replace them only for a strictly longer word. average_word_len divides with `as f64`.
+3. For non_ascii_words, `bytes()` visits the raw bytes, and every byte of a non-ASCII character is above 127. For first_sentence, `char_indices()` gives each character with its byte position. The end marks are one byte long, so `&text[..i + 1]` ends right after one.
+"""
+
+[[quest]]
+name = "structs1"
+chapter = 9
+path = "09_structs/structs1.rs"
+title = "Define a struct"
+summary = "Named fields, tuple structs and unit structs."
+hint = """
+1. rustc names the struct and the field in every error. Start with the first error, which says what a struct literal is missing.
+2. A tuple struct has no field names. Its fields are read as p.0 and p.1, not p.x and p.y.
+3. A new account starts out active, so the struct literal in new_user needs a value for active. In deactivate, the field is a bool, so a number will not do.
+"""
+
+[[quest]]
+name = "structs2"
+chapter = 9
+path = "09_structs/structs2.rs"
+title = "Methods and new()"
+summary = "impl blocks, &self, &mut self and constructors."
+hint = """
+1. Read each signature. new and square have no self, so they are called as Rect::new and Rect::square. The other methods take &self or &mut self.
+2. area multiplies the two fields. scale changes the fields, so it needs &mut self. Assign with self.w *= k and the same for h.
+3. can_hold needs both comparisons to be true at once: self.w >= other.w && self.h >= other.h. square can call new with the size twice.
+"""
+
+[[quest]]
+name = "structs3"
+chapter = 9
+path = "09_structs/structs3.rs"
+title = "Derive and compare"
+summary = "derive Debug, Clone, PartialEq and update syntax."
+hint = """
+1. The derive line is already done: Debug, Clone and PartialEq. Default is the one you write by hand, because the app wants 14 and derive would give 0.
+2. In default, return a Settings literal with the three values from the header. String::from("light") makes an owned String.
+3. In with_theme, write only theme in the literal, then ..*base to copy the other fields from the original. Both of those fields are Copy, so nothing is cloned.
+"""
+
+[[quest]]
+name = "enums1"
+chapter = 10
+path = "10_enums_match/enums1.rs"
+title = "Enums with data"
+summary = "Model messages whose variants carry different data."
+hint = """
+1. Write one match per function, with one arm for each variant. Name the fields in the pattern, as in Notification::Email { to, subject }.
+2. Build the text with format!, for example format!("Push: {title}"). Silent gives String::new().
+3. channel does not need the field values, so the patterns can skip them with .. or _, as in Notification::Email { .. } => "email".
+"""
+
+[[quest]]
+name = "enums2"
+chapter = 10
+path = "10_enums_match/enums2.rs"
+title = "Exhaustive match"
+summary = "An order status state machine."
+hint = """
+1. next is a match on s with one arm per variant. Return Some with the following status, or None where there is no next step.
+2. cancel can put the cancellable variants in one arm with |, and return Some(Cancelled) from it. Shipped and Delivered share the other arm, and return None.
+3. Put Cancelled in the same arm as Pending and Paid, so cancelling a cancelled order gives Some. Leave out a _ arm so the compiler checks every variant.
+"""
+
+[[quest]]
+name = "option1"
+chapter = 10
+path = "10_enums_match/option1.rs"
+title = "Option instead of null"
+summary = "Return None when there is nothing to return."
+hint = """
+1. find_user: loop over the list with `for (user_id, name) in users`. When
+   `*user_id == id`, return `Some(name.as_str())`. If the loop ends with no match, return None.
+2. safe_divide: look for an integer method that returns an Option instead of
+   panicking, such as `checked_div` (Chapter 3 covers the checked methods). It returns None for a zero divisor and for i32::MIN / -1.
+3. first_even: loop over v with `for x in v`. Each x is a reference, so `x % 2`
+   works and `*x` is the number to return. Return `Some(*x)` at the first even
+   value, and None after the loop.
+"""
+
+[[quest]]
+name = "option2"
+chapter = 10
+path = "10_enums_match/option2.rs"
+title = "if let and let else"
+summary = "Unwrap optional values without unwrap()."
+hint = """
+1. Each unwrap() panics on None, or on a bad parse. Replace it with a way to handle the missing case: if let, let else or unwrap_or.
+2. parse_port: parse() returns a Result, and Result has unwrap_or too. `unwrap_or(8080)` gives the fallback when the text is not a valid u16.
+3. initials: let Some(name) = name else { return String::new(); } handles the None case first. The iterator chain after it can stay as it is.
+"""
+
+[[quest]]
+name = "errors1"
+chapter = 11
+path = "11_errors/errors1.rs"
+title = "Return a Result"
+summary = "Replace a panic with a recoverable error."
+hint = """
+1. A function that returns a Result should return Err for bad input, not call panic! or expect(). Each message in the header is one Err value.
+2. Use match on s.parse::<u32>(). Put the error arm first, then a guard arm for numbers above 150.
+3. The guard looks like Ok(n) if n > 150 => Err(String::from("too old")). The last arm is Ok(n) for a valid age.
+"""
+
+[[quest]]
+name = "errors2"
+chapter = 11
+path = "11_errors/errors2.rs"
+title = "The ? operator"
+summary = "Propagate parse errors upward."
+hint = """
+1. unwrap() turns an error into a panic. These functions already return a Result, so the error can travel up to the caller instead.
+2. Put ? after a call that returns a Result. On Err it returns that error from the function at once. On Ok it gives you the value.
+3. In sum_csv, total += field.parse::<i64>()?; does it. In parse_point, each of the two parses gets its own ? inside the Ok(...).
+"""
+
+[[quest]]
+name = "errors3"
+chapter = 11
+path = "11_errors/errors3.rs"
+title = "Your own error type"
+summary = "An error enum with Display."
+hint = """
+1. Display is one match on self with an arm for each variant. write!(f, "missing key: {key}") writes the text into the formatter.
+2. In get_port, loop over the pairs with `for (key, raw) in pairs`. The key is a reference, so compare `*key == "port"`. If no pair matches after the loop, return Err(ConfigError::Missing(...)) with the key name.
+3. Inside the matching branch, match on raw.parse::<u16>(). Ok(port) returns the port. Err returns Invalid with the key and the raw text.
+"""
+
+[[quest]]
+name = "errors4"
+chapter = 11
+path = "11_errors/errors4.rs"
+title = "From conversions"
+summary = "Let ? convert errors for you."
+hint = """
+1. The compiler says ? cannot convert a ParseIntError into an AppError. Teach it how with impl From<ParseIntError> for AppError.
+2. In the from function, wrap the error in the Parse variant: AppError::Parse(e).
+3. Display follows the errors3 pattern: a match on self, then write! for each variant, using the messages from the header.
+"""
+
+[[quest]]
+name = "cli1_args"
+chapter = 11
+path = "11_errors/cli1_args.rs"
+title = "Read the command line"
+summary = "Turn the arguments into a Config, or a usage error."
+hint = """
+1. Walk the list with an index: `let mut i = 0;` and `while i < args.len()`. Look
+   at `args[i]` each time round the loop.
+2. For `--limit`, the value is the next word. `args.get(i + 1)` is `None` when
+   `--limit` is the last word. Parse the value with `value.parse()`, then skip it
+   by adding one more to `i`.
+3. Keep the file as an `Option<String>`. A second file is a usage error, so check
+   before you store it. At the end, `None` is a usage error too.
+"""
+
+[[quest]]
+name = "cli2_wordcount"
+chapter = 11
+path = "11_errors/cli2_wordcount.rs"
+title = "Count lines, words and bytes"
+summary = "Count from any reader, one line at a time, the way wc does."
+hint = """
+1. Loop on `input.read_line(&mut line)`. Clear `line` at the top of each pass. The
+   return value is the number of bytes read, and 0 means the input is over.
+2. Add the bytes to `counts.bytes`, the words from `line.split_whitespace().count()`,
+   and one to `counts.lines` only when the line ends with `'\n'`.
+3. `read_line` can fail, so put `?` after it. The method changes the reader, so the
+   parameter needs `mut input: R`.
+"""
+
+[[quest]]
+name = "vecs1"
+chapter = 12
+path = "12_collections/vecs1.rs"
+title = "Vec basics"
+summary = "retain, sort a copy, and get without panicking."
+hint = """
+1. For remove_negatives, look at Vec::retain. It keeps the items a closure approves of, in place.
+2. top_three must not change its input. Copy the numbers into a new Vec with a loop, sort the copy from biggest to smallest, then keep only the first three.
+3. sort_by_key with Reverse sorts biggest first (Sorting and ordering in Chapter 12 explains it), and truncate(3) keeps three. For safe_get, check i < v.len() before you index with v[i].
+"""
+
+[[quest]]
+name = "hashmap1"
+chapter = 12
+path = "12_collections/hashmap1.rs"
+title = "Word counter"
+summary = "Count words with the entry API."
+hint = """
+1. Split the text with split_whitespace(). Lowercase each word before you use it as a key.
+2. *counts.entry(word).or_insert(0) += 1 adds one to a word's count, creating the entry when the word is new.
+3. For top_word, iter() followed by max_by finds the largest pair. For ties, compare the words in reverse, so the alphabetically first word counts as the larger one. Sorting and ordering in Chapter 12 explains max_by and then_with.
+"""
+
+[[quest]]
+name = "hashmap2"
+chapter = 12
+path = "12_collections/hashmap2.rs"
+title = "Group by"
+summary = "Laravel's groupBy, by hand."
+hint = """
+1. entry(role).or_default() returns the Vec for that role, empty if the role is new. Then push the name onto it.
+2. group_by_role owns the users, so you can move user.role and user.name out of each one. No clone is needed there.
+3. In count_by_role, *counts.entry(user.role.clone()).or_insert(0) += 1 works on a BTreeMap. The key has to be an owned String, which is why the role is cloned.
+"""
+
+[[quest]]
+name = "sets1"
+chapter = 12
+path = "12_collections/sets1.rs"
+title = "Unique tags"
+summary = "HashSet and BTreeSet for de-duplication and order."
+hint = """
+1. A BTreeSet ignores a repeated insert and keeps its items sorted. Loop over each post and each tag, and insert every tag.
+2. For common_tags, put the tags from b in a HashSet, so "is it in b?" is a quick check. Tags in a can repeat, so collect the matches into a HashSet (or call dedup() after sorting), then turn them into a sorted Vec<String>. A HashSet has no order.
+3. For has_duplicates, HashSet::insert returns false when the value is already in the set. Use that on each number and stop at the first repeat.
+"""
+
+[[quest]]
+name = "closures1"
+chapter = 13
+path = "13_iterators_closures/closures1.rs"
+title = "Closures capture"
+summary = "Write closures that read, mutate and move."
+hint = """
+1. A closure returned from a function must own the values it uses. The move keyword moves them in.
+2. For apply_n, loop n times. Each time, feed the result back into f as the next input.
+3. For counter, keep the count inside the closure and add one on each call. For consume, return the captured msg. Returning it moves it out, which makes the closure FnOnce.
+"""
+
+[[quest]]
+name = "iter1"
+chapter = 13
+path = "13_iterators_closures/iter1.rs"
+title = "Collection pipeline"
+summary = "Translate a Laravel collection chain into iterators."
+hint = """
+1. Start with orders.iter(), then filter(|order| order.paid), then map(|order| order.total_cents), then sum().
+2. For customers, map each order to order.customer.as_str(), then collect::<BTreeSet<_>>(). The set drops repeats and sorts.
+3. Turn the set back into owned Strings with into_iter().map(String::from).collect().
+"""
+
+[[quest]]
+name = "iter2"
+chapter = 13
+path = "13_iterators_closures/iter2.rs"
+title = "zip, scan and windows"
+summary = "Combine iterators to compute results."
+hint = """
+1. a.iter().zip(b) pairs up the elements. Then map multiplies each pair, and sum adds them.
+2. scan keeps a state value between items. Use Option<i32> as the state, holding the biggest value so far. Each step returns that value.
+3. v.windows(2) gives each neighboring pair as a slice of two. Filter the pairs whose first item is smaller than the second, then count().
+"""
+
+[[quest]]
+name = "iter3"
+chapter = 13
+path = "13_iterators_closures/iter3.rs"
+title = "Your own iterator"
+summary = "Implement Iterator for a Fibonacci generator."
+hint = """
+1. fib() starts the pair at 0 and 1. Set both fields in the struct literal.
+2. next() returns the current value a. Before it returns, it moves the pair forward. Save a first, then update the fields.
+3. The new b is a + b. Work out that sum before you change a or b, or the sum will use the wrong values.
+"""
+
+[[quest]]
+name = "boss3_ledger"
+chapter = 13
+path = "13_iterators_closures/boss3_ledger.rs"
+title = "Bank ledger"
+summary = "Act III boss: enums, Results, maps and iterators together."
+boss = true
+hint = """
+1. Start with the small pieces: Display has one arm per variant, and open is one entry(...).or_insert(0) call. Then write a helper that checks an account exists, and one that returns a &mut u64 for an account or UnknownAccount for a missing name.
+2. A transfer checks from, then to, then the funds, and only then moves money. Make withdraw check the funds before it writes. Chaining the steps with ? gives the all-or-nothing rule.
+3. apply_all can be txs.iter().filter_map(|tx| self.apply(tx).err()).collect(). For top_accounts, collect (name, balance) pairs, sort_by with b.1.cmp(&a.1) then a.0.cmp(&b.0), then truncate(n). Sorting and ordering in Chapter 12 explains sort_by, cmp and then_with.
+"""
+
+[[quest]]
+name = "traits1"
+chapter = 14
+path = "14_traits_generics/traits1.rs"
+title = "Implement a trait"
+summary = "Give two types the same ability."
+hint = """
+1. Each impl block is one type's version of the trait. The signature is given, so the only job is the body.
+2. Build the string with format!, the same way println! builds its output. Field order matters, so read the test.
+3. Book is "{title} by {author}". Movie is "{title} ({year})". Watch the parentheses around the year.
+"""
+
+[[quest]]
+name = "traits2"
+chapter = 14
+path = "14_traits_generics/traits2.rs"
+title = "Default methods and impl Trait"
+summary = "Share behavior and accept anything that can do it."
+hint = """
+1. recipient is the one method each type has to write. For Customer, return a reference to the name field.
+2. Overdue overrides message. Split the cents into dollars and cents with / and %, and use self.recipient() for the name.
+3. loud takes any Notify. Call item.message() and turn the result into uppercase with to_uppercase().
+"""
+
+[[quest]]
+name = "generics1"
+chapter = 14
+path = "14_traits_generics/generics1.rs"
+title = "Generic largest"
+summary = "One function, many types, with trait bounds."
+hint = """
+1. The first error says > cannot be applied to T. The compiler only knows T is some type, so it won't assume T can be compared.
+2. Put the bounds in the angle brackets, as in fn largest<T: PartialOrd + Copy>. Copy is needed because the function returns an element taken out of a slice.
+3. Pair needs the comparison bound too. Put it on the impl block as impl<T: PartialOrd> Pair<T> and leave the method body alone.
+"""
+
+[[quest]]
+name = "traits3"
+chapter = 14
+path = "14_traits_generics/traits3.rs"
+title = "Trait objects"
+summary = "A Vec<Box<dyn Shape>> of different shapes."
+hint = """
+1. Each area is a formula. A circle is PI times the radius squared (std::f64::consts::PI is ready to use), a square is side times side, and a triangle is base times height divided by two.
+2. total_area can be one chain: iterate the slice, map each shape to its area, and call sum(). Calling .area() on a Box<dyn Shape> runs that shape's own impl.
+3. For largest_name, walk the slice and keep the best shape so far in an Option. Replace it only when the new area is strictly bigger, so a tie keeps the earlier shape. Then take the name of the best one.
+"""
+
+[[quest]]
+name = "traits4"
+chapter = 14
+path = "14_traits_generics/traits4.rs"
+title = "Display and From"
+summary = "Implement the standard traits everyone expects."
+hint = """
+1. Display writes into the formatter with write!, so the body is one call. Split the cents into dollars and the remainder with / and %, and pad the remainder with {:02}.
+2. From is one line that builds a Money from the cents. Add reads two Money values by value and returns a new one with the sum of the cents.
+3. For negative amounts, format the absolute value with unsigned_abs() and print the minus sign yourself, before the $.
+"""
+
+[[quest]]
+name = "lifetimes1"
+chapter = 15
+path = "15_lifetimes/lifetimes1.rs"
+title = "Longest"
+summary = "Tie an output reference to its inputs."
+hint = """
+1. Read the E0106 error. The compiler says it can't tell whether the output borrows from x or from y, so it asks you to name the lifetime.
+2. Add a lifetime parameter, <'a>, and use 'a on both inputs and on the return type. That says the result is valid only while both inputs are.
+3. Only the signature changes. Both branches already return one of the inputs, so the body stays the same.
+"""
+
+[[quest]]
+name = "lifetimes2"
+chapter = 15
+path = "15_lifetimes/lifetimes2.rs"
+title = "Structs that borrow"
+summary = "A parser that holds a &str."
+hint = """
+1. The struct stores an &'a str, so new only has to keep the input and start pos at 0.
+2. In next_token, skip whitespace with trim_start(), then find the next whitespace with find(char::is_whitespace). Store the end offset in pos so the next call starts where this one stopped.
+3. Return a slice of the input, not of self. Slice self.input itself: it is a &'a str, so the slice keeps 'a and does not borrow the tokenizer. The signature -> Option<&'a str> is what promises this.
+"""
+
+[[quest]]
+name = "lifetimes3"
+chapter = 15
+path = "15_lifetimes/lifetimes3.rs"
+title = "Outlive me"
+summary = "Fix borrowed values that don't live long enough."
+hint = """
+1. There are two separate errors. E0515 is in build_label: the String is dropped when the function returns, so no reference to it can escape. E0597 is in main: long_word is dropped at the end of its block, but word is used after that.
+2. Return an owned value. A String moves out to the caller, so nothing borrows from the local. The test module also reports E0277 about &'static str. It has the same cause, and the same change makes it go away.
+3. In main, declare the owner before the borrow, at the outer level. Remove the braces around the block and long_word lives through every use of word.
+"""
+
+[[quest]]
+name = "modules1"
+chapter = 16
+path = "16_modules_cargo/modules1.rs"
+title = "Visibility"
+summary = "pub, private fields and constructors."
+hint = """
+1. E0603 says the function is private, so its visibility is the first fix. After that the tests fail on the missing Account::new (E0599), and main's struct literal reports the private fields (E0451) once new exists.
+2. The tests call bank::Account::new("Ana") and expect a zero balance. Add pub fn new(owner: &str) -> Account inside impl Account, with balance: 0.
+3. In main, create the account with new and then call deposit. Keep owner and balance private, because the constructor is the only way to make an account.
+"""
+
+[[quest]]
+name = "modules2"
+chapter = 16
+path = "16_modules_cargo/modules2.rs"
+title = "Paths and use"
+summary = "Nested modules, use, self and super."
+hint = """
+1. A path is resolved from the module where it is written. models is a sibling of services, so from inside services you reach it with super::.
+2. A use line brings a name into scope once. Put use super::models::User; at the top of services, and both functions can write User.
+3. main writes app::User, which needs the name visible in app itself. Add pub use models::User; inside mod app.
+"""
+
+[[quest]]
+name = "tests1"
+chapter = 16
+path = "16_modules_cargo/tests1.rs"
+title = "Testing toolkit"
+summary = "Satisfy assert!, assert_eq!, should_panic and Result tests."
+hint = """
+1. Start with divide. Check for zero first and call panic! with the exact text the test expects. should_panic(expected = ...) passes only when the panic message contains that text.
+2. parse_percent: strip_suffix('%') returns None when the sign is missing, so turn that into an Err with ok_or_else. Parse the rest with parse::<u8>(), then reject anything over 100.
+3. is_palindrome: collect the letters and digits, lowercased, into a Vec<char>. A palindrome equals its reverse, so compare v.iter() with v.iter().rev().
+"""
+
+[[quest]]
+name = "clap1"
+chapter = 16
+kind = "cargo"
+path = "pkgs/clap1"
+title = "A CLI with subcommands"
+summary = "Describe a command line as types and let clap parse it."
+hint = """
+1. Put `#[derive(Parser)]` on `Cli`, and `#[derive(Subcommand)]` on `Command`. The
+   `clap` import is already there.
+2. Mark the `command` field with `#[command(subcommand)]`, and `verbose` with
+   `#[arg(short, long)]`. Doc comments become the help text.
+3. `try_parse_from` comes from the `Parser` derive. If the tests cannot find it,
+   the derive is missing.
+"""
+
+[[quest]]
+name = "box1"
+chapter = 17
+path = "17_smart_pointers/box1.rs"
+title = "Recursive types"
+summary = "Build a linked list with Box."
+hint = """
+1. The error is E0072, recursive type has infinite size. Which field makes List contain itself directly?
+2. Box<T> is a pointer, and every pointer has the same size. Change the Cons field so the tail sits behind a Box.
+3. sum can match on self: Cons adds its value to rest.sum(), and Nil gives 0. For from_slice, walk the slice in reverse and wrap each new value around the list built so far with Box::new.
+"""
+
+[[quest]]
+name = "rc1"
+chapter = 17
+path = "17_smart_pointers/rc1.rs"
+title = "Shared ownership"
+summary = "Count owners with Rc."
+hint = """
+1. Every viewer needs a handle to the same Document. Rc::clone does not copy the Document. It adds one more owner.
+2. (0..n) gives you n steps. Map each step to a Viewer, then collect the results into a Vec.
+3. Inside the map, the Viewer's doc field is Rc::clone of the Rc you were given.
+"""
+
+[[quest]]
+name = "refcell1"
+chapter = 17
+path = "17_smart_pointers/refcell1.rs"
+title = "Interior mutability"
+summary = "A test double that records calls through &self."
+hint = """
+1. send only gets &self, so you cannot push to sent directly. Which type lets you change data behind a shared reference?
+2. self.sent.borrow_mut() gives you a mutable guard. Push a (String, String) pair built from to and body.
+3. welcome loops over the users. For each one, call mailer.send with the user's name and a body built with format!.
+"""
+
+[[quest]]
+name = "rc_refcell1"
+chapter = 17
+path = "17_smart_pointers/rc_refcell1.rs"
+title = "Shared and mutable"
+summary = "Rc<RefCell<T>> for a shared shopping cart."
+hint = """
+1. Give each view a clone of the Rc with Rc::clone(cart). Clone the Rc, not the Vec inside it. A cloned Vec would be a separate cart.
+2. add needs a mutable borrow. self.cart.borrow_mut() gives a guard you can push a (String, u32) tuple into.
+3. total borrows the cart with borrow(), then adds up the cents of every item. Iterate, pick out the cents, and sum.
+"""
+
+[[quest]]
+name = "boss4_template"
+chapter = 17
+path = "17_smart_pointers/boss4_template.rs"
+title = "Mini Blade"
+summary = "Act IV boss: a tiny template engine with traits and lifetimes."
+boss = true
+hint = """
+1. Build the small pieces first. Each filter's apply is one line. tokens can use str::find to look for "{{" and then "}}".
+2. In tokens, a Tag holds the name and the filters, and both are slices of the template. Split the text between the braces on '|' and trim each piece. Return Err(RenderError::Unclosed) when there is no "}}".
+3. render calls tokens(template)? first. For each Tag, look up the name in ctx, then apply each filter from self.filters in order, feeding each result into the next. Engine::new registers the three built-in filters with register.
+"""
+
+[[quest]]
+name = "threads1"
+chapter = 18
+path = "18_concurrency/threads1.rs"
+title = "Spawn and join"
+summary = "Run work on threads and collect the results."
+hint = """
+1. Read the E0597 error. It says data must be borrowed for 'static, because a spawned thread can run after parallel_sum returns.
+2. Adding move is not enough, because chunk is still a slice of data. Each thread needs numbers that it owns.
+3. Use data.into_iter() and pull each chunk out with by_ref().take(chunk_size).collect(). by_ref() lends the iterator instead of consuming it, so each take continues where the last one stopped. Move each owned chunk into its thread, and stop when a chunk comes back empty.
+"""
+
+[[quest]]
+name = "channels1"
+chapter = 18
+path = "18_concurrency/channels1.rs"
+title = "Message passing"
+summary = "Several producers, one consumer."
+hint = """
+1. Make the channel with mpsc::channel(). Each worker needs its own clone of the sender, moved into its thread.
+2. The receiver's iterator ends only when every sender is dropped. Look at the sender you created in the function itself.
+3. After starting the workers, call drop on the original sender. Then collect the receiver into a Vec and call sort().
+"""
+
+[[quest]]
+name = "mutex1"
+chapter = 18
+path = "18_concurrency/mutex1.rs"
+title = "Shared counter"
+summary = "Arc<Mutex<T>> across threads."
+hint = """
+1. Rc and RefCell are for one thread. Which types in std::sync are the thread-safe versions of each?
+2. Arc replaces Rc. Mutex replaces RefCell, and lock() replaces borrow_mut(). lock() returns a Result, so unwrap it.
+3. Call lock() both inside the threads and for the final read. The guard unlocks at the end of the statement.
+"""
+
+[[quest]]
+name = "scoped1"
+chapter = 18
+path = "18_concurrency/scoped1.rs"
+title = "Scoped threads"
+summary = "Borrow local data from threads safely."
+hint = """
+1. thread::scope(|s| ...) lets threads borrow local data. Inside it, s.spawn starts a thread and returns a handle you can join.
+2. data.chunks(chunk) gives you slices. Pass each slice into its own spawn with move, and take the max of that slice.
+3. Collect the handles into a Vec, then join them in order and collect the results. The value the scope closure returns is what thread::scope returns.
+"""
+
+[[quest]]
+name = "bounded1"
+chapter = 18
+path = "18_concurrency/bounded1.rs"
+title = "A worker pool with a bounded queue"
+summary = "Bound the job queue with sync_channel, and count how full it gets."
+hint = """
+1. Make the jobs channel with `mpsc::sync_channel::<u64>(queue)`. Share its receiver
+   with `Arc::new(Mutex::new(job_rx))`, and clone the Arc for each worker.
+2. Each worker loops on `recv()` while it holds the lock, then lets the lock go before
+   it runs `work`. When `recv()` returns an error, the queue is closed, so stop.
+   Add one to `taken` with `fetch_add` right after a receive.
+3. After each `send`, add one to `sent` and keep the largest `sent - taken`. Drop
+   your copy of `result_tx` before you collect, and drop `job_tx` after the last send.
+"""
+
+[[quest]]
+name = "async1"
+chapter = 19
+path = "19_async/async1.rs"
+title = "Drive a future"
+summary = "Write a tiny block_on and run async functions."
+hint = """
+1. `block_on` has to call `poll` on the future, and `poll` only works on a pinned future. The standard library's `pin!` macro pins a value to the current stack frame.
+2. `poll` returns `Poll::Pending` or `Poll::Ready(value)`. Keep polling in a loop until you get `Ready`, then return the value.
+3. `poll` also needs a `Context`. Make one before the loop with `Context::from_waker(Waker::noop())`.
+"""
+
+[[quest]]
+name = "async2"
+chapter = 19
+path = "19_async/async2.rs"
+title = "Hand-written future"
+summary = "Implement Future yourself and watch it get polled."
+hint = """
+1. `poll` gets `self` as `Pin<&mut Self>`. `self.get_mut()` gives a plain `&mut Countdown`, which is allowed because every field is `Unpin`. Count the call on `polls` first, every time.
+2. If `remaining` is 0, return `Poll::Ready("liftoff")`. Otherwise subtract 1 from `remaining`.
+3. Before you return `Poll::Pending`, call `cx.waker().wake_by_ref()`. A real executor polls a pending future again only after a wake.
+"""
+
+[[quest]]
+name = "tokio1"
+chapter = 19
+kind = "cargo"
+path = "pkgs/tokio1"
+title = "Jobs with a timeout"
+summary = "Run every job at once with a time limit, and report the ones that timed out."
+hint = """
+1. Make a `JoinSet::new()`. For each job, copy the id and the delay out, then call
+   `set.spawn(async move { ... })`.
+2. Inside the task, `timeout(per_job, work).await` gives `Ok(value)` in time or
+   `Err(Elapsed)` when the limit passes. Return `(id, result)` from the task.
+3. Loop with `while let Some(joined) = set.join_next().await`. Sort `done` and
+   `timed_out` by id before you return the Report.
+"""
+
+[[quest]]
+name = "tokio2"
+chapter = 19
+kind = "cargo"
+path = "pkgs/tokio2"
+title = "At most N at a time"
+summary = "Limit concurrent jobs with a Semaphore and acquire_owned."
+hint = """
+1. Make `Arc::new(Semaphore::new(limit))`. In the loop, take a permit with
+   `semaphore.clone().acquire_owned().await` before you spawn each job.
+2. Move the permit into `tokio::spawn(async move { ... })`, with a clone of the gauge
+   Arc. Call `work(item, &gauge).await` inside. The permit is returned when it drops.
+3. Keep the join handles in order, then `handle.await` each one in that order to
+   build the output.
+"""
+
+[[quest]]
+name = "sse1"
+chapter = 19
+path = "19_async/sse1.rs"
+title = "Parse server-sent events"
+summary = "Turn chunks of bytes into events, even when a chunk ends mid-line."
+hint = """
+1. Add the new bytes to `self.buffer`. Find each `\n` with `position`, and take the
+   line up to it with `drain(..=end)`. Bytes after the last `\n` wait for the next chunk.
+2. Make the line text with `String::from_utf8_lossy`, and remove a trailing `\r`
+   with `strip_suffix`. Then check what the line starts with: `data:`, `event:`,
+   or something you ignore.
+3. A blank line ends the event. Take the name with `self.event.take()`. If there is
+   data, join the data lines with `"\n"` and push an `Event`.
+"""
+
+[[quest]]
+name = "http1"
+chapter = 20
+path = "20_web/http1.rs"
+title = "Parse a request"
+summary = "Turn raw HTTP text into a typed Request."
+hint = """
+1. Split the raw text in two at the first blank line with `split_once`. The left side is the head and the right side is the body. `head.lines()` then gives the request line first, followed by the header lines.
+2. Count the parts of the request line with `split_whitespace`. A `let ... else` can return `BadRequestLine` when there are not exactly three parts. Then `match` on the method text, with an `other =>` arm that returns `UnknownMethod`.
+3. `split_once('?')` separates the path from the query. Split the query on `&`, and each pair with `split_once('=')`. For headers, use `split_once(':')`, then `trim` and `to_lowercase`. `ok_or_else` with `?` handles the missing colon.
+"""
+
+[[quest]]
+name = "http2"
+chapter = 20
+path = "20_web/http2.rs"
+title = "A tiny router"
+summary = "Laravel-style routes with path parameters."
+hint = """
+1. Start with `match_pattern`. Split both strings on `/` and collect the segments. If the two lengths differ there is no match. Otherwise walk the segments side by side with `zip`.
+2. A segment like `{id}` is a parameter. `strip_prefix('{')` and `strip_suffix('}')` give the name inside the braces, and the path segment is its value, so `insert` it into the `Params` map. Any other segment must be equal to the path segment.
+3. In `dispatch`, loop over the routes and return as soon as the pattern matches and the method is equal. Keep a `bool` for whether any pattern matched the path. Only after the loop does that flag choose between 405 and 404.
+"""
+
+[[quest]]
+name = "serde1"
+chapter = 20
+kind = "cargo"
+path = "pkgs/serde1"
+title = "Tagged JSON enums"
+summary = "Give a JSON enum a type tag, and keep tool arguments as any JSON."
+hint = """
+1. Put `#[serde(tag = "type", rename_all = "snake_case")]` above `pub enum Block`.
+   The tag becomes the `type` field, and each variant name becomes snake_case.
+2. `to_json` and `from_json` are one call each: `serde_json::to_string(block)` and
+   `serde_json::from_str(text)`. Both return a `Result`, so return it as it is.
+3. An unknown or missing type makes `from_str` return an error. You do not need to
+   check for it yourself.
+"""
+
+[[quest]]
+name = "client1"
+chapter = 20
+kind = "cargo"
+path = "pkgs/client1"
+title = "Call an API"
+summary = "Send a GET, check the status, and tell a 404 from a timeout."
+hint = """
+1. Build the URL with `format!("{base_url}/users/{id}")`. Then
+   `client.get(url).send().await?` sends the request, and `error_for_status()` turns
+   4xx and 5xx responses into errors.
+2. In the `match`, a 404 is `err.status() == Some(reqwest::StatusCode::NOT_FOUND)`.
+   Every other error goes through `err.into()`.
+3. Write `impl From<reqwest::Error> for ApiError`. Use `err.is_timeout()` to pick
+   `Timeout`, and `Failed(err.to_string())` for everything else.
+"""
+
+[[quest]]
+name = "axum1"
+chapter = 20
+kind = "cargo"
+path = "pkgs/axum1"
+title = "A handler with state and errors"
+summary = "Read state and JSON in a handler, and send an error as a 422 response."
+hint = """
+1. In `create_note`, return `Err(AppError::EmptyText)` when `body.text.trim()` is
+   empty. Otherwise lock `state.notes`, push the text, and return
+   `Ok(Json(Saved { id }))`, where `id` is the index of the new note.
+2. In `into_response`, build the body with `serde_json::json!({ "error": message })`,
+   and return `(StatusCode::UNPROCESSABLE_ENTITY, Json(...)).into_response()`.
+   422 is for valid JSON with a refused value. Chapter 20 explains the difference from 400.
+3. In `app`, use `Router::new().route("/notes", post(create_note)).with_state(state)`.
+"""
+
+[[quest]]
+name = "macros1"
+chapter = 21
+path = "21_mastery/macros1.rs"
+title = "Your first macro"
+summary = "A hashmap! macro with macro_rules!."
+hint = """
+1. The error says no rule matches the first key. The macro has only the empty rule, so it needs a second rule for `key => value` pairs.
+2. Give the new rule a matcher of `$key:expr => $value:expr` pairs separated by commas, and add `$(,)?` after the repetition so a trailing comma is allowed. Rules are tried in order, so the empty rule can stay as it is.
+3. In the body, `HashMap::from` takes an array of pairs. Build that array as `[$( ($key, $value) ),*]`, which repeats the tuple once per captured pair. Use the full path `::std::collections::HashMap` so the macro works without an import.
+"""
+
+[[quest]]
+name = "newtype1"
+chapter = 21
+path = "21_mastery/newtype1.rs"
+title = "Newtypes guard invariants"
+summary = "Make invalid emails unrepresentable."
+hint = """
+1. In `try_from`, split `raw` on `@` and match the first three pieces with `(parts.next(), parts.next(), parts.next())`. You want exactly `(Some(local), Some(domain), None)`. Anything else is an error.
+2. Add a guard after that pattern: `local` and `domain` must not be empty, and `domain` must contain a dot. Return `Ok(Email(raw.to_string()))` when the guard passes, and an `Err` with a message in the other arm.
+3. `as_str` returns `&self.0`. `Display` can call `f.write_str(&self.0)`. `send_welcome` can call `to.as_str()` inside `format!`.
+"""
+
+[[quest]]
+name = "builder1"
+chapter = 21
+path = "21_mastery/builder1.rs"
+title = "Builder pattern"
+summary = "A fluent builder with sensible defaults."
+hint = """
+1. Each setter takes `mut self`, changes one field and returns `self`. Wrap the optional fields in `Some`, and turn each `&str` into a `String` with `to_string`. Headers live in a `Vec`, so `push` onto it.
+2. In `build`, `self.url.ok_or("url is required")?` turns a missing url into an early `Err`. `unwrap_or_else` and `unwrap_or` give the defaults for the other two fields. `build` takes `self` by value, so you can move the fields out instead of cloning them.
+3. The struct literal names every field. `headers: self.headers` moves the vector straight into the request.
+"""
+
+[[quest]]
+name = "proc1"
+chapter = 21
+path = "21_mastery/proc1.rs"
+title = "Run a program with a timeout"
+summary = "Spawn a child, poll it with try_wait, and kill it at the deadline."
+hint = """
+1. Build the command with `Command::new(cmd).args(args)`, set `stdout` and `stderr`
+   to `Stdio::piped()`, then call `spawn()`. Turn a spawn error into
+   `RunError::Spawn` with `.map_err`.
+2. Loop on `child.try_wait()`. `Ok(None)` means the child still runs. Compare
+   `started.elapsed()` with the timeout, and sleep a few milliseconds between checks.
+3. On timeout, call `child.kill()` and then `child.wait()`, and return
+   `RunError::TimedOut`. When the child exits in time, read `child.stdout.take()`
+   with `read_to_end`. That needs `use std::io::Read`.
+"""
+
+[[quest]]
+name = "boss5_job_queue"
+chapter = 21
+path = "21_mastery/boss5_job_queue.rs"
+title = "Job queue"
+summary = "Final boss: a worker pool like Laravel queues, with threads and channels."
+boss = true
+hint = """
+1. Start with `Queue::new`. Create the channel, wrap the receiver in `Arc::new(Mutex::new(..))`, and spawn one thread per worker with `thread::spawn(move || worker_loop(..))`, giving each thread its own `Arc` clones. Store the sender as `Some(sender)` and keep the join handles in `workers`.
+2. `worker_loop` loops. Each pass takes one envelope with `recv()` in a single statement, so the lock is released before the job runs. If `recv()` fails, the channel is closed and the function returns. Otherwise run the job in an inner `loop` with `match envelope.job.handle()`: on `Ok`, break with `Done`; on `Err` at `max_attempts`, break with `Failed`; otherwise bump `attempt` and go again. Push the result into the shared vector.
+3. Put the close-and-join in a private method, say `close(&mut self)`. It takes the sender out of its `Option`, which drops it, then joins every worker. `shutdown` calls `close`, takes the results with `std::mem::take`, and sorts them by `job_name`. `Drop` calls `close` too. `job_name` can match both variants with one or-pattern.
+"""

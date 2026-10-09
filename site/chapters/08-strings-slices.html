@@ -1,0 +1,1050 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Strings &amp; Slices · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<link rel="stylesheet" href="../assets/cast-art.css">
+<link rel="stylesheet" href="../assets/cast.css">
+<link rel="stylesheet" href="../assets/motion.css">
+<link rel="stylesheet" href="../assets/story.css">
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/quests-data.js" defer></script>
+<script src="../assets/cards/ch08.js" defer></script>
+<script src="../assets/scenarios/ch08.js" defer></script>
+<script src="../assets/motion/ch08.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+<script src="../assets/cast-art.js"></script>
+<script src="../assets/cast.js" defer></script>
+<script src="../assets/motion.js" defer></script>
+<script src="../assets/xray.js" defer></script>
+<script src="../assets/story.js" defer></script>
+</head>
+<body data-chapter="8">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<div class="ox-page">
+<aside class="ox-rail" aria-label="Chapter contents"></aside>
+<main class="ox-main" id="main">
+
+<header class="ox-hero" data-auto>
+  <ul>
+    <li>Say when to use <code>String</code> and when to use <code>&amp;str</code>.</li>
+    <li>Take slices of strings and vectors, and explain what a slice is in memory.</li>
+    <li>Handle UTF-8 correctly: bytes versus chars, and why <code>s[0]</code> doesn't compile.</li>
+    <li>Build and transform strings with the everyday methods.</li>
+  </ul>
+</header>
+
+<section>
+<h2 id="two-strings">Two string types, one idea</h2>
+
+<p>Chapter 06 showed that a <code>String</code> owns a heap buffer. Rust has a second text type, <code>&amp;str</code>, and most string questions come down to which of the two you hold.</p>
+
+<p>A <code>String</code> is owned text that can grow. The variable holds a pointer, a length and a capacity, and the bytes live on the heap. A <code>&amp;str</code> is a <em>view</em>: a pointer and a length, 16 bytes on the stack, pointing at bytes that somebody else owns. A view owns nothing, so it can't free anything, and it must not outlive the bytes it points at. Chapter 15 covers how the compiler checks that.</p>
+
+<p>String literals are the third case. <code>"hi"</code> has type <code>&amp;'static str</code>: a view of bytes that are compiled into the program itself. The <code>'static</code> part is a lifetime, which Chapter 15 explains.</p>
+
+<div class="ox-xray ox-wide" data-scenario="str-literal-vs-string"></div>
+
+<p>Step through it and watch the three names. <code>lit</code> points into the binary, <code>owned</code> owns a heap buffer, and <code>view</code> borrows from <code>owned</code>. Only <code>owned</code> is allowed to free anything.</p>
+
+<aside class="ox-callout" data-kind="php">
+  <p>PHP has one string type. A string is a value, and <code>substr()</code> hands you a new string. You never choose between a view and a copy, because PHP makes a copy when it needs one. Rust asks you to choose, and the type in the signature records the choice.</p>
+</aside>
+
+<p>The rule of thumb: if your code owns the text, store a <code>String</code>. If it only looks at text that someone else owns, take a <code>&amp;str</code>. Section 5 turns that rule into function signatures.</p>
+
+<div class="ox-quiz" data-id="08:quiz-literal" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0308">
+fn main() {
+    let s: String = "hi";
+    println!("{s}");
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. A literal turns into a <code>String</code> when the annotation asks for one.</li>
+    <li data-correct>No. A literal is a <code>&amp;str</code>, and the annotation asks for a <code>String</code>.</li>
+  </ol>
+  <div class="ox-why"><p>This is error E0308, mismatched types. Convert the literal with <code>"hi".to_string()</code>, <code>"hi".to_owned()</code> or <code>String::from("hi")</code>. Section 6 lists the conversions.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="slices">Slices: a window into data</h2>
+
+<p>A slice is a window onto a run of data that already sits in memory. It is a pointer to the first element and a length. You write it with a range inside square brackets: <code>&amp;s[0..5]</code> is the first five bytes of <code>s</code>, and <code>&amp;v[1..3]</code> is the second and third elements of a vector.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Range</th><th>Covers</th><th>On <code>"Laravel"</code></th></tr></thead>
+  <tbody>
+    <tr><td><code>a..b</code></td><td>from <code>a</code> up to, not including, <code>b</code></td><td><code>&amp;s[2..4]</code> is <code>"ra"</code></td></tr>
+    <tr><td><code>a..</code></td><td>from <code>a</code> to the end</td><td><code>&amp;s[3..]</code> is <code>"avel"</code></td></tr>
+    <tr><td><code>..b</code></td><td>from the start up to, not including, <code>b</code></td><td><code>&amp;s[..3]</code> is <code>"Lar"</code></td></tr>
+    <tr><td><code>a..=b</code></td><td>from <code>a</code> up to and including <code>b</code></td><td><code>&amp;s[2..=4]</code> is <code>"rav"</code></td></tr>
+    <tr><td><code>..</code></td><td>everything</td><td><code>&amp;s[..]</code> is <code>"Laravel"</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Two things to keep in mind. The numbers are <em>byte</em> positions, not character positions, and section 4 explains why that matters. And a slice is a borrow: it is valid only while the string it points into is alive.</p>
+
+<p>Step through this program. The question on line 4 is the one most people get wrong.</p>
+
+<div class="ox-xray ox-wide" data-scenario="slice-window"></div>
+
+<p>Line 4 creates <code>world</code> with the same type as <code>hello</code>, but it points at byte 6 of the buffer that <code>s</code> owns. A slice is a <span class="c-ref">shared borrow</span> of <code>s</code>. Chapter 07 covered borrows, and a slice is the same rule seen through text.</p>
+
+<p>Vectors work the same way. <code>&amp;v[1..3]</code> has type <code>&amp;[i32]</code>, a slice of integers.</p>
+
+<div class="ox-xray ox-wide" data-scenario="slice-vec"></div>
+
+<div class="ox-quiz" data-id="08:quiz-slices" data-label="Predict">
+  <p class="ox-q">What does this print?</p>
+  <pre class="rs" data-stdout="Lar|avel">
+fn main() {
+    let name = "Laravel";
+    println!("{}|{}", &amp;name[..3], &amp;name[3..]);
+}</pre>
+  <ol class="ox-choices">
+    <li data-correct><code>Lar|avel</code></li>
+    <li><code>Lara|vel</code></li>
+    <li><code>L|aravel</code></li>
+  </ol>
+  <div class="ox-why"><p><code>..3</code> covers bytes 0, 1 and 2, and <code>3..</code> starts at byte 3. Together they cover the whole word, with no overlap and nothing lost.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="first-word" data-toc="Slice, not index">Why returning a slice beats returning an index</h2>
+
+<p>Here is a common first attempt at a function that finds the first word of a sentence. It returns a position, which is a plain number.</p>
+
+<p>The loop below uses two things you will meet properly later. <code>&amp;item</code> copies each byte out of its reference, which Chapter 7 explains. <code>.enumerate()</code> pairs each item with its position, which Chapter 13 explains.</p>
+
+<div class="ox-quiz" data-id="08:quiz-first-word" data-label="Predict">
+  <p class="ox-q">This compiles. What does it print, and why?</p>
+  <pre class="rs" data-stdout="first word ends at 5">
+fn first_word(s: &amp;str) -&gt; usize {
+    let bytes = s.as_bytes();
+    for (i, &amp;item) in bytes.iter().enumerate() {
+        if item == b' ' {
+            return i;
+        }
+    }
+    s.len()
+}
+
+fn main() {
+    let mut s = String::from("hello world");
+    let end = first_word(&amp;s);
+    s.clear();
+    println!("first word ends at {end}");
+}</pre>
+  <ol class="ox-choices">
+    <li>It doesn't compile, because <code>s</code> is cleared while <code>end</code> still exists.</li>
+    <li data-correct>It compiles and prints <code>first word ends at 5</code>. The number still says 5 after <code>s</code> is empty.</li>
+    <li>It compiles and prints <code>first word ends at 0</code>, because <code>clear()</code> resets every number that came from <code>s</code>.</li>
+  </ol>
+  <div class="ox-why"><p><code>end</code> is a plain <code>usize</code>, and nothing connects it to <code>s</code>. The compiler has no reason to object. After <code>s.clear()</code> the number is stale: it points at a position that no longer holds a word. The program runs, prints something plausible, and is wrong. That is the worst kind of bug, because nothing warns you.</p></div>
+</div>
+
+<p>Now return the word itself. A slice of the input is a borrow, so the compiler knows which string the result depends on.</p>
+
+<pre class="rs" data-check="E0502">
+fn first_word(s: &amp;str) -&gt; &amp;str {
+    let end = s.find(' ').unwrap_or(s.len());
+    &amp;s[..end]
+}
+
+fn main() {
+    let mut s = String::from("hello world");
+    let word = first_word(&amp;s);
+    s.clear();
+    println!("first word: {word}");
+}</pre>
+
+<p>Here is the real output for that program:</p>
+
+<pre class="rustc">
+error[E0502]: cannot borrow `s` as mutable because it is also borrowed as immutable
+  --> src/main.rs:9:5
+   |
+ 8 |     let word = first_word(&amp;s);
+   |                           -- immutable borrow occurs here
+ 9 |     s.clear();
+   |     ^^^^^^^^^ mutable borrow occurs here
+10 |     println!("first word: {word}");
+   |                            ---- immutable borrow later used here
+
+For more information about this error, try `rustc --explain E0502`.</pre>
+
+<p>This is the error you want. The compiler now catches the bug that the index version let through. The timeline shows why: the borrow in <code>word</code> has to stay alive until its last use, and the clear sits inside that stretch.</p>
+
+<div class="ox-timeline ox-wide" data-scenario="first-word-clear"></div>
+
+<p>Move the use above the clear and the program is fine:</p>
+
+<pre class="rs" data-run data-stdout="first word: hello\nafter clear: []">
+fn first_word(s: &amp;str) -&gt; &amp;str {
+    let end = s.find(' ').unwrap_or(s.len());
+    &amp;s[..end]
+}
+
+fn main() {
+    let mut s = String::from("hello world");
+    let word = first_word(&amp;s);
+    println!("first word: {word}");
+    s.clear();
+    println!("after clear: [{s}]");
+}</pre>
+
+<p>Return a slice when the answer is part of the input. Return an index only when you truly need a position, and remember that the position means something only for the string it came from.</p>
+</section>
+
+<section>
+<h2 id="utf8">UTF-8: bytes, chars and what you see</h2>
+
+<p>Rust strings are UTF-8. Each character takes between one and four bytes. An ASCII letter takes one, <code>é</code> takes two, most CJK characters take three, and emoji usually take four. The length in bytes and the length in characters are different numbers, and Rust makes you pick the one you mean.</p>
+
+<div class="ox-meet" data-cast="glyph" data-say="Every byte of me is a segment. You may cut between letters, but never through one."></div>
+
+<details class="ox-think">
+  <summary>Predict: what do <code>"héllo".len()</code> and <code>"héllo".chars().count()</code> return?</summary>
+  <div class="ox-think-body">
+    <p><code>.len()</code> gives 6 and <code>.chars().count()</code> gives 5. The <code>é</code> takes two bytes, but it is one character.</p>
+  </div>
+</details>
+
+<pre class="rs" data-run data-stdout="6 bytes\n5 chars">
+fn main() {
+    let s = "héllo";
+    println!("{} bytes", s.len());
+    println!("{} chars", s.chars().count());
+}</pre>
+
+<p>Indexing is where most of the trouble starts, because <code>s[0]</code> looks as if it should work on any string:</p>
+
+<pre class="rs" data-check="E0277">
+fn main() {
+    let s = String::from("hello");
+    let first = s[0];
+    println!("{first}");
+}</pre>
+
+<pre class="rustc">
+error[E0277]: the type `str` cannot be indexed by `{integer}`
+ --> src/main.rs:3:19
+  |
+3 |     let first = s[0];
+  |                   ^ string indices are ranges of `usize`
+  |
+  = help: the trait `SliceIndex&lt;str&gt;` is not implemented for `{integer}`
+  = note: you can use `.chars().nth()` or `.bytes().nth()`
+          for more information, see chapter 8 in The Book: &lt;https://doc.rust-lang.org/book/ch08-02-strings.html#indexing-into-strings&gt;
+
+For more information about this error, try `rustc --explain E0277`.</pre>
+
+<p>The real report goes on past these lines. It adds a help block that quotes two lines of the standard library source, and a last note: <code>required for String to implement Index&lt;{integer}&gt;</code>. Those lines depend on the Rust source installed on your machine, so they are trimmed here.</p>
+
+<p>The compiler won't guess. "The first character" could mean the first byte, the first <code>char</code>, or the first visible letter, and finding the nth <code>char</code> means walking the bytes from the start. Say which one you mean:</p>
+
+<ul>
+  <li><code>s.as_bytes()[0]</code> gives the first byte, as a <code>u8</code>.</li>
+  <li><code>s.chars().nth(0)</code> gives the first character, as an <code>Option&lt;char&gt;</code>. An <code>Option</code> is a value that is either <code>Some(c)</code> or <code>None</code>. Chapter 10 covers it; for now, read <code>None</code> as "nothing came back".</li>
+  <li><code>&amp;s[0..1]</code> gives the first byte as a <code>&amp;str</code>. That is a whole character only when the first character is one byte long. Otherwise it panics.</li>
+</ul>
+
+<p>Slicing has a second trap. <code>&amp;s[0..2]</code> has the right types, so it compiles. It fails when it runs:</p>
+
+<pre class="rs" data-check="panic">
+fn main() {
+    let s = "héllo";
+    let part = &amp;s[0..2];
+    println!("{part}");
+}</pre>
+
+<p>The program panics with this message:</p>
+
+<pre class="text">end byte index 2 is not a char boundary; it is inside 'é' (bytes 1..3 of string)</pre>
+
+<p>Byte 2 is the second byte of <code>é</code>. The character occupies bytes 1 and 2, and the slice ends in the middle of it. The message writes that span as <code>1..3</code>, with the end excluded. A <code>&amp;str</code> must always hold valid UTF-8, so Rust stops the program here rather than hand you half a character.</p>
+
+<aside class="ox-callout" data-kind="trap">
+  <p><code>s.get(0..2)</code> returns <code>None</code> instead of panicking. Use it whenever the boundaries come from input you don't control.</p>
+</aside>
+
+<p>Glyph makes the same cut visible. Predict the second cut before the verdict.</p>
+
+<div class="ox-motion" data-scene="ch08-boundary"></div>
+
+<h3>Bytes, chars and graphemes</h3>
+
+<p>Three methods show three levels. <code>.bytes()</code> gives the raw bytes, <code>.chars()</code> gives Unicode scalar values, and <code>.char_indices()</code> gives each character together with the byte position where it starts. <code>.collect()</code> gathers the items of an iterator into a collection, and Chapter 13 explains iterators in full.</p>
+
+<pre class="rs" data-run data-stdout="[h][é][l][l][o]\n[104, 195, 169, 108, 108, 111]\n0: h\n1: é\n3: l\n4: l\n5: o">
+fn main() {
+    let s = "héllo";
+    for c in s.chars() {
+        print!("[{c}]");
+    }
+    println!();
+    let bytes: Vec&lt;u8&gt; = s.bytes().collect();
+    println!("{bytes:?}");
+    for (i, c) in s.char_indices() {
+        println!("{i}: {c}");
+    }
+}</pre>
+
+<p>A <code>char</code> is a Unicode scalar value, and it is not always what a reader sees as one character. The flag <code>🇵🇰</code> is two <code>char</code>s, but a reader sees one symbol, a grapheme cluster. Counting graphemes takes the <code>unicode-segmentation</code> crate: <code>"🇵🇰".graphemes(true).count()</code> returns 1. Most code works with <code>chars()</code> or <code>bytes()</code>. Graphemes matter for text that a person reads and counts, such as a name that must fit in a column.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+$s = "héllo";
+strlen($s);            // 6 bytes
+mb_strlen($s);         // 5 characters
+mb_substr($s, 0, 2);   // "hé"
+substr($s, 0, 2);      // "h" plus half of "é"
+  </pre>
+  <pre class="rs" data-stdout="6\n5\nhé\nNone">
+fn main() {
+    let s = "héllo";
+    println!("{}", s.len());                                 // 6 bytes
+    println!("{}", s.chars().count());                       // 5 characters
+    println!("{}", s.chars().take(2).collect::&lt;String&gt;());  // hé
+    println!("{:?}", s.get(0..2));                           // None, not a panic
+}
+  </pre>
+  <div class="ox-bridge-note"><p>PHP strings are byte arrays too, so the byte view matches. PHP offers both views as separate functions, <code>strlen()</code> for bytes and <code>mb_strlen()</code> for characters, and nothing stops you from calling the byte one by mistake. The difference is also what happens at the boundary. <code>substr()</code> hands you a broken byte sequence, and that string keeps travelling through your code. Rust never lets a <code>&amp;str</code> hold invalid UTF-8, and each method says whether it counts bytes or characters.</p></div>
+</div>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Agents often truncate text with <code>&amp;title[..80]</code>. That compiles, and it passes every test that uses ASCII titles. The first title with an <code>é</code> or an emoji panics in production. When you review code that slices with numbers, check that each number is a byte offset that lands between characters. To cut by characters, write <code>title.chars().take(80).collect::&lt;String&gt;()</code>.</p>
+</aside>
+
+<p>Now try it. Type any text, choose a start and an end, and watch the bytes. Each square is one byte, and the squares for one character share a tint.</p>
+
+<style>
+#utf8x .u8-head { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: flex-end; }
+#utf8x .u8-head .ox-label { align-self: center; }
+#utf8x .u8-field { display: grid; gap: 5px; font: 700 0.72rem/1.2 var(--font-mono); letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+#utf8x .u8-field .ox-input { width: 100%; }
+#utf8x .u8-text-field { flex: 1 1 280px; min-width: 0; }
+#utf8x .u8-num-field { width: 7.5rem; }
+#utf8x .u8-stats { display: flex; flex-wrap: wrap; gap: 6px 28px; margin: 16px 0 0; color: var(--ink-2); }
+#utf8x .u8-stats span { display: flex; align-items: baseline; gap: 8px; }
+#utf8x .u8-stats b { font: 900 1.9rem/1 var(--font-display); color: var(--ink); font-variant-numeric: tabular-nums; }
+#utf8x .u8-stats code { font-size: 0.85rem; }
+#utf8x .u8-strip { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; }
+#utf8x .u8-group { display: grid; gap: 6px; padding: 6px 6px 8px; border: 1px solid var(--line-2); border-radius: var(--radius); background: var(--surface-2); }
+#utf8x .u8-group.is-alt { background: var(--surface-3); }
+#utf8x .u8-ch { font: 700 1.15rem/1.2 var(--font-mono); text-align: center; color: var(--ink); min-height: 1.4em; }
+#utf8x .u8-bytes { display: flex; gap: 4px; }
+#utf8x .u8-byte { display: grid; justify-items: center; gap: 4px; }
+#utf8x .u8-hex { min-width: 2.3rem; padding: 6px 4px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--ink); font: 600 0.9rem/1 var(--font-mono); text-align: center; }
+#utf8x .u8-idx { font: 500 0.7rem/1 var(--font-mono); color: var(--muted); }
+#utf8x .u8-byte.is-in .u8-hex { background: var(--borrow-soft); border-color: var(--borrow); outline: 2px solid var(--borrow); outline-offset: 1px; }
+#utf8x .u8-byte.is-bad .u8-hex { background: var(--bad-soft); border-color: var(--bad); outline: 2px solid var(--bad); outline-offset: 1px; }
+#utf8x .u8-range { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px; margin-top: 16px; }
+#utf8x .u8-presets { display: flex; flex-wrap: wrap; gap: 8px; }
+#utf8x .u8-result { margin: 16px 0 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); color: var(--ink); overflow-wrap: anywhere; }
+#utf8x .u8-result.is-ok { border-color: var(--ok); background: var(--ok-soft); }
+#utf8x .u8-result.is-bad { border-color: var(--bad); background: var(--bad-soft); }
+#utf8x .u8-result code { font-size: 0.9em; }
+#utf8x .u8-note { margin: 8px 0 0; color: var(--ink-2); font-size: 0.95rem; }
+</style>
+
+<div class="ox-figure ox-wide" id="utf8x" role="region" aria-label="UTF-8 Byte Explorer">
+  <div class="u8-head">
+    <span class="ox-label">UTF-8 Byte Explorer</span>
+    <div class="u8-field u8-text-field">
+      <label for="utf8x-text">Text</label>
+      <input class="ox-input" id="utf8x-text" type="text" value="héllo, 🦀!" spellcheck="false" autocomplete="off">
+    </div>
+  </div>
+  <div class="u8-stats">
+    <span><b id="utf8x-bytes">13</b> bytes from <code>.len()</code></span>
+    <span><b id="utf8x-chars">9</b> chars from <code>.chars().count()</code></span>
+  </div>
+  <div class="u8-strip" id="utf8x-strip"></div>
+  <div class="u8-range">
+    <div class="u8-field u8-num-field">
+      <label for="utf8x-start">Start</label>
+      <input class="ox-input" id="utf8x-start" type="number" min="0" step="1" value="0">
+    </div>
+    <div class="u8-field u8-num-field">
+      <label for="utf8x-end">End</label>
+      <input class="ox-input" id="utf8x-end" type="number" min="0" step="1" value="2">
+    </div>
+    <div class="u8-presets" role="group" aria-label="Example slices for the default text">
+      <button type="button" class="ox-btn is-small" data-from="0" data-to="3">0..3 gives "hé"</button>
+      <button type="button" class="ox-btn is-small" data-from="0" data-to="2">0..2 splits é</button>
+      <button type="button" class="ox-btn is-small" data-from="8" data-to="12">8..12 gives the crab</button>
+      <button type="button" class="ox-btn is-small" data-from="9" data-to="12">9..12 splits the crab</button>
+    </div>
+  </div>
+  <p class="u8-result" id="utf8x-result" aria-live="polite"></p>
+  <p class="u8-note" id="utf8x-note"></p>
+  <p class="ox-caption">The blue outline marks the bytes your slice covers. Red marks the byte where a slice would split a character. The panic messages match what rustc 1.97 prints for the same slice.</p>
+</div>
+
+<p>Try the presets first, then type your own text. Include an accent, a flag or a Chinese character, and find the byte positions where a slice is allowed to start.</p>
+
+<p>Now cut a string yourself. Choose a text, then move the slider across its bytes. Glyph shows where the cut lands, and the panel shows what the two slices do.</p>
+
+<div class="ox-figure ox-wide" id="cutter" role="group" aria-label="Caterpillar cutter: move a cut across a string and see whether Rust allows it">
+<style>
+  #cutter .ct-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 12px; }
+  #cutter .ct-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+  #cutter .ct-presets .ox-btn { font-family: var(--font-mono); font-size: 0.85rem; }
+  #cutter .ct-text { display: grid; gap: 5px; margin-bottom: 8px; }
+  #cutter .ct-text label, #cutter .ct-cut label { font: 700 0.72rem/1.2 var(--font-mono); letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+  #cutter .ct-stage { min-height: 110px; display: grid; place-items: center; }
+  #cutter .ct-stage .ca { display: block; width: 100%; max-width: 560px; }
+  #cutter .ct-cut { display: grid; gap: 6px; margin: 10px 0 14px; }
+  #cutter .ct-cut input[type="range"] { width: 100%; accent-color: var(--oxide); }
+  #cutter .ct-cut output { font: 900 1.2rem/1 var(--font-display); color: var(--ink); font-variant-numeric: tabular-nums; margin-left: 4px; }
+  #cutter .ct-result { margin: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); color: var(--ink); overflow-wrap: anywhere; }
+  #cutter .ct-result.is-ok { border-color: var(--ok); background: var(--ok-soft); }
+  #cutter .ct-result.is-bad { border-color: var(--bad); background: var(--bad-soft); }
+  #cutter .ct-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  #cutter .ct-chip { font: 600 0.9rem/1.3 var(--font-mono); padding: 4px 10px; border-radius: 999px; background: var(--surface-3); color: var(--ink); }
+  #cutter .ct-msg { font: 0.88rem/1.5 var(--font-mono); white-space: normal; }
+  #cutter .ct-empty { color: var(--muted); }
+  #cutter .ct-code { margin: 12px 0 0; padding: 8px 0; background: var(--code-bg); color: var(--code-ink); border-radius: var(--radius); font: 0.9rem/1.5 var(--font-mono); white-space: pre; overflow-x: auto; }
+  #cutter .ct-line { display: block; padding: 0 14px; border-left: 3px solid transparent; }
+  #cutter .ct-line.is-bad { background: color-mix(in srgb, var(--bad) 20%, transparent); border-left-color: var(--bad); }
+  #cutter .ct-note { min-height: 1.3em; margin: 8px 0 0; color: var(--ink-2); font-size: 0.95rem; }
+</style>
+  <div class="ct-head">
+    <span class="ox-label">Caterpillar cutter</span>
+    <div class="ct-presets" role="group" aria-label="Presets">
+      <button type="button" class="ox-btn is-small" data-preset="0">café</button>
+      <button type="button" class="ox-btn is-small" data-preset="1">naïve</button>
+      <button type="button" class="ox-btn is-small" data-preset="2">日本</button>
+      <button type="button" class="ox-btn is-small" data-preset="3">🦀 crab</button>
+    </div>
+  </div>
+  <div class="ct-text">
+    <label for="ct-text">Your text</label>
+    <input class="ox-input" id="ct-text" type="text" value="café" maxlength="24" spellcheck="false" autocomplete="off">
+  </div>
+  <div class="ct-stage" data-stage aria-hidden="true"></div>
+  <div class="ct-cut">
+    <label for="ct-cut">Cut at byte <output id="ct-pos" for="ct-cut">4</output></label>
+    <input id="ct-cut" type="range" min="0" max="5" step="1" value="4">
+  </div>
+  <div class="ct-result" id="ct-result" aria-live="polite"></div>
+  <pre class="ct-code" data-code aria-label="The Rust lines for this cut"></pre>
+  <p class="ct-note" id="ct-note" aria-live="polite"></p>
+  <p class="ox-caption">Move the slider with the arrow keys. A cut between two characters gives two slices. A cut inside a character panics, and the message is rustc's.</p>
+  <script>
+(function () {
+  "use strict";
+  var PRESETS = [
+    { text: "café", cut: 4 },
+    { text: "naïve", cut: 3 },
+    { text: "日本", cut: 1 },
+    { text: "🦀 crab", cut: 2 }
+  ];
+  var MAX_CHARS = 12;
+
+  function init() {
+    var root = document.getElementById("cutter");
+    if (!root || !window.OxUtf8) return;
+    var U = window.OxUtf8;
+    var textIn = root.querySelector("#ct-text");
+    var slider = root.querySelector("#ct-cut");
+    var pos = root.querySelector("#ct-pos");
+    var stage = root.querySelector("[data-stage]");
+    var result = root.querySelector("#ct-result");
+    var codeEl = root.querySelector("[data-code]");
+    var note = root.querySelector("#ct-note");
+    var tried = {}, ntried = 0, awarded = false;
+
+    function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+    // A Rust string literal for t: escape the backslash, the quote and the line breaks.
+    function rustStr(t) { return '"' + t.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\t/g, "\\t").replace(/\r/g, "\\r").replace(/\n/g, "\\n") + '"'; }
+
+    function render() {
+      var raw = Array.from(textIn.value);
+      var chars = raw.slice(0, MAX_CHARS);
+      var text = chars.join("");
+      var bytes = U.u8Spans(text).len;
+      slider.max = String(bytes);
+      if (Number(slider.value) > bytes) slider.value = String(bytes);
+      slider.disabled = bytes === 0;
+      var cut = Number(slider.value);
+      pos.textContent = String(cut);
+      var truncNote = raw.length > MAX_CHARS ? "Only the first " + MAX_CHARS + " characters are used." : "";
+      var explain = "";
+      if (!text) {
+        note.textContent = "";
+        stage.innerHTML = "";
+        result.className = "ct-result";
+        result.innerHTML = '<span class="ct-empty">Type some text, or press a preset.</span>';
+        codeEl.innerHTML = "";
+        return;
+      }
+      var left = U.u8Slice(text, 0, cut);
+      var right = U.u8Slice(text, cut, bytes);
+      var ok = left.ok && right.ok;
+      var failed = left.ok ? right : left;
+      if (window.OxCast) stage.innerHTML = OxCast.el("glyph", { chars: chars, cut: cut, pose: ok ? "happy" : "ouch" });
+      if (ok) {
+        result.className = "ct-result is-ok";
+        result.innerHTML = "<strong>Both cuts are valid.</strong>" +
+          '<div class="ct-chips"><span class="ct-chip">&amp;s[..' + cut + '] = "' + esc(left.text) + '"</span>' +
+          '<span class="ct-chip">&amp;s[' + cut + '..] = "' + esc(right.text) + '"</span></div>';
+        explain = "Each cut falls between two characters, so each slice is a valid &str that borrows from s.";
+      } else {
+        result.className = "ct-result is-bad";
+        result.innerHTML = "<strong>Rust panics.</strong> <code class=\"ct-msg\">" + esc(failed.message) + "</code>";
+        explain = "The cut falls inside a character, and a &str must hold whole characters. Move the cut to a boundary between characters.";
+      }
+      note.textContent = [truncNote, explain].filter(Boolean).join(" ");
+      var lines = [
+        { text: "let s = " + rustStr(text) + ";" },
+        { text: "let left = &s[.." + cut + "];", bad: !left.ok },
+        { text: "let right = &s[" + cut + "..];", bad: left.ok && !right.ok },
+        { text: 'println!("{left} | {right}");' }
+      ];
+      codeEl.innerHTML = lines.map(function (l) {
+        return '<span class="ct-line' + (l.bad ? " is-bad" : "") + '">' + esc(l.text) + "</span>";
+      }).join("");
+    }
+
+    // Finishing: try every preset once.
+    function visitPreset(i) {
+      if (!tried[i]) { tried[i] = true; ntried++; }
+      if (ntried === PRESETS.length && !awarded) {
+        awarded = true;
+        if (window.Ox && typeof Ox.award === "function") Ox.award(10, "tried every preset in the cutter", "08:cutter");
+      }
+    }
+
+    root.querySelectorAll("[data-preset]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var i = Number(btn.getAttribute("data-preset"));
+        var p = PRESETS[i];
+        textIn.value = p.text;
+        slider.max = String(U.u8Spans(p.text).len);
+        slider.value = String(p.cut);
+        render();
+        visitPreset(i);
+      });
+    });
+    textIn.addEventListener("input", function () { render(); });
+    slider.addEventListener("input", function () { render(); });
+    render();
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
+  </script>
+</div>
+</section>
+
+<section>
+<h2 id="params">Take &amp;str, return String</h2>
+
+<p>A parameter type decides what callers can pass in. For a function that only reads text, use <code>&amp;str</code>. It accepts a string literal, a slice of a larger string, and a <code>&amp;String</code>. The last one is converted automatically by deref coercion, because <code>String</code> dereferences to <code>str</code>. A <code>String</code> parameter accepts only a <code>String</code>, and it takes ownership of that value.</p>
+
+<pre class="rs" data-run data-stdout="Hello, Ana!\nHello, Bo!">
+fn greet(name: &amp;str) -&gt; String {
+    format!("Hello, {name}!")
+}
+
+fn main() {
+    let owned = String::from("Ana");
+    println!("{}", greet(&amp;owned));  // &amp;String becomes &amp;str
+    println!("{}", greet("Bo"));     // a literal is already a &amp;str
+}</pre>
+
+<p>The return type follows the same logic from the other side. A function that creates new text returns a <code>String</code>, because the caller has to own what was made. A function that returns part of its input returns a <code>&amp;str</code> tied to that input, as <code>first_word</code> did in section 3.</p>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Agents write <code>fn f(s: &amp;String)</code> constantly, because <code>&amp;String</code> is the type they already hold. Clippy flags it with the <code>ptr_arg</code> lint, which says: writing <code>&amp;String</code> instead of <code>&amp;str</code> involves a new object where a slice will do. Treat that as a review finding. A parameter that is only read should be <code>&amp;str</code>. A <code>String</code> parameter claims that the function needs to own the text, so ask why it does.</p>
+</aside>
+
+<div class="ox-quiz" data-id="08:quiz-param" data-label="Check yourself">
+  <p class="ox-q">A function only reads the text it receives. Which parameter type should it use?</p>
+  <ol class="ox-choices">
+    <li data-feedback="That compiles, but the caller gives up its String for good, and a literal won't be accepted.">
+      <code>fn f(s: String)</code></li>
+    <li data-feedback="That works for a String, but a string literal or a slice of a larger string won't be accepted.">
+      <code>fn f(s: &amp;String)</code></li>
+    <li data-correct><code>fn f(s: &amp;str)</code></li>
+  </ol>
+  <div class="ox-why"><p><code>&amp;str</code> accepts everything the other two accept, and it asks nothing extra of the caller. The other two forms are stricter for no benefit.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="building">Building and changing strings</h2>
+
+<p>Most methods that change a <code>String</code> take <code>&amp;mut self</code> and edit the buffer in place. Methods on a <code>&amp;str</code> never change anything: they return a new value or a view. Read the return type first, because it tells you whether a method allocates.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Method</th><th>Returns</th><th>Allocates?</th></tr></thead>
+  <tbody>
+    <tr><td><code>push_str</code>, <code>push</code></td><td>nothing; the String changes</td><td>only when the buffer must grow</td></tr>
+    <tr><td><code>to_uppercase</code>, <code>replace</code>, <code>format!</code></td><td>a new <code>String</code></td><td>yes</td></tr>
+    <tr><td><code>trim</code></td><td>a <code>&amp;str</code> view of the original</td><td>no</td></tr>
+    <tr><td><code>split</code>, <code>split_whitespace</code>, <code>lines</code></td><td>an iterator of <code>&amp;str</code> views</td><td>no</td></tr>
+    <tr><td><code>contains</code>, <code>starts_with</code>, <code>find</code></td><td><code>bool</code>, or <code>Option&lt;usize&gt;</code> for <code>find</code></td><td>no</td></tr>
+    <tr><td><code>parse::&lt;i32&gt;()</code></td><td><code>Result&lt;i32, ParseIntError&gt;</code></td><td>no</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>This program uses most of them. Each line of output comes from one method call, so you can match them up:</p>
+
+<pre class="rs" data-run data-stdout="hello, world!\nHELLO, WORLD!\n[trim me]\n[&quot;one&quot;, &quot;two&quot;, &quot;three&quot;]\na | b | c\n1: line one\n2: line two\ndogs and dogs\ntrue\ntrue\nSome(7)\n43\ntrue\n42 items, 84 total">
+fn main() {
+    let mut greeting = String::from("hello");
+    greeting.push_str(", world");
+    greeting.push('!');
+    println!("{greeting}");
+
+    let shout = greeting.to_uppercase();
+    println!("{shout}");
+
+    println!("[{}]", "   trim me   ".trim());
+
+    let words: Vec&lt;&amp;str&gt; = "one two  three".split_whitespace().collect();
+    println!("{words:?}");
+
+    let parts: Vec&lt;&amp;str&gt; = "a,b,c".split(',').collect();
+    println!("{}", parts.join(" | "));
+
+    for (n, line) in "line one\nline two".lines().enumerate() {
+        println!("{}: {line}", n + 1);
+    }
+
+    println!("{}", "cats and cats".replace("cats", "dogs"));
+    println!("{}", greeting.contains("world"));
+    println!("{}", greeting.starts_with("hello"));
+    println!("{:?}", greeting.find("world"));
+
+    let n: i32 = "42".parse().unwrap();
+    println!("{}", n + 1);
+    println!("{}", "4x".parse::&lt;i32&gt;().is_err());
+
+    let report = format!("{n} items, {} total", n * 2);
+    println!("{report}");
+}</pre>
+<p><code>to_uppercase</code> and <code>to_lowercase</code> follow the Unicode rules, so <code>É</code> becomes <code>é</code>. <code>to_ascii_uppercase</code> and <code>to_ascii_lowercase</code> change only the letters A to Z and leave every other character alone. So <code>"École".to_ascii_lowercase()</code> keeps its capital <code>É</code>, while <code>to_lowercase()</code> gives <code>école</code>. Use the ASCII versions for ASCII-only input such as keywords or codes.</p>
+
+<p>PHP has the same operations under other names, and the Unicode-aware versions carry an <code>mb_</code> prefix. This bridge runs the same checks on both sides. The <code>ucfirst</code> function below uses <code>chain</code> to join two iterators and <code>collect</code> to build the String. <code>Some</code> and <code>None</code> are the two cases of an <code>Option</code>, which Chapter 10 covers.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+$name = "\u{00A0} Ünal \u{3000}";    // no-break space, text, ideographic space
+trim($name);                         // unchanged: the no-break space is not ASCII
+mb_trim($name);                      // "Ünal"
+str_contains($name, "nal");          // true
+str_starts_with($name, "\u{00A0}");  // true
+mb_ucfirst("élan");                  // "Élan"</pre>
+  <pre class="rs" data-stdout="&quot;Ünal&quot;\ntrue\ntrue\nÉlan">
+fn ucfirst(s: &amp;str) -&gt; String {
+    let mut chars = s.chars();
+    match chars.next() {
+        Some(first) =&gt; first.to_uppercase().chain(chars).collect(),
+        None =&gt; String::new(),
+    }
+}
+
+fn main() {
+    let name = "\u{00A0} Ünal \u{3000}";
+    println!("{:?}", name.trim());          // "Ünal": trim removes Unicode spaces
+    println!("{}", name.contains("nal"));
+    println!("{}", name.starts_with('\u{00A0}'));
+    println!("{}", ucfirst("élan"));        // Élan
+}</pre>
+  <div class="ox-bridge-note"><p>PHP's <code>trim()</code> knows only ASCII whitespace and the NUL byte, so the no-break space at the start stops it. <code>mb_trim()</code> also removes Unicode spaces. Rust's <code>trim()</code> removes every character with the Unicode White_Space property, so the no-break space and the ideographic space both go. <code>contains()</code> and <code>str_contains()</code> both match bytes. A valid UTF-8 needle only matches whole characters, so a byte search can't split one. The standard library has no capitalize method. The <code>ucfirst</code> function above is the <code>chars()</code> version of PHP's <code>mb_ucfirst()</code>.</p></div>
+</div>
+
+<p>There is one operator on strings, <code>+</code>, and it follows the ownership rules from Chapter 06. <code>s1 + &amp;s2</code> calls <code>add(self, &amp;str)</code>. The left side is moved into the call, and its buffer is reused for the result. The right side is only borrowed.</p>
+
+<pre class="rs" data-run data-stdout="tic-tac\n-tac">
+fn main() {
+    let s1 = String::from("tic");
+    let s2 = String::from("-tac");
+    let s3 = s1 + &amp;s2;
+    println!("{s3}");
+    println!("{s2}");
+}</pre>
+
+<div class="ox-xray ox-wide" data-scenario="plus-moves"></div>
+
+<p>Converting between the two types is common enough to memorize. Each of these gives you an owned <code>String</code> from a literal, and they all end up with the same bytes:</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Expression</th><th>Gives</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td><code>String::from("x")</code></td><td><code>String</code></td><td>The explicit form. This course uses it.</td></tr>
+    <tr><td><code>"x".to_string()</code></td><td><code>String</code></td><td>Works for anything that implements <code>Display</code>.</td></tr>
+    <tr><td><code>"x".to_owned()</code></td><td><code>String</code></td><td>Same result for a <code>&amp;str</code>.</td></tr>
+    <tr><td><code>"x".into()</code></td><td><code>String</code></td><td>Needs the target type: <code>let s: String = "x".into();</code></td></tr>
+    <tr><td><code>s.as_str()</code></td><td><code>&amp;str</code></td><td>A view of the String. No copy.</td></tr>
+    <tr><td><code>&amp;s</code></td><td><code>&amp;String</code></td><td>Coerces to <code>&amp;str</code> wherever a <code>&amp;str</code> is expected.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<details class="ox-think">
+  <summary>Which of these allocates a new buffer: <code>trim()</code>, <code>to_uppercase()</code> or <code>split()</code>?</summary>
+  <div class="ox-think-body">
+    <p>Only <code>to_uppercase()</code>. It returns a new String with different letters, so it needs new bytes. <code>trim()</code> returns a view of the original text with the surrounding spaces left out, and <code>split()</code> returns an iterator of views. Neither copies a byte.</p>
+  </div>
+</details>
+</section>
+
+<section>
+<h2 id="practice">Practice</h2>
+
+<p>Four quick checks, then a fill-in and a match. Answer each one before you read the explanation.</p>
+
+<div class="ox-quiz" data-id="08:quiz-plus" data-label="Does it compile?">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0382">
+fn main() {
+    let s1 = String::from("tic");
+    let s2 = String::from("-tac");
+    let s3 = s1 + &amp;s2;
+    println!("{s3} {s1}");
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. <code>+</code> works on a copy of <code>s1</code>.</li>
+    <li data-correct>No. <code>s1</code> was moved into <code>+</code>, so it can't be read afterwards.</li>
+  </ol>
+  <div class="ox-why"><p>The left operand of <code>+</code> is moved, the same way <code>let t = s1;</code> moves it in Chapter 06. The right operand is only borrowed, which is why <code>s2</code> is still usable. This is error E0382. To keep <code>s1</code>, write <code>format!("{s1}{s2}")</code>, which borrows both.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="08:quiz-len" data-label="Predict">
+  <p class="ox-q">What does this print?</p>
+  <pre class="rs" data-stdout="2 1">
+fn main() {
+    let e = "é";
+    println!("{} {}", e.len(), e.chars().count());
+}</pre>
+  <ol class="ox-choices">
+    <li data-correct><code>2 1</code></li>
+    <li><code>1 1</code></li>
+    <li><code>2 2</code></li>
+  </ol>
+  <div class="ox-why"><p><code>é</code> is one character encoded in two bytes. <code>.len()</code> counts bytes, and <code>.chars().count()</code> counts characters.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="08:quiz-index" data-label="Does it compile?">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0277">
+fn main() {
+    let name = "Ana";
+    let initial = name[0];
+    println!("{initial}");
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. It stores the byte 65, which is the letter A.</li>
+    <li data-correct>No. A <code>&amp;str</code> can't be indexed by an integer. This is error E0277.</li>
+  </ol>
+  <div class="ox-why"><p>A string literal is a <code>&amp;str</code>, so the rule is the same as for a <code>String</code>. Choose a meaning explicitly: <code>name.as_bytes()[0]</code>, <code>name.chars().nth(0)</code> or <code>&amp;name[0..1]</code>.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="08:quiz-char-indices" data-label="Predict">
+  <p class="ox-q">What does this print?</p>
+  <pre class="rs" data-stdout="0 a\n1 ñ\n3 b">
+fn main() {
+    for (i, c) in "añb".char_indices() {
+        println!("{i} {c}");
+    }
+}</pre>
+  <ol class="ox-choices">
+    <li>Indexes 0, 1, 2, because <code>b</code> is the third character.</li>
+    <li data-correct>Indexes 0, 1, 3, because <code>ñ</code> is two bytes wide.</li>
+    <li>Indexes 0, 2, 3, because <code>ñ</code> starts at byte 2.</li>
+  </ol>
+  <div class="ox-why"><p><code>ñ</code> starts at byte 1 and takes two bytes, so <code>b</code> starts at byte 3. <code>char_indices()</code> reports byte positions, not character counts.</p></div>
+</div>
+
+<div class="ox-fill" data-id="08:fill-first">
+  <p class="ox-q">Fill in the two types so that <code>first_word</code> reads a string without taking it, and returns a view of its first word.</p>
+  <pre class="rs" data-stdout="hello">
+fn first_word(s: [[&amp;str]]) -&gt; [[&amp;str]] {
+    s.split(' ').next().unwrap_or("")
+}
+
+fn main() {
+    println!("{}", first_word("hello world"));
+}</pre>
+  <div class="ox-why"><p>Both types are <code>&amp;str</code>. The parameter is a borrow, so the caller keeps its String. The return value is a slice of that same input, so it is a borrow too, and nothing is allocated. Returning <code>String</code> would not compile here, because the value is a <code>&amp;str</code>, and to make it a <code>String</code> you would have to copy the word.</p></div>
+</div>
+
+<div class="ox-match" data-id="08:match" data-left-label="PHP" data-right-label="Rust">
+  <ul>
+    <li data-left="strlen($s)">the byte count: <code>s.len()</code></li>
+    <li data-left="mb_strlen($s)">the character count: <code>s.chars().count()</code></li>
+    <li data-left="mb_str_split($s)">one value per character: <code>s.chars().collect::&lt;Vec&lt;char&gt;&gt;()</code></li>
+    <li data-left="explode(' ', $s)">split on a separator: <code>s.split(' ')</code></li>
+    <li data-left="implode(', ', $parts)">join pieces: <code>parts.join(", ")</code></li>
+    <li data-left="mb_strtoupper($s)">uppercase: <code>s.to_uppercase()</code></li>
+    <li data-left="mb_trim($s)">strip the edges: <code>s.trim()</code></li>
+    <li data-left="str_contains($s, $needle)">search: <code>s.contains(needle)</code></li>
+  </ul>
+</div>
+
+<p><code>split</code> returns a lazy iterator, not an array. When you need the array that <code>explode</code> gives you, add <code>.collect::&lt;Vec&lt;_&gt;&gt;()</code>, which names the collection to build. Nothing is split until something pulls on the iterator.</p>
+
+<p>The uppercase row is the one to watch. <code>strtoupper()</code> changes only ASCII letters, so <code>strtoupper("é")</code> returns <code>é</code> unchanged. Use <code>mb_strtoupper()</code> for text with accents, and it matches <code>to_uppercase()</code>.</p>
+</section>
+
+<section>
+<h2 id="act2">Act II wrap-up</h2>
+
+<p>Chapters 05 through 08 are one idea seen from several angles. Every value has one owner. Every borrow is a view that must not outlive the thing it looks at.</p>
+
+<ul>
+  <li>Copy types such as integers are copied. Values that own heap memory, such as a String, have exactly one owner (Chapters 05 and 06).</li>
+  <li>Assigning or passing a value that isn't <code>Copy</code> moves it, and the old name becomes unusable (Chapter 06).</li>
+  <li>A borrow is a shared <code>&amp;T</code> or an exclusive <code>&amp;mut T</code>: many readers or one writer (Chapter 07).</li>
+  <li>A slice or a <code>&amp;str</code> is a borrow with a length, and it must not outlive its owner (Chapters 07 and 08).</li>
+  <li><code>String</code> owns text and <code>&amp;str</code> views it. Take a <code>&amp;str</code> in, and return a <code>String</code> out when you create new text.</li>
+</ul>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Tool</th><th>Use it when</th><th>Cost</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Move</strong></td><td>The caller is finished with the value.</td><td>Free</td></tr>
+    <tr><td><strong>Borrow</strong> (<code>&amp;</code>, <code>&amp;mut</code>)</td><td>The other code only needs to look at the value, or edit it for a moment.</td><td>Free</td></tr>
+    <tr><td><strong>Clone</strong> (<code>.clone()</code>)</td><td>You need two values that can change independently.</td><td>An allocation and a copy</td></tr>
+  </tbody>
+</table>
+</div>
+
+<details class="ox-think">
+  <summary>A function needs only the length of a String the caller already holds. Should it move, clone or borrow?</summary>
+  <div class="ox-think-body">
+    <p>Borrow. Take a <code>&amp;str</code> and call <code>.len()</code>. Moving gives the String away for no reason, and cloning allocates for nothing.</p>
+  </div>
+</details>
+
+<p>The Act II boss quest is <em>Text statistics</em> (<code>boss2_text_stats</code>). Its summary is short: analyze text without a single unnecessary clone. It is the test of everything in these four chapters. For a quicker check of your reading, try the <a href="../labs/borrow-checker.html">Be the Borrow Checker</a> lab.</p>
+</section>
+
+<section>
+<h2 id="quests">Forge quests</h2>
+<p>Reading builds recognition. Writing code builds the skill. These quests run locally against the real compiler.</p>
+<div class="ox-quests" data-chapter="8"></div>
+</section>
+
+<section>
+<h2 id="recap">Recap</h2>
+
+<div class="ox-recap">
+  <h3>Two views, one idea</h3>
+  <ul>
+    <li><code>String</code> owns heap text: pointer, length and capacity. <code>&amp;str</code> is a view: pointer and length, and no ownership.</li>
+    <li><code>"hi"</code> is a <code>&amp;'static str</code>, and its bytes live in the program.</li>
+    <li><code>&amp;s[a..b]</code> is a slice, a shared borrow of the owner's bytes. Its numbers are byte positions.</li>
+    <li>Strings are UTF-8. <code>.len()</code> counts bytes, <code>.chars()</code> counts characters, and <code>s[0]</code> doesn't compile.</li>
+    <li>A slice that starts or ends inside a character panics. <code>s.get(a..b)</code> returns an <code>Option</code> instead.</li>
+    <li>Take <code>&amp;str</code> in and return <code>String</code> out. <code>+</code> moves its left side, and a method's return type tells you whether it allocates.</li>
+  </ul>
+</div>
+
+<div class="ox-deck" data-chapter="8"></div>
+
+<details class="ox-think">
+  <summary>Explain it back: explain <code>String</code> versus <code>&amp;str</code> using the word "view".</summary>
+  <div class="ox-think-body">
+    <p>One good answer: "A <code>String</code> owns its text. It has a heap buffer, and when it goes out of scope the buffer is freed. A <code>&amp;str</code> is a view: a pointer and a length that look at text owned by something else. It allocates nothing and frees nothing. If your code owns the text, use a <code>String</code>. If it only looks at the text, take a <code>&amp;str</code>."</p>
+    <p>If your version said <em>owns</em>, <em>view</em> and <em>frees nothing</em>, you have it.</p>
+  </div>
+</details>
+
+<div class="ox-complete-host"></div>
+</section>
+
+</main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  /*u8-logic:begin*/
+  // Byte and char model of a string, the same way Rust sees it.
+  function u8Spans(text) {
+    const enc = new TextEncoder();
+    const spans = [];
+    let pos = 0;
+    for (const ch of Array.from(text)) {
+      const bytes = enc.encode(ch);
+      spans.push({ ch, start: pos, end: pos + bytes.length });
+      pos += bytes.length;
+    }
+    return { spans, len: pos, all: enc.encode(text) };
+  }
+
+  // Rust prints a char with {:?}: printable characters appear as they are, and
+  // invisible or unassigned ones are escaped as \u{...}. This matches rustc 1.97
+  // for every character that Unicode 16 assigns.
+  const U8_ESCAPED = /^(?:\p{Grapheme_Extend}|\p{Cc}|\p{Cf}|\p{Cs}|\p{Co}|\p{Cn}|\p{Zl}|\p{Zp}|\p{Zs})$/u;
+  function u8Debug(ch) {
+    return U8_ESCAPED.test(ch) ? "'\\u{" + ch.codePointAt(0).toString(16) + "}'" : "'" + ch + "'";
+  }
+
+  // What &text[start..end] does in Rust 1.97, with the same panic messages.
+  // Returns { ok: true, text } or { ok: false, kind, message, ... }.
+  function u8Slice(text, start, end) {
+    const { spans, len, all } = u8Spans(text);
+    if (start > len || end > len) {
+      const which = start > len ? "start" : "end";
+      const at = start > len ? start : end;
+      return { ok: false, kind: "bounds", at, len, message: `${which} byte index ${at} is out of bounds for string of length ${len}` };
+    }
+    if (start > end) {
+      return { ok: false, kind: "order", message: `byte range starts at ${start} but ends at ${end}` };
+    }
+    const boundary = new Set([0, len, ...spans.map((s) => s.start)]);
+    if (!boundary.has(start) || !boundary.has(end)) {
+      const which = boundary.has(start) ? "end" : "start";
+      const at = boundary.has(start) ? end : start;
+      const span = spans.find((s) => s.start < at && at < s.end);
+      return {
+        ok: false, kind: "boundary", at, span,
+        message: `${which} byte index ${at} is not a char boundary; it is inside ${u8Debug(span.ch)} (bytes ${span.start}..${span.end} of string)`
+      };
+    }
+    return { ok: true, text: new TextDecoder().decode(all.subarray(start, end)) };
+  }
+  /*u8-logic:end*/
+  // Shared with the Caterpillar cutter, so both print the same panic text.
+  window.OxUtf8 = { u8Spans: u8Spans, u8Slice: u8Slice, u8Debug: u8Debug };
+
+  const ORDINAL = ["first", "second", "third", "fourth"];
+
+  function init() {
+    const root = document.getElementById("utf8x");
+    if (!root) return;
+    const textIn = document.getElementById("utf8x-text");
+    const fromIn = document.getElementById("utf8x-start");
+    const toIn = document.getElementById("utf8x-end");
+    const strip = document.getElementById("utf8x-strip");
+    const result = document.getElementById("utf8x-result");
+    const note = document.getElementById("utf8x-note");
+    const bytesOut = document.getElementById("utf8x-bytes");
+    const charsOut = document.getElementById("utf8x-chars");
+
+    function make(tag, cls, text) {
+      const n = document.createElement(tag);
+      if (cls) n.className = cls;
+      if (text !== undefined) n.textContent = text;
+      return n;
+    }
+    function shown(ch) {
+      if (ch === " ") return "␠";
+      if (ch === "\n") return "⏎";
+      return ch;
+    }
+    function hex(b) {
+      return b.toString(16).toUpperCase().padStart(2, "0");
+    }
+
+    function render(byUser) {
+      const s = textIn.value;
+      const info = u8Spans(s);
+      bytesOut.textContent = String(info.len);
+      charsOut.textContent = String(info.spans.length);
+
+      const a = fromIn.value.trim();
+      const b = toIn.value.trim();
+      const numbers = /^\d+$/.test(a) && /^\d+$/.test(b);
+      const from = numbers ? Number(a) : NaN;
+      const to = numbers ? Number(b) : NaN;
+      const res = numbers ? u8Slice(s, from, to) : null;
+
+      strip.replaceChildren();
+      info.spans.forEach((sp, gi) => {
+        const group = make("div", "u8-group" + (gi % 2 ? " is-alt" : ""));
+        group.setAttribute("role", "group");
+        group.setAttribute("aria-label", "character " + sp.ch + ", bytes " + sp.start + " to " + (sp.end - 1));
+        group.appendChild(make("span", "u8-ch", shown(sp.ch)));
+        const row = make("div", "u8-bytes");
+        for (let k = sp.start; k < sp.end; k++) {
+          let cls = "u8-byte";
+          if (res && res.ok && k >= from && k < to) cls += " is-in";
+          if (res && !res.ok && res.at === k) cls += " is-bad";
+          const cell = make("div", cls);
+          cell.appendChild(make("span", "u8-hex", hex(info.all[k])));
+          cell.appendChild(make("span", "u8-idx", String(k)));
+          row.appendChild(cell);
+        }
+        group.appendChild(row);
+        strip.appendChild(group);
+      });
+
+      result.className = "u8-result";
+      result.replaceChildren();
+      note.textContent = "";
+      if (!s) {
+        result.textContent = "Type some text above.";
+        return;
+      }
+      if (!res) {
+        result.textContent = "Enter a start and an end as whole numbers, zero or more.";
+        return;
+      }
+      result.appendChild(make("code", null, "&s[" + from + ".." + to + "]"));
+      if (res.ok) {
+        result.classList.add("is-ok");
+        result.appendChild(document.createTextNode(" gives "));
+        result.appendChild(make("strong", null, "\"" + res.text + "\""));
+        note.textContent = "Both ends sit between characters, so this is a valid &str. It is a view into the same bytes, and no bytes were copied.";
+        return;
+      }
+      result.classList.add("is-bad");
+      result.appendChild(document.createTextNode(" panics: "));
+      result.appendChild(make("code", null, res.message));
+      if (res.kind === "bounds") {
+        note.textContent = "The text has " + res.len + " bytes, so a slice can start and end only at 0 through " + res.len + ".";
+      } else if (res.kind === "order") {
+        note.textContent = "The end must not come before the start.";
+      } else {
+        const idx = res.at - res.span.start;
+        note.textContent = "Byte " + res.at + " is the " + ORDINAL[idx] + " byte of " + shown(res.span.ch) + ", which takes bytes " + res.span.start + " to " + (res.span.end - 1) + ". A slice has to start and end between characters.";
+        if (byUser && window.Ox && typeof Ox.award === "function") Ox.award(5, "found a slice that splits a character", "utf8x:boundary");
+      }
+    }
+
+    textIn.addEventListener("input", () => render(true));
+    fromIn.addEventListener("input", () => render(true));
+    toIn.addEventListener("input", () => render(true));
+    root.querySelectorAll("[data-from]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        fromIn.value = btn.getAttribute("data-from");
+        toIn.value = btn.getAttribute("data-to");
+        render(true);
+      });
+    });
+    render();
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
+</script>
+</body>
+</html>

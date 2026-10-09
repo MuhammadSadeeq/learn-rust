@@ -1,0 +1,1012 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hello, Crab · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<link rel="stylesheet" href="../assets/cast-art.css">
+<link rel="stylesheet" href="../assets/cast.css">
+<link rel="stylesheet" href="../assets/motion.css">
+<link rel="stylesheet" href="../assets/story.css">
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/quests-data.js" defer></script>
+<script src="../assets/cards/ch01.js" defer></script>
+<script src="../assets/motion/ch01.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+<script src="../assets/cast-art.js"></script>
+<script src="../assets/cast.js" defer></script>
+<script src="../assets/motion.js" defer></script>
+<script src="../assets/xray.js" defer></script>
+<script src="../assets/story.js" defer></script>
+</head>
+<body data-chapter="1">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<div class="ox-page">
+<aside class="ox-rail" aria-label="Chapter contents"></aside>
+<main class="ox-main" id="main">
+
+<header class="ox-hero" data-auto>
+  <ul>
+    <li>Explain in one sentence how running Rust differs from running PHP.</li>
+    <li>Install Rust, then create, build and run a Cargo project.</li>
+    <li>Read every token of a hello-world program and say what it does.</li>
+    <li>Read a compiler error from the top and act on it.</li>
+  </ul>
+</header>
+
+<section>
+<h2 id="why">Why Rust, and why now</h2>
+
+<p>Rust compiles to native machine code, the same kind of code C and C++ produce, and it has no garbage collector. Nothing pauses your program to hunt for memory it no longer uses. The compiler also checks memory safety before the program runs. Whole classes of bugs, such as use after free, double free and data races between threads, fail to compile instead of failing in production.</p>
+
+<p>The rules that keep memory safe also keep threads from changing the same data without coordination. You will meet that in Chapter 18. Rust also ships one toolchain for compiling, testing, formatting, linting and managing dependencies, so you use the same few commands in every project.</p>
+
+<p>There is a second reason this matters now. AI agents write a lot of code, and they write it quickly. In Rust the compiler and the tests reject a whole category of mistakes before the code runs, which makes agent-written code much easier to verify. It is one reason more runtimes, command-line tools, web frameworks and agent harnesses are being written in Rust.</p>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>For you, this means you will often read and review Rust written by an agent, more often than you write Rust from a blank file. Review starts with the compiler's verdict, but a program that compiles can still do the wrong thing. Ask whether the code does what you meant, and whether its ownership choices are the ones you would make. This course trains both skills: writing small programs, and reading code you did not write.</p>
+</aside>
+
+<aside class="ox-callout" data-kind="trap" data-label="Fair warning">
+  <p>Rust has a real learning curve. The hardest part is ownership, which you reach in Act II. This course flattens that curve on purpose: every concept gets a picture you can step through, you predict before each reveal, you check your guesses against the real compiler, PHP bridges show where the comparison breaks, and Forge quests and recall cards keep it in your head.</p>
+</aside>
+
+<details class="ox-think">
+  <summary>Think first: your PHP app is fast enough today. Name one good reason to write part of it in Rust anyway.</summary>
+  <div class="ox-think-body">
+    <p>Some good reasons: a CPU-heavy step that dominates response time, a long-running worker that must keep its memory small and predictable, a command-line tool you want to ship as one file that needs no PHP on the target machine, or a tool an agent will run constantly, where a compile-time check is worth having.</p>
+  </div>
+</details>
+
+<div class="ox-meet" data-cast="oxi" data-say="I ask you to guess before each reveal. A wrong guess still teaches, so guess anyway."></div>
+</section>
+
+<section>
+<h2 id="two-worlds">Interpreted per request vs compiled once</h2>
+
+<p>PHP is usually called an interpreted language. In practice it compiles your source to opcodes, the internal instructions that the Zend engine executes. Rust works differently in one important way: it compiles everything ahead of time, before anyone sends a request.</p>
+
+<p>In a classic PHP-FPM setup, the web server hands each request to a PHP worker process. PHP loads the script and compiles it to opcodes. OPcache keeps those opcodes in shared memory, so the compile step is usually skipped after the first request. The script then runs. When the response is sent, PHP frees everything the request allocated. The worker process lives on for the next request, but nothing from the last request is still in memory.</p>
+
+<p>A Rust web service is built once, before you deploy. <code>cargo build</code> compiles the whole program into one native binary. You start that binary and it keeps running. Each request is handled by code that is already machine code, so nothing is compiled when a request arrives. The process also keeps whatever your program stores in memory, until your code removes it.</p>
+
+<div class="ox-meet" data-cast="forge" data-say="Hand me your source before anything runs. Clean code comes back as an ingot. Broken code comes back as a scroll that says why."></div>
+
+<div class="ox-motion" data-scene="ch01-two-worlds"></div>
+
+<style>
+#pipelines .pl-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 4px; }
+#pipelines .pl-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 4px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); font: 600 0.82rem/1.2 var(--font-body); cursor: pointer; }
+#pipelines .pl-toggle input { accent-color: var(--ink-2); margin: 0; }
+#pipelines .pl-lane { margin-top: 14px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); }
+#pipelines .pl-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 16px; }
+#pipelines .pl-title { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: var(--step-1); }
+#pipelines .pl-stats { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; font-size: 0.85rem; color: var(--muted); }
+#pipelines .pl-stats b { color: var(--ink); font-family: var(--font-mono); font-weight: 600; }
+#pipelines .pl-track { position: relative; display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+#pipelines .pl-stage { display: flex; flex-direction: column; gap: 2px; min-height: 72px; padding: 8px 9px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+#pipelines .pl-num { font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted); }
+#pipelines .pl-name { font-weight: 700; font-size: 0.92rem; line-height: 1.2; }
+#pipelines .pl-note { font-size: 0.78rem; line-height: 1.3; color: var(--muted); }
+#pipelines .pl-stage.is-built { background: var(--ok-soft); border-color: var(--ok); }
+#pipelines .pl-stage.is-built .pl-num { color: var(--ok); font-weight: 700; }
+#pipelines .pl-stage.is-cached { border-style: dashed; border-color: var(--ghost); }
+#pipelines .pl-stage.is-cached .pl-name { color: var(--muted); text-decoration: line-through; }
+#pipelines .pl-stage.is-hot { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+#pipelines .pl-dots { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+#pipelines .pl-dot { position: absolute; left: 0; top: 0; width: 14px; height: 14px; border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 3px var(--surface); opacity: 0; transition: transform 0.38s ease, opacity 0.25s ease; }
+#pipelines .pl-dot.is-in { opacity: 1; }
+#pipelines .pl-dot.is-new { transition: none; }
+#pipelines .pl-proc { margin-top: 12px; padding: 6px 10px; border-radius: var(--radius); background: var(--ok-soft); color: var(--ink); font-size: 0.85rem; }
+#pipelines .pl-foot { margin: 10px 0 0; font-size: 0.85rem; color: var(--muted); }
+#pipelines .pl-foot b { color: var(--ink); }
+#pipelines .pl-caption { margin: 14px 0 0; font-size: 0.88rem; color: var(--muted); }
+@media (max-width: 640px) {
+  #pipelines .pl-track { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #pipelines .pl-dot { transition: none; }
+}
+</style>
+
+<div class="ox-figure ox-wide" id="pipelines">
+  <div class="pl-bar">
+    <button type="button" class="ox-btn is-primary is-small" data-send="1">Send a request</button>
+    <button type="button" class="ox-btn is-small" data-send="5">Send 5 requests</button>
+    <button type="button" class="ox-btn is-small" data-reset>Reset</button>
+    <label class="pl-toggle"><input type="checkbox" data-opcache checked> OPcache on</label>
+  </div>
+
+  <div class="pl-lane" data-lane="php" role="group" aria-label="PHP lane">
+    <div class="pl-head">
+      <p class="pl-title">PHP (FPM)</p>
+      <p class="pl-stats" aria-live="polite">
+        <span>Requests: <b data-count>0</b></span>
+        <span>Compile work, latest request: <b data-compile>none yet</b></span>
+      </p>
+    </div>
+    <div class="pl-track" style="--cols: 6">
+      <div class="pl-stage" data-key="web"><span class="pl-num">1</span><span class="pl-name">Web server</span><span class="pl-note">passes it to PHP-FPM</span></div>
+      <div class="pl-stage" data-key="fpm"><span class="pl-num">2</span><span class="pl-name">FPM worker</span><span class="pl-note">a worker takes it</span></div>
+      <div class="pl-stage" data-key="load"><span class="pl-num">3</span><span class="pl-name">Load script</span><span class="pl-note">reads index.php</span></div>
+      <div class="pl-stage" data-key="compile"><span class="pl-num">4</span><span class="pl-name">Compile to opcodes</span><span class="pl-note">the first request compiles it</span></div>
+      <div class="pl-stage" data-key="exec"><span class="pl-num">5</span><span class="pl-name">Execute</span><span class="pl-note">runs your code</span></div>
+      <div class="pl-stage" data-key="teardown"><span class="pl-num">6</span><span class="pl-name">Tear down</span><span class="pl-note">request memory freed</span></div>
+      <div class="pl-dots" aria-hidden="true"></div>
+    </div>
+    <p class="pl-foot">Kept between requests: <b>nothing</b>. Each request starts with a fresh set of variables.</p>
+  </div>
+
+  <div class="pl-lane" data-lane="rust" role="group" aria-label="Rust lane">
+    <div class="pl-head">
+      <p class="pl-title">Rust (compiled binary)</p>
+      <p class="pl-stats" aria-live="polite">
+        <span>Requests served by one process: <b data-count>0</b></span>
+        <span>Compile work per request: <b>none</b>, built before deploy</span>
+      </p>
+    </div>
+    <div class="pl-track" style="--cols: 4">
+      <div class="pl-stage is-built" data-key="built"><span class="pl-num">&#10003;</span><span class="pl-name">cargo build</span><span class="pl-note">once, before deploy</span></div>
+      <div class="pl-stage" data-key="accept"><span class="pl-num">1</span><span class="pl-name">Accept</span><span class="pl-note">the listener takes it</span></div>
+      <div class="pl-stage" data-key="handler"><span class="pl-num">2</span><span class="pl-name">Run handler</span><span class="pl-note">your function runs</span></div>
+      <div class="pl-stage" data-key="respond"><span class="pl-num">3</span><span class="pl-name">Respond</span><span class="pl-note">bytes go back out</span></div>
+      <div class="pl-dots" aria-hidden="true"></div>
+    </div>
+    <div class="pl-proc">One process, started at deploy, still running.</div>
+    <p class="pl-foot">Kept between requests: <b>whatever the process holds</b>. The process keeps running, so anything your code stores stays until your code removes it.</p>
+  </div>
+
+  <p class="pl-caption">The PHP lane repeats its setup for every request. OPcache can skip only the compile step, and the script still runs and is torn down each time. The Rust lane compiles once, before deploy, and one running process handles every request. Switch OPcache off to see the compile step come back for each request. The lanes show the order of the work, not how long each step takes.</p>
+</div>
+
+<div class="ox-quiz" data-id="01:opcache">
+  <p class="ox-q">With OPcache on, what does PHP still do on every request?</p>
+  <ol class="ox-choices">
+    <li>Re-parse the source file from disk.</li>
+    <li data-correct>Execute the opcodes, then tear down the request's memory.</li>
+    <li>Compile the script to machine code.</li>
+    <li>Nothing. The whole response is cached.</li>
+  </ol>
+  <div class="ox-why"><p>OPcache skips the parse and compile-to-opcodes step, which is the expensive part. Executing the opcodes and freeing the request's memory still happen on every request. OPcache caches compiled code, not responses. Machine-code compilation is not the usual PHP request path, so that option is wrong too.</p></div>
+</div>
+
+<aside class="ox-callout" data-kind="php">
+  <p>If you have run Laravel Octane on Swoole, RoadRunner or FrankenPHP, you have seen the long-running model already. The application boots once and serves many requests. The catch is that anything you leave in memory survives into the next request.</p>
+  <p>Rust has the same property. The difference is that the compiler makes you say who may touch shared state, and when.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="install">Install Rust</h2>
+
+<p>Rust is installed with <strong>rustup</strong>, a toolchain manager. On macOS or Linux, run this in a terminal:</p>
+
+<pre class="sh">curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh</pre>
+
+<p>On Windows, download <code>rustup-init.exe</code> from <a href="https://rustup.rs">rustup.rs</a> and run it. Rust uses Microsoft's linker on Windows, so the installer may offer the Visual Studio C++ Build Tools. Install them if it asks.</p>
+
+<p>Open a new terminal, so it loads the updated <code>PATH</code>, and check the install:</p>
+
+<pre class="sh">rustc --version
+cargo --version</pre>
+
+<p>To upgrade later, run <code>rustup update</code>. It updates the toolchain you have.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Tool</th><th>What it is</th><th>PHP comparison</th></tr></thead>
+  <tbody>
+    <tr><td><code>rustup</code></td><td>Installs and switches toolchains. You can keep several versions and update them with one command.</td><td>phpenv, or Homebrew's PHP versions</td></tr>
+    <tr><td><code>rustc</code></td><td>The compiler. It turns your source into a binary before anything runs.</td><td>No direct equivalent. PHP runs the source itself.</td></tr>
+    <tr><td><code>cargo</code></td><td>The build tool and package manager. You will use it every day.</td><td>Composer and Artisan together</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>For an editor, use VS Code with the rust-analyzer extension, or RustRover from JetBrains. If you know PhpStorm, RustRover will feel familiar.</p>
+
+<details class="ox-think">
+  <summary>Think first: you just installed Rust, but a new terminal says <code>rustc: command not found</code>. What is the most likely cause?</summary>
+  <div class="ox-think-body">
+    <p>The terminal was open before the install, so it does not know about the directory rustup put the tools in. rustup adds <code>~/.cargo/bin</code> to your <code>PATH</code> through your shell profile, and a shell only reads that when it starts. Open a fresh terminal. In the current one, <code>. "$HOME/.cargo/env"</code> also works.</p>
+  </div>
+</details>
+</section>
+
+<section>
+<h2 id="cargo">Cargo: Composer and Artisan in one</h2>
+
+<p>Cargo creates projects, builds them, runs them, runs tests, fetches dependencies and formats code. Start a project with <code>cargo new</code>, then run it:</p>
+
+<pre class="sh">cargo new hello
+cd hello
+cargo run</pre>
+
+<p>The first <code>cargo run</code> prints something like this. Your path will differ:</p>
+
+<pre class="rustc">
+   Compiling hello v0.1.0 (/path/to/hello)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running `target/debug/hello`
+Hello, world!
+</pre>
+
+<p>Cargo compiled the program, then ran the binary it produced. The <code>dev</code> profile is the default debug build. Every later <code>cargo run</code> skips work that is already done, and only rebuilds what changed.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>File or folder</th><th>What it is</th><th>PHP comparison</th></tr></thead>
+  <tbody>
+    <tr><td><code>Cargo.toml</code></td><td>The manifest: name, version, edition and dependencies.</td><td><code>composer.json</code></td></tr>
+    <tr><td><code>Cargo.lock</code></td><td>The exact versions Cargo resolved. Created by the first build. Commit it for applications.</td><td><code>composer.lock</code></td></tr>
+    <tr><td><code>src/main.rs</code></td><td>The entry point of a binary program.</td><td><code>index.php</code>, as the file your program starts from</td></tr>
+    <tr><td><code>target/</code></td><td>Build output. Never edit it and never commit it. <code>cargo new</code> adds it to <code>.gitignore</code> when it creates a new git repository. Inside an existing repository, add <code>/target</code> to <code>.gitignore</code> yourself.</td><td><code>vendor/</code>, which you also never edit</td></tr>
+  </tbody>
+</table>
+</div>
+
+<pre class="toml" data-title="Cargo.toml">
+[package]
+name = "hello"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]</pre>
+
+<p><code>edition = "2024"</code> tells the compiler which edition of the language to use. Editions let Rust add changes without breaking code written for an older edition.</p>
+
+<div class="ox-bridge">
+  <pre class="json" data-title="composer.json">
+{
+    "name": "acme/shop",
+    "require": {
+        "php": "^8.5",
+        "monolog/monolog": "^3.0"
+    }
+}</pre>
+  <pre class="toml" data-title="Cargo.toml">
+[package]
+name = "shop"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+serde_json = "1"</pre>
+  <div class="ox-bridge-note"><p>Both files declare the name and the dependencies. The <code>php</code> line says which PHP the project needs, and the <code>edition</code> line says which Rust edition the code is written in. The bigger difference comes after that. Cargo fetches and compiles dependencies as part of the build, and there is no autoloader. Code is included because your program declares it, which you will see in Chapter 16.</p></div>
+</div>
+
+<p>Laravel adds Artisan on top of Composer. Its commands run through PHP. A new Laravel app starts like this:</p>
+
+<pre class="sh">laravel new shop
+cd shop
+php artisan serve</pre>
+
+<p>Cargo has no second tool for this job. For a Rust web app, <code>cargo run</code> builds the server and starts it in one step.</p>
+
+<p>Once you know the Composer and Artisan commands, the Cargo ones are easy to find. This is the table to keep open for a while:</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Task</th><th>PHP, Composer, Artisan</th><th>Cargo</th></tr></thead>
+  <tbody>
+    <tr><td>Create a project</td><td><code>composer create-project</code>, or <code>laravel new</code></td><td><code>cargo new</code></td></tr>
+    <tr><td>Run it</td><td><code>php index.php</code>, or a framework's dev server</td><td><code>cargo run</code>, which builds first if needed</td></tr>
+    <tr><td>Build for release</td><td>No build step</td><td><code>cargo build --release</code></td></tr>
+    <tr><td>Check without running</td><td><code>php -l</code>, which checks syntax only</td><td><code>cargo check</code>, which also checks types and borrows</td></tr>
+    <tr><td>Run tests</td><td><code>phpunit</code>, <code>pest</code></td><td><code>cargo test</code></td></tr>
+    <tr><td>Format code</td><td>Pint, <code>php-cs-fixer</code></td><td><code>cargo fmt</code></td></tr>
+    <tr><td>Lint and analyze</td><td><code>phpstan</code>, Larastan</td><td><code>cargo clippy</code></td></tr>
+    <tr><td>Add a dependency</td><td><code>composer require vendor/package</code></td><td><code>cargo add crate</code></td></tr>
+    <tr><td>Update dependencies</td><td><code>composer update</code></td><td><code>cargo update</code></td></tr>
+    <tr><td>Browse API docs</td><td><code>phpDocumentor</code></td><td><code>cargo doc --open</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>The table is not a perfect match. <code>php -l</code> only parses the file. <code>cargo check</code> goes much further, because it type-checks and borrow-checks the whole project, which is why it catches real bugs. The borrow checker is the part of the compiler that checks ownership; Chapter 06 explains it.</p>
+
+<div class="ox-match" data-id="01:match-cargo" data-left-label="Composer / Artisan" data-right-label="Cargo">
+  <ul>
+    <li data-left="composer create-project"><code>cargo new</code></li>
+    <li data-left="php index.php"><code>cargo run</code></li>
+    <li data-left="composer require vendor/package"><code>cargo add crate</code></li>
+    <li data-left="phpunit or pest"><code>cargo test</code></li>
+    <li data-left="Pint or php-cs-fixer"><code>cargo fmt</code></li>
+    <li data-left="phpstan or Larastan"><code>cargo clippy</code></li>
+  </ul>
+</div>
+</section>
+
+<section>
+<h2 id="anatomy">Anatomy of hello world</h2>
+
+<p>Here is the program <code>cargo new</code> generated. Run it in the browser, then read it one token at a time.</p>
+
+<pre class="rs" data-run data-stdout="Hello, world!">
+fn main() {
+    println!("Hello, world!");
+}</pre>
+
+<style>
+#anatomy-tokens .an-code { margin: 0; padding: 14px 16px; overflow-x: auto; border-radius: var(--radius); background: var(--code-bg); color: var(--code-ink); font-family: var(--font-mono); font-size: 0.95rem; line-height: 2; }
+#anatomy-tokens .an-code div { white-space: pre; }
+#anatomy-tokens .an-tok { font: inherit; color: var(--code-ink); background: transparent; border: 1px solid transparent; border-radius: 4px; padding: 0 1px; cursor: pointer; }
+#anatomy-tokens .an-tok:hover { border-color: var(--code-dim); }
+#anatomy-tokens .an-tok[aria-pressed="true"] { background: var(--c-hl); border-color: var(--c-kw); }
+#anatomy-tokens .an-tok:focus-visible { outline: 2px solid var(--c-kw); outline-offset: 2px; }
+#anatomy-tokens .an-tok.t-kw { color: var(--c-kw); }
+#anatomy-tokens .an-tok.t-fn { color: var(--c-fn); }
+#anatomy-tokens .an-tok.t-ma { color: var(--c-ma); }
+#anatomy-tokens .an-tok.t-st { color: var(--c-st); }
+#anatomy-tokens .an-say { margin: 14px 0 0; padding: 12px 14px; border-left: 3px solid var(--ink-2); border-radius: 0 var(--radius) var(--radius) 0; background: var(--surface-2); }
+#anatomy-tokens .an-say p { margin: 0 0 6px; }
+#anatomy-tokens .an-say p:last-child { margin-bottom: 0; }
+#anatomy-tokens .an-say code { font-weight: 600; }
+</style>
+
+<div class="ox-figure ox-wide" id="anatomy-tokens">
+  <p class="ox-label">Tap a token</p>
+  <div class="an-code">
+<div><button type="button" class="an-tok t-kw" data-tok="fn" aria-pressed="true">fn</button> <button type="button" class="an-tok t-fn" data-tok="main" aria-pressed="false">main</button><button type="button" class="an-tok" data-tok="parens" aria-pressed="false">()</button> <button type="button" class="an-tok" data-tok="body" aria-pressed="false">{</button></div>
+<div>    <button type="button" class="an-tok t-ma" data-tok="macro" aria-pressed="false">println!</button>(<button type="button" class="an-tok t-st" data-tok="literal" aria-pressed="false">"Hello, world!"</button>)<button type="button" class="an-tok" data-tok="semi" aria-pressed="false">;</button></div>
+<div><button type="button" class="an-tok" data-tok="body" aria-pressed="false">}</button></div>
+  </div>
+  <div class="an-say" aria-live="polite">
+    <p><code>fn</code> declares a function.</p>
+    <p>The name comes next, then the parameter list in parentheses, then the body in braces. Every function in Rust is written this way.</p>
+  </div>
+</div>
+
+<div class="ox-bridge">
+  <pre class="php">
+&lt;?php
+echo "Hello, world!\n";</pre>
+  <pre class="rs">
+fn main() {
+    println!("Hello, world!");
+}</pre>
+  <div class="ox-bridge-note"><p>PHP runs statements from the top of the file down. Rust has no top-level code. Execution starts in <code>main</code>. Everything else in a Rust file is a declaration, such as a function, struct or constant, rather than a statement that runs.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="01:bang">
+  <p class="ox-q">What does the <code>!</code> in <code>println!</code> tell you?</p>
+  <ol class="ox-choices">
+    <li data-correct>It is a macro, and the compiler expands it into other code before the program is built.</li>
+    <li>It is the logical NOT, so the line runs only when a condition is false.</li>
+    <li>It marks the call as unsafe, so the compiler skips its checks.</li>
+    <li>It sends the output to standard error instead of standard output.</li>
+  </ol>
+  <div class="ox-why"><p><code>println!</code> is a macro, and so is <code>vec!</code>. A macro is code that writes code. The <code>!</code> is how you spot one at the call site. Macros take a variable number of arguments, which a normal function cannot, and <code>println!</code> checks its format string when you compile. You will write your own macros in Chapter 21.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="printing">Printing values</h2>
+
+<p><code>println!</code> takes a format string. Each <code>{}</code> placeholder is filled by the next argument, and the compiler checks the placeholders against the arguments before the program runs.</p>
+
+<p>The examples below use <code>let</code> to give values names. <code>let name = value;</code> gives a value a name. Chapter 02 explains it, and why a plain <code>let</code> cannot be changed.</p>
+
+<pre class="rs" data-run data-stdout="Ferris has 10 legs\nFerris has 10 legs\n[  Ferris] [Ferris  ] [ Ferris ]\nprice: 3.50\n(&quot;Ferris&quot;, 10)">
+fn main() {
+    let name = "Ferris";
+    let legs = 10;
+    let price = 3.5;
+    println!("{name} has {legs} legs");
+    println!("{} has {} legs", name, legs);
+    println!("[{:>8}] [{:<8}] [{:^8}]", name, name, name);
+    println!("price: {price:.2}");
+    println!("{:?}", (name, legs));
+}</pre>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Placeholder</th><th>What it does</th><th>Output for <code>name = "Ferris"</code></th></tr></thead>
+  <tbody>
+    <tr><td><code>{}</code></td><td>Display format, meant for people. The next argument fills it.</td><td><code>Ferris</code></td></tr>
+    <tr><td><code>{name}</code></td><td>The same, but the variable is named inside the braces.</td><td><code>Ferris</code></td></tr>
+    <tr><td><code>{:?}</code></td><td>Debug format, meant for developers. Strings get quotes.</td><td><code>"Ferris"</code></td></tr>
+    <tr><td><code>{:&gt;8}</code></td><td>Right-aligned in eight columns. <code>{:&lt;8}</code> left-aligns, <code>{:^8}</code> centers.</td><td><code>  Ferris</code></td></tr>
+    <tr><td><code>{price:.2}</code></td><td>Two digits after the decimal point.</td><td><code>3.50</code></td></tr>
+    <tr><td><code>{n:02}</code></td><td>Pads a number with zeros to a width of two.</td><td><code>05</code> for <code>n = 5</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<aside class="ox-callout" data-kind="php">
+  <p>PHP's <code>printf</code> uses placeholders such as <code>%s</code> and <code>%05.2f</code>. Extra arguments are silently ignored, and a missing one throws an <code>ArgumentCountError</code> only when that line runs. In Rust the placeholders are checked against the arguments at compile time, so <code>println!("{} {}", 1)</code> with one argument is a compile error.</p>
+</aside>
+
+<aside class="ox-callout" data-kind="trap">
+  <p><code>{}</code> only works for types that implement <code>Display</code>. A tuple does not, so this fails to compile:</p>
+  <pre class="rs" data-check="E0277">
+fn main() {
+    let name = "Ferris";
+    let legs = 10;
+    println!("{}", (name, legs));
+}</pre>
+  <p>Use <code>{:?}</code> for a tuple.</p>
+</aside>
+
+<p><code>println!</code> prints the text. <code>format!</code> takes the same format string and gives the text back as a <code>String</code>, so you can keep it in a variable or return it from a function. Chapter 08 covers <code>String</code>. The placeholder <code>{:02}</code> pads a number with leading zeros to two digits, so <code>format!("{:02}", 7)</code> is <code>07</code>.</p>
+
+<p>Comments use the same forms as PHP's <code>//</code> and <code>/* */</code>. A <code>///</code> comment is a doc comment. It documents the item below it, the way PHPDoc sits above a method.</p>
+
+<pre class="rs" data-run data-stdout="comments cost nothing at run time">
+fn main() {
+    // A line comment runs to the end of the line.
+    /* A block comment
+       can span several lines. */
+    println!("comments cost nothing at run time");
+}</pre>
+
+<p><code>cargo doc --open</code> turns your <code>///</code> comments into a browsable HTML site. In a library crate, code blocks inside them are compiled and run by <code>cargo test</code>, so the examples in your docs stay correct. A binary project like this one does not run them.</p>
+
+<div class="ox-quiz" data-id="01:fmt">
+  <p class="ox-q">What does this print?</p>
+  <pre class="rs" data-stdout="[   7] 0.7">
+fn main() {
+    println!("[{:>4}] {:.1}", 7, 2.0 / 3.0);
+}</pre>
+  <ol class="ox-choices">
+    <li><code>[7&nbsp;&nbsp;&nbsp;] 0.7</code></li>
+    <li data-correct><code>[&nbsp;&nbsp;&nbsp;7] 0.7</code></li>
+    <li><code>[&nbsp;&nbsp;&nbsp;7] 0.66</code></li>
+    <li><code>[7] 0.7</code></li>
+  </ol>
+  <div class="ox-why"><p><code>{:&gt;4}</code> right-aligns the first argument in a field four characters wide, so <code>7</code> gets three spaces in front of it. <code>{:.1}</code> rounds the second argument to one digit after the decimal point, so 0.666 becomes 0.7. Both formats apply to the same line.</p></div>
+</div>
+
+<div class="ox-fill" data-id="01:fill-fmt" data-label="Fill the blank">
+  <p class="ox-q">Make this print <code>Hello, Ana!</code> by putting the variable inside the string, not as a second argument.</p>
+  <pre class="rs" data-stdout="Hello, Ana!">
+fn main() {
+    let name = "Ana";
+    println!("Hello, [[{name}]]!");
+}</pre>
+  <div class="ox-why"><p><code>{name}</code> reads the variable <code>name</code> directly. The name in the braces has to match a variable in scope exactly. A typo there is a compile error, not an empty string in your output.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="first-error">Your first compiler error</h2>
+
+<p>Now break the program on purpose. This version forgets the <code>!</code>:</p>
+
+<pre class="rs" data-check="E0423" data-badge="error">
+fn main() {
+    println("Hi");
+}</pre>
+
+<p>Here is what rustc prints for it. Read it from the top:</p>
+
+<pre class="rustc">
+error[E0423]: expected function, found macro `println`
+ --&gt; src/main.rs:2:5
+  |
+2 |     println("Hi");
+  |     ^^^^^^^ not a function
+  |
+help: use `!` to invoke the macro
+  |
+2 |     println!("Hi");
+  |            +
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0423`.</pre>
+
+<ol class="ox-steps">
+  <li><div><p><strong>The code and the summary.</strong> <code>error[E0423]</code> is a stable code you can look up. The text after it says what went wrong.</p></div></li>
+  <li><div><p><strong>The location.</strong> The arrow <code>--&gt;</code> gives the file, line and column where the problem starts.</p></div></li>
+  <li><div><p><strong>The source excerpt.</strong> The <code>^^^</code> marks the exact tokens at fault, and the label beside them says why.</p></div></li>
+  <li><div><p><strong>The help line.</strong> <code>help:</code> often gives the fix. Here it suggests adding the <code>!</code>.</p></div></li>
+  <li><div><p><strong>The long explanation.</strong> <code>rustc --explain E0423</code> prints a fuller description of any error code.</p></div></li>
+</ol>
+
+<aside class="ox-callout" data-kind="compiler">
+  <p>The compiler is your pair programmer. Its messages are specific, and they usually name the fix. Read the <code>help:</code> line before you search the web for the error.</p>
+</aside>
+
+<div class="ox-motion" data-scene="ch01-first-error"></div>
+
+<div class="ox-quiz" data-id="01:compiles">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0425">
+fn main() {
+    let total = 3;
+    println!("{totl}");
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. It prints <code>3</code>, because the name is close enough.</li>
+    <li data-correct>No. <code>totl</code> is not a variable in scope. This is error E0425.</li>
+  </ol>
+  <div class="ox-why"><p>The name in the braces must be a variable in scope, and <code>totl</code> is a typo for <code>total</code>. The compiler even suggests the fix. In PHP, a typo in a variable name becomes an "Undefined variable" warning that appears only when that line runs. In Rust it is caught before the program exists.</p></div>
+</div>
+
+<style>
+#feed-forge { margin: 24px 0; }
+#feed-forge .ff-intro { margin: 0 0 14px; color: var(--ink-2); }
+#feed-forge .ff-bench { position: relative; display: grid; justify-items: center; gap: 6px; padding: 14px 12px 12px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface-2); }
+#feed-forge .ff-forge { width: 112px; }
+#feed-forge .ff-forge .ca { display: block; width: 100%; }
+#feed-forge .ff-forge .ca-svg { display: block; width: 100%; height: auto; }
+#feed-forge .ff-status { margin: 0; min-height: 1.5em; text-align: center; font: 600 0.9rem/1.4 var(--font-mono); color: var(--ink-2); }
+#feed-forge .ff-chip { position: absolute; left: 0; top: 0; z-index: 3; padding: 3px 10px; border: 1px solid var(--ink); border-radius: 999px; background: var(--surface); color: var(--ink); font: 700 0.78rem/1.2 var(--font-mono); white-space: nowrap; box-shadow: var(--shadow); pointer-events: none; }
+#feed-forge .ff-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 16px 0 0; padding: 0; list-style: none; }
+@media (max-width: 640px) { #feed-forge .ff-cards { grid-template-columns: minmax(0, 1fr); } }
+#feed-forge .ff-card { position: relative; display: grid; gap: 10px; min-width: 0; margin: 0; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
+#feed-forge .ff-card.is-right { border-color: var(--ok); }
+#feed-forge .ff-card.is-wrong { border-color: var(--bad); }
+#feed-forge .ff-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+#feed-forge .ff-name { margin: 0; font: 800 1.15rem/1.1 var(--font-display); color: var(--ink); }
+#feed-forge .ff-code { margin: 0; padding: 10px 12px; overflow-x: auto; border-radius: var(--radius); background: var(--code-bg); color: var(--code-ink); font: 400 0.8rem/1.6 var(--font-mono); }
+#feed-forge .ff-pick { display: flex; flex-wrap: wrap; gap: 8px; }
+#feed-forge .ff-out { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 12px; align-items: center; }
+#feed-forge .ff-out[hidden] { display: none; }
+#feed-forge .ff-out:focus { outline: 2px solid var(--oxide); outline-offset: 3px; border-radius: var(--radius); }
+#feed-forge .ff-art { display: block; width: 84px; }
+#feed-forge .ff-art .ca { display: block; width: 100%; }
+#feed-forge .ff-art .ca-svg { display: block; width: 100%; height: auto; }
+#feed-forge .ff-text { min-width: 0; font-size: 0.92rem; }
+#feed-forge .ff-text p { margin: 0 0 4px; }
+#feed-forge .ff-verdict.is-right strong { color: var(--ok); }
+#feed-forge .ff-verdict.is-wrong strong { color: var(--bad); }
+#feed-forge .ff-why { color: var(--muted); }
+#feed-forge .ff-end { margin: 14px 0 0; padding: 12px 14px; border-left: 3px solid var(--ok); border-radius: 0 var(--radius) var(--radius) 0; background: var(--ok-soft); }
+#feed-forge .ff-end[hidden] { display: none; }
+#feed-forge .ff-end p { margin: 0 0 6px; }
+#feed-forge .ff-end p:last-child { margin-bottom: 0; }
+#feed-forge .ff-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 14px; }
+#feed-forge .ff-count { margin: 0; font: 600 0.85rem/1 var(--font-mono); color: var(--muted); }
+</style>
+
+<div class="ox-figure ox-wide" id="feed-forge">
+  <p class="ox-label">Feed the Forge</p>
+  <p class="ff-intro">Each card is a whole program. Before you feed it, predict what the Forge does. <b>Accept</b> means it builds to an ingot. <b>Reject</b> means it hands back an error scroll. You have not met this syntax yet. Predict from the shapes, and read the reason after each card.</p>
+  <div class="ff-bench">
+    <div class="ff-forge" aria-hidden="true"></div>
+    <p class="ff-status" aria-live="polite">Predict the first program. Then the Forge takes it.</p>
+  </div>
+  <ol class="ff-cards" aria-label="Five programs to predict"></ol>
+  <div class="ff-end" hidden aria-live="polite"></div>
+  <div class="ff-bar">
+    <p class="ff-count">0 of 5 fed</p>
+    <button type="button" class="ox-btn is-small" data-ff-reset>Start over</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  function init() {
+  var root = document.getElementById("feed-forge");
+  if (!root || !window.OxCast) return;
+  var items = window.OX_CH01_FORGE || [];
+  var bench = root.querySelector(".ff-bench");
+  var forgeBox = root.querySelector(".ff-forge");
+  var list = root.querySelector(".ff-cards");
+  var status = root.querySelector(".ff-status");
+  var endBox = root.querySelector(".ff-end");
+  var countBox = root.querySelector(".ff-count");
+  var reset = root.querySelector("[data-ff-reset]");
+  var reduced = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+  var fed = 0, awarded = false, timers = [], forgeNode = null, round = 0;
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function later(fn, ms) { timers.push(setTimeout(fn, ms)); }
+  function code(src) { return window.Ox && Ox.highlight ? Ox.highlight(src, "rust") : esc(src); }
+
+  function buildCards() {
+    list.innerHTML = "";
+    items.forEach(function (it, i) {
+      var li = document.createElement("li");
+      li.className = "ff-card";
+      li.innerHTML =
+        '<div class="ff-head"><p class="ff-name">Program ' + (i + 1) + '</p><span class="ox-label">predict</span></div>' +
+        '<pre class="ff-code"><code>' + code(it.rust) + '</code></pre>' +
+        '<div class="ff-pick" role="group" aria-label="Predict program ' + (i + 1) + '">' +
+        '<button type="button" class="ox-btn is-small" data-pick="accept">Accept</button>' +
+        '<button type="button" class="ox-btn is-small" data-pick="reject">Reject</button></div>' +
+        '<div class="ff-out" tabindex="-1" hidden></div>';
+      li.querySelectorAll("[data-pick]").forEach(function (b) {
+        b.addEventListener("click", function () { predict(i, b.getAttribute("data-pick")); });
+      });
+      list.appendChild(li);
+    });
+  }
+
+  function predict(i, choice) {
+    var li = list.children[i];
+    if (li.dataset.state) return;
+    li.dataset.state = "flying";
+    li.querySelectorAll("[data-pick]").forEach(function (b) { b.disabled = true; });
+    li.dataset.right = (choice === "accept") === (items[i].check === "ok") ? "1" : "0";
+    status.textContent = "Program " + (i + 1) + " goes into the Forge.";
+    fly(i, function () { land(i); });
+  }
+
+  // The card's name flies from its place in the list to the Forge.
+  function fly(i, done) {
+    if (reduced) return done();
+    var b = bench.getBoundingClientRect();
+    var from = list.children[i].getBoundingClientRect();
+    var to = forgeBox.getBoundingClientRect();
+    var x0 = from.left + from.width / 2 - b.left, y0 = from.top + from.height / 2 - b.top;
+    var dx = to.left + to.width / 2 - b.left - x0, dy = to.top + to.height / 2 - b.top - y0;
+    var r = round;
+    var chip = document.createElement("span");
+    chip.className = "ff-chip";
+    chip.setAttribute("aria-hidden", "true");
+    chip.textContent = "Program " + (i + 1);
+    chip.style.left = x0 + "px";
+    chip.style.top = y0 + "px";
+    bench.appendChild(chip);
+    var a = chip.animate([
+      { transform: "translate(-50%, -50%)", opacity: 1 },
+      { transform: "translate(calc(-50% + " + dx + "px), calc(-50% + " + dy + "px)) scale(0.3)", opacity: 0 },
+    ], { duration: 650, easing: "cubic-bezier(.45,.05,.25,1)" });
+    a.addEventListener("finish", function () { chip.remove(); if (r === round) done(); });
+  }
+
+  function land(i) {
+    var li = list.children[i];
+    li.dataset.state = "fed";
+    OxCast.pose(forgeNode, "chomp", reduced ? 0 : 760);
+    later(function () {
+      OxCast.pose(forgeNode, items[i].check === "ok" ? "happy" : "oops");
+      show(i);
+      fed++;
+      countBox.textContent = fed + " of " + items.length + " fed";
+      if (fed === items.length) finish();
+    }, reduced ? 0 : 760);
+  }
+
+  function show(i) {
+    var it = items[i], li = list.children[i], out = li.querySelector(".ff-out");
+    var accepted = it.check === "ok", right = li.dataset.right === "1";
+    var art = accepted
+      ? OxCast.prop("ingot", { label: "ingot" })
+      : OxCast.prop("errscroll", { label: it.code || "no code" });
+    var head = accepted
+      ? "This compiles, and the ingot prints <code>" + esc(it.stdout) + "</code>."
+      : "The Forge rejects it: <code>" + esc(it.msg) + "</code>";
+    out.innerHTML = '<span class="ff-art">' + art + '</span>' +
+      '<div class="ff-text">' +
+      '<p class="ff-verdict ' + (right ? "is-right" : "is-wrong") + '"><strong>' + (right ? "You called it." : "Not this time.") + '</strong></p>' +
+      '<p>' + head + '</p>' +
+      '<p class="ff-why">' + esc(it.why) + '</p></div>';
+    out.hidden = false;
+    li.classList.add(right ? "is-right" : "is-wrong");
+    status.textContent = "Program " + (i + 1) + " is " + (accepted ? "accepted" : "rejected") + ". " + (right ? "You called it." : "Not this time.");
+    li.dispatchEvent(new CustomEvent("ox:answer", { bubbles: true, detail: { right: right } }));
+    out.focus({ preventScroll: true });
+  }
+
+  function finish() {
+    var acc = items.filter(function (it) { return it.check === "ok"; }).length;
+    endBox.innerHTML =
+      "<p><strong>All " + items.length + " fed.</strong> The Forge accepted " + acc + " and rejected " + (items.length - acc) + ". Every verdict came from rustc 1.97, not from a guess about style.</p>" +
+      "<p>One reject has no error code at all. Not every error has an E-number, but every one stops the build.</p>";
+    endBox.hidden = false;
+    if (!awarded && window.Ox && Ox.award) { awarded = true; Ox.award(10, "fed the Forge", "ch01:feed-forge"); }
+  }
+
+  function restart() {
+    round++;
+    timers.forEach(clearTimeout);
+    timers = [];
+    bench.querySelectorAll(".ff-chip").forEach(function (c) { c.remove(); });
+    fed = 0;
+    countBox.textContent = "0 of " + items.length + " fed";
+    endBox.hidden = true;
+    status.textContent = "Predict the first program. Then the Forge takes it.";
+    OxCast.pose(forgeNode, "sleep");
+    buildCards();
+  }
+
+  forgeBox.innerHTML = OxCast.el("forge", { pose: "sleep" });
+  forgeNode = forgeBox.querySelector(".ca");
+  buildCards();
+  reset.addEventListener("click", restart);
+  }
+  // cast-art.js and the scene data are deferred, so wait for them.
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
+</script>
+</section>
+
+<section>
+<h2 id="toolbox">Your toolbox for the first chapters</h2>
+
+<p>The quests and examples in Act I use a few things before their own chapter arrives. Here is enough to use each one. Each will get a full explanation later; until then, treat them as tools.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Tool</th><th>What it is for now</th><th>Full story</th></tr></thead>
+  <tbody>
+    <tr><td><code>let name = value;</code></td><td>Gives a value a name. Add <code>mut</code> if it will change.</td><td>Chapter 02</td></tr>
+    <tr><td><code>fn add(a: i32, b: i32) -&gt; i32 { a + b }</code></td><td>A function: inputs with their types, then <code>-&gt;</code> and the output type. The last line without <code>;</code> is the result.</td><td>Chapter 04</td></tr>
+    <tr><td><code>"hello"</code></td><td>Text written in quotes. Its type is <code>&amp;'static str</code>, usually written <code>&amp;str</code>.</td><td>Chapter 08</td></tr>
+    <tr><td><code>String::from("hi")</code>, <code>String::new()</code>, <code>s.push_str("…")</code>, <code>format!("{a} {b}")</code>, <code>n.to_string()</code></td><td>Text you build and own. <code>String::new()</code> starts an empty one, and <code>push_str</code> adds text to the end of it. <code>format!</code> works like <code>println!</code> but gives the text back instead of printing it.</td><td>Chapter 08</td></tr>
+    <tr><td><code>vec![1, 2, 3]</code>, <code>Vec::new()</code>, <code>v.push(x)</code>, <code>v.len()</code>, <code>for x in &amp;v { … }</code></td><td>A list that can grow.</td><td>Chapter 12</td></tr>
+    <tr><td><code>&amp;[T]</code> and <code>&amp;str</code> parameters</td><td>A function that only reads a list or text borrows it. Loop over a <code>&amp;[T]</code> with <code>for x in list</code>.</td><td>Chapters 07 and 08</td></tr>
+    <tr><td><code>todo!()</code></td><td>A placeholder that compiles and panics if it runs. Quests use it to mark where your code goes.</td><td>—</td></tr>
+    <tr><td><code>#[cfg(test)] mod tests { … }</code> at the bottom of a quest</td><td>The checks <code>cargo forge</code> runs. Read them to see what is expected; don't edit them.</td><td>Chapter 16</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>If the compiler complains about a <code>&amp;</code> you didn't expect inside a loop, write <code>*x</code> to read the value behind it; Chapter 07 explains why.</p>
+
+<div class="ox-fill" data-id="01:fill-toolbox" data-label="Fill the blank">
+  <p class="ox-q">Complete the program so it prints <code>7</code>. Pick the macro that builds the text and gives it back.</p>
+  <pre class="rs" data-stdout="7">
+fn main() {
+    let name = "Ana";
+    let greeting = [[format!|println!]]("Hi, {name}");
+    println!("{}", greeting.len());
+}</pre>
+  <div class="ox-why"><p><code>format!</code> builds a <code>String</code> and returns it, so <code>greeting</code> holds <code>Hi, Ana</code>, and its length is 7. <code>println!</code> prints the text and gives back nothing, so <code>greeting</code> would be <code>()</code>, and <code>greeting.len()</code> would not compile.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="course">How to use this course</h2>
+
+<p>Each chapter works the same way. You read and interact in the browser, then you write code in your editor, and <code>cargo forge</code> checks it with the real compiler, <code>rustc</code>.</p>
+
+<ol class="ox-steps">
+  <li><div><p><strong>Clone the repo.</strong></p><pre class="sh">git clone https://github.com/MuhammadSadeeq/learn-rust.git
+cd learn-rust</pre></div></li>
+  <li><div><p><strong>Open the course.</strong> Serve the site folder and visit it in your browser, or open <code>site/index.html</code> directly.</p><pre class="sh">python3 -m http.server -d site 8000</pre></div></li>
+  <li><div><p><strong>Start <code>cargo forge</code>.</strong> In a second terminal, from the repo root. It opens your next quest and rechecks it on every save. When the tests pass, press Enter to move on.</p><pre class="sh">cargo forge            # watch mode: your next quest, rechecked on every save
+cargo forge hint       # a hint for the current quest
+cargo forge list       # every quest, with your progress</pre></div></li>
+</ol>
+
+<p>A note on names: the Forge, the character, stands for the Rust compiler, <code>rustc</code>. <code>cargo forge</code> is this course's practice tool; it runs the real compiler and the tests for you.</p>
+
+<p>Each chapter lists its quests near the end. Tick <em>passed in forge</em> next to a quest to record it on the site.</p>
+
+<p>On the chapter pages you will see quizzes that award XP, Think first blocks that hide the answer until you have guessed, Memory X-Ray step-throughs that show a program running, and recall cards at the end. Three labs are worth knowing now: the <a href="../labs/xray.html">Memory X-Ray</a>, <a href="../labs/borrow-checker.html">Be the Borrow Checker</a>, and the <a href="../labs/rosetta.html">PHP to Rust Rosetta</a>.</p>
+
+<div class="ox-quiz" data-id="01:forge-cmd">
+  <p class="ox-q">You want the next quest, and you want it rechecked every time you save. Which command?</p>
+  <ol class="ox-choices">
+    <li><code>cargo forge list</code></li>
+    <li data-correct><code>cargo forge</code></li>
+    <li><code>cargo forge hint</code></li>
+    <li><code>cargo forge reset</code></li>
+  </ol>
+  <div class="ox-why"><p>Plain <code>cargo forge</code> starts watch mode. <code>list</code> prints the map of quests, <code>hint</code> prints a hint, and <code>reset</code> restores a quest file to its original state.</p></div>
+</div>
+
+<p>Act I, Ore, covers the foundations. Chapter 02 covers variables, and why a binding is immutable unless you say <code>mut</code>. Chapter 03 covers types, where every value has one exact type that the compiler knows before the program runs. Chapter 04 shows that <code>if</code> and blocks produce values, and the semicolon decides whether a line counts as one. After Act I you will be ready for ownership, the idea that makes Rust different from the languages you know.</p>
+</section>
+
+<section>
+<h2 id="quests">Forge quests</h2>
+<p>Reading builds recognition. Writing code builds the skill. These quests run locally against the real compiler, through <code>cargo forge</code>.</p>
+<p>Each quest is one Rust file, such as <code>quests/01_hello/hello1.rs</code>, and it has the same three parts. The header comment at the top says what the program should do and what you may change. The body is the starter code: some quests begin with a <code>todo!()</code> placeholder, and some begin with a line that does not compile yet. At the bottom, a <code>#[cfg(test)] mod tests</code> block holds the checks. Don't edit the tests. Read them, because they say exactly what the program must return. Chapter 16 explains the test module.</p>
+<div class="ox-quests" data-chapter="1"></div>
+</section>
+
+<section>
+<h2 id="recap">Recap</h2>
+
+<div class="ox-recap">
+  <h3>Hello, Crab</h3>
+  <ul>
+    <li>Rust compiles ahead of time. <code>cargo build</code> produces a native binary, and a running process handles requests with no compile step. PHP compiles per request unless OPcache has the opcodes cached, and it frees request memory when the response is sent.</li>
+    <li><code>rustup</code> installs and switches toolchains. <code>rustc</code> compiles. <code>cargo</code> builds, runs, tests and manages dependencies.</li>
+    <li>Execution starts in <code>fn main</code>. <code>println!</code> is a macro whose format string is checked at compile time: <code>{}</code> for Display, <code>{:?}</code> for Debug, and <code>{name}</code> to use a variable inside the string.</li>
+    <li>Read a rustc error from the top: the code and summary, then the <code>--&gt;</code> location, the <code>^^^</code> marker, and the <code>help:</code> line.</li>
+    <li><code>cargo check</code> is the fastest feedback the compiler gives. <code>target/</code> holds build output, and you never edit or commit it.</li>
+  </ul>
+</div>
+
+<div class="ox-deck" data-chapter="1"></div>
+
+<details class="ox-think">
+  <summary>Explain it back: explain to a PHP colleague, in two sentences, why a Rust web service doesn't compile your code on every request.</summary>
+  <div class="ox-think-body">
+    <p>One good answer: "Rust compiles the whole program ahead of time with <code>cargo build</code>, into one native binary. The server starts that binary once and keeps it running, so each request runs machine code that already exists, and nothing is compiled when a request arrives."</p>
+    <p>If yours mentioned the build step, the single long-running process, and the lack of a compile step per request, you have it.</p>
+  </div>
+</details>
+
+<div class="ox-complete-host"></div>
+</section>
+
+</main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var root = document.getElementById("anatomy-tokens");
+  if (!root) return;
+  var say = root.querySelector(".an-say");
+  var tokens = root.querySelectorAll(".an-tok");
+  var notes = {
+    fn: ["fn", "declares a function", "The name comes next, then the parameter list in parentheses, then the body in braces. Every function in Rust is written this way."],
+    main: ["main", "the entry point", "Every program starts running at a function called <code>main</code>. Rust files have no top-level code, so nothing in a file runs on its own the way a PHP script does."],
+    parens: ["()", "the parameter list", "The parentheses hold the parameters, the values a function receives. <code>main</code> takes none, so the list is empty. The parentheses are still required. Chapter 04 explains parameters and return types."],
+    body: ["{ }", "the body", "The braces wrap the block of code that belongs to <code>main</code>. A block also defines a scope, the region where variables live and are dropped. Chapter 06 covers scope in detail."],
+    macro: ["println!", "a macro", "The <code>!</code> marks a macro, which is code that writes code. The compiler expands <code>println!</code> before the program is built, and it checks the format string against the arguments, so a mismatch is a compile error."],
+    literal: ["\"Hello, world!\"", "a string literal", "This is a string literal. Its type is <code>&amp;str</code>, a borrowed view of text stored in the binary. Chapter 08 explains that type properly."],
+    semi: [";", "ends the statement", "In Rust a block produces the value of its last expression, unless that line ends with a semicolon. Chapter 04 covers exactly that rule."]
+  };
+  function choose(btn) {
+    tokens.forEach(function (t) { t.setAttribute("aria-pressed", t === btn ? "true" : "false"); });
+    var n = notes[btn.getAttribute("data-tok")];
+    if (!n) return;
+    say.innerHTML = '<p><code></code> ' + n[1] + '</p><p>' + n[2] + '</p>';
+    say.querySelector("code").textContent = n[0];
+  }
+  tokens.forEach(function (t) { t.addEventListener("click", function () { choose(t); }); });
+})();
+
+(function () {
+  "use strict";
+  var root = document.getElementById("pipelines");
+  if (!root) return;
+
+  var STEP = 420;     // ms a request spends on each stage
+  var SPREAD = 160;   // ms between requests in "Send 5 requests"
+  var DOT = 14;       // dot diameter in px, matches .pl-dot
+  var PHP_ORDER = ["web", "fpm", "load", "compile", "exec", "teardown"];
+  var RUST_ORDER = ["accept", "handler", "respond"];
+
+  var php = root.querySelector('[data-lane="php"]');
+  var rust = root.querySelector('[data-lane="rust"]');
+  var toggle = root.querySelector("[data-opcache]");
+  var compileStage = php.querySelector('[data-key="compile"]');
+  var compileNote = compileStage.querySelector(".pl-note");
+  var compileOut = php.querySelector("[data-compile]");
+
+  var state = { php: 0, rust: 0, warm: false, spawned: 0, awarded: false };
+  var timers = [];
+  var dots = [];
+
+  function stage(lane, key) { return lane.querySelector('[data-key="' + key + '"]'); }
+  function count(lane, n) { lane.querySelector("[data-count]").textContent = String(n); }
+
+  function later(fn, ms) {
+    var id = setTimeout(function () {
+      timers = timers.filter(function (t) { return t !== id; });
+      fn();
+    }, ms);
+    timers.push(id);
+  }
+
+  // Rest a dot on the top edge of a stage, so it never covers the text.
+  // The transform is measured from the dot layer, so the same code works
+  // in a grid of 6 or a grid of 2.
+  function place(dot, lane, key) {
+    var box = dot.parentNode.getBoundingClientRect();
+    var r = stage(lane, key).getBoundingClientRect();
+    var x = r.left - box.left + r.width / 2 - DOT / 2 + dot.spread;
+    var y = r.top - box.top - DOT / 2;
+    dot.style.transform = "translate(" + x + "px, " + y + "px)";
+  }
+
+  function spawn(lane, key) {
+    var dot = document.createElement("span");
+    dot.className = "pl-dot is-new";
+    dot.setAttribute("aria-hidden", "true");
+    state.spawned++;
+    dot.spread = ((state.spawned % 3) - 1) * 9;   // keep dots in one stage apart
+    lane.querySelector(".pl-dots").appendChild(dot);
+    dots.push(dot);
+    place(dot, lane, key);
+    void dot.offsetWidth;                         // apply the start position first
+    dot.classList.remove("is-new");
+    dot.classList.add("is-in");
+    return dot;
+  }
+
+  function retire(dot) {
+    dot.classList.remove("is-in");
+    later(function () {
+      dot.remove();
+      dots = dots.filter(function (d) { return d !== dot; });
+    }, 300);
+  }
+
+  function refreshCompile() {
+    var on = toggle.checked;
+    compileStage.classList.remove("is-hot");
+    compileStage.classList.toggle("is-cached", on && state.warm);
+    if (!on) compileNote.textContent = "compiled on every request";
+    else if (!state.warm) compileNote.textContent = "the first request compiles it";
+    else compileNote.textContent = "cached, so skipped";
+  }
+
+  function compiling() {
+    compileStage.classList.remove("is-cached");
+    compileStage.classList.add("is-hot");
+    compileNote.textContent = "compiling now";
+    later(refreshCompile, STEP);
+  }
+
+  function phpStep(dot, i) {
+    var key = PHP_ORDER[i];
+    place(dot, php, key);
+    if (key === "teardown") {
+      later(function () { state.php++; count(php, state.php); retire(dot); }, STEP);
+      return;
+    }
+    later(function () {
+      var next = i + 1;
+      if (PHP_ORDER[next] === "compile") {
+        // Decided as the request leaves "Load script": a warm cache skips the stage.
+        if (toggle.checked && state.warm) {
+          compileOut.textContent = "0 (cache hit)";
+          refreshCompile();
+          next = PHP_ORDER.indexOf("exec");
+        } else {
+          compileOut.textContent = "1 compile";
+          if (toggle.checked) state.warm = true;
+          compiling();
+        }
+      }
+      phpStep(dot, next);
+    }, STEP);
+  }
+
+  function rustStep(dot, i) {
+    place(dot, rust, RUST_ORDER[i]);
+    later(function () {
+      if (i + 1 < RUST_ORDER.length) rustStep(dot, i + 1);
+      else { state.rust++; count(rust, state.rust); retire(dot); }
+    }, STEP);
+  }
+
+  function launch() {
+    phpStep(spawn(php, "web"), 0);
+    rustStep(spawn(rust, "accept"), 0);
+  }
+
+  function send(n) {
+    if (!state.awarded && window.Ox && typeof window.Ox.award === "function") {
+      state.awarded = true;
+      window.Ox.award(5, "traced a request through both lanes", "ch01:pipelines");
+    }
+    for (var k = 0; k < n; k++) later(launch, k * SPREAD);
+  }
+
+  function reset() {
+    timers.forEach(function (id) { clearTimeout(id); });
+    timers = [];
+    dots.forEach(function (d) { d.remove(); });
+    dots = [];
+    state.php = 0;
+    state.rust = 0;
+    state.warm = false;
+    count(php, 0);
+    count(rust, 0);
+    compileOut.textContent = "none yet";
+    refreshCompile();
+  }
+
+  root.querySelectorAll("[data-send]").forEach(function (b) {
+    b.addEventListener("click", function () { send(parseInt(b.getAttribute("data-send"), 10)); });
+  });
+  root.querySelector("[data-reset]").addEventListener("click", reset);
+  toggle.addEventListener("change", function () { state.warm = false; refreshCompile(); });
+  refreshCompile();
+})();
+</script>
+</body>
+</html>

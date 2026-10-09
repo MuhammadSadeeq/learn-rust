@@ -1,0 +1,13 @@
+# A quest package: one crate, checked with `cargo test`.
+# The empty [workspace] makes it its own workspace, so the course's root
+# workspace leaves it alone.
+[package]
+name = "clap1"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+clap = { version = "4.6", features = ["derive"] }

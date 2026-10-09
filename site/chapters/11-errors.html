@@ -1,0 +1,1340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Errors Are Values · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<link rel="stylesheet" href="../assets/cast-art.css">
+<link rel="stylesheet" href="../assets/cast.css">
+<link rel="stylesheet" href="../assets/motion.css">
+<link rel="stylesheet" href="../assets/story.css">
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/quests-data.js" defer></script>
+<script src="../assets/cards/ch11.js" defer></script>
+<script src="../assets/motion/ch11.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+<script src="../assets/cast-art.js"></script>
+<script src="../assets/cast.js" defer></script>
+<script src="../assets/motion.js" defer></script>
+<script src="../assets/xray.js" defer></script>
+<script src="../assets/story.js" defer></script>
+</head>
+<body data-chapter="11">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<div class="ox-page">
+<aside class="ox-rail" aria-label="Chapter contents"></aside>
+<main class="ox-main" id="main">
+
+<header class="ox-hero" data-auto>
+  <ul>
+    <li>Choose between panicking and returning a <code>Result</code>.</li>
+    <li>Propagate errors with <code>?</code>, and know what it requires of the function it sits in.</li>
+    <li>Write your own error type with <code>Display</code>, <code>Error</code> and <code>From</code>.</li>
+    <li>Pick between <code>thiserror</code> and <code>anyhow</code>, and explain why.</li>
+  </ul>
+</header>
+
+<section>
+<h2 id="two-kinds">Two kinds of failure</h2>
+
+<p>Some failures are bugs in your code. Others are ordinary events, and your code is supposed to survive them. Rust gives each kind a different tool.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Kind</th><th>Examples</th><th>Tool</th></tr></thead>
+  <tbody>
+    <tr><td><strong>A bug.</strong> The code asked for something that can't be done.</td><td>An index past the end of a <code>Vec</code>, <code>unwrap()</code> on a <code>None</code>, a state your logic says is impossible</td><td><code>panic!</code>. The thread stops.</td></tr>
+    <tr><td><strong>An expected failure.</strong> The outside world didn't cooperate.</td><td>A file is missing, the user typed nonsense, the network timed out, the database is down</td><td><code>Result&lt;T, E&gt;</code>. The caller decides.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>A panic unwinds the thread that panicked. Values on the way up are dropped as usual, and then the thread ends. If that thread is <code>main</code>, the whole program exits with status 101. Here is a panic caused by a bug:</p>
+
+<pre class="rs" data-check="panic" data-run data-title="src/main.rs">
+fn main() {
+    let scores = vec![90, 72, 85];
+    let fourth = scores[3];
+    println!("{fourth}");
+}</pre>
+
+<pre class="text" data-title="stderr">
+thread 'main' (27578) panicked at src/main.rs:3:24:
+index out of bounds: the len is 3 but the index is 3
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace</pre>
+
+<p>Read the message from the top. The first line names the thread and the place: line 3 of <code>src/main.rs</code>. The second line says what went wrong. The number in parentheses is the thread id: the operating system's number for the thread that panicked, so yours will differ. Set <code>RUST_BACKTRACE=1</code> and the same panic also prints a stack trace, the chain of calls that led to that line. Reach for it when a panic shows up somewhere you didn't expect.</p>
+
+<div class="ox-quiz" data-id="11:panic-or-result" data-label="Check yourself">
+  <p class="ox-q">Your app reads <code>config.toml</code> when it starts. Someone forgot to deploy the file. What should the code do?</p>
+  <ol class="ox-choices">
+    <li>Call <code>panic!</code>. Without its config, the app can't run.</li>
+    <li>Call <code>unwrap()</code> on the file read. The file will always exist in production.</li>
+    <li data-correct>Return an <code>Err</code>, and let <code>main</code> print a clear message and exit. A missing file is outside the code's control, so it's an expected failure.</li>
+  </ol>
+  <div class="ox-why"><p>Panicking would stop the program, but it treats a deployment mistake as a bug in your code. The output is also noisier, and it doesn't tell the operator what to fix. A returned error can name the missing file and exit cleanly. Panic when your code is wrong. Return a <code>Result</code> when the world can be wrong.</p></div>
+</div>
+
+<div class="ox-bridge">
+  <pre class="php">
+function loadConfig(string $path): string
+{
+    $text = file_get_contents($path);
+    if ($text === false) {
+        throw new RuntimeException("cannot read $path");
+    }
+    return $text;
+}</pre>
+  <pre class="rs" data-check="ok">
+use std::fs;
+use std::io;
+
+fn load_config(path: &amp;str) -&gt; Result&lt;String, io::Error&gt; {
+    fs::read_to_string(path)
+}</pre>
+  <div class="ox-bridge-note"><p>In PHP, <code>loadConfig(): string</code> says nothing about failure. Any function can throw, and the only hint is a <code>@throws</code> docblock, if someone wrote one. In Rust, <code>-&gt; Result&lt;String, io::Error&gt;</code> is part of the signature, and every caller has to deal with it. The break: nothing unwinds to a <code>catch</code>. The error is a value that the caller receives and inspects. The two <code>use</code> lines bring <code>fs</code> and <code>io</code> into scope, the way a PHP <code>use</code> does; Chapter 16 covers modules and paths in full.</p></div>
+</div>
+
+<p>PHP 8.1 added a return type for the other case: a function that never returns normally. Declare it <code>never</code>, and it must throw or exit.</p>
+
+<pre class="php">
+function abortWith(string $message): never
+{
+    throw new RuntimeException($message);
+}</pre>
+
+<p>PHP checks this at runtime. If the body can finish normally, PHP throws a <code>TypeError</code> when the function ends. Rust's <code>!</code> type makes the same promise, and the compiler checks it before the program runs. A function declared <code>-&gt; !</code> whose body can finish fails with E0308.</p>
+
+<p class="ox-pull">In Rust, a function that can fail says so in its return type.</p>
+</section>
+
+<section>
+<h2 id="result">Result: success or failure, in the type</h2>
+
+<p><code>Result</code> is an ordinary enum from the standard library. It has two variants, and the function that returns it decides what goes inside each one:</p>
+
+<pre class="rs" data-check="skip">
+enum Result&lt;T, E&gt; {
+    Ok(T),   // success, with a value of type T
+    Err(E),  // failure, with an error of type E
+}</pre>
+
+<div class="ox-meet" data-cast="switchman" data-say="Ok cars roll on. Err cars get switched back to whoever sent them."></div>
+
+<p>Anything that can fail returns one. Parsing text into a number is a good example. <code>parse</code> doesn't panic on bad text. It returns an <code>Err</code> that says why the text was rejected. The <code>::&lt;i32&gt;</code> tells <code>parse</code> which type to produce:</p>
+
+<pre class="rs" data-run data-stdout="parsed 42" data-title="src/main.rs">
+fn main() {
+    match "42".parse::&lt;i32&gt;() {
+        Ok(n) =&gt; println!("parsed {n}"),
+        Err(e) =&gt; println!("not a number: {e}"),
+    }
+}</pre>
+
+<div class="ox-quiz" data-id="11:debug-err" data-label="Predict the output">
+  <p class="ox-q">What does this print?</p>
+  <pre class="rs" data-run data-stdout="Err(ParseIntError { kind: InvalidDigit })">
+fn main() {
+    let result = "4x2".parse::&lt;i32&gt;();
+    println!("{result:?}");
+}</pre>
+  <ol class="ox-choices">
+    <li><code>Err(4x2)</code></li>
+    <li data-correct><code>Err(ParseIntError { kind: InvalidDigit })</code></li>
+    <li><code>Ok(0)</code></li>
+    <li>The program panics, because the text is not a number.</li>
+  </ol>
+  <div class="ox-why"><p><code>{:?}</code> prints the Debug view of the Result, including the fields of the error. <code>InvalidDigit</code> means the text has a character that isn't a digit. Empty text gives <code>kind: Empty</code> instead. The program doesn't panic, because <code>parse</code> returned an error and the code printed it.</p></div>
+</div>
+
+<p>A <code>Result</code> you ignore is a warning, not an error, and it's easy to miss. Rust marks <code>Result</code> as <code>#[must_use]</code>, so the compiler reminds you:</p>
+
+<pre class="rs" data-title="src/main.rs">
+fn main() {
+    "42".parse::&lt;i32&gt;();
+    println!("done");
+}</pre>
+
+<pre class="rustc">
+warning: unused `Result` that must be used
+ --&gt; src/main.rs:2:5
+  |
+2 |     "42".parse::&lt;i32&gt;();
+  |     ^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this `Result` may be an `Err` variant, which should be handled
+  = note: `#[warn(unused_must_use)]` (part of `#[warn(unused)]`) on by default
+help: use `let _ = ...` to ignore the resulting value
+  |
+2 |     let _ = "42".parse::&lt;i32&gt;();
+  |     +++++++
+
+warning: 1 warning emitted</pre>
+
+<p>In PHP, a thrown exception can't be ignored. It keeps moving up the stack until something catches it. A return value can be dropped without any sign. PHP 8.5 added an opt-in check for that: a function marked <code>#[\NoDiscard]</code> warns at runtime when a caller drops its return value, and the warning appears only when that line runs.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+declare(strict_types=1);
+
+#[\NoDiscard('check the result of saveUser()')]
+function saveUser(array $data): bool
+{
+    return $data !== [];
+}
+
+saveUser([]);         // warns at runtime: the return value is ignored
+(void) saveUser([]);  // the cast says the discard is intentional</pre>
+  <pre class="rs" data-title="src/main.rs">
+fn save_user(data: &amp;[&amp;str]) -&gt; Result&lt;(), String&gt; {
+    if data.is_empty() {
+        Err("no data".to_string())
+    } else {
+        Ok(())
+    }
+}
+
+fn main() {
+    let _ = save_user(&amp;[]);  // the let says the discard is intentional
+}</pre>
+  <div class="ox-bridge-note"><p>Where it holds: both languages let you say "I meant to ignore this", and the spelling is short. Where it breaks: Rust's check comes from the type. <code>Result</code> is marked <code>#[must_use]</code>, so every function that returns one gets the check at compile time, before the program runs. PHP checks only the functions that opted in, and only on the path that actually runs.</p></div>
+</div>
+
+<p>Use <code>let _ =</code> only when ignoring the error is the right behavior, and say why in a comment. The warning exists because an ignored error is usually a bug that hasn't shown up yet.</p>
+
+<h3>unwrap and expect</h3>
+
+<p><code>unwrap()</code> takes the value out of an <code>Ok</code>, or panics on an <code>Err</code>. <code>expect("message")</code> does the same, and prints your message in the panic. Both are right when a failure would be a bug: in tests, in a quick prototype, or when you can state why the value can't be an error. A good <code>expect</code> message names the fact that must be true, not the symptom:</p>
+
+<pre class="rs" data-run data-stdout="listening on 8080" data-title="src/main.rs">
+fn main() {
+    let port: u16 = "8080".parse().expect("the port constant is a valid u16");
+    println!("listening on {port}");
+}</pre>
+</section>
+
+<section>
+<h2 id="combinators">Working with Results without match</h2>
+
+<p><code>match</code> always works, but for a simple step it takes several lines. <code>Result</code> and <code>Option</code> have small methods, called combinators, that do the usual steps in one expression. Learn them by their types: what goes in, and what comes out.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Method</th><th>What happens</th><th>Use it to</th></tr></thead>
+  <tbody>
+    <tr><td><code>map(f)</code></td><td><code>Ok(v)</code> becomes <code>Ok(f(v))</code>. <code>Err</code> passes through.</td><td>Change the success value</td></tr>
+    <tr><td><code>map_err(f)</code></td><td><code>Err(e)</code> becomes <code>Err(f(e))</code>. <code>Ok</code> passes through.</td><td>Change the error, for example to add a message</td></tr>
+    <tr><td><code>and_then(f)</code></td><td><code>Ok(v)</code> calls <code>f(v)</code>, which returns a Result itself.</td><td>Chain a second step that can also fail</td></tr>
+    <tr><td><code>unwrap_or(d)</code></td><td><code>Ok(v)</code> becomes <code>v</code>. <code>Err</code> becomes <code>d</code>.</td><td>Supply a default</td></tr>
+    <tr><td><code>unwrap_or_else(f)</code></td><td><code>Err(e)</code> becomes <code>f(e)</code>. The closure runs only on <code>Err</code>.</td><td>Compute a default from the error</td></tr>
+    <tr><td><code>ok()</code></td><td><code>Ok(v)</code> becomes <code>Some(v)</code>. <code>Err</code> becomes <code>None</code>.</td><td>Drop the error and keep an Option</td></tr>
+    <tr><td><code>ok_or(e)</code></td><td>On an Option: <code>Some(v)</code> becomes <code>Ok(v)</code>. <code>None</code> becomes <code>Err(e)</code>.</td><td>Turn "missing" into an error</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Each <code>f</code> in the table is a closure: a small function written inline, with its parameters between two bars, like <code>|e| format!(...)</code>. Chapter 13 explains closures in full. The example below uses several of them, so read <code>|e|</code> as "a function that takes <code>e</code>".</p>
+
+<pre class="rs" data-run data-stdout="Ok(31)\nErr(&quot;x: invalid digit found in string&quot;)\nErr(&quot;12 is under 18&quot;)\n18\n(x: invalid digit found in string)\n0\nSome(7)\nErr(&quot;no value&quot;)" data-title="src/main.rs">
+fn parse_age(text: &amp;str) -&gt; Result&lt;u32, String&gt; {
+    text.trim()
+        .parse::&lt;u32&gt;()
+        .map_err(|e| format!("{text}: {e}"))
+        .and_then(|age| {
+            if age &gt;= 18 {
+                Ok(age)
+            } else {
+                Err(format!("{age} is under 18"))
+            }
+        })
+}
+
+fn main() {
+    println!("{:?}", parse_age("30").map(|a| a + 1));
+    println!("{:?}", parse_age("x"));
+    println!("{:?}", parse_age("12"));
+    println!("{}", parse_age("12").unwrap_or(18));
+    println!("{}", parse_age("x").unwrap_or_else(|e| {
+        println!("({e})");
+        0
+    }));
+    println!("{:?}", "7".parse::&lt;i32&gt;().ok());
+    let found: Option&lt;u32&gt; = None;
+    println!("{:?}", found.ok_or("no value"));
+}</pre>
+
+<p>Read the output in order. The closure in <code>unwrap_or_else</code> runs while that line is being evaluated, so its message prints before the <code>0</code>. Each combinator either handles an <code>Err</code> or passes it along, and an <code>Ok</code> keeps flowing through the chain.</p>
+
+<div class="ox-quiz" data-id="11:combinator-chain" data-label="Predict the output">
+  <p class="ox-q">What does this print?</p>
+  <pre class="rs" data-run data-stdout="-1">
+fn main() {
+    let v = "x1".parse::&lt;i32&gt;().map(|n| n * 2).unwrap_or(-1);
+    println!("{v}");
+}</pre>
+  <ol class="ox-choices">
+    <li><code>0</code>, the default for an integer</li>
+    <li data-correct><code>-1</code></li>
+    <li><code>x1</code>, because the text comes back unchanged</li>
+    <li>A compile error, because <code>map</code> isn't defined on Result</li>
+  </ol>
+  <div class="ox-why"><p><code>"x1"</code> doesn't parse, so the result is an <code>Err</code>. <code>map</code> passes an Err through without calling its closure, so <code>n * 2</code> never runs. <code>unwrap_or(-1)</code> sees an Err and returns <code>-1</code>. <code>map</code> is defined on Result, so the compile error choice is wrong too.</p></div>
+</div>
+
+<p>Use a combinator when the step is one line and reads well. Use <code>match</code> when each branch does different work, or when a chain stops being easy to read. A long chain of combinators is harder to follow than the match it replaced.</p>
+</section>
+
+<section>
+<h2 id="question-mark">The ? operator</h2>
+
+<p>Most functions that can fail do the same thing: run a step, and if the step fails, hand that failure to whoever called the function. Written out with <code>match</code> every time, that buries the real work. The <code>?</code> operator does the same job in one character.</p>
+
+<p>Here is a function that reads two numbers out of text like <code>3,4</code>. It uses <code>?</code> twice:</p>
+
+<pre class="rs" data-run data-stdout="Ok((3, 4))\nErr(ParseIntError { kind: InvalidDigit })\nErr(ParseIntError { kind: Empty })" data-title="src/main.rs">
+use std::num::ParseIntError;
+
+fn parse_pair(s: &amp;str) -&gt; Result&lt;(i32, i32), ParseIntError&gt; {
+    let mut parts = s.split(',');
+    let x = parts.next().unwrap_or("").trim().parse::&lt;i32&gt;()?;
+    let y = parts.next().unwrap_or("").trim().parse::&lt;i32&gt;()?;
+    Ok((x, y))
+}
+
+fn main() {
+    println!("{:?}", parse_pair("3,4"));
+    println!("{:?}", parse_pair("3,x"));
+    println!("{:?}", parse_pair("5"));
+}</pre>
+
+<p>Read <code>?</code> as: if this is <code>Err</code>, return it from this function now. If it's <code>Ok</code>, take the value out and keep going. Predict what happens before you check:</p>
+
+<div class="ox-quiz" data-id="11:question-err" data-label="Check yourself">
+  <p class="ox-q">The expression before <code>?</code> produced an <code>Err</code>. What happens next?</p>
+  <ol class="ox-choices">
+    <li>The program panics, the same as <code>unwrap()</code>.</li>
+    <li>The error is printed, and the next line runs with a default value.</li>
+    <li data-correct>The function returns that error to its caller right away. The lines after the <code>?</code> don't run.</li>
+    <li>The value is replaced with <code>Ok(0)</code>, and execution continues.</li>
+  </ol>
+  <div class="ox-why"><p><code>?</code> is an early return. It's <code>return Err(e)</code> with the boilerplate removed. The caller receives the error and decides what to do with it. Section 5 covers the one more step <code>?</code> takes on the way out: a conversion.</p></div>
+</div>
+
+<div class="ox-motion" data-scene="ch11-question"></div>
+
+<p>Here is what <code>?</code> stands for, written out by hand. With <code>?</code>, the <code>let</code> is one line: <code>let n = s.parse::&lt;i32&gt;()?;</code>.</p>
+
+<pre class="rs" data-run data-stdout="Ok(42)\nErr(ParseIntError { kind: InvalidDigit })" data-title="src/main.rs">
+use std::num::ParseIntError;
+
+fn doubled(s: &amp;str) -&gt; Result&lt;i32, ParseIntError&gt; {
+    let n = match s.parse::&lt;i32&gt;() {
+        Ok(v) =&gt; v,
+        Err(e) =&gt; return Err(From::from(e)),
+    };
+    Ok(n * 2)
+}
+
+fn main() {
+    println!("{:?}", doubled("21"));
+    println!("{:?}", doubled("x"));
+}</pre>
+
+<p>The <code>match</code> is the whole idea. The <code>Ok</code> arm gives back the value and the code continues. The <code>Err</code> arm returns early, so the rest of the function doesn't run. <code>From::from(e)</code> converts the error into the function's error type. Here that conversion does nothing, because the types already match.</p>
+
+<details class="ox-callout" data-kind="deep">
+  <summary>The real expansion</summary>
+  <p>The compiler doesn't use a <code>match</code> directly. It goes through the standard library's <code>Try</code> trait, which is also how <code>?</code> works on an Option. The effect is the same as the match above: continue with the value, or return early with the failure, converted by <code>From</code>.</p>
+</details>
+
+<p>The same operator works on <code>Option</code>, inside a function that returns <code>Option</code>. A <code>None</code> makes the function return <code>None</code>:</p>
+
+<pre class="rs" data-run data-stdout="Some('R')\nNone" data-title="src/main.rs">
+fn first_char_upper(s: &amp;str) -&gt; Option&lt;char&gt; {
+    let c = s.chars().next()?;
+    Some(c.to_ascii_uppercase())
+}
+
+fn main() {
+    println!("{:?}", first_char_upper("rust"));
+    println!("{:?}", first_char_upper(""));
+}</pre>
+
+<p><code>?</code> needs the function to return a type that can carry the failure. An Option function can't return an <code>Err</code>, and a Result function can't return a <code>None</code>. The two don't mix.</p>
+
+<h3>Where ? doesn't work</h3>
+
+<p>This rule trips up almost everyone. Try <code>?</code> in <code>main</code>, which returns nothing:</p>
+
+<div class="ox-quiz" data-id="11:q-in-main" data-label="Does it compile?">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0277">
+fn main() {
+    let n: i32 = "42".parse()?;
+    println!("{n}");
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. <code>?</code> works anywhere.</li>
+    <li data-correct>No. <code>main</code> returns <code>()</code>, which has no place to put the error.</li>
+    <li>No. <code>?</code> only works on Option.</li>
+  </ol>
+  <div class="ox-why">
+    <p><code>?</code> needs somewhere to send the error. A function that returns <code>()</code> has nowhere to put it, so the compiler stops with E0277. The message is worth reading in full:</p>
+    <pre class="rustc">error[E0277]: the `?` operator can only be used in a function that returns `Result` or `Option` (or another type that implements `FromResidual`)
+ --&gt; src/main.rs:2:30
+  |
+1 | fn main() {
+  | --------- this function should return `Result` or `Option` to accept `?`
+2 |     let n: i32 = "42".parse()?;
+  |                              ^ cannot use the `?` operator in a function that returns `()`
+  |
+help: consider adding return type
+  |
+1 ~ fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+2 |     let n: i32 = "42".parse()?;
+3 |     println!("{n}");
+4 +     Ok(())
+  |
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0277`.</pre>
+  </div>
+</div>
+
+<p>Give <code>main</code> a return type that can hold an error. The simplest one is <code>Result&lt;(), ParseIntError&gt;</code>. When <code>main</code> returns an <code>Err</code>, Rust prints it and exits with status 1:</p>
+
+<pre class="rs" data-run data-stdout="42" data-title="src/main.rs">
+use std::num::ParseIntError;
+
+fn main() -&gt; Result&lt;(), ParseIntError&gt; {
+    let n: i32 = "42".parse()?;
+    println!("{n}");
+    Ok(())
+}</pre>
+
+<p>A program usually has more than one kind of error, and <code>main</code> can't name them all. <code>Box&lt;dyn Error&gt;</code> accepts any error type that implements the <code>Error</code> trait. A <code>Box</code> is a pointer to a value on the heap, and <code>dyn Error</code> hides the exact error type from the compiler, so calls go through a table of functions at run time. You'll meet both properly in Chapters 14 and 17. Chapter 18 explains the <code>+ Send + Sync</code> that a boxed error needs when it crosses threads. Here two different error types go through one <code>main</code>:</p>
+
+<pre class="rs" data-run data-stdout="42 9.5" data-title="src/main.rs">
+use std::error::Error;
+
+fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
+    let n: i32 = "42".parse()?;
+    let price: f64 = "9.5".parse()?;
+    println!("{n} {price}");
+    Ok(())
+}</pre>
+
+<p>Change <code>"42"</code> to <code>"x42"</code> and run it again. The error comes out of <code>main</code> in its Debug form, and the program exits with status 1:</p>
+
+<pre class="text" data-title="stderr">
+Error: ParseIntError { kind: InvalidDigit }</pre>
+
+<h3>Watch a Result travel</h3>
+
+<p>Here is <code>?</code> as a railway. Four stations run in order. The top track carries the value while every step succeeds. A failing station sends the value down its exit ramp to the bottom track, and the stations after it are skipped. The Rust function that the diagram follows is printed with it. Press Run, then break a station and run again.</p>
+
+<style>
+#railway { margin-top: 1.6rem; }
+#railway { container-type: inline-size; }
+#railway .rw-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-items: center; }
+@container (min-width: 960px) { #railway .rw-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); } }
+#railway .rw-grid > * { min-width: 0; }
+#railway .rw-stage svg { display: block; width: 100%; max-width: 560px; height: auto; margin: 0 auto; }
+#railway .rw-track-ok { fill: none; stroke: var(--ok); stroke-width: 4; stroke-linecap: round; }
+#railway .rw-track-err { fill: none; stroke: var(--bad); stroke-width: 4; stroke-linecap: round; opacity: .35; transition: opacity .3s; }
+#railway .rw-track-err.is-live { opacity: 1; }
+#railway .rw-ramp { fill: none; stroke: var(--ghost); stroke-width: 2; stroke-dasharray: 5 5; }
+#railway .rw-ramp.is-taken { stroke: var(--bad); stroke-width: 3.5; stroke-dasharray: none; }
+#railway .rw-st rect { fill: var(--surface-2); stroke: var(--line); stroke-width: 1.5; transition: fill .25s, stroke .25s; }
+#railway .rw-st text { font-family: var(--font-mono); font-size: 14px; fill: var(--ink); text-anchor: middle; }
+#railway .rw-st.is-now rect { fill: var(--oxide-soft); stroke: var(--oxide); stroke-width: 2.5; }
+#railway .rw-st.is-ok rect { fill: var(--ok-soft); stroke: var(--ok); }
+#railway .rw-st.is-fail rect { fill: var(--bad-soft); stroke: var(--bad); stroke-width: 2.5; }
+#railway .rw-st.is-skip { opacity: .45; }
+#railway .rw-st.is-skip rect { stroke: var(--ghost); stroke-dasharray: 4 3; }
+#railway .rw-label { font-family: var(--font-mono); font-size: 14px; font-weight: 700; }
+#railway .rw-ok-label { fill: var(--ok); }
+#railway .rw-err-label { fill: var(--bad); }
+#railway .rw-q { font-family: var(--font-mono); font-size: 16px; font-weight: 700; fill: var(--muted); }
+#railway .rw-controls { display: flex; flex-wrap: wrap; gap: 10px 14px; justify-content: space-between; align-items: center; margin-top: 14px; }
+#railway .rw-controls[hidden] { display: none; }
+#railway .rw-toggles, #railway .rw-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+#railway .rw-toggle[aria-pressed="true"] { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); }
+#railway button:disabled { opacity: .5; cursor: not-allowed; }
+#railway .rw-status { margin: 14px 0 0; min-height: 3em; color: var(--ink-2); }
+#railway .rw-result { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; margin-top: 6px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); }
+#railway .rw-value { font-family: var(--font-mono); font-size: 0.9rem; overflow-wrap: anywhere; color: var(--ink); }
+#railway .rw-result.is-ok .rw-value { color: var(--ok); }
+#railway .rw-result.is-bad .rw-value { color: var(--bad); }
+#railway .rw-canvas { position: relative; width: 100%; max-width: 560px; margin: 0 auto; }
+#railway .rw-canvas svg { display: block; }
+#railway .rw-car, #railway .rw-lever, #railway .rw-switchman { position: absolute; top: 0; left: 0; transform: translate(-50%, -50%); pointer-events: none; }
+#railway .rw-car { z-index: 2; width: 14%; }
+#railway .rw-lever { width: 6%; z-index: 1; }
+#railway .rw-switchman { left: 8%; top: 10%; width: 13%; z-index: 1; }
+#railway .rw-car .ca, #railway .rw-lever .ca, #railway .rw-switchman .ca { display: block; width: 100%; }
+#railway .rw-car .ca-svg, #railway .rw-lever .ca-svg, #railway .rw-switchman .ca-svg { display: block; width: 100%; height: auto; }
+</style>
+
+<div class="ox-figure ox-wide" id="railway">
+  <div class="rw-grid">
+    <div class="rw-stage">
+      <div class="rw-canvas">
+      <svg viewBox="0 0 480 260" role="img" aria-labelledby="rw-title">
+        <title id="rw-title">Two tracks. The top Ok track runs through four stations: read_input, parse, validate and save. A failing station sends the value down an exit ramp to the bottom Err track.</title>
+        <path class="rw-track-err" d="M12 236 H472"/>
+        <path class="rw-track-ok" d="M12 96 H472"/>
+        <text class="rw-label rw-ok-label" x="33" y="64">Ok</text>
+        <text class="rw-label rw-err-label" x="33" y="226">Err</text>
+        <path class="rw-ramp" d="M81 96 L81 118 Q81 236 121 236 L472 236"/>
+        <path class="rw-ramp" d="M187 96 L187 118 Q187 236 227 236 L472 236"/>
+        <path class="rw-ramp" d="M293 96 L293 118 Q293 236 333 236 L472 236"/>
+        <path class="rw-ramp" d="M399 96 L399 118 Q399 236 439 236 L472 236"/>
+        <g class="rw-st" data-i="0"><rect x="33" y="74" width="96" height="44" rx="8"/><text x="81" y="101">read_input</text></g>
+        <g class="rw-st" data-i="1"><rect x="139" y="74" width="96" height="44" rx="8"/><text x="187" y="101">parse</text></g>
+        <g class="rw-st" data-i="2"><rect x="245" y="74" width="96" height="44" rx="8"/><text x="293" y="101">validate</text></g>
+        <g class="rw-st" data-i="3"><rect x="351" y="74" width="96" height="44" rx="8"/><text x="399" y="101">save</text></g>
+        <text class="rw-q" x="89" y="150">?</text>
+        <text class="rw-q" x="195" y="150">?</text>
+        <text class="rw-q" x="301" y="150">?</text>
+        <text class="rw-q" x="407" y="150">?</text>
+      </svg>
+      <span class="rw-switchman" aria-hidden="true"></span>
+      <span class="rw-lever" data-i="0" aria-hidden="true"></span>
+      <span class="rw-lever" data-i="1" aria-hidden="true"></span>
+      <span class="rw-lever" data-i="2" aria-hidden="true"></span>
+      <span class="rw-lever" data-i="3" aria-hidden="true"></span>
+      <span class="rw-car" aria-hidden="true"></span>
+      </div>
+    </div>
+    <div class="rw-code">
+      <pre class="rs" data-check="skip" data-title="src/main.rs">fn register(raw: &amp;str) -&gt; Result&lt;User, AppError&gt; {
+    let input = read_input(raw)?;
+    let data = parse(&amp;input)?;
+    let user = validate(data)?;
+    save(&amp;user)?;
+    Ok(user)
+}</pre>
+    </div>
+  </div>
+  <div class="rw-controls" hidden>
+    <div class="rw-toggles" role="group" aria-label="Make a station fail">
+      <button type="button" class="ox-btn is-small rw-toggle" data-i="0" aria-pressed="false">read_input fails</button>
+      <button type="button" class="ox-btn is-small rw-toggle" data-i="1" aria-pressed="false">parse fails</button>
+      <button type="button" class="ox-btn is-small rw-toggle" data-i="2" aria-pressed="false">validate fails</button>
+      <button type="button" class="ox-btn is-small rw-toggle" data-i="3" aria-pressed="false">save fails</button>
+    </div>
+    <div class="rw-buttons">
+      <button type="button" class="ox-btn is-primary is-small rw-run">Run</button>
+      <button type="button" class="ox-btn is-small rw-reset">Reset</button>
+    </div>
+  </div>
+  <p class="rw-status" aria-live="polite">Nothing fails yet. Press Run to send a value through, or break a station first.</p>
+  <div class="rw-result"><span class="ox-label">Result</span><code class="rw-value">not run yet</code></div>
+  <p class="ox-caption">Each toggle stands for a bad input at that station: an empty line for read_input, an age of thirty for parse, an age of 12 for validate, and the name admin for save. The result line shows each value the way <code>{:?}</code> prints it. The Switchman throws the lever at the first failing station, and the car takes that station's <code>?</code> exit ramp. Every later station is skipped.</p>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var root = document.getElementById("railway");
+  if (!root) return;
+
+  var STATIONS = [
+    { name: "read_input", line: 2, cx: 81,  err: 'Err(Invalid("empty input"))' },
+    { name: "parse",      line: 3, cx: 187, err: "Err(Parse(ParseIntError { kind: InvalidDigit }))" },
+    { name: "validate",   line: 4, cx: 293, err: 'Err(Invalid("must be 18 or older"))' },
+    { name: "save",       line: 5, cx: 399, err: 'Err(Invalid("name already taken"))' }
+  ];
+  var OK_VALUE = 'Ok(User { name: "Ana", age: 31 })';
+  var START_X = 34, TRACK_Y = 96, END_X = 446;
+  var VB_W = 480, VB_H = 260, LEVER_Y = 44;
+  var reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  var stations = Array.prototype.slice.call(root.querySelectorAll(".rw-st"));
+  var ramps = Array.prototype.slice.call(root.querySelectorAll(".rw-ramp"));
+  var toggles = Array.prototype.slice.call(root.querySelectorAll(".rw-toggle"));
+  var token = root.querySelector(".rw-car");
+  var switchman = root.querySelector(".rw-switchman");
+  var levers = Array.prototype.slice.call(root.querySelectorAll(".rw-lever"));
+  var errTrack = root.querySelector(".rw-track-err");
+  var runBtn = root.querySelector(".rw-run");
+  var resetBtn = root.querySelector(".rw-reset");
+  var controls = root.querySelector(".rw-controls");
+  var statusEl = root.querySelector(".rw-status");
+  var resultEl = root.querySelector(".rw-result");
+  var valueEl = root.querySelector(".rw-value");
+  var lines = [];
+  var fails = [false, false, false, false];
+  var runId = 0;
+  var busy = false;
+
+  function wait(ms) {
+    return new Promise(function (resolve) { setTimeout(resolve, reduce ? 0 : ms); });
+  }
+  // The car is an HTML overlay on the canvas, placed in SVG units as percentages.
+  function place(x, y) {
+    token.style.left = (x / VB_W * 100) + "%";
+    token.style.top = (y / VB_H * 100) + "%";
+  }
+  // Cars are the values: Ok on the top track, Err once a ? takes the exit ramp.
+  function setCar(kind, label) {
+    if (window.OxCast) token.innerHTML = OxCast.prop("car", { kind: kind, label: label });
+  }
+  // The Switchman throws the lever of the station that fails.
+  function setLever(i, on) {
+    var p = levers[i] && levers[i].querySelector(".pr-lever");
+    if (p) p.classList.toggle("is-on", !!on);
+  }
+  function setSwitch(pose, ms) {
+    var n = switchman && switchman.querySelector(".ca");
+    if (n && window.OxCast) OxCast.pose(n, pose, ms);
+  }
+  // Each animation frame checks the run id, so a Reset stops the car where clearRun put it.
+  function slide(x0, x1, y, ms, id) {
+    return new Promise(function (resolve) {
+      if (reduce) { place(x1, y); resolve(); return; }
+      var t0 = null;
+      function frame(now) {
+        if (id !== runId) { resolve(); return; }
+        if (t0 === null) t0 = now;
+        var p = Math.min(1, (now - t0) / ms);
+        var e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+        place(x0 + (x1 - x0) * e, y);
+        if (p < 1) requestAnimationFrame(frame); else resolve();
+      }
+      requestAnimationFrame(frame);
+    });
+  }
+  function drop(path, ms, id) {
+    return new Promise(function (resolve) {
+      var total = path.getTotalLength();
+      if (reduce) {
+        var end = path.getPointAtLength(total);
+        place(end.x, end.y);
+        resolve();
+        return;
+      }
+      var t0 = null;
+      function frame(now) {
+        if (id !== runId) { resolve(); return; }
+        if (t0 === null) t0 = now;
+        var p = Math.min(1, (now - t0) / ms);
+        var pt = path.getPointAtLength(total * p);
+        place(pt.x, pt.y);
+        if (p < 1) requestAnimationFrame(frame); else resolve();
+      }
+      requestAnimationFrame(frame);
+    });
+  }
+  function markLines(current, failed) {
+    lines.forEach(function (el, i) {
+      el.classList.toggle("is-hl", i + 1 === current);
+      el.classList.toggle("is-err", i + 1 === failed);
+    });
+  }
+  function markStation(i, state) {
+    var g = stations[i];
+    ["is-now", "is-ok", "is-fail", "is-skip"].forEach(function (c) { g.classList.remove(c); });
+    if (state) g.classList.add(state);
+  }
+  function say(text) { statusEl.textContent = text; }
+  function show(text, kind) {
+    valueEl.textContent = text;
+    resultEl.classList.remove("is-ok", "is-bad");
+    if (kind) resultEl.classList.add(kind);
+  }
+  function setBusy(on) {
+    busy = on;
+    runBtn.disabled = on;
+    toggles.forEach(function (b) { b.disabled = on; });
+  }
+  function clearRun() {
+    stations.forEach(function (_, i) { markStation(i, null); });
+    ramps.forEach(function (r) { r.classList.remove("is-taken"); });
+    errTrack.classList.remove("is-live");
+    markLines(0, 0);
+    setCar("ok", "value");
+    levers.forEach(function (_, i) { setLever(i, false); });
+    setSwitch("", 0);
+    place(START_X, TRACK_Y);
+  }
+  function describe() {
+    var broken = [];
+    fails.forEach(function (on, i) { if (on) broken.push(STATIONS[i].name); });
+    if (!broken.length) return "Nothing fails yet. Press Run to send a value through, or break a station first.";
+    return broken.join(", ") + (broken.length > 1 ? " are set to fail" : " is set to fail") + ". Press Run to see where the value stops.";
+  }
+  function reset() {
+    runId++;
+    setBusy(false);
+    clearRun();
+    show("not run yet", null);
+    say(describe());
+  }
+
+  async function run() {
+    if (busy) return;
+    var id = ++runId;
+    setBusy(true);
+    clearRun();
+    show("waiting", null);
+    setSwitch("talk", 1200);
+    var failAt = fails.indexOf(true);
+    var last = failAt === -1 ? STATIONS.length - 1 : failAt;
+    var x = START_X;
+    say("The value enters read_input.");
+
+    for (var i = 0; i <= last; i++) {
+      if (id !== runId) return;
+      var st = STATIONS[i];
+      markLines(st.line, 0);
+      markStation(i, "is-now");
+      say("Checking " + st.name + " on line " + st.line + ".");
+      await slide(x, st.cx, TRACK_Y, 420, id);
+      x = st.cx;
+      await wait(260);
+      if (id !== runId) return;
+
+      if (i === failAt) {
+        markStation(i, "is-fail");
+        for (var j = i + 1; j < STATIONS.length; j++) markStation(j, "is-skip");
+        markLines(0, st.line);
+        ramps[i].classList.add("is-taken");
+        setLever(i, true);
+        setCar("err", st.name);
+        setSwitch("oops", 1600);
+        say(st.name + " returned Err. The ? on line " + st.line + " takes the exit ramp, and the stations after it are skipped.");
+        await drop(ramps[i], 900, id);
+        if (id !== runId) return;
+        errTrack.classList.add("is-live");
+        show(st.err, "is-bad");
+        setBusy(false);
+        return;
+      }
+      markStation(i, "is-ok");
+      say(st.name + " returned Ok, so the value moves on.");
+    }
+
+    markLines(6, 0);
+    setSwitch("happy", 1400);
+    await slide(x, END_X, TRACK_Y, 420, id);
+    if (id !== runId) return;
+    show(OK_VALUE, "is-ok");
+    say("All four stations returned Ok, so the function returns the User.");
+    setBusy(false);
+  }
+
+  function init() {
+    lines = Array.prototype.slice.call(root.querySelectorAll(".ox-code .ln"));
+    if (window.OxCast) {
+      switchman.innerHTML = OxCast.el("switchman");
+      levers.forEach(function (el, i) {
+        el.innerHTML = OxCast.prop("lever", { on: false });
+        el.style.left = (STATIONS[i].cx / VB_W * 100) + "%";
+        el.style.top = (LEVER_Y / VB_H * 100) + "%";
+      });
+    }
+    if (controls) controls.hidden = false;
+    runBtn.addEventListener("click", function () { run(); });
+    resetBtn.addEventListener("click", function () { reset(); });
+    toggles.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var i = parseInt(btn.getAttribute("data-i"), 10);
+        fails[i] = !fails[i];
+        btn.setAttribute("aria-pressed", fails[i] ? "true" : "false");
+        reset();
+      });
+    });
+    reset();
+  }
+
+  if (window.Ox && window.Ox.ready) init();
+  else document.addEventListener("ox:ready", init, { once: true });
+})();
+</script>
+
+<p>Each station in the diagram is one <code>?</code> line in the code. The railway uses <code>AppError</code>, which the next section defines in full.</p>
+</section>
+
+<section>
+<h2 id="io">Programs that talk to the world</h2>
+
+<p>So far, every function in this chapter took values and returned values. A command-line tool also reads its arguments and its input, and it reads and writes files. The standard library covers each of those. Each call can fail, so each one returns a <code>Result</code>, and the <code>?</code> you just learned works on all of them.</p>
+
+<p>Arguments come from <code>std::env::args()</code>. The first item is the program name, the same as <code>$argv[0]</code> in PHP, so skip it. Everything else arrives as text. The function below turns that text into a <code>Config</code>, and it returns an error message when a flag is unknown or the file name is missing.</p>
+
+<pre class="rs" data-title="src/main.rs">
+use std::env;
+use std::process::ExitCode;
+
+struct Config {
+    verbose: bool,
+    file: String,
+}
+
+fn parse_args(args: &amp;[String]) -&gt; Result&lt;Config, String&gt; {
+    let mut verbose = false;
+    let mut file = None;
+    for arg in args {
+        match arg.as_str() {
+            "-v" | "--verbose" =&gt; verbose = true,
+            other if other.starts_with('-') =&gt; return Err(format!("unknown flag {other}")),
+            other =&gt; file = Some(other.to_string()),
+        }
+    }
+    let file = file.ok_or("missing file name")?;
+    Ok(Config { verbose, file })
+}
+
+fn main() -&gt; ExitCode {
+    let args: Vec&lt;String&gt; = env::args().skip(1).collect();
+    match parse_args(&amp;args) {
+        Ok(config) =&gt; {
+            println!("file: {}, verbose: {}", config.file, config.verbose);
+            ExitCode::SUCCESS
+        }
+        Err(message) =&gt; {
+            eprintln!("error: {message}");
+            eprintln!("usage: notes [-v] &lt;file&gt;");
+            ExitCode::from(2)
+        }
+    }
+}</pre>
+
+<p>Run it the way a shell user would. Each <code># exit</code> line shows the status the process returned.</p>
+
+<pre class="text">$ notes -v notes.txt
+file: notes.txt, verbose: true
+# exit 0
+$ notes --bogus notes.txt
+error: unknown flag --bogus
+usage: notes [-v] &lt;file&gt;
+# exit 2
+$ notes
+error: missing file name
+usage: notes [-v] &lt;file&gt;
+# exit 2</pre>
+
+<p><code>main</code> returns an <code>ExitCode</code>, so it sets the exit status without calling <code>process::exit</code>. <code>ExitCode::SUCCESS</code> is 0, <code>ExitCode::FAILURE</code> is 1, and <code>ExitCode::from(2)</code> gives any other value. Chapter 16 uses 2 for bad arguments too, because clap does.</p>
+
+<p>The usage lines use <code>eprintln!</code>, not <code>println!</code>. <code>println!</code> writes to stdout, the stream a pipe reads, as in <code>notes | sort</code>. <code>eprintln!</code> writes to stderr, a second stream. The terminal shows it, and a script can read or hide it on its own. This program prints one line to each stream.</p>
+
+<pre class="rs" data-title="src/main.rs" data-stdout="results: 3 files">
+fn main() {
+    println!("results: 3 files");
+    eprintln!("warning: 1 file skipped");
+}</pre>
+
+<p>Standard input works the same way. <code>io::stdin().lines()</code> gives you an iterator over the lines that you type or pipe in. Each item is a <code>Result</code>, because reading can fail, so the loop calls <code>?</code> on every line. Each line comes without its newline.</p>
+
+<pre class="rs" data-title="src/main.rs">
+use std::io;
+
+fn main() -&gt; io::Result&lt;()&gt; {
+    let mut count = 0;
+    for line in io::stdin().lines() {
+        let line = line?;
+        count += 1;
+        println!("{count}: {line}");
+    }
+    println!("{count} lines");
+    Ok(())
+}</pre>
+
+<pre class="text">$ printf 'alpha\nbeta\n' | notes
+1: alpha
+2: beta
+2 lines</pre>
+
+<p>Files use <code>std::fs</code>. <code>fs::read_to_string</code> reads a whole file into a <code>String</code>, and <code>fs::write</code> replaces a file's contents in one call. To write in pieces, open the file with <code>File::create</code>, wrap it in a <code>BufWriter</code>, and call <code>writeln!</code> as often as you need. The buffer collects the small writes and sends them to the disk in larger blocks. The program below writes three lines, reads them back, and removes the file.</p>
+
+<pre class="rs" data-title="src/main.rs" data-stdout="read 21 bytes\nline 1\nline 2\nline 3">
+use std::error::Error;
+use std::fs::{self, File};
+use std::io::{BufWriter, Write};
+use std::path::PathBuf;
+
+fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
+    let path: PathBuf = std::env::temp_dir().join("oxidize-ch11-files.txt");
+
+    let file = File::create(&amp;path)?;
+    let mut out = BufWriter::new(file);
+    for n in 1..=3 {
+        writeln!(out, "line {n}")?;
+    }
+    out.flush()?;
+
+    let text = fs::read_to_string(&amp;path)?;
+    println!("read {} bytes", text.len());
+    print!("{text}");
+    fs::remove_file(&amp;path)?;
+    Ok(())
+}</pre>
+
+<p>The <code>flush()</code> call is there on purpose. A <code>BufWriter</code> also flushes when it is dropped, but a drop has nowhere to send an error, so it ignores a failed flush. Call <code>flush()</code> yourself when the write has to succeed.</p>
+
+<p><code>Path</code> is the borrowed form of a path, like <code>&amp;str</code>. <code>PathBuf</code> is the owned form, like <code>String</code>. <code>join</code> adds a segment with the separator that the platform uses, so you never type a slash by hand. This program prints a path, then its extension and its file name. On Windows the separator is a backslash, so the first line looks different there.</p>
+
+<pre class="rs" data-title="src/main.rs" data-stdout="notes/2026/todo.md\nSome(&quot;md&quot;)\nSome(&quot;todo.md&quot;)">
+use std::path::{Path, PathBuf};
+
+fn main() {
+    let dir = Path::new("notes");
+    let file: PathBuf = dir.join("2026").join("todo.md");
+    println!("{}", file.display());
+    println!("{:?}", file.extension());
+    println!("{:?}", file.file_name());
+}</pre>
+
+<p><code>fs::read_dir</code> lists the entries of a folder. Opening the folder returns a <code>Result</code>, and so does each entry. The order of the entries is not promised, so sort the paths when the order matters.</p>
+
+<p>If <code>main</code> returns an <code>Err</code>, Rust prints <code>Error:</code> and the <code>Debug</code> form of the error, then exits with status 1. A missing file looks like this: <code>Error: Os { code: 2, kind: NotFound, message: "No such file or directory" }</code>. Users deserve a sentence of their own, so a tool catches these errors and prints a message the way <code>parse_args</code> does.</p>
+
+<p>Environment variables come from <code>std::env::var</code>. It returns a <code>Result</code>. A variable that is not set is <code>Err(VarError::NotPresent)</code>, not an empty string, so decide what the default should be. Chapter 20 reads its configuration this way.</p>
+
+<p>Laravel's closest equivalent is an artisan command. Here is the part of one that handles the file argument, next to the Rust version of the same check:</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+// app/Console/Commands/CountNotes.php, the handle() method
+public function handle(): int
+{
+    $file = $this-&gt;argument('file');
+
+    if (! is_file($file)) {
+        $this-&gt;error("missing file: {$file}");
+        return 2;
+    }
+
+    $this-&gt;line("reading {$file}");
+    return 0;
+}</pre>
+  <pre class="rs" data-title="src/main.rs">
+use std::env;
+use std::path::Path;
+use std::process::ExitCode;
+
+fn main() -&gt; ExitCode {
+    let Some(file) = env::args().nth(1) else {
+        eprintln!("usage: notes &lt;file&gt;");
+        return ExitCode::from(2);
+    };
+    if !Path::new(&amp;file).is_file() {
+        eprintln!("missing file: {file}");
+        return ExitCode::from(2);
+    }
+    println!("reading {file}");
+    ExitCode::SUCCESS
+}</pre>
+  <div class="ox-bridge-note"><p>The artisan command returns its code from <code>handle()</code>, and <code>$this-&gt;error()</code> prints the message. Rust does both jobs in <code>main</code>. Two things differ. <code>$this-&gt;argument()</code> gives you values that the console has already checked against the command's signature. <code>env::args()</code> gives you raw text, which is why chapter 16 adds clap. And PHP's <code>exit()</code> can run from any function, as can Rust's <code>process::exit</code>. Rust's version skips destructors, as the callout below shows, so return from <code>main</code> when you can.</p></div>
+</div>
+
+<aside class="ox-callout" data-kind="ai" data-label="AI reviewer checklist">
+  <p>Agent-written command-line code fails in the same few places. Check these in review:</p>
+  <ul>
+    <li><strong><code>unwrap()</code> on an argument.</strong> <code>env::args().nth(1).unwrap()</code> panics when the user passes nothing. The panic exits with status 101. The user needs a usage message and status 2.</li>
+    <li><strong>A panic where an exit code belongs.</strong> A bad flag or a missing file is an expected failure, so it returns an <code>ExitCode</code> or a <code>Result</code>. A panic says "this is a bug".</li>
+    <li><strong><code>process::exit</code> in the middle of a program.</strong> It ends the process without running destructors, so a <code>BufWriter</code> may never flush. In a quick test, the file was empty after <code>process::exit</code>. After a normal return from <code>main</code>, it held all 15 bytes.</li>
+    <li><strong>Reading a whole huge file.</strong> <code>fs::read_to_string</code> loads the entire file into memory. For big input, read it line by line.</li>
+  </ul>
+</aside>
+
+<div class="ox-quiz" data-id="11:io-exit" data-label="Check yourself">
+  <p class="ox-q">You run <code>notes</code> with no arguments. Where does the error text go, and what exit code does the process return?</p>
+  <ol class="ox-choices">
+    <li>stdout, exit code 0</li>
+    <li data-correct>stderr, exit code 2</li>
+    <li data-feedback="The error is printed with eprintln!, so it does not go to stdout. Try again.">stdout, exit code 1</li>
+  </ol>
+  <div class="ox-why"><p>The error and the usage line use <code>eprintln!</code>, so they go to stderr. The <code>Err</code> branch returns <code>ExitCode::from(2)</code>. Only the <code>Ok</code> branch prints to stdout.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="custom">Your own error type</h2>
+
+<p>A function that can fail in several ways needs an error type that says which way. A <code>String</code> can hold any message, but the caller can't match on it. An enum gives each failure its own variant, so the caller can react to each one differently.</p>
+
+<p>The block below has three new things. <code>impl fmt::Display for AppError</code> is the form <code>impl Trait for Type</code>: it fills in a standard interface for your type, here the one that lets <code>{}</code> print it. Chapter 14 explains traits. Inside <code>fmt</code>, <code>write!</code> works like <code>println!</code>, but it writes into the formatter <code>f</code> instead of the terminal. The formatter's full type is <code>Formatter&lt;'_&gt;</code>, where <code>'_</code> is an anonymous lifetime that the compiler fills in; Chapter 15 explains it.</p>
+
+<pre class="rs" data-run data-stdout="found Ana\nerror: user 7 not found\nerror: could not parse number: invalid digit found in string\nerror: invalid input: id is empty" data-title="src/main.rs">
+use std::error::Error;
+use std::fmt;
+use std::num::ParseIntError;
+
+#[derive(Debug)]
+enum AppError {
+    NotFound(u32),
+    Invalid(String),
+    Parse(ParseIntError),
+}
+
+impl fmt::Display for AppError {
+    fn fmt(&amp;self, f: &amp;mut fmt::Formatter) -&gt; fmt::Result {
+        match self {
+            AppError::NotFound(id) =&gt; write!(f, "user {id} not found"),
+            AppError::Invalid(why) =&gt; write!(f, "invalid input: {why}"),
+            AppError::Parse(e) =&gt; write!(f, "could not parse number: {e}"),
+        }
+    }
+}
+
+impl Error for AppError {}
+
+impl From&lt;ParseIntError&gt; for AppError {
+    fn from(e: ParseIntError) -&gt; Self {
+        AppError::Parse(e)
+    }
+}
+
+fn find_name(id: u32) -&gt; Result&lt;&amp;'static str, AppError&gt; {
+    let names = [(1, "Ana"), (2, "Bo")];
+    names
+        .iter()
+        .find(|(uid, _)| *uid == id)
+        .map(|(_, name)| *name)
+        .ok_or(AppError::NotFound(id))
+}
+
+fn lookup(id_text: &amp;str) -&gt; Result&lt;&amp;'static str, AppError&gt; {
+    if id_text.is_empty() {
+        return Err(AppError::Invalid("id is empty".to_string()));
+    }
+    let id: u32 = id_text.parse()?; // ParseIntError becomes AppError::Parse
+    find_name(id)
+}
+
+fn main() {
+    for input in ["1", "7", "seven", ""] {
+        match lookup(input) {
+            Ok(name) =&gt; println!("found {name}"),
+            Err(e) =&gt; println!("error: {e}"),
+        }
+    }
+}</pre>
+
+<p><code>find_name</code> uses two closures, <code>|(uid, _)| *uid == id</code> and <code>|(_, name)| *name</code>, inside the iterator methods <code>find</code> and <code>map</code>. Chapter 13 explains closures, and the iterator methods that take them.</p>
+
+<p>Three things make this type work with <code>?</code>:</p>
+
+<ol class="ox-steps">
+  <li><div><p><strong>Display</strong> writes the message a person reads. <code>println!("{e}")</code> uses it.</p></div></li>
+  <li><div><p><strong>Error</strong> is the standard trait for error types. It requires <code>Debug</code> and <code>Display</code>, which the derive and the impl provide. The impl itself can be empty.</p></div></li>
+  <li><div><p><strong>From&lt;ParseIntError&gt;</strong> lets <code>?</code> convert a parse error into <code>AppError::Parse</code>.</p></div></li>
+</ol>
+
+<p>The third one is the conversion. On an <code>Err</code>, <code>?</code> calls <code>From::from</code> to turn the error into the function's error type. In the <code>doubled</code> example that call did nothing, because the types already matched. In <code>lookup</code>, <code>parse()</code> produces a <code>ParseIntError</code> and the function returns an <code>AppError</code>, so the conversion does real work and needs the impl. Without the impl, the compiler rejects the <code>?</code>. Notice what happens to the error itself: it's moved out to the caller, which becomes its owner. That's Chapter 6's move again.</p>
+
+<p>Fill in the one line that makes the conversion work:</p>
+
+<div class="ox-fill" data-id="11:fill-from">
+  <p class="ox-q">Complete the impl so <code>?</code> can convert a <code>ParseIntError</code> into <code>AppError</code>.</p>
+  <pre class="rs">
+use std::num::ParseIntError;
+
+#[derive(Debug)]
+enum AppError {
+    Parse(ParseIntError),
+}
+
+impl [[From&lt;ParseIntError&gt;|From&lt;std::num::ParseIntError&gt;|std::convert::From&lt;ParseIntError&gt;]] for AppError {
+    fn from(e: ParseIntError) -&gt; Self {
+        AppError::Parse(e)
+    }
+}
+
+fn main() {
+    let err: AppError = "x".parse::&lt;u8&gt;().unwrap_err().into();
+    println!("{err:?}");
+}</pre>
+  <div class="ox-why"><p><code>From&lt;ParseIntError&gt;</code> names the trait and the type it converts from. The body wraps the error in the <code>Parse</code> variant. Once this impl exists, <code>?</code> on a <code>ParseIntError</code> converts automatically in any function that returns <code>Result&lt;_, AppError&gt;</code>. You can have one <code>From</code> impl per source type, so a <code>From&lt;io::Error&gt;</code> can sit beside it.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="ecosystem">thiserror and anyhow</h2>
+
+<p>Writing <code>Display</code> and <code>From</code> by hand for every error gets repetitive. Two crates from the community handle most of that work, and they're built for different jobs. Choosing between them is a real decision:</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th></th><th>thiserror</th><th>anyhow</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Use it in</strong></td><td>Libraries, the code other people import</td><td>Applications, the programs that run and report errors</td></tr>
+    <tr><td><strong>The error type is</strong></td><td>Your own enum, with a derive</td><td>One type, <code>anyhow::Error</code>, that holds any error</td></tr>
+    <tr><td><strong>Callers can</strong></td><td>Match on each variant and react to it</td><td>Print it and add context. Matching on a specific failure means downcasting.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Add both crates to <code>Cargo.toml</code>. Major versions are enough to pin: Cargo picks the newest compatible release.</p>
+
+<pre class="toml" data-title="Cargo.toml">
+[dependencies]
+thiserror = "2"
+anyhow = "1"</pre>
+
+<p>A library defines its own enum. <code>thiserror</code> writes the <code>Display</code> and <code>From</code> impls from attributes:</p>
+
+<pre class="rs" data-check="skip" data-title="src/main.rs">
+use std::num::ParseIntError;
+
+#[derive(Debug, thiserror::Error)]
+enum AppError {
+    #[error("user {0} not found")]
+    NotFound(u32),
+
+    #[error(transparent)]
+    Parse(#[from] ParseIntError),
+}
+
+fn lookup(id_text: &amp;str) -&gt; Result&lt;u32, AppError&gt; {
+    let id: u32 = id_text.parse()?; // #[from] gives the conversion
+    if id == 1 {
+        Ok(id)
+    } else {
+        Err(AppError::NotFound(id))
+    }
+}
+
+fn main() {
+    for input in ["1", "9", "nine"] {
+        match lookup(input) {
+            Ok(id) =&gt; println!("ok: {id}"),
+            Err(e) =&gt; println!("error: {e}"),
+        }
+    }
+}</pre>
+
+<pre class="text" data-title="output">
+ok: 1
+error: user 9 not found
+error: invalid digit found in string</pre>
+
+<p><code>#[error("…")]</code> writes <code>Display</code> for you. <code>#[from]</code> writes the <code>From</code> impl from the previous section. <code>transparent</code> passes the wrapped error's message through unchanged. The enum is what callers see, so they can still match on <code>NotFound</code>.</p>
+
+<p>An application's <code>main</code> doesn't need callers to match on anything. It needs to report a failure with enough context to act on. <code>anyhow::Result&lt;T&gt;</code> is <code>Result&lt;T, anyhow::Error&gt;</code>, and <code>.context("…")</code> wraps whatever error came before with a sentence that says what the program was doing:</p>
+
+<pre class="rs" data-check="skip" data-title="src/main.rs">
+use anyhow::{Context, Result};
+
+fn load_port(path: &amp;str) -&gt; Result&lt;u16&gt; {
+    let text = std::fs::read_to_string(path).context("could not read the port file")?;
+    let port = text
+        .trim()
+        .parse::&lt;u16&gt;()
+        .context("the port file must hold a number")?;
+    Ok(port)
+}
+
+fn main() -&gt; Result&lt;()&gt; {
+    let port = load_port("config/port.txt")?;
+    println!("port {port}");
+    Ok(())
+}</pre>
+
+<p>With no <code>config/port.txt</code> in the directory, the program reports this:</p>
+
+<pre class="text" data-title="output">
+Error: could not read the port file
+
+Caused by:
+    No such file or directory (os error 2)</pre>
+
+<p>Each <em>Caused by</em> line is the error the previous line wrapped. <code>with_context(|| …)</code> does the same job with a closure, which only runs on the error path. That matters when building the message costs something. Set <code>RUST_BACKTRACE=1</code> and anyhow adds a stack trace to the report.</p>
+
+<aside class="ox-callout" data-kind="insight">
+  <p>The strategy in one line: <strong>libraries return typed errors. Applications add context at the boundary and report.</strong></p>
+</aside>
+
+<div class="ox-quiz" data-id="11:lib-or-app" data-label="Check yourself">
+  <p class="ox-q">You're writing a crate that other teams will import. Which error type should its public functions return?</p>
+  <ol class="ox-choices">
+    <li><code>anyhow::Result</code>, because it takes the least code.</li>
+    <li data-correct>An enum of errors, derived with thiserror, so callers can match on each failure.</li>
+    <li><code>String</code>, because every error can be turned into one.</li>
+  </ol>
+  <div class="ox-why"><p>Callers of a library act on specific failures. One may retry a timeout, another may show a 404 for NotFound, and a third may log the rest. A typed enum gives them variants to match. anyhow erases the type, which is right at the top of an application, where errors are only reported. The public boundary of a library is the place that needs the types.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="laravel">From Laravel's exception handler to Rust</h2>
+
+<p>In Laravel, a failure is an exception. It travels up the stack until something catches it, and the exception handler turns it into a response. Rust has the same two roles, but the failure travels as a return value. Three Laravel habits have direct Rust counterparts:</p>
+
+<ul>
+  <li><strong><code>findOrFail()</code></strong> becomes a lookup that returns an Option, followed by <code>.ok_or(...)?</code>, which says which error a missing value means.</li>
+  <li><strong>A validation exception</strong> becomes a variant of your error enum, such as <code>Invalid(String)</code>, with the messages inside it.</li>
+  <li><strong>Exception rendering in <code>bootstrap/app.php</code></strong>, set with <code>withExceptions()</code>, becomes one place at the edge of the app that turns your error into an HTTP response.</li>
+</ul>
+
+<p>The first habit in Rust:</p>
+
+<pre class="rs" data-run data-stdout="Ok(&quot;user: Ana&quot;)\nErr(NotFound(2))" data-title="src/main.rs">
+#[derive(Debug)]
+enum AppError {
+    NotFound(u32),
+}
+
+fn find_user(id: u32) -&gt; Option&lt;&amp;'static str&gt; {
+    if id == 1 { Some("Ana") } else { None }
+}
+
+fn show_user(id: u32) -&gt; Result&lt;String, AppError&gt; {
+    let name = find_user(id).ok_or(AppError::NotFound(id))?;
+    Ok(format!("user: {name}"))
+}
+
+fn main() {
+    println!("{:?}", show_user(1));
+    println!("{:?}", show_user(2));
+}</pre>
+
+<p><code>find_user</code> returns an Option, because a missing user isn't a failure yet. It's a fact about the data. <code>ok_or</code> decides what the missing case means in this part of the program, and <code>?</code> returns that error. Unlike <code>findOrFail()</code>, the error is written in the code, where a reader can see it.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+// No try block. When no model matches, Laravel
+// sends a 404 response on its own.
+$user = $users-&gt;findOrFail($id);
+$mailer-&gt;welcome($user);</pre>
+  <pre class="rs" data-run data-stdout="user 2 not found" data-title="src/main.rs">
+#[derive(Debug)]
+enum AppError {
+    NotFound(u32),
+}
+
+fn register(id: u32) -&gt; Result&lt;String, AppError&gt; {
+    if id == 1 {
+        Ok("Ana".to_string())
+    } else {
+        Err(AppError::NotFound(id))
+    }
+}
+
+fn main() {
+    match register(2) {
+        Ok(name) =&gt; println!("welcome, {name}"),
+        Err(AppError::NotFound(id)) =&gt; println!("user {id} not found"),
+    }
+}</pre>
+  <div class="ox-bridge-note"><p>In PHP the framework catches the exception here, so the code never names it. A <code>try</code> block would catch any exception thrown below it, including ones you didn't expect, and it chooses the handler by class. The <code>match</code> sees only the Result of the call in front of it, and it has to cover every variant. Add a variant later and the compiler points at every <code>match</code> that needs it. That's the trade: fewer surprises, in exchange for touching more lines when the set of errors grows.</p></div>
+</div>
+
+<p>The third habit happens at the edge. Laravel renders exceptions once, for the whole app, and you configure that in <code>bootstrap/app.php</code> with <code>withExceptions()</code>. In Rust, you write the same kind of conversion for your web layer. A type implements a trait (axum calls it <code>IntoResponse</code>), so a route can return <code>Result&lt;Json&lt;User&gt;, AppError&gt;</code> and the framework turns the <code>Err</code> into a response. You'll build that in Chapter 20.</p>
+
+<details class="ox-think">
+  <summary>Think first: a repository finds no user. Where should that become a 404?</summary>
+  <div class="ox-think-body">
+    <p>At the HTTP edge, once. The repository and the services under it return the <code>NotFound</code> variant. Only the code that builds responses knows what a 404 looks like. If a service turned the failure into a response itself, it would be tied to HTTP, and every other caller, such as a CLI command or a queued job, would have to undo that.</p>
+  </div>
+</details>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Coding agents reach for <code>.unwrap()</code> everywhere. The code compiles, the happy path runs, and the panic appears only on an input the agent never tried. Put the rule in your instructions, in these words or close to them: <em>no unwrap or expect outside tests and main; propagate errors with ? and a thiserror enum</em>.</p>
+  <p>When you review, search before you read. Every hit is a question: is this a test, a true invariant, or a bug waiting for the wrong input?</p>
+  <pre class="sh">grep -rn "unwrap()" src/</pre>
+</aside>
+</section>
+
+<section>
+<h2 id="practice">Practice</h2>
+
+<p>Two checks finish the chapter. The first puts the steps of <code>?</code> in order. The second matches the PHP habits you know to their Rust forms.</p>
+
+<div class="ox-order" data-id="11:order" data-label="Put these in order">
+  <ol>
+    <li>The expression before <code>?</code> is evaluated, and it produces an <code>Err(e)</code>.</li>
+    <li><code>From::from(e)</code> converts the error into the function's error type.</li>
+    <li>The function returns that error right away. Its remaining lines don't run.</li>
+    <li>The caller receives the <code>Err</code> and decides what to do with it.</li>
+  </ol>
+  <div class="ox-why"><p>If the expression had produced <code>Ok</code>, the first step would have taken the value out and kept going. The conversion always happens before the return, so the caller sees the function's own error type, never the one from deeper down.</p></div>
+</div>
+
+<div class="ox-match" data-id="11:match" data-left-label="PHP" data-right-label="Rust">
+  <ul>
+    <li data-left="throw new X(…)">return Err(x)</li>
+    <li data-left="try { … } catch (X $e) { … }">match result { Ok(v) =&gt; …, Err(e) =&gt; … }</li>
+    <li data-left="@throws X in the docblock">-&gt; Result&lt;T, E&gt; in the signature</li>
+    <li data-left="finally { … }">a Drop impl, which runs whenever the value leaves its scope</li>
+    <li data-left="$user = findOrFail($id);">let user = find(id).ok_or(AppError::NotFound(id))?;</li>
+    <li data-left="error_log($e); continue;">if let Err(e) = step() { eprintln!("{e}"); }</li>
+    <li data-left="(void) save($user);">let _ = save(&amp;user);</li>
+    <li data-left="function fail(): never">fn fail() -&gt; !</li>
+  </ul>
+</div>
+
+<aside class="ox-callout" data-kind="trap">
+  <p>These pairs are scaffolding, not equivalences. <code>catch</code> can recover from an exception thrown three calls down, while a <code>match</code> only sees the Result of the call in front of it. In Rust, a failure that should reach a caller further up must be passed up by every function in between, with <code>?</code>. That's more typing, and it's why signatures carry the error type.</p>
+  <p><code>finally</code> is a block you write at each use. <code>Drop</code> is cleanup written once on a type, and it runs on every path out of the scope, including the early return from <code>?</code>. That's why a file or a lock can release itself even when a step fails.</p>
+</aside>
+<div class="ox-quiz" data-id="11:quiz-option-question" data-label="Check yourself">
+  <p class="ox-q">Chapter 10 taught <code>Option</code>. Does this compile?</p>
+  <pre class="rs" data-check="E0277">
+fn first_char(s: &amp;str) -&gt; Result&lt;char, String&gt; {
+    let c = s.chars().next()?;
+    Ok(c)
+}
+
+fn main() {
+    println!("{:?}", first_char("crab"));
+}
+</pre>
+  <ol class="ox-choices">
+    <li>Yes. The <code>?</code> turns the <code>None</code> into an error string.</li>
+    <li data-correct>No, E0277. <code>?</code> works on an <code>Option</code> only in a function that returns <code>Option</code>. Here the function returns <code>Result</code>, so convert the <code>None</code> yourself or change the return type.</li>
+    <li>Yes, and the function returns <code>Ok(None)</code> for an empty string.</li>
+  </ol>
+  <div class="ox-why"><p>The compiler says the <code>?</code> operator can only be used on <code>Result</code>s here. The <code>?</code> from Chapter 11 leaves early with an error, and an <code>Option</code> has no error to hand over.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="quests">Forge quests</h2>
+<p>Reading builds recognition. Writing code builds the skill. These quests run locally against the real compiler.</p>
+<div class="ox-quests" data-chapter="11"></div>
+</section>
+
+<section>
+<h2 id="recap">Recap</h2>
+
+<div class="ox-recap">
+  <h3>Errors are values</h3>
+  <ul>
+    <li>Bugs panic. Expected failures return a <code>Result&lt;T, E&gt;</code>. A function that can fail says so in its return type.</li>
+    <li><code>match</code>, <code>map</code>, <code>map_err</code>, <code>and_then</code>, <code>unwrap_or</code> and <code>ok_or</code> handle a Result or Option in one expression.</li>
+    <li><code>?</code> returns early on <code>Err</code>, after converting the error with <code>From</code>. The function must have a return type that can carry that error.</li>
+    <li>Write your own error enum with <code>Display</code>, <code>Error</code> and <code>From</code>, or derive them with <code>thiserror</code>. Applications can use <code>anyhow</code> at the top.</li>
+    <li>Command-line programs read <code>env::args</code>, stdin and files through <code>std</code>. Each call returns a <code>Result</code>, so <code>?</code> works on each one. Return an <code>ExitCode</code> from <code>main</code> to choose the exit status.</li>
+  </ul>
+</div>
+
+<div class="ox-deck" data-chapter="11"></div>
+
+<details class="ox-think">
+  <summary>Explain it back: What does <code>?</code> do, step by step?</summary>
+  <div class="ox-think-body">
+    <p>One good answer: "It evaluates the expression before the <code>?</code>. If the result is <code>Ok</code>, it takes the value out and the function keeps going. If the result is <code>Err</code>, it converts the error with <code>From</code> into the function's error type and returns it right away, so the lines after it don't run. The caller receives the <code>Err</code> and decides what to do."</p>
+    <p>If your version has <em>Ok continues</em>, <em>Err returns early</em>, and <em>From converts</em>, you've got it.</p>
+  </div>
+</details>
+
+<div class="ox-complete-host"></div>
+</section>
+
+</main>
+</div>
+</body>
+</html>
