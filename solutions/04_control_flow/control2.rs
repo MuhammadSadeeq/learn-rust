@@ -22,7 +22,11 @@ fn first_divisible(start: u32, by: u32) -> u32 {
 fn collatz_steps(mut n: u64) -> u32 {
     let mut steps = 0;
     while n != 1 {
-        n = if n.is_multiple_of(2) { n / 2 } else { 3 * n + 1 };
+        n = if n.is_multiple_of(2) {
+            n / 2
+        } else {
+            3 * n + 1
+        };
         steps += 1;
     }
     steps

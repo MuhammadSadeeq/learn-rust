@@ -542,7 +542,7 @@
     vars.forEach((v) => { html += `<div class="tl-head is-${v.kind}">${esc(v.name)}<small>${esc(v.label || (v.kind === "own" ? "owner" : v.kind === "mut" ? "&mut borrow" : "& borrow"))}</small></div>`; });
     lines.forEach((l, k) => {
       const n = k + 1;
-      html += `<div class="tl-code" data-line="${n}"><span class="lnno">${n}</span>${l || " "}</div>`;
+      html += `<div class="tl-code" data-line="${n}"><span class="lnno">${n}</span><span class="tl-src">${l || " "}</span></div>`;
       vars.forEach((v) => {
         let inner = "";
         const alive = n >= v.from && n <= v.to;

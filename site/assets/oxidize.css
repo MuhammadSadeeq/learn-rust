@@ -1285,6 +1285,7 @@ details.ox-think > .ox-think-body > :last-child { margin-bottom: 0; }
 .tl-scroll { overflow-x: auto; }
 .tl-grid { display: grid; min-width: min-content; position: relative; }
 .tl-code { background: var(--code-bg); color: var(--code-ink); font: 0.84rem/1 var(--font-mono); padding: 0 16px 0 10px; display: flex; align-items: center; white-space: pre; border-left: 3px solid transparent; }
+.tl-code .tl-src { white-space: pre; }
 .tl-code .lnno { color: var(--code-dim); margin-right: 12px; width: 2ch; text-align: right; display: inline-block; }
 .tl-code.is-now { background: #1e2732; border-left-color: var(--c-kw); }
 .tl-code.is-err { background: #3a1416; border-left-color: #ff6b6b; }
