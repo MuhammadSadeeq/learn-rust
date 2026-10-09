@@ -693,7 +693,7 @@ window.OX_ROSETTA = [
       }
       `,
     check: "ok",
-    note: `The condition needs no parentheses, and the braces are never optional. The condition must be a <code>bool</code>, which is the point of the truthiness entry above.`,
+    note: `The condition needs no parentheses, and the braces are never optional. The condition must be a <code>bool</code>, which the Truthiness entry in Basics explains.`,
     chapter: 4
   },
   {
@@ -943,7 +943,7 @@ window.OX_ROSETTA = [
       println!("{}", greet(Some("Ada")));
       `,
     check: "ok",
-    note: `Rust has no default parameters. Take an <code>Option</code> and say what <code>None</code> means, or pass a struct that derives <code>Default</code>, as in the named-arguments entry.`,
+    note: `Rust has no default parameters. Take an <code>Option</code> and say what <code>None</code> means, or pass a struct that derives <code>Default</code>, as in Named arguments as a struct.`,
     chapter: 4
   },
   {
@@ -1107,7 +1107,7 @@ window.OX_ROSETTA = [
       println!("{} {}", user.name, user.age);
       `,
     check: "ok",
-    note: `A struct holds data only. Its fields are private to their module unless marked <code>pub</code>. There is no constructor promotion, so you write the literal yourself or add a constructor function, as in the next entry.`,
+    note: `A struct holds data only. Its fields are private to their module unless marked <code>pub</code>. There is no constructor promotion, so you write the literal yourself or add a constructor function (see Constructors).`,
     chapter: 9
   },
   {
@@ -1416,7 +1416,7 @@ window.OX_ROSETTA = [
       }
       `,
     check: "ok",
-    note: `Nothing is thrown. The failure is part of the return type, so the caller has to handle it, and the match arms play the part of the catch blocks. Panics do unwind through calls, but they are for bugs, not for failures you expect. The unwrap entry below covers them.`,
+    note: `Nothing is thrown. The failure is part of the return type, so the caller has to handle it, and the match arms play the part of the catch blocks. Panics do unwind through calls, but they are for bugs, not for failures you expect. Crash on purpose with expect covers them.`,
     chapter: 11
   },
   {
@@ -2022,7 +2022,7 @@ window.OX_ROSETTA = [
       println!("{}", route("GET", "/users"));
       `,
     check: "ok",
-    note: `A route table is a <code>match</code>: each arm is a route, and the last arm says what happens when nothing matches. A real router also matches path segments and extracts parameters, which is the next entry.`,
+    note: `A route table is a <code>match</code>: each arm is a route, and the last arm says what happens when nothing matches. A real router also matches path segments and extracts parameters, which Routes and path parameters shows.`,
     chapter: 20
   },
   {
@@ -2363,7 +2363,7 @@ window.OX_ROSETTA = [
       }
       `,
     check: "ok",
-    note: `There is no <code>setUp</code>. Each test builds the data it needs with a plain function, so no test depends on another and nothing is shared by accident. Cleanup belongs in a <code>Drop</code> impl, as in the errors group.`,
+    note: `There is no <code>setUp</code>. Each test builds the data it needs with a plain function, so no test depends on another and nothing is shared by accident. Cleanup belongs in a <code>Drop</code> impl, as in finally becomes Drop under Errors.`,
     chapter: 16
   },
   {

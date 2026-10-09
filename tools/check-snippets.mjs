@@ -139,7 +139,8 @@ for (const file of dataFiles) {
 }
 
 function wrap(code) {
-  const body = /\bfn\s+main\s*\(/.test(code) ? code : `fn main() {\n${code}\n}`;
+  // Snippets with tests are whole files of items, so they get an empty main.
+  const body = /\bfn\s+main\s*\(/.test(code) ? code : /#\[test\]/.test(code) ? `${code}\nfn main() {}` : `fn main() {\n${code}\n}`;
   return `#![allow(unused, dead_code, unused_variables, unused_mut, unused_assignments, unreachable_code, path_statements, unused_must_use)]\n${body}\n`;
 }
 
@@ -170,6 +171,14 @@ async function checkOne(s) {
   const failed = c.code !== 0;
   if (check === "ok" || check === "panic") {
     if (failed) return { ok: false, msg: `expected to compile, but rustc failed:\n${c.stderr.split("\n").slice(0, 25).join("\n")}` };
+    // A normal build drops #[cfg(test)] code, so snippets with tests are
+    // also built with --test and their tests must pass.
+    if (check === "ok" && /#\[test\]/.test(s.code)) {
+      const t = await run("rustc", ["--test", "--edition", "2024", "--crate-name", "snippet", "--color", "never", "-o", bin + "_t", src], { cwd: TMP });
+      if (t.code !== 0) return { ok: false, msg: `its tests do not compile:\n${t.stderr.split("\n").slice(0, 25).join("\n")}` };
+      const tr = await run(bin + "_t", ["--quiet"], { cwd: TMP });
+      if (tr.code !== 0) return { ok: false, msg: `its tests fail:\n${(tr.stdout + tr.stderr).slice(0, 800)}` };
+    }
     if (!needRun) return { ok: true };
     const r = await run(bin, [], { cwd: TMP });
     if (check === "panic") {
