@@ -762,9 +762,9 @@ def finish(g, duck=None, ir=None, wet_level=0.9):
 
 DRONE_GAIN = 0.30     # sub drone group gain (S1 sub share)
 BODY_GAIN = 0.25      # warm D2+A2+D3 body under the drone (S1 mid share)
-PLUCK_GAIN = 0.25    # glass plucks group gain
+PLUCK_GAIN = 0.20    # glass plucks group gain
 TICK_GAIN = 0.19     # S1 clock ticks (hats) gain
-CARD_BRIGHT = 3.5     # bright filter-opening layer on the S2 error stabs
+CARD_BRIGHT = 4.5     # bright filter-opening layer on the S2 error stabs
 TP_LIMIT = 10.0 ** (-1.5 / 20.0)   # limiter ceiling, linear (-1.5 dBTP)
 
 
@@ -1007,7 +1007,7 @@ def compose():
 
 # ---------------------------------------------------------------- master, measure, write
 
-TARGET_PEAK = 10.0 ** (-1.05 / 20.0)       # -1.05 dBFS: peak never above -1 dBFS after dither
+TARGET_PEAK = 10.0 ** (-2.0 / 20.0)        # sample-peak target before the true-peak limiter
 DRIVE_IN = 1.25                            # pre-clip drive for the soft clipper
 
 
@@ -1167,7 +1167,7 @@ def spectrogram_image(mono, path, groups_marks):
     fmax = 12000.0
     kmax = int(fmax / (SR / Wn))
     S = S[:, :kmax]
-    S = np.clip((S + 100.0) / 80.0, 0, 1)   # -100..-20 dB visible range
+    S = np.clip((S - S.max() + 80.0) / 80.0, 0, 1)   # top 80 dB below the loudest bin
     stops = np.array([[0, 0, 0], [60, 20, 60], [200, 70, 20], [255, 140, 60], [255, 230, 190]], float)
     pos = np.linspace(0, 1, len(stops))
     rgb = np.stack([np.interp(S, pos, stops[:, c]) for c in range(3)], axis=-1).astype(np.uint8)
@@ -1179,7 +1179,7 @@ def spectrogram_image(mono, path, groups_marks):
         dr.line([(x, 0), (x, H)], fill=(60, 200, 120), width=1)
         dr.text((x + 3, 4), label, fill=(60, 200, 120))
     dr.text((8, top_h + 12), "spectrogram 0-12 kHz (dB)", fill=(255, 244, 227))
-    dr.text((8, 4), "waveform, 64 s, -1 dBFS ceiling", fill=(255, 244, 227))
+    dr.text((8, 4), "waveform, 64 s, limiter at -1.5 dBTP", fill=(255, 244, 227))
     img.save(path)
 
 
