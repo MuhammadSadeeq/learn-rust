@@ -1,5 +1,5 @@
 // ============================================================================
-//  QUEST traits2 · Default methods and impl Trait       Chapter 14 · Traits & Generics
+//  QUEST traits2 · Default methods and impl Trait Chapter 14 · Traits & Generics
 // ----------------------------------------------------------------------------
 //  A trait can have a default method. Every type that implements the required
 //  methods gets the default for free, and can override it. `impl Trait` in an

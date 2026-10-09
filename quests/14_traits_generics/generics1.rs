@@ -1,10 +1,10 @@
 // ============================================================================
-//  QUEST generics1 · Generic largest                    Chapter 14 · Traits & Generics
+//  QUEST generics1 · Generic largest        Chapter 14 · Traits & Generics
 // ----------------------------------------------------------------------------
 //  `largest` should work for any element type, but the generic body does not
-//  compile yet. The compiler can't compare a bare T (E0369), and it can't
-//  copy an element out of the slice either. Add the trait bounds it asks for.
-//  Don't edit the bodies or the tests.
+//  compile yet. First the compiler can't compare a bare T (E0369). Once that
+//  is fixed, it also refuses to move an element out of the slice (E0508). Add
+//  the trait bounds it asks for. Don't edit the bodies or the tests.
 //
 //  cargo forge          check your work (re-runs every time you save)
 //  cargo forge hint     a nudge in the right direction
@@ -27,11 +27,7 @@ struct Pair<T> {
 
 impl<T> Pair<T> {
     fn larger(&self) -> &T {
-        if self.a > self.b {
-            &self.a
-        } else {
-            &self.b
-        }
+        if self.a > self.b { &self.a } else { &self.b }
     }
 }
 

@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION memory1 · Size it up               Chapter 05 · The Stack & The Heap
+//  SOLUTION memory1 · Size it up             Chapter 05 · The Stack & The Heap
 // ----------------------------------------------------------------------------
 //  Every number is the size on a 64-bit machine. A pointer or a length is 8
 //  bytes, so String and Vec are three of them (24), and &str is a pointer and

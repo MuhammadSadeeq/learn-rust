@@ -1,0 +1,87 @@
+[[quest]]
+name = "traits1"
+hint = """
+1. Each impl block is one type's version of the trait. The signature is given, so the only job is the body.
+2. Build the string with format!, the same way println! builds its output. Field order matters, so read the test.
+3. Book is "{title} by {author}". Movie is "{title} ({year})". Watch the parentheses around the year.
+"""
+
+[[quest]]
+name = "traits2"
+hint = """
+1. recipient is the one method each type has to write. For Customer, return a reference to the name field.
+2. Overdue overrides message. Split the cents into dollars and cents with / and %, and use self.recipient() for the name.
+3. loud takes any Notify. Call item.message() and turn the result into uppercase with to_uppercase().
+"""
+
+[[quest]]
+name = "generics1"
+hint = """
+1. The first error says > cannot be applied to T. The compiler only knows T is some type, so it won't assume T can be compared.
+2. Put the bounds in the angle brackets, as in fn largest<T: PartialOrd + Copy>. Copy is needed because the function returns an element taken out of a slice.
+3. Pair needs the comparison bound too. Put it on the impl block as impl<T: PartialOrd> Pair<T> and leave the method body alone.
+"""
+
+[[quest]]
+name = "traits3"
+hint = """
+1. Each area is a formula. A circle is PI times the radius squared (std::f64::consts::PI is ready to use), a square is side times side, and a triangle is base times height divided by two.
+2. total_area can be one chain: iterate the slice, map each shape to its area, and call sum(). Calling .area() on a Box<dyn Shape> runs that shape's own impl.
+3. For largest_name, walk the slice and keep the best shape so far in an Option. Replace it only when the new area is strictly bigger, so a tie keeps the earlier shape. Then take the name of the best one.
+"""
+
+[[quest]]
+name = "traits4"
+hint = """
+1. Display writes into the formatter with write!, so the body is one call. Split the cents into dollars and the remainder with / and %, and pad the remainder with {:02}.
+2. From is one line that builds a Money from the cents. Add reads two Money values by value and returns a new one with the sum of the cents.
+3. For negative amounts, format the absolute value with unsigned_abs() and print the minus sign yourself, before the $.
+"""
+
+[[quest]]
+name = "lifetimes1"
+hint = """
+1. Read the E0106 error. The compiler says it can't tell whether the output borrows from x or from y, so it asks you to name the lifetime.
+2. Add a lifetime parameter, <'a>, and use 'a on both inputs and on the return type. That says the result is valid only while both inputs are.
+3. Only the signature changes. Both branches already return one of the inputs, so the body stays the same.
+"""
+
+[[quest]]
+name = "lifetimes2"
+hint = """
+1. The struct stores an &'a str, so new only has to keep the input and start pos at 0.
+2. In next_token, skip whitespace with trim_start(), then find the next whitespace with find(char::is_whitespace). Store the end offset in pos so the next call starts where this one stopped.
+3. Return a slice of the input, not of self. Copy self.input into a local &'a str first and slice that. The local's type carries 'a, so a token can outlive the tokenizer.
+"""
+
+[[quest]]
+name = "lifetimes3"
+hint = """
+1. There are two separate errors. E0515 is in build_label: the String is dropped when the function returns, so no reference to it can escape. E0597 is in main: long_word is dropped at the end of its block, but word is used after that.
+2. Return an owned value. A String moves out to the caller, so nothing borrows from the local.
+3. In main, declare the owner before the borrow, at the outer level. Remove the braces around the block and long_word lives through every use of word.
+"""
+
+[[quest]]
+name = "modules1"
+hint = """
+1. E0603 says the function is private, so its visibility is the first fix. rustc reports the private fields (E0451) only after that is fixed.
+2. The tests call bank::Account::new("Ana") and expect a zero balance. Add pub fn new(owner: &str) -> Account inside impl Account, with balance: 0.
+3. In main, create the account with new and then call deposit. Keep owner and balance private, because the constructor is the only way to make an account.
+"""
+
+[[quest]]
+name = "modules2"
+hint = """
+1. A path is resolved from the module where it is written. models is a sibling of services, so from inside services you reach it with super::.
+2. A use line brings a name into scope once. Put use super::models::User; at the top of services, and both functions can write User.
+3. main writes app::User, which needs the name visible in app itself. Add pub use models::User; inside mod app.
+"""
+
+[[quest]]
+name = "tests1"
+hint = """
+1. Start with divide. Check for zero first and call panic! with the exact text the test expects. should_panic(expected = ...) passes only when the panic message contains that text.
+2. parse_percent: strip_suffix('%') returns None when the sign is missing, so turn that into an Err with ok_or_else. Parse the rest with parse::<u8>(), then reject anything over 100.
+3. is_palindrome: collect the letters and digits, lowercased, into a Vec<char>. A palindrome equals its reverse, so compare v.iter() with v.iter().rev().
+"""

@@ -1,5 +1,5 @@
 // ============================================================================
-//  QUEST structs1 · Define a struct                 Chapter 09 · Structs & Methods
+//  QUEST structs1 · Define a struct           Chapter 09 · Structs & Methods
 // ----------------------------------------------------------------------------
 //  The file does not compile. Read each error, fix it, and make every function
 //  do what its name and the tests say.

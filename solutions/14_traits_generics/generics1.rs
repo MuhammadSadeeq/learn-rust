@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION generics1 · Generic largest                 Chapter 14 · Traits & Generics
+//  SOLUTION generics1 · Generic largest     Chapter 14 · Traits & Generics
 // ----------------------------------------------------------------------------
 //  The bounds say what T can do. PartialOrd makes `>` legal. Copy lets us
 //  return an element by value from a borrowed slice. Pair only needs
@@ -25,11 +25,7 @@ struct Pair<T> {
 
 impl<T: PartialOrd> Pair<T> {
     fn larger(&self) -> &T {
-        if self.a > self.b {
-            &self.a
-        } else {
-            &self.b
-        }
+        if self.a > self.b { &self.a } else { &self.b }
     }
 }
 

@@ -37,7 +37,7 @@
 <section>
 <h2 id="macros">Macros: code that writes code</h2>
 
-<p>You have called macros since your first program. <code>println!</code>, <code>vec!</code> and <code>format!</code> all end in <code>!</code>, and that bang is the signal. A macro is not a function call. The compiler runs it while it is still reading your source. The macro replaces the tokens you wrote with other tokens, and then the compiler type-checks the result as if you had typed it yourself.</p>
+<p>You have called macros since your first program. <code>println!</code>, <code>vec!</code> and <code>format!</code> all end in <code>!</code>, and that bang is the signal. A macro is not a function call. The compiler expands it early, before it type-checks anything. The macro replaces the tokens you wrote with other tokens, and then the compiler checks the result as if you had typed it yourself.</p>
 
 <p>That is why <code>println!</code> can check your format string when you compile. A function receives values, so it has to take a fixed number of arguments with fixed types. A macro receives the raw tokens, so it can accept any number of arguments and any syntax its author allows.</p>
 
@@ -234,7 +234,7 @@ fn main() {
     <pre class="ox-pre ox-ex-pre" data-pane="expanded" data-show="false" aria-hidden="true"></pre>
   </div>
   <p class="ox-ex-note" aria-live="polite"></p>
-  <p class="ox-caption">Expansions are simplified by hand, except <code>hashmap!</code>, which is our own macro. The real <code>vec!</code> and derive call compiler-internal helpers. The real tokio macro is longer, but it builds the same runtime.</p>
+  <p class="ox-caption">Expansions are simplified by hand, except <code>hashmap!</code>, which is our own macro. The real <code>vec!</code> and derive call internal helpers from the standard library. The real tokio macro is longer, but it builds the same runtime.</p>
 </div>
 
 <details class="ox-callout" data-kind="deep">
@@ -1511,6 +1511,5 @@ fn main() {
   });
 })();
 </script>
-</div>
 </body>
 </html>

@@ -48,7 +48,7 @@
     <tr><td>Middleware</td><td>tower layers, such as <code>TraceLayer</code> and <code>TimeoutLayer</code></td><td>Same idea, with one catch: where the layer runs is different. Section 2 shows where.</td></tr>
     <tr><td>Service container and <code>app()</code></td><td><code>State&lt;AppState&gt;</code></td><td>Shared state is passed in explicitly. Nothing is resolved by name.</td></tr>
     <tr><td>Eloquent</td><td>sqlx, SeaORM or Diesel</td><td>Rust has no built-in ORM, so you choose a library. Section 7 introduces sqlx.</td></tr>
-    <tr><td>Migrations</td><td><code>sqlx migrate</code></td><td>Numbered SQL files, applied in order.</td></tr>
+    <tr><td>Migrations</td><td><code>sqlx migrate</code></td><td>Versioned SQL files, applied in order.</td></tr>
     <tr><td>Blade</td><td>askama, maud or minijinja</td><td>askama and maud compile templates into Rust code. minijinja renders templates at runtime.</td></tr>
     <tr><td>Queues and Horizon</td><td>tokio tasks, or the apalis crate</td><td>Background work runs on the same async runtime that serves requests.</td></tr>
     <tr><td>Artisan commands</td><td>clap</td><td>A struct with derive attributes describes the arguments, and clap parses them.</td></tr>
@@ -1028,7 +1028,7 @@ $this->postJson('/api/notes', ['title' => 'Learn axum'])
     )
     .await;
     assert_eq!(status, StatusCode::CREATED);</pre>
-  <div class="ox-bridge-note"><p>The PHP helper hides the request, the response and the assertions. In Rust they are separate values: a status code, a parsed body, and a plain <code>assert_eq!</code>. Nothing is hidden behind a magic method.</p></div>
+  <div class="ox-bridge-note"><p>The PHP helper hides the request, the response and the assertions. In Rust they are separate values: a status code, a parsed body, and a plain <code>assert_eq!</code>. Nothing is hidden behind a helper method.</p></div>
 </div>
 
 <p>Each test calls <code>app(AppState::default())</code>, so each test starts with an empty table. Inside one test, the helper sends every request through <code>app.clone()</code>. Cloning a router is cheap, and the clones share one <code>AppState</code>. That is why a note created by one request can be read back by the next.</p>
@@ -1108,7 +1108,7 @@ null</pre>
   <li><strong>The pool lives in the state.</strong> <code>SqlitePool</code> manages the connections. Cloning it is cheap, because the pool shares its inner data, just as the <code>Arc</code> does in our table.</li>
   <li><strong>Rows become structs.</strong> <code>query_as::&lt;_, Note&gt;</code> maps each row to a <code>Note</code> by column name, using <code>FromRow</code>.</li>
   <li><strong>Not found is <code>None</code>.</strong> <code>fetch_optional</code> returns an <code>Option&lt;Note&gt;</code>. A missing row is not an error. A handler turns the <code>None</code> into <code>AppError::NotFound</code>.</li>
-  <li><strong>Migrations are SQL files.</strong> <code>sqlx migrate add</code> creates a numbered file. <code>sqlx::migrate!</code> embeds those files in the binary and runs the ones that have not been applied yet.</li>
+  <li><strong>Migrations are SQL files.</strong> <code>sqlx migrate add</code> scaffolds a new version-prefixed file. <code>sqlx::migrate!</code> embeds those files in the binary and runs the ones that have not been applied yet.</li>
   <li><strong>Compile-time checks need a database.</strong> <code>query_as!</code> checks the SQL against a real database while your code compiles. Without <code>DATABASE_URL</code> set, the build stops and asks you to set it, or to run <code>cargo sqlx prepare</code> to save the query cache.</li>
 </ul>
 
@@ -1206,7 +1206,7 @@ null</pre>
     <li><code>/notes/&lt;id&gt;</code></li>
     <li><code>/notes/*id</code></li>
   </ol>
-  <div class="ox-why"><p>Axum 0.8 uses braces for captures. <code>/notes/:id</code> is the 0.7 syntax, and it panics now. <code>/notes/*id</code> panics too. The wildcard form is <code>{*rest}</code>. <code>/&lt;id&gt;</code> does not panic, but it is a literal segment. It captures nothing, and a URL cannot contain a bare <code>&lt;</code>, so no request can match it.</p></div>
+  <div class="ox-why"><p>Axum 0.8 uses braces for captures. <code>/notes/:id</code> is the 0.7 syntax, and it panics now. <code>/notes/*id</code> panics too. The wildcard form is <code>{*rest}</code>. <code>/&lt;id&gt;</code> is accepted without a panic. It is a literal segment, so it captures nothing. A URL cannot contain a bare <code>&lt;</code>, so no request can match it.</p></div>
 </div>
 
 <div class="ox-quiz" data-id="20:quiz-state" data-label="Check yourself">

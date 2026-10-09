@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION memory2 · Length vs capacity       Chapter 05 · The Stack & The Heap
+//  SOLUTION memory2 · Length vs capacity     Chapter 05 · The Stack & The Heap
 // ----------------------------------------------------------------------------
 //  Capacity is the room a String or Vec has. with_capacity reserves it up
 //  front, so pushes inside that room never allocate. Growth past the room

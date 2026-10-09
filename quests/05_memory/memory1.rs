@@ -1,5 +1,5 @@
 // ============================================================================
-//  QUEST memory1 · Size it up                  Chapter 05 · The Stack & The Heap
+//  QUEST memory1 · Size it up                Chapter 05 · The Stack & The Heap
 // ----------------------------------------------------------------------------
 //  Predict, then check. Each constant should hold the number of bytes that
 //  size_of::<T>() reports for its type on a 64-bit machine. Replace every 0

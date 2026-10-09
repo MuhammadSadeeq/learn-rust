@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION traits3 · Trait objects                     Chapter 14 · Traits & Generics
+//  SOLUTION traits3 · Trait objects         Chapter 14 · Traits & Generics
 // ----------------------------------------------------------------------------
 //  Box<dyn Shape> lets one Vec hold different types. Each call to area()
 //  goes through the shape's own impl at runtime. largest_name uses a strict

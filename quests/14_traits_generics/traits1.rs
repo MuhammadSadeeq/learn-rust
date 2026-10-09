@@ -1,5 +1,5 @@
 // ============================================================================
-//  QUEST traits1 · Implement a trait                    Chapter 14 · Traits & Generics
+//  QUEST traits1 · Implement a trait        Chapter 14 · Traits & Generics
 // ----------------------------------------------------------------------------
 //  A trait is a list of methods a type promises to have. Book and Movie are
 //  two unrelated structs. Implement `Describe` for both so each one can

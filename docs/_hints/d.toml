@@ -1,0 +1,71 @@
+[[quest]]
+name = "vecs1"
+hint = """
+1. For remove_negatives, look at Vec::retain. It keeps the items a closure approves of, in place.
+2. top_three must not change its input. Copy the slice into a new Vec, sort the copy from biggest to smallest, then keep only the first three.
+3. sort_by_key with Reverse sorts biggest first, and truncate(3) keeps three. For safe_get, v.get(i) returns Option<&i32>, and copied() turns that into Option<i32>.
+"""
+
+[[quest]]
+name = "hashmap1"
+hint = """
+1. Split the text with split_whitespace(). Lowercase each word before you use it as a key.
+2. *counts.entry(word).or_insert(0) += 1 adds one to a word's count, creating the entry when the word is new.
+3. For top_word, iter() followed by max_by finds the largest pair. For ties, compare the words in reverse, so the alphabetically first word counts as the larger one.
+"""
+
+[[quest]]
+name = "hashmap2"
+hint = """
+1. entry(role).or_default() returns the Vec for that role, empty if the role is new. Then push the name onto it.
+2. group_by_role owns the users, so you can move user.role and user.name out of each one. No clone is needed there.
+3. In count_by_role, *counts.entry(user.role.clone()).or_insert(0) += 1 works on a BTreeMap. The key has to be an owned String, which is why the role is cloned.
+"""
+
+[[quest]]
+name = "sets1"
+hint = """
+1. A BTreeSet ignores a repeated insert and keeps its items sorted. Loop over each post and each tag, and insert every tag.
+2. For common_tags, put the tags from b in a HashSet, so "is it in b?" is a quick check. Keep the tags from a that pass, then sort the Vec<String> at the end, because a HashSet has no order.
+3. For has_duplicates, HashSet::insert returns false when the value is already in the set. Use that on each number and stop at the first repeat.
+"""
+
+[[quest]]
+name = "closures1"
+hint = """
+1. A closure returned from a function must own the values it uses. The move keyword moves them in.
+2. For apply_n, loop n times. Each time, feed the result back into f as the next input.
+3. For counter, keep the count inside the closure and add one on each call. For consume, return the captured msg. Returning it moves it out, which makes the closure FnOnce.
+"""
+
+[[quest]]
+name = "iter1"
+hint = """
+1. Start with orders.iter(), then filter(|order| order.paid), then map(|order| order.total_cents), then sum().
+2. For customers, map each order to order.customer.as_str(), then collect::<BTreeSet<_>>(). The set drops repeats and sorts.
+3. Turn the set back into owned Strings with into_iter().map(String::from).collect().
+"""
+
+[[quest]]
+name = "iter2"
+hint = """
+1. a.iter().zip(b) pairs up the elements. Then map multiplies each pair, and sum adds them.
+2. scan keeps a state value between items. Use Option<i32> as the state, holding the biggest value so far. Each step returns that value.
+3. v.windows(2) gives each neighboring pair as a slice of two. Filter the pairs whose first item is smaller than the second, then count().
+"""
+
+[[quest]]
+name = "iter3"
+hint = """
+1. fib() starts the pair at 0 and 1. Set both fields in the struct literal.
+2. next() returns the current value a. Before it returns, it moves the pair forward. Save a first, then update the fields.
+3. The new b is a + b. Work out that sum before you change a or b, or the sum will use the wrong values.
+"""
+
+[[quest]]
+name = "boss3_ledger"
+hint = """
+1. Start with the small pieces: Display has one arm per variant, and open is one entry(...).or_insert(0) call. Then write a helper that checks an account exists, and one that returns a &mut u64 for an account or UnknownAccount for a missing name.
+2. A transfer checks from, then to, then the funds, and only then moves money. Make withdraw check the funds before it writes. Chaining the steps with ? gives the all-or-nothing rule.
+3. apply_all can be txs.iter().filter_map(|tx| self.apply(tx).err()).collect(). For top_accounts, collect (name, balance) pairs, sort_by with b.1.cmp(&a.1) then a.0.cmp(&b.0), then truncate(n).
+"""

@@ -1,5 +1,5 @@
 // ============================================================================
-//  QUEST memory2 · Length vs capacity          Chapter 05 · The Stack & The Heap
+//  QUEST memory2 · Length vs capacity        Chapter 05 · The Stack & The Heap
 // ----------------------------------------------------------------------------
 //  A String keeps two numbers: len (bytes in use) and capacity (room it has
 //  before it must grow). Build a CSV line into a String that is sized once,

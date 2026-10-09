@@ -40,8 +40,14 @@ fn has_duplicates(v: &[i32]) -> bool {
 fn main() {
     let posts = vec![vec!["rust", "php"], vec!["php", "laravel"], vec!["rust"]];
     println!("all tags: {:?}", unique_tags(&posts));
-    println!("common: {:?}", common_tags(&["rust", "php", "go"], &["go", "rust"]));
-    println!("duplicates in [1, 2, 3, 2]? {}", has_duplicates(&[1, 2, 3, 2]));
+    println!(
+        "common: {:?}",
+        common_tags(&["rust", "php", "go"], &["go", "rust"])
+    );
+    println!(
+        "duplicates in [1, 2, 3, 2]? {}",
+        has_duplicates(&[1, 2, 3, 2])
+    );
 }
 
 #[cfg(test)]

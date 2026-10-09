@@ -1,0 +1,85 @@
+// ============================================================================
+//  QUEST errors4 · From conversions                 Chapter 11 · Errors Are Values
+// ----------------------------------------------------------------------------
+//  The file does not compile. parse_non_negative uses ? on a ParseIntError,
+//  but AppError has no conversion from ParseIntError. Add
+//  `impl From<ParseIntError> for AppError`. After that, ? calls from() for you.
+//
+//  Then fill in Display, which gives the messages the tests check:
+//    AppError::Parse(e)     "not a number: {e}"
+//    AppError::Negative(n)  "must not be negative: {n}"
+//
+//  Any value below zero is Negative. Zero is allowed. Don't edit the tests.
+//
+//  cargo forge          check your work (re-runs every time you save)
+//  cargo forge hint     a nudge in the right direction
+// ============================================================================
+
+use std::fmt;
+use std::num::ParseIntError;
+
+#[derive(Debug)]
+enum AppError {
+    Parse(ParseIntError),
+    Negative(i64),
+}
+
+impl fmt::Display for AppError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        todo!()
+    }
+}
+
+fn parse_non_negative(s: &str) -> Result<i64, AppError> {
+    let n = s.parse::<i64>()?;
+    if n < 0 {
+        return Err(AppError::Negative(n));
+    }
+    Ok(n)
+}
+
+fn main() {
+    for input in ["42", "-3", "abc"] {
+        match parse_non_negative(input) {
+            Ok(n) => println!("ok: {n}"),
+            Err(e) => println!("error: {e}"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_zero_and_positive_numbers() {
+        assert_eq!(parse_non_negative("42").unwrap(), 42);
+        assert_eq!(parse_non_negative("0").unwrap(), 0); // edge case: zero is allowed
+    }
+
+    #[test]
+    fn negative_numbers_are_rejected() {
+        assert!(matches!(
+            parse_non_negative("-3"),
+            Err(AppError::Negative(-3))
+        ));
+    }
+
+    #[test]
+    fn text_becomes_a_parse_error() {
+        // The ? operator converted the ParseIntError into AppError::Parse.
+        assert!(matches!(parse_non_negative("abc"), Err(AppError::Parse(_))));
+    }
+
+    #[test]
+    fn messages_come_from_display() {
+        assert_eq!(
+            parse_non_negative("-3").unwrap_err().to_string(),
+            "must not be negative: -3"
+        );
+        assert_eq!(
+            parse_non_negative("abc").unwrap_err().to_string(),
+            "not a number: invalid digit found in string"
+        );
+    }
+}

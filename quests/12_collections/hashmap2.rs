@@ -32,10 +32,22 @@ fn count_by_role(users: &[User]) -> BTreeMap<String, usize> {
 
 fn main() {
     let team = vec![
-        User { name: "Cy".into(), role: "admin".into() },
-        User { name: "Bo".into(), role: "editor".into() },
-        User { name: "Ana".into(), role: "admin".into() },
-        User { name: "Dee".into(), role: "viewer".into() },
+        User {
+            name: "Cy".into(),
+            role: "admin".into(),
+        },
+        User {
+            name: "Bo".into(),
+            role: "editor".into(),
+        },
+        User {
+            name: "Ana".into(),
+            role: "admin".into(),
+        },
+        User {
+            name: "Dee".into(),
+            role: "viewer".into(),
+        },
     ];
     println!("{:?}", count_by_role(&team));
     let groups = group_by_role(team);
@@ -47,7 +59,10 @@ mod tests {
     use super::*;
 
     fn user(name: &str, role: &str) -> User {
-        User { name: name.to_string(), role: role.to_string() }
+        User {
+            name: name.to_string(),
+            role: role.to_string(),
+        }
     }
 
     fn team() -> Vec<User> {
@@ -63,7 +78,10 @@ mod tests {
     fn groups_names_in_input_order() {
         let groups = group_by_role(team());
         let expected = HashMap::from([
-            ("admin".to_string(), vec!["Cy".to_string(), "Ana".to_string()]),
+            (
+                "admin".to_string(),
+                vec!["Cy".to_string(), "Ana".to_string()],
+            ),
             ("editor".to_string(), vec!["Bo".to_string()]),
             ("viewer".to_string(), vec!["Dee".to_string()]),
         ]);

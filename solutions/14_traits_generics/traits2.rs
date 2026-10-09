@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION traits2 · Default methods and impl Trait    Chapter 14 · Traits & Generics
+//  SOLUTION traits2 · Default methods and impl Trait Chapter 14 · Traits & Generics
 // ----------------------------------------------------------------------------
 //  `recipient` is the one method every type must write. `message` comes from
 //  the trait, and Overdue overrides it. `loud` takes any Notify, so it works

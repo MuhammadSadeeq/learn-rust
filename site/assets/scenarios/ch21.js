@@ -19,7 +19,7 @@
       src: `let v = vec![⟦1, 2, 3⟧];`,
       marked: `let v = <[_]>::into_vec(Box::new([⟦1, 2, 3⟧]));`,
       check: "ok",
-      note: "Simplified. The real vec! calls compiler-internal helpers, such as box_assume_init_into_vec_unsafe, to use less stack space in debug builds. The public form shown here builds the same Vec."
+      note: "Simplified. The real vec! calls internal helpers, such as box_assume_init_into_vec_unsafe, to use less stack space in debug builds. The public form shown here builds the same Vec."
     }),
     item({
       id: "hashmap",

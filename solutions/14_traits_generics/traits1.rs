@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION traits1 · Implement a trait                 Chapter 14 · Traits & Generics
+//  SOLUTION traits1 · Implement a trait     Chapter 14 · Traits & Generics
 // ----------------------------------------------------------------------------
 //  Each impl block gives one type its version of the trait. `&self` borrows
 //  the value, so describe can run again and again and the book is never moved.

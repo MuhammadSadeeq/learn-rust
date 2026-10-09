@@ -2,9 +2,9 @@
 //  SOLUTION borrow4 · No dangling              Chapter 07 · Borrowing
 // ----------------------------------------------------------------------------
 //  Return the String itself. format! creates it, and the caller receives
-//  ownership, so the greeting lives as long as the caller needs it. longest_word
-//  already returns a borrow of its input, and the elision rule ties that borrow
-//  to `text`, so no change is needed there.
+//  ownership, so the greeting lives as long as the caller needs it.
+//  longest_word already returns a borrow of its input. The elision rule ties
+//  that borrow to `text`, so it needs no change.
 // ============================================================================
 
 /// Builds a greeting for `name`. The caller owns the result.

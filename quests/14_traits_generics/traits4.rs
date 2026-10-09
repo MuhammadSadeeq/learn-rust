@@ -1,5 +1,5 @@
 // ============================================================================
-//  QUEST traits4 · Display and From                     Chapter 14 · Traits & Generics
+//  QUEST traits4 · Display and From         Chapter 14 · Traits & Generics
 // ----------------------------------------------------------------------------
 //  Money stores whole cents in an i64. Make it print like money ("$12.34",
 //  "-$0.50"), build from an integer, and add with +. Display, From and Add
