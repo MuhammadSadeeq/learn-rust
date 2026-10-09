@@ -19,7 +19,8 @@
   const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
   const CMD = `cargo run -- "What is 6 times 7?"`;
-  const TERM = { x: 310, y: 290, w: 1300, h: 600 };
+  // The group is centred: 'BUILD WHAT'S NEXT.' (140) + gap 40 + terminal (420) + gap 40 + capstone line (~53).
+  const TERM = { x: 310, y: 373, w: 1300, h: 420 };
   const DELTAS = ["6 times 7 ", "is 42."];
 
   // Sparks: a seeded burst from the logo's centre.
@@ -44,9 +45,9 @@
 .s8-streak { position: absolute; left: 0; top: 0; height: 3px; border-radius: 2px;
   background: linear-gradient(90deg, rgba(255,138,61,0), #ff8a3d 70%, #ffd38a); transform-origin: 0 50%; }
 .s8-group { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 50% 50%; }
-.s8-cap1 { position: absolute; left: 0; top: 92px; width: 1920px; text-align: center; white-space: nowrap;
+.s8-cap1 { position: absolute; left: 0; top: 193px; width: 1920px; text-align: center; white-space: nowrap;
   font: 900 140px/1 var(--font-display); text-transform: uppercase; letter-spacing: 0.02em; color: var(--cream); }
-.s8-cap2 { position: absolute; left: 0; top: 930px; width: 1920px; text-align: center; white-space: nowrap;
+.s8-cap2 { position: absolute; left: 0; top: 833px; width: 1920px; text-align: center; white-space: nowrap;
   font: 400 44px/1.2 var(--font-body); color: var(--cream); }
 .s8-term { position: absolute; left: ${TERM.x}px; top: ${TERM.y}px; width: ${TERM.w}px; height: ${TERM.h}px;
   background: #0d1117; border: 1px solid var(--steel); border-radius: 18px; overflow: hidden;
@@ -54,7 +55,7 @@
 .s8-bar { position: absolute; left: 0; top: 0; width: 100%; height: 58px; border-bottom: 1px solid #1c232c; }
 .s8-bar i { position: absolute; top: 21px; width: 16px; height: 16px; border-radius: 50%; background: #39414b; }
 .s8-bar span { position: absolute; left: 0; right: 0; top: 14px; text-align: center; font: 500 28px/30px var(--font-mono); color: #7d8792; }
-.s8-body { position: absolute; left: 50px; top: 100px; width: 1200px; height: 460px; overflow: hidden;
+.s8-body { position: absolute; left: 50px; top: 84px; width: 1200px; height: 316px; overflow: hidden;
   font: 500 32px/46px var(--font-mono); color: #e9e4da; white-space: pre; font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
 .s8-body .l { height: 46px; white-space: pre; }
 .s8-body .c-ok { color: var(--ok); }
@@ -65,9 +66,12 @@
 .s8-body .c-b { font-weight: 700; color: #fff4e3; }
 .s8-caret { display: inline-block; width: 0.56em; height: 1em; background: var(--oxide); vertical-align: -0.14em; }
 .s8-end { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
-.s8-logo { position: absolute; left: 0; top: 300px; width: 1920px; text-align: center; white-space: nowrap;
-  font: 900 260px/1 var(--font-display); text-transform: uppercase; letter-spacing: 0.02em; color: var(--oxide);
-  text-shadow: 0 0 36px rgba(255,138,61,0.65), 0 0 110px rgba(232,89,12,0.45); }
+.s8-logo, .s8-logo-glow { position: absolute; left: 0; top: 300px; width: 1920px; text-align: center; white-space: nowrap;
+  font: 900 260px/1 var(--font-display); text-transform: uppercase; letter-spacing: 0.06em; color: var(--oxide); }
+.s8-logo-glow { filter: blur(18px); opacity: 0.5; }
+.s8-cta { position: absolute; left: 0; top: 821px; width: 1920px; text-align: center; white-space: nowrap; opacity: 0; }
+.s8-cta-text { position: relative; display: inline-block; font: 500 32px/1.2 var(--font-mono); color: var(--cream); }
+.s8-cta-line { position: absolute; left: 0; bottom: -10px; width: 100%; height: 2px; background: var(--oxide); transform-origin: 0 50%; transform: scaleX(0); }
 .s8-oxi { position: absolute; left: 0; top: 0; width: 230px; height: 230px; }
 .s8-oxi > .ca { width: 230px; height: 230px; display: block; }
 .s8-oxi > .ca > .ca-svg { width: 230px; height: 230px; }
@@ -138,11 +142,13 @@
           <div class="s8-cap2" data-k="cap2">Your capstone: an AI agent harness, in Rust.</div>
         </div>
         <div class="s8-end" data-k="end">
+          <div class="s8-logo-glow" data-k="glow2">OXIDIZE</div>
           <div class="s8-logo" data-k="logo">OXIDIZE</div>
           <div class="s8-oxi" data-k="oxi">${V.cast("graduate")}</div>
           <div class="s8-sparks">${sparks}</div>
           <div class="s8-tag" data-k="tag">THE RUST COURSE YOU CAN SEE.</div>
           <div class="s8-sub" data-k="sub">For PHP &amp; Laravel developers · 21 chapters · 88 quests · real compiler</div>
+          <div class="s8-cta" data-k="cta"><span class="s8-cta-text">github.com/MuhammadSadeeq/learn-rust<span class="s8-cta-line" data-k="ctaline"></span></span></div>
         </div>
         <div class="s8-flash" data-k="flash"></div>
         <div class="s8-fade" data-k="fade"></div>`;
@@ -206,6 +212,16 @@
         logo.style.transform = `translate(${shk.x}px, ${shk.y}px) scale(${drift.toFixed(4)})`;
         logo.style.transformOrigin = "50% 50%";
         logo.style.opacity = "1";
+        const glow2 = q("glow2");
+        glow2.style.transform = logo.style.transform;
+        glow2.style.transformOrigin = "50% 50%";
+        // the call to action: the real repo URL (README), fading in at 61.4, underline drawn in 400 ms
+        const cta = q("cta");
+        const ctaIn = P(T, 61.4, 61.7, E.outQuad);
+        const ctaOut = P(T, 62.5, 63.0, E.inQuad);
+        cta.style.opacity = String(clamp(ctaIn - ctaOut, 0, 1).toFixed(3));
+        V.set(cta, { y: 10 * (1 - ctaIn) });
+        V.set(q("ctaline"), { sx: P(T, 61.4, 61.8, E.outCubic), sy: 1, origin: "0 50%" });
         // Oxi lands on the logo's top right (outBack), and blinks once at 61.8.
         const oxi = q("oxi");
         const pop = P(T, fT + 0.05, fT + 0.5, E.outBack);

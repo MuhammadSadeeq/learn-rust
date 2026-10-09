@@ -1109,12 +1109,14 @@ def main():
     for g in groups:
         outs[g.name] = finish(g, duck=DUCK if g.duck else None, ir=ir)
     mix = np.zeros((2, N))
-    for o in outs.values():
-        mix += o
-
-    lin = breath_gate(master_linear(mix))        # exact silence: the 25 Hz high-pass tail is cut too
-    lin = lin + master_linear(outs["breath"])    # the reversed swell is the only sound in the breath
-    drv = brickwall(np.tanh(DRIVE_IN * lin))     # clipper harmonics above 20 kHz are removed too
+    for name, o in outs.items():
+        if name != "breath":
+            mix += o
+    lin_main = master_linear(mix)
+    lin_sw = master_linear(outs["breath"])
+    # The main mix is gated after the clipper and brick-wall, so the breath is exactly silent,
+    # then the reversed swell (the only sound in 15.5-16.0) is added back ungated.
+    drv = breath_gate(brickwall(np.tanh(DRIVE_IN * lin_main))) + brickwall(np.tanh(DRIVE_IN * lin_sw))
     peak_drv = float(np.max(np.abs(drv)))
     scale = TARGET_PEAK / peak_drv
     master = drv * scale

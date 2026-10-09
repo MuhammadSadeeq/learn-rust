@@ -53,6 +53,7 @@
   .s-s5 .h2s5-rings { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: visible; }
   .s-s5 .h2s5-ring { fill: none; stroke: var(--molten); stroke-width: 6; stroke-linecap: round; }
   .s-s5 .h2s5-grain { fill: var(--molten); }
+  .s-s5 .h2s5-act > .h2s5-tk { position: absolute; left: 0; top: 0; width: 100%; height: 100%; border: 3px solid var(--molten); border-radius: 10px; background: var(--cream); color: var(--ink); font: 700 30px/66px var(--font-mono); text-align: center; white-space: pre; }
   `;
   function injectCSS() {
     if (document.getElementById("h2-s5-css")) return;
@@ -139,36 +140,37 @@
     return { F, slotsA, fluffA, fifth, pushLabel, slotsB, alloc, lenLabel };
   }
   function renderRealloc(R, tv, T) {
-    // Plot A pops in, four slots in 60 ms steps.
+    const popD = (t0, d) => ({ s: V.p(T, t0, t0 + d, E.outBack), o: V.p(T, t0, t0 + d * 0.5) });
+    // Plot A: four slots, and four fluffies in them, all in place by 32.3.
     R.slotsA.forEach((s, i) => {
-      const e = V.p(T, 32.0 + i * 0.06, 32.4 + i * 0.06, E.outExpo);
-      V.set(s, { s: lerp(0.6, 1, e), o: e * (1 - V.p(T, 33.7, 34.0)) });
+      const e = V.p(T, 32.0 + i * 0.03, 32.3, E.outExpo);
+      V.set(s, { s: lerp(0.6, 1, e), o: e * (1 - V.p(T, 33.0, 33.25)) });
     });
-    // The four fluffies pop in, then hop to plot B in staggered arcs (80 ms apart).
+    // The move: fluffies hop 80 ms apart, from 32.72 to 33.2 in total.
     R.fluffA.forEach((a, i) => {
-      const p = pop(T, 32.2 + i * 0.08);
-      const u = V.p(T, 33.36 + i * 0.08, 33.36 + i * 0.08 + 0.26, E.inOutSine);
+      const p = popD(32.0 + i * 0.04, 0.18);
+      const u = V.p(T, 32.72 + i * 0.08, 32.88 + i * 0.08, E.inOutSine);
       const tx = B_X(i) + 36 - (A_X(i) + 75);
       const ty = 686 - 430;
       put(a, lerp(0, tx, u), lerp(0, ty, u) + arcUp(u, 170), p.s * lerp(1, 60 / 110, u), p.o);
     });
-    // The fifth drops in at 33.0 and hops to slot 5 of plot B.
-    const drop = V.p(T, 33.0, 33.3, E.outBack);
-    const uF = V.p(T, 33.36 + 4 * 0.08, 33.36 + 4 * 0.08 + 0.26, E.inOutSine);
+    // push(5) at 32.7: the fifth drops in above the full plot, then hops into slot 5 last.
+    const drop = V.p(T, 32.7, 32.9, E.outBack);
+    const uF = V.p(T, 32.72 + 4 * 0.08, 32.88 + 4 * 0.08, E.inOutSine);
     const txF = B_X(4) + 36 - 1640;
     const tyF = 686 - 270;
-    put(R.fifth, lerp(0, txF, uF), lerp(-120 * (1 - drop), tyF, uF) + arcUp(uF, 170), lerp(0.2, 1, drop) * lerp(1, 60 / 110, uF), V.p(T, 33.0, 33.1));
-    V.set(R.pushLabel, { o: V.p(T, 33.1, 33.3) * (1 - V.p(T, 33.45, 33.6)) });
-    // Plot B pops in at 33.3, outBack, slot by slot.
+    put(R.fifth, lerp(0, txF, uF), lerp(-120 * (1 - drop), tyF, uF) + arcUp(uF, 170), lerp(0.2, 1, drop) * lerp(1, 60 / 110, uF), V.p(T, 32.7, 32.75));
+    V.set(R.pushLabel, { o: V.p(T, 32.7, 32.8) * (1 - V.p(T, 32.95, 33.05)) });
+    // Plot B (eight slots) and Alloc: both in place by 32.95 and 32.85.
     R.slotsB.forEach((s, i) => {
-      const e = V.p(T, 33.3 + i * 0.03, 33.6 + i * 0.03, E.outBack);
-      V.set(s, { s: e, o: V.p(T, 33.3, 33.4) });
+      const e = V.p(T, 32.72 + i * 0.02, 32.95 + i * 0.02, E.outBack);
+      V.set(s, { s: e, o: V.p(T, 32.72, 32.8) });
     });
-    // Alloc walks in from the right (33.0 to 33.4) with a small step bob.
-    const walk = V.p(T, 33.0, 33.4, E.outCubic);
+    const walk = V.p(T, 32.7, 32.85, E.outCubic);
     const bob = Math.abs(Math.sin(T * 14)) * 10 * (1 - walk);
-    put(R.alloc, (1 - walk) * 380, -bob, 1, V.p(T, 33.0, 33.1));
-    R.lenLabel.style.opacity = String(f(V.p(T, 33.5, 33.8)));
+    put(R.alloc, (1 - walk) * 380, -bob, 1, V.p(T, 32.7, 32.75));
+    // The label lands at 33.2 and holds to the 34.0 cut (cream, 36 px mono).
+    R.lenLabel.style.opacity = String(f(V.p(T, 33.2, 33.3)));
   }
 
   /* ------------------------------------------------------------ LIFETIMES */
@@ -239,48 +241,56 @@
   }
 
   /* ------------------------------------------------------------ MUTEX */
-  // A room with a counter. The key passes to the next worker, who steps in and bumps the count.
-  const MX = { queue: [1000, 1120, 1240], roomIn: [1420, 470], out: [[1620, 760], [1740, 760]], handY: 740 };
+  // A room with a counter. The queue waits in its own lane, left of the room with a clear gap.
+  // Only the crab holding the key walks in, through the door; leavers go out lower, to the back.
+  // Each worker follows straight-leg waypoints [t, x, y]; every position is a function of T.
+  const QUEUE_X = 1060;
+  const KEEPER = [1060, 300];
+  const TRACK = [
+    [[36.0, 1060, 450], [36.5, 1060, 450], [36.7, 1330, 450], [36.85, 1480, 500], [37.0, 1480, 500], [37.2, 1330, 580], [37.35, 1200, 580], [37.6, 1200, 860], [37.85, 1060, 860]],
+    [[36.0, 1060, 580], [36.5, 1060, 580], [36.8, 1060, 450], [37.0, 1060, 450], [37.2, 1330, 450], [37.36, 1480, 500], [37.5, 1480, 500], [37.7, 1330, 580], [37.85, 1200, 580], [38.0, 1200, 860]],
+    [[36.0, 1060, 710], [37.0, 1060, 710], [37.2, 1060, 580], [37.4, 1060, 450], [37.5, 1060, 450], [37.7, 1330, 450], [37.86, 1480, 500]],
+  ];
+  const ARRIVE = [36.85, 37.36, 37.86];
+  const LEAVE = [37.0, 37.5, 99];
+  function track(T, pts) {
+    if (T <= pts[0][0]) return [pts[0][1], pts[0][2]];
+    for (let i = 1; i < pts.length; i++) {
+      if (T <= pts[i][0]) {
+        const q = pts[i - 1];
+        const r = pts[i];
+        const u = V.p(T, q[0], r[0], E.inOutSine);
+        return [lerp(q[1], r[1], u), lerp(q[2], r[2], u)];
+      }
+    }
+    const last = pts[pts.length - 1];
+    return [last[1], last[2]];
+  }
+  const wpos = (i, T) => track(T, TRACK[i]);
+  const hand = (p) => [p[0] + 52, p[1] - 18];
+  const KEEPER_HAND = [KEEPER[0] + 52, KEEPER[1] - 18];
   function buildMutex(parent) {
     const F = frame(parent, { tint: "lock", term: "MUTEX", meaning: "one thread at a time.", chip: "ch18" });
     const pic = F.pic;
+    el(pic, "h2s5-slot", "left:980px; top:380px; width:160px; height:440px;");
     const room = el(pic, "h2s5-room", "left:1330px; top:300px; width:470px; height:320px;");
     const roomLabel = el(pic, "h2s5-label", "left:1356px; top:322px; color: var(--lock);", "Mutex<i32>");
     const count = el(pic, "h2s5-count", "left:1600px; top:372px;", "0");
-    const keeper = actor(pic, oxi("keeper"), 1120, 380, 150, 150 * (102 / 120));
-    const workers = [0, 1, 2].map((i) => actor(pic, oxi("crab"), MX.queue[i], MX.handY, 120, 120 * (102 / 120)));
+    const keeper = actor(pic, oxi("keeper"), KEEPER[0], KEEPER[1], 150, 150 * (102 / 120));
+    const workers = [0, 1, 2].map(() => actor(pic, oxi("crab"), QUEUE_X, 450, 120, 120 * (102 / 120)));
     const key = actor(pic, prop("key"), 1210, 400, 96, 48);
     const label = el(pic, "h2s5-label", "left:1420px; top:646px; width:290px; text-align:center;", "Arc<Mutex<T>>");
     return { F, room, roomLabel, count, keeper, workers, key, label };
   }
-  // A worker's position: it walks from the queue into the room at its entry time, then out.
-  function workerPos(i, T) {
-    const ins = [36.5, 37.0, 37.5][i];
-    const outs = [37.0, 37.5, null][i];
-    const q = [MX.queue[i], MX.handY];
-    const e = V.p(T, ins, ins + 0.35, E.inOutSine);
-    let x = lerp(q[0], MX.roomIn[0], e);
-    let y = lerp(q[1], MX.roomIn[1], e) + arcUp(e, 60);
-    if (outs !== null) {
-      const o = V.p(T, outs, outs + 0.35, E.inOutSine);
-      const dst = MX.out[i === 0 ? 0 : 1];
-      x = lerp(x, dst[0], o);
-      y = lerp(y, dst[1], o) + arcUp(o, 60);
-    }
-    return [x, y];
-  }
-  // The key's hand position for a worker or the keeper.
-  const hand = (p) => [p[0] + 52, p[1] - 18];
+  // The key: from the keeper's hand, passed at 36.5, 37.0, 37.5, and back at 37.9 (38.0 minus epsilon).
   function keyPos(T) {
-    const kHand = [1182, 360];
-    // Each pass: [time, from(T), to(T)], then the key sticks to its new holder.
     const passes = [
-      { t: 36.5, from: () => kHand, to: (T) => hand(workerPos(0, T)) },
-      { t: 37.0, from: (T) => hand(workerPos(0, T)), to: (T) => hand(workerPos(1, T)) },
-      { t: 37.5, from: (T) => hand(workerPos(1, T)), to: (T) => hand(workerPos(2, T)) },
-      { t: 37.9, from: (T) => hand(workerPos(2, T)), to: () => kHand },
+      { t: 36.5, from: () => KEEPER_HAND, to: (T) => hand(wpos(0, T)) },
+      { t: 37.0, from: (T) => hand(wpos(0, T)), to: (T) => hand(wpos(1, T)) },
+      { t: 37.5, from: (T) => hand(wpos(1, T)), to: (T) => hand(wpos(2, T)) },
+      { t: 37.9, from: (T) => hand(wpos(2, T)), to: () => KEEPER_HAND },
     ];
-    let pos = kHand;
+    let pos = KEEPER_HAND;
     for (const p of passes) {
       if (T < p.t) break;
       const u = V.p(T, p.t, p.t + 0.3, E.inOutCubic);
@@ -296,22 +306,20 @@
     R.count.style.opacity = String(f(V.p(T, 36.0, 36.3)));
     const kp = pop(T, 36.0);
     put(R.keeper, 0, 0, kp.s, kp.o);
-    const ins = [36.5, 37.0, 37.5];
     R.workers.forEach((w, i) => {
       const wp = pop(T, 36.0 + 0.04 * i);
-      const [x, y] = workerPos(i, T);
-      put(w, x - MX.queue[i], y - MX.handY, wp.s, wp.o);
-      pose(w, "happy", T >= ins[i] + 0.3 && (i === 2 || T < [37.0, 37.5][i]));
+      const [x, y] = wpos(i, T);
+      put(w, x - QUEUE_X, y - 450, wp.s, wp.o);
+      pose(w, "happy", T >= ARRIVE[i] && T < LEAVE[i]);
     });
     const k = keyPos(T);
     put(R.key, k[0] - 1210, k[1] - 400, 1, V.p(T, 36.0, 36.2));
-    // The counter: 1 at 36.85, 2 at 37.35, 3 at 37.85, with a bump on each change.
-    const changes = [36.85, 37.35, 37.85];
+    // The counter: 1, 2, 3 as each worker arrives inside the room.
     let n = 0;
     let last = null;
-    changes.forEach((c, i) => {
+    ARRIVE.forEach((c) => {
       if (T >= c) {
-        n = i + 1;
+        n += 1;
         last = c;
       }
     });
@@ -329,7 +337,7 @@
     const F = frame(parent, { tint: "ok", term: "ASYNC", meaning: "paused until the waker rings.", chip: "ch19" });
     const pic = F.pic;
     const waiter = actor(pic, oxi("waiter"), 1392, 600, 210, 210 * (102 / 120));
-    const tickets = [0, 1, 2].map((i) => actor(pic, prop("ticket", { label: "#" + (i + 1) }), 1392, 300, 120, 66));
+    const tickets = [0, 1, 2].map((i) => actor(pic, `<div class="h2s5-tk">#${i + 1}</div>`, 1392, 300, 140, 72));
     const bells = BELLS.map(() => actor(pic, prop("bell"), 1392, 300, 110, 90));
     const ringSvg = svgEl(pic, "svg", { class: "h2s5-rings", viewBox: "0 0 1920 1080" });
     const served = el(pic, "h2s5-plate", "left:1600px; top:640px; width:180px; height:54px;", "served");

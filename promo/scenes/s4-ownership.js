@@ -117,9 +117,7 @@
   .s-s4 .h2-capline.is-ok { color: var(--ok); }
   .s-s4 .h2-stamp { position: absolute; width: 400px; height: 170px; display: flex; align-items: center; justify-content: center; }
   .s-s4 .h2-stamp-in { border: 10px double var(--error); border-radius: 16px; padding: 0 28px; font: 900 120px/1 var(--font-display); letter-spacing: 0.04em; color: var(--error); background: color-mix(in srgb, var(--ink) 55%, transparent); white-space: nowrap; }
-  .s-s4 .h2-wipe { position: absolute; left: -3000px; top: -210px; width: 6000px; height: 1500px; }
-  .s-s4 .h2-wsolid { position: absolute; left: 0; top: 0; width: 3000px; height: 100%; background: var(--oxide); }
-  .s-s4 .h2-wband { position: absolute; left: 3000px; top: 0; width: 1400px; height: 100%; background: linear-gradient(90deg, var(--oxide), var(--hot)); }
+  .s-s4 .h2-wipe { position: absolute; left: 0; top: -210px; width: 1400px; height: 1500px; background: linear-gradient(90deg, var(--oxide), var(--hot)); border-right: 2px solid var(--molten); }
   `;
   function injectCSS() {
     if (document.getElementById("h2-s4-css")) return;
@@ -364,8 +362,6 @@
       hBorrow.style.opacity = "0";
 
       const wipe = el(cam, "h2-wipe");
-      el(wipe, "h2-wsolid");
-      el(wipe, "h2-wband");
 
       S.R = {
         cam, stack, heap, code, lines, wave, rope, blue, red, A, T_a, T_moved, T_b, T_r, T_mut, T_fl, T_ins,
@@ -383,17 +379,17 @@
       V.set(R.cam, { x: sk.x, y: sk.y, s: 1 + 0.04 * clamp(t / 8, 0, 1) });
 
       // Panels: scale 0.96 to 1 and fade in over 400 ms, staggered 120 ms.
-      const zin = (node, t0) => {
-        const e = V.p(T, t0, t0 + 0.4, E.outExpo);
+      const zin = (node, t0, dur) => {
+        const e = V.p(T, t0, t0 + dur, E.outExpo);
         V.set(node, { s: lerp(0.96, 1, e), o: e });
       };
-      zin(R.code, C.zonesIn);
-      zin(R.stack, C.zonesIn + 0.12);
-      zin(R.heap, C.zonesIn + 0.24);
+      zin(R.code, C.zonesIn, 0.25);
+      zin(R.stack, C.zonesIn + 0.06, 0.19);
+      zin(R.heap, C.zonesIn + 0.12, 0.13);
 
       // Code: five lines typed in, with the red wave drawn left to right.
       const spans = [
-        [C.zonesIn + 0.2, C.zonesIn + 0.8],
+        [C.zonesIn + 0.05, C.zonesIn + 0.6],
         [C.codeMove, C.codeMove + 0.45],
         [C.borrowStart, C.borrowStart + 0.8],
         [C.mutTry, C.mutTry + 0.3],
@@ -496,10 +492,11 @@
       rise(R.sBorrow, C.borrowStart + 0.35, 0.5, borrowOn);
       rise(R.sOk, C.stamp, 0.4, V.p(T, C.stamp, C.stamp + 0.1) * borrowOn);
 
-      // The wipe: a 1400 px oxide-to-hot band with a solid oxide trail, skewed -18 degrees.
-      const wp = V.p(T, C.wipe, C.end, E.outCubic);
-      const lead = lerp(-2000, 2400, wp);
-      R.wipe.style.transform = `translate(${f(lead)}px, 0px) skewX(-18deg)`;
+      // The wipe: one 1400 px oxide-to-hot band, skewed -18 degrees, with a 2 px molten leading edge.
+      // Its right edge crosses the frame over 31.5-31.85 (inExpo). It never sits on flat orange.
+      const wp = V.p(T, C.wipe, 31.85, E.inExpo);
+      const xl = lerp(-1700, 2200, wp);
+      R.wipe.style.transform = `translate(${f(xl)}px, 0px) skewX(-18deg)`;
     },
   });
 
