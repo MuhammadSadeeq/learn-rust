@@ -531,7 +531,7 @@ fn main() {
 </div>
 <h3>Closures of different types in one list</h3>
 
-<p><code>impl Fn(i32) -&gt; i32</code> accepts one closure at a time, and each closure has its own type. So a <code>Vec</code> cannot hold two different closures by that rule. <code>Box&lt;dyn Fn(i32) -&gt; i32&gt;</code> erases the closure's type and keeps only what it does. Each box holds one closure on the heap, so closures with different captures can share one list.</p>
+<p><code>impl Fn(i32) -&gt; i32</code> stands for one closure type, and every closure has a type of its own. So a <code>Vec</code> cannot hold two different closures by that rule. <code>Box&lt;dyn Fn(i32) -&gt; i32&gt;</code> erases the closure's type and keeps only what it does. Each box holds one closure on the heap, so closures with different captures can share one list.</p>
 
 <pre class="rs" data-check="ok" data-stdout="[-3, -40, 4]">fn main() {
     let offset = 10;

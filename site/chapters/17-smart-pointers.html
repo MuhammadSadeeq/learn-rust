@@ -81,7 +81,7 @@ fn main() {
 <p><code>String</code> implements <code>Deref&lt;Target = str&gt;</code>, so the compiler turns the <code>&amp;String</code> into a <code>&amp;str</code> at the call. This is called deref coercion. You will meet it in most functions that take text.</p>
 <h3>Deref is not inheritance</h3>
 
-<p>Deref coercion makes a wrapper look like the type it wraps. Method calls on the target work on the wrapper, and a <code>&amp;Dog</code> turns into an <code>&amp;Animal</code> in a function call. It is tempting to use <code>Deref</code> to get inheritance. Do not. Method calls and deref coercion follow the pointer, but trait impls do not. In this example, <code>Animal</code> derives <code>Debug</code>, and <code>Dog</code> does not:</p>
+<p><code>Deref</code> makes a wrapper look like the type it wraps. Method calls on the target work on the wrapper, and a <code>&amp;Dog</code> turns into an <code>&amp;Animal</code> in a function call. It is tempting to use <code>Deref</code> to get inheritance. Do not. Method calls and deref coercion follow the pointer, but trait impls do not. In this example, <code>Animal</code> derives <code>Debug</code>, and <code>Dog</code> does not:</p>
 
 <pre class="rs" data-check="E0277">use std::ops::Deref;
 

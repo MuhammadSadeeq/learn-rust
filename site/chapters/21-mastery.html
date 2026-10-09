@@ -1274,7 +1274,7 @@ async fn main() {
     }
 }</pre>
 
-<p>The timer wins after one second. The future that owns the <code>Child</code> is dropped with it, and the 10-second <code>sleep</code> is killed. The program prints <code>timed out</code>. The <code>tokio</code> crate needs its <code>full</code> feature for <code>process</code> and <code>time</code>, and the course's crate examples use it.</p>
+<p>The timer wins after one second. The future that owns the <code>Child</code> is dropped with it, and the 10-second <code>sleep</code> is killed. The program prints <code>timed out</code>. The <code>tokio</code> crate needs the <code>process</code> and <code>time</code> features. The <code>full</code> feature turns on both, and the tool-runner project uses it.</p>
 
 <h3>The Laravel bridge</h3>
 
@@ -1550,7 +1550,7 @@ error: aborting due to 2 previous errors</pre>
 
 <p>The excerpts below are copied from the project's files, with their line numbers. They are fragments, not programs, so the checker skips them. Each title names the file.</p>
 
-<p>Every message, tool call and result is a value of one enum type. Serde reads the <code>type</code> field to pick the variant.</p>
+<p>Each content block in a message, a tool call or a tool result is one variant of an enum. Serde reads the <code>type</code> field to pick the variant.</p>
 
 <pre class="rs" data-check="skip" data-crates="serde,serde_json" data-title="projects/tool-runner/src/protocol.rs, lines 28 to 47">/// One piece of a message. The `type` field picks the variant.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1876,7 +1876,7 @@ cargo test                          # 51 tests, all offline</pre>
 <section>
 <h2 id="edition-2024">What edition 2024 changed</h2>
 
-<p>Edition 2024 came out with Rust 1.85, alongside async closures. Most of its changes are small. Some code that compiled on 2021 fails on 2024. Some code still compiles, but it means something different. Most of the changes concern how long a temporary value lives. You set the edition in <code>Cargo.toml</code> with <code>edition = "2024"</code>, and the tool-runner project does that too.</p>
+<p>Edition 2024 came out with Rust 1.85, alongside async closures. Most of its changes are small. Some code that compiled on 2021 fails on 2024. Some code still compiles, but it means something different. Several of the changes concern how long a temporary value lives. You set the edition in <code>Cargo.toml</code> with <code>edition = "2024"</code>, and the tool-runner project does that too.</p>
 
 <h3>The edition changes you will meet</h3>
 
