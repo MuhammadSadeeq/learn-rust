@@ -1,5 +1,5 @@
 // ============================================================================
-//  QUEST channels1 · Message passing           Chapter 18 · Fearless Concurrency
+//  QUEST channels1 · Message passing     Chapter 18 · Fearless Concurrency
 // ----------------------------------------------------------------------------
 //  collect_reports starts `workers` threads. Worker N sends "worker N done"
 //  (N counts from 1) through an mpsc channel. Receive until every sender is

@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION mutex1 · Shared counter            Chapter 18 · Fearless Concurrency
+//  SOLUTION mutex1 · Shared counter      Chapter 18 · Fearless Concurrency
 // ----------------------------------------------------------------------------
 //  Arc is Rc with atomic reference counts, so it can cross threads. Mutex lets
 //  only one thread touch the number at a time. lock() returns a guard that

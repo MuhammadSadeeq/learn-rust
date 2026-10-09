@@ -78,6 +78,8 @@
   let toastBox;
   function toast(html) {
     if (!toastBox) { toastBox = h("div", { class: "ox-toasts", "aria-live": "polite" }); document.body.appendChild(toastBox); }
+    // Keep at most three on screen so a burst (a review session) stays tidy.
+    while (toastBox.children.length >= 3) toastBox.firstChild.remove();
     const t = h("div", { class: "ox-toast" }, html);
     toastBox.appendChild(t);
     setTimeout(() => t.remove(), 3300);
@@ -507,7 +509,8 @@
     const answers = [];
     // Blanks become identifier-shaped markers (__OXB0__): the highlighter
     // keeps an identifier in one piece, inside or outside string literals.
-    const marked = raw.replace(/\[\[([^\]]+)\]\]/g, (_, a) => { answers.push(a.split("|")); return `__OXB${answers.length - 1}__`; });
+    // Blank contents may hold balanced [..] (e.g. &[i32]); `|` separates alternatives.
+    const marked = raw.replace(/\[\[((?:[^\[\]]|\[[^\[\]]*\])+)\]\]/g, (_, a) => { answers.push(a.split("|")); return `__OXB${answers.length - 1}__`; });
     const fig = enhancePre(Object.assign(pre, { textContent: marked }));
     const codeEl = $("code", fig);
     codeEl.innerHTML = codeEl.innerHTML.replace(/<span class="t-\w+">__OXB(\d+)__<\/span>|__OXB(\d+)__/g, (_, n1, n2) => {

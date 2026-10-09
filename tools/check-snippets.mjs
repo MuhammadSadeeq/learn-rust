@@ -84,7 +84,7 @@ for (const file of htmlFiles) {
     if (!/class="[^"]*\b(rs|rust)\b/.test(attrs)) continue;
     const check = (/data-check="([^"]*)"/.exec(attrs) || [])[1] || "ok";
     const so = /data-stdout="([^"]*)"/.exec(attrs);
-    const code = dedent(decode(pm[2])).replace(/\[\[([^\]|]+)(\|[^\]]*)?\]\]/g, "$1");
+    const code = dedent(decode(pm[2])).replace(/\[\[((?:[^\[\]]|\[[^\[\]]*\])+)\]\]/g, (_, a) => a.split("|")[0]);
     snippets.push({ where: `${path.relative(ROOT, file)}:${lineOf(text, m.index)} (fill)`, code, check, stdout: so ? decode(so[1]).replace(/\\n/g, "\n") : null });
   }
   const preRe = /<pre([^>]*)>([\s\S]*?)<\/pre>/g;

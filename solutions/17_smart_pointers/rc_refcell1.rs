@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION rc_refcell1 · Shared and mutable  Chapter 17 · Smart Pointers
+//  SOLUTION rc_refcell1 · Shared and mutable   Chapter 17 · Smart Pointers
 // ----------------------------------------------------------------------------
 //  Rc gives every view an owner handle to one cart. RefCell lets a view change
 //  the cart through a shared &self, with the borrow rules checked at run time.

@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION channels1 · Message passing        Chapter 18 · Fearless Concurrency
+//  SOLUTION channels1 · Message passing  Chapter 18 · Fearless Concurrency
 // ----------------------------------------------------------------------------
 //  Every worker gets a clone of the Sender. The receiver's iterator ends only
 //  when every Sender is dropped, so the Sender this function made must be

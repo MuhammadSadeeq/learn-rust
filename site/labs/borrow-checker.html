@@ -74,7 +74,7 @@
   .bc-why p:last-child { margin-bottom: 0; }
   .bc-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; }
   .bc-actions .bc-next { margin-left: auto; }
-  .bc-actions .bc-next kbd { font-size: 0.75rem; opacity: 0.85; }
+  .bc-actions .bc-next kbd { font-size: 0.75rem; background: transparent; border-color: currentColor; color: inherit; }
 
   .bc-tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr)); gap: 10px; }
   .bc-tier { display: grid; gap: 6px; padding: 12px 14px; border: 2px solid var(--line); border-radius: var(--radius-lg); background: var(--surface-2); color: var(--ink); text-align: left; cursor: pointer; font: inherit; }
@@ -133,7 +133,9 @@
 <script>
 (function () {
   "use strict";
-
+  // Everything reads window.OX_BORROW and Ox, which exist only after the
+  // deferred scripts run, so the whole lab starts on DOMContentLoaded.
+  function boot() {
   var ITEMS = window.OX_BORROW || [];
   var BY_ID = {};
   ITEMS.forEach(function (p) { BY_ID[p.id] = p; });
@@ -271,11 +273,10 @@
     if (verdictRight && rejected) {
       S.options = ruleOptions(p.rule);
       S.stage = "rule";
-      render();
     } else {
       finishPuzzle();
-      render();
     }
+    render(true);
   }
 
   function pickRule(i) {
@@ -290,7 +291,7 @@
     }
     S.flash = r.ruleRight ? "right" : "wrong";
     finishPuzzle();
-    render();
+    render(true);
   }
 
   function skipRule() {
@@ -298,7 +299,7 @@
     S.cur.ruleSkipped = true;
     S.flash = null;
     finishPuzzle();
-    render();
+    render(true);
   }
 
   // A puzzle is clean when the verdict is right and, for rejected code, the
@@ -428,7 +429,7 @@
       if (chips) top += '<div class="bc-chips">' + chips + "</div>";
     } else if (stage === "rule") {
       top += '<p class="bc-ask">Which rule does it break?</p>' +
-        '<p class="bc-status" role="status">Right call. Name the rule for ' + "50 bonus points, or skip it. <span>Keys 1 to 4, or S.</span></p>";
+        '<p class="bc-status" role="status">Right call. rustc rejects it. Name the rule for 50 bonus points. <span>Keys 1 to 4, or S to skip.</span></p>';
     } else {
       top += '<p class="bc-ask">Does rustc accept this program?</p>';
     }
@@ -462,13 +463,11 @@
     var rj = isRejected(p), out = "";
     if (rj) {
       var said = r.ruleChosen ? (r.ruleRight ? "You named it." : "You picked: " + Ox.esc(RULES[r.ruleChosen]) + ".") : (r.ruleSkipped ? "You skipped the rule." : "");
-      out += '<p class="bc-rulebox"><span class="ox-label">Rule broken</span><br><b>' + Ox.esc(RULES[p.rule]) + "</b>" + (said ? " " + said : "") + "</p>";
+      out += '<p class="bc-rulebox"><span class="ox-label">Rule broken</span><br><b>' + Ox.esc(RULES[p.rule]) + "</b>" + (said ? "<br><span>" + said + "</span>" : "") + "</p>";
       out += '<p class="ox-label bc-sub">What rustc said</p>';
       out += '<div class="bc-err">' + codePlate(p.error, "rustc", null, "") + "</div>";
     }
-    out += '<div class="bc-why">' + (rj ? "" : "") + "<p>" + "</p>" + "</div>";
-    out = out.replace('<div class="bc-why"><p></p></div>', "");
-    out += '<div class="bc-why">' + p.why.split("</p>").join("") + "</div>";
+    out += '<div class="bc-why"><p>' + p.why + "</p></div>";
     if (rj) {
       out += '<p class="ox-label bc-sub">A fix that compiles</p>';
       out += codePlate(p.fix, "rust", null, "src/main.rs");
@@ -533,7 +532,14 @@
     var el = e.target.closest("[data-act]");
     if (!el || el.disabled) return;
     var act = el.getAttribute("data-act");
-    if (act === "tier") { pickedTier = el.getAttribute("data-tier"); store().tier = pickedTier; Ox.save(); render(); }
+    if (act === "tier") {
+      pickedTier = el.getAttribute("data-tier");
+      store().tier = pickedTier;
+      Ox.save();
+      render(false);
+      var same = host.querySelector('[data-tier="' + pickedTier + '"]');
+      if (same) same.focus({ preventScroll: true });
+    }
     else if (act === "start") startRun(pickedTier);
     else if (act === "review") startReview();
     else if (act === "accept") answer(true);
@@ -560,10 +566,11 @@
     }
   });
 
-  function start() { render(false); }
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
-  else start();
   pickedTier = (store().tier && TIERS.some(function (t) { return t.id === store().tier; })) ? store().tier : "novice";
+  render(false);
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
 })();
 </script>
 </body>

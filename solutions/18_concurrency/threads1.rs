@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION threads1 · Spawn and join          Chapter 18 · Fearless Concurrency
+//  SOLUTION threads1 · Spawn and join    Chapter 18 · Fearless Concurrency
 // ----------------------------------------------------------------------------
 //  A spawned thread can outlive the function that started it, so it must own
 //  the numbers it adds. `by_ref().take(n)` moves the next n values out of the

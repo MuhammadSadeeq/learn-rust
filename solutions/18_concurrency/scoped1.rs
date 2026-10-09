@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION scoped1 · Scoped threads           Chapter 18 · Fearless Concurrency
+//  SOLUTION scoped1 · Scoped threads     Chapter 18 · Fearless Concurrency
 // ----------------------------------------------------------------------------
 //  thread::scope ends every thread before it returns, so the threads may borrow
 //  `data` safely. Handles are joined in spawn order, which keeps the results in

@@ -1221,6 +1221,9 @@ details.ox-think > .ox-think-body > :last-child { margin-bottom: 0; }
 .xr-arrows .a-head-ref { fill: var(--borrow); }
 .xr-arrows .a-head-mut { fill: var(--mut); }
 .xr-arrows .a-head-ghost { fill: var(--ghost); }
+.xr-arrows .a-bad { stroke: var(--bad); stroke-dasharray: 3 3; stroke-width: 2.5; }
+.xr-arrows .a-head-bad { fill: var(--bad); }
+.xr-block.is-freed .xr-block-label { color: var(--bad); }
 .xr-arrows path.is-drawing { stroke-dasharray: 400; stroke-dashoffset: 400; animation: ox-draw 0.6s ease forwards; }
 .xr-out {
   grid-column: 1 / -1;

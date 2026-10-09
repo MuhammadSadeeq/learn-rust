@@ -1,5 +1,5 @@
 // ============================================================================
-//  QUEST threads1 · Spawn and join             Chapter 18 · Fearless Concurrency
+//  QUEST threads1 · Spawn and join       Chapter 18 · Fearless Concurrency
 // ----------------------------------------------------------------------------
 //  parallel_sum splits the numbers into chunks, runs one thread per chunk, and
 //  adds up the partial sums. The starter does not compile (E0597). Make it

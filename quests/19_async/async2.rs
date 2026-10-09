@@ -1,8 +1,9 @@
 // ============================================================================
 //  QUEST async2 · Hand-written future                  Chapter 19 · Async Rust
 // ----------------------------------------------------------------------------
-//  Write a future by hand. Countdown is ready after `remaining` polls. Each
-//  poll that is not ready must count itself and call cx.waker().wake_by_ref().
+//  Write a future by hand. Countdown is ready after `remaining` pending polls.
+//  Every poll counts itself in `polls`. A poll that is not ready must also call
+//  cx.waker().wake_by_ref().
 //  A real executor polls again only after a wake, so a Pending without one
 //  would sleep forever. The block_on below busy-polls, so one test checks the
 //  wake directly.

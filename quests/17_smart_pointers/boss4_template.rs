@@ -110,6 +110,7 @@ mod tests {
             render("Hi {{ first }} {{last}}!", &vars),
             ok("Hi Ana Silva!")
         );
+        assert_eq!(render("{{first}}{{last}}", &vars), ok("AnaSilva"));
     }
 
     #[test]

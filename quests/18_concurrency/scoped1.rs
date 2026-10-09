@@ -1,5 +1,5 @@
 // ============================================================================
-//  QUEST scoped1 · Scoped threads              Chapter 18 · Fearless Concurrency
+//  QUEST scoped1 · Scoped threads        Chapter 18 · Fearless Concurrency
 // ----------------------------------------------------------------------------
 //  max_per_chunk finds the largest value in each chunk of `data`, with one
 //  thread per chunk. Use std::thread::scope so the threads can borrow `data`

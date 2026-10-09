@@ -1,5 +1,5 @@
 // ============================================================================
-//  QUEST rc_refcell1 · Shared and mutable     Chapter 17 · Smart Pointers
+//  QUEST rc_refcell1 · Shared and mutable      Chapter 17 · Smart Pointers
 // ----------------------------------------------------------------------------
 //  Two CartView values point at one shared cart, so an add through one view
 //  shows up in the other. Give each view its own handle to the cart, add items

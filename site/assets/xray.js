@@ -154,10 +154,15 @@
         const old = findBlock(st, oldId);
         const cells = Array.isArray(content) ? content.map(String) : Array.from(String(content));
         st.heap.push({ id: newId, cells, cap: cap || cells.length, label: old ? old.label : "", status: "", flash: true });
-        st.heap = st.heap.filter((x) => x.id !== oldId);
         for (const f of st.frames) for (const v of f.vars) {
           if (v.val.ptr === oldId) v.val.ptr = newId;
         }
+        // Owners follow the data to the new block. References don't: if any
+        // still point at the old block, keep it on screen as freed memory so
+        // the dangling arrow is visible.
+        const dangling = st.frames.some((f) => f.vars.some((v) => v.val.ref === oldId || v.val.mut === oldId));
+        if (old && dangling) { old.status = "freed"; old.label = "freed"; delete old.flash; }
+        else st.heap = st.heap.filter((x) => x.id !== oldId);
         break;
       }
       case "free": st.heap = st.heap.filter((x) => x.id !== a[0]); break;
@@ -175,6 +180,7 @@
       st = clone(st);
       for (const f of st.frames) for (const v of f.vars) delete v.flash;
       for (const b of st.heap) delete b.flash;
+      st.heap = st.heap.filter((b) => b.status !== "freed" || st.frames.some((f) => f.vars.some((v) => v.val.ref === b.id || v.val.mut === b.id)));
       (step.ops || []).forEach((op) => apply(st, op, scen));
       st.line = step.line || 0;
       states.push(st);
@@ -325,7 +331,7 @@
       st.heap.forEach((b) => {
         let be = blockEls.get(b.id);
         if (!be) { be = document.createElement("div"); be.dataset.id = b.id; heapEl.appendChild(be); blockEls.set(b.id, be); }
-        be.className = "xr-block" + (b.flash ? " is-flash" : "") + (b.rc !== undefined ? " is-shared" : "");
+        be.className = "xr-block" + (b.flash ? " is-flash" : "") + (b.rc !== undefined ? " is-shared" : "") + (b.status === "freed" ? " is-freed" : "");
         const spare = Math.max(0, (b.cap || 0) - b.cells.length);
         be.innerHTML = `<div class="xr-block-label"><span>${esc(b.label || "heap " + b.id)}</span>${b.rc !== undefined ? `<span class="xr-rc">count ${b.rc}</span>` : `<span>${b.cells.length}/${b.cap}</span>`}</div>
           <div class="xr-bytes">${b.cells.map((c, k) => `<span class="xr-byte" data-i="${k}">${esc(c === " " ? "␠" : c)}</span>`).join("")}${"<span class=\"xr-byte is-spare\">·</span>".repeat(spare)}</div>`;
@@ -365,6 +371,8 @@
         const S = center((cell || ve).getBoundingClientRect(), base);
         let kind = v.val.ptr !== undefined ? "own" : v.val.mut !== undefined ? "mut" : "ref";
         if ((v.status || "").includes("moved") || (v.status || "").includes("ended")) kind = "ghost";
+        const tb = st.heap.find((b) => b.id === target);
+        if (tb && tb.status === "freed") kind = "bad";
         const be = blockEls.get(target);
         const tv = varEls.get(target);
         let d, ex, ey, ang;

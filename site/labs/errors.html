@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Error Museum · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<style>
+  [hidden] { display: none !important; }
+  .ox-lab h2 { font-size: var(--step-3); margin: 2.6rem 0 0.8rem; }
+  .ox-lab h2:first-of-type { margin-top: 0.4rem; }
+  .ox-lab h3 { font-size: var(--step-1); margin: 1.8rem 0 0.5rem; }
+  .ox-lab p { max-width: 44rem; }
+
+  /* anatomy of an error */
+  .em-lead { color: var(--ink-2); margin-bottom: 1.2rem; }
+  .em-anatomy-grid { display: grid; gap: 18px; align-items: start; }
+  @media (min-width: 900px) { .em-anatomy-grid { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); } }
+  .em-anatomy-grid .ox-code { margin: 0; }
+  .em-legend { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; min-width: 0; }
+  .em-legend li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; margin: 0; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); font-size: 0.92rem; color: var(--ink-2); }
+  .em-legend b { display: block; color: var(--ink); }
+  .em-legend p { margin: 0; }
+
+  /* numbered marks (anatomy plate and legend) */
+  .em-n { display: inline-grid; place-items: center; width: 1.45rem; height: 1.45rem; border-radius: 50%; background: var(--oxide); color: var(--surface); font: 700 0.78rem/1 var(--font-mono); flex: none; }
+  .em-slot { display: inline-flex; align-items: center; justify-content: center; width: 1.9em; margin-right: 0.3em; flex: none; vertical-align: top; }
+  .em-slot .em-n { width: 1.25em; height: 1.25em; font-size: 0.7rem; }
+
+  /* museum: search, tags, grid */
+  .em-tools { display: grid; gap: 12px; margin: 0 0 10px; }
+  .em-search { display: grid; gap: 6px; }
+  .em-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .em-tag { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 3px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink-2); font: 600 0.78rem/1.4 var(--font-mono); cursor: pointer; }
+  .em-tag:hover { border-color: var(--ink-2); color: var(--ink); }
+  .em-tag span { color: var(--muted); font-weight: 400; }
+  .em-tag[aria-pressed="true"] { background: var(--oxide-soft); border-color: var(--oxide); color: var(--oxide-ink); }
+  .em-tag[aria-pressed="true"] span { color: var(--oxide-ink); }
+  .em-count { margin: 0 0 14px; font-size: 0.9rem; color: var(--muted); }
+  .em-grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 760px) { .em-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .em-card { display: grid; gap: 10px; align-content: start; min-width: 0; padding: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow); color: var(--ink); text-decoration: none; }
+  .em-card:hover { border-color: var(--oxide); }
+  .em-card-head { display: flex; align-items: center; gap: 8px; }
+  .em-code { font: 700 0.8rem/1 var(--font-mono); color: var(--oxide-ink); background: var(--oxide-soft); padding: 5px 7px; border-radius: 4px; }
+  .em-seen { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font: 600 0.7rem/1 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ok); }
+  .em-seen svg, .em-seen-btn svg { width: 14px; height: 14px; flex: none; }
+  .em-card-title { font: 700 1rem/1.3 var(--font-body); color: var(--ink); overflow-wrap: anywhere; }
+  .em-card-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ox-code.em-mini { margin: 0; box-shadow: none; }
+  .ox-code.em-mini pre { font-size: 0.76rem; line-height: 1.55; padding: 10px 12px 12px; }
+  .em-empty { padding: 18px; border: 1px dashed var(--line); border-radius: var(--radius-lg); color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+
+  /* exhibit view */
+  .em-exhibit { scroll-margin-top: calc(var(--top-h) + 12px); }
+  .em-ex-nav { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 1.2rem; }
+  .em-pn { display: flex; flex-wrap: wrap; gap: 8px; }
+  .em-ex-head { display: grid; gap: 8px; margin-bottom: 0.4rem; }
+  .em-ex-title { font: 800 clamp(1.9rem, 4.6vw, 2.7rem)/1.08 var(--font-display); letter-spacing: 0.005em; margin: 0; overflow-wrap: anywhere; }
+  .em-ex-title:focus { outline: none; }
+  .em-ex-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .em-ex-meta .em-seen-btn { margin-left: auto; }
+  .em-seen-btn { display: inline-flex; align-items: center; gap: 6px; }
+  .em-seen-btn[aria-pressed="true"] { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+  .em-hint { margin: 0 0 0.6rem; font-size: 0.88rem; color: var(--muted); }
+  .em-note { margin: 10px 0 0; color: var(--ink-2); }
+  .em-learn { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 2rem; padding-top: 1.2rem; border-top: 1px solid var(--line); }
+  .em-fixes { margin: 0.4rem 0 0; }
+  .em-fixes .ox-tabpanel > .ox-code { margin-top: 12px; }
+  .ox-lab .ox-callout { margin: 1.2rem 0; }
+</style>
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/labs/errors-data.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+</head>
+<body data-crumb="Lab · Error Museum">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<main class="ox-lab" id="main">
+  <header class="ox-lab-hero">
+    <span class="ox-label">Lab</span>
+    <h1 class="ox-title">Error Museum</h1>
+    <p>The 25 compiler errors you will meet most, each shown as real rustc output with what it means and how to fix it.</p>
+  </header>
+
+  <div id="em-museum">
+    <section class="em-anatomy" aria-labelledby="anatomy-h">
+      <h2 id="anatomy-h">How to read any rustc error</h2>
+      <p class="em-lead">Every rustc error has the same parts, in the same order. Read them from the top, and the message usually tells you what to change.</p>
+      <div class="em-anatomy-grid">
+        <div id="em-anatomy-plate" class="em-anatomy-plate"></div>
+        <ol class="em-legend">
+          <li><span class="em-n" aria-hidden="true">1</span><div><b>Code and summary</b><p>The code, such as <code>E0382</code>, is what you search for. The text after it says what went wrong.</p></div></li>
+          <li><span class="em-n" aria-hidden="true">2</span><div><b>Location</b><p>The arrow gives the file, line and column of the main problem. Start there.</p></div></li>
+          <li><span class="em-n" aria-hidden="true">3</span><div><b>Primary span</b><p>The <code>^^^</code> marks the exact expression rustc blames. This is usually the line you change.</p></div></li>
+          <li><span class="em-n" aria-hidden="true">4</span><div><b>Secondary spans</b><p>The <code>---</code> lines mark other places that matter, such as where a value was moved or where a borrow began.</p></div></li>
+          <li><span class="em-n" aria-hidden="true">5</span><div><b>Notes and help</b><p><code>note</code> explains the rule. <code>help</code> often shows a fix as a diff, with <code>+</code> for added text. Read it before you apply it, because a suggestion may only silence the error.</p></div></li>
+          <li><span class="em-n" aria-hidden="true">6</span><div><b>The explain command</b><p><code>rustc --explain E0382</code> prints a longer explanation, with examples, offline. Cargo shows the same errors, so the command works in any project.</p></div></li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="em-gallery" aria-labelledby="gallery-h">
+      <h2 id="gallery-h">The exhibits</h2>
+      <div class="em-tools">
+        <label class="em-search">
+          <span class="ox-label">Search</span>
+          <input type="search" class="ox-input" id="em-q" placeholder="Try E0502, moved, trait or modules" autocomplete="off" spellcheck="false">
+        </label>
+        <div class="em-tags" id="em-tags" role="group" aria-label="Filter by topic"></div>
+      </div>
+      <p class="em-count" id="em-count" aria-live="polite"></p>
+      <div class="em-grid" id="em-grid"></div>
+    </section>
+  </div>
+
+  <section id="em-exhibit" class="em-exhibit" aria-live="off" hidden></section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  function start() {
+    var Ox = window.Ox, EX = window.OX_ERRORS || [];
+    var esc = Ox.esc, icon = Ox.icon;
+    var TAG_ORDER = ["ownership", "borrowing", "lifetimes", "types", "traits", "modules", "patterns", "closures", "threads"];
+    var byId = {}, tagCount = {};
+    EX.forEach(function (e) { byId[e.id] = e; e.tags.forEach(function (t) { tagCount[t] = (tagCount[t] || 0) + 1; }); });
+
+    var museum = document.getElementById("em-museum"),
+        exhibit = document.getElementById("em-exhibit"),
+        grid = document.getElementById("em-grid"),
+        tagsHost = document.getElementById("em-tags"),
+        search = document.getElementById("em-q"),
+        count = document.getElementById("em-count"),
+        anatomyHost = document.getElementById("em-anatomy-plate");
+    var activeTag = "All", query = "", lastId = null, currentId = null, copies = [];
+
+    /* ---------------------------------------------------------- state */
+    function seenMap() {
+      var st = Ox.state();
+      st.game.errors = st.game.errors || {};
+      st.game.errors.seen = st.game.errors.seen || {};
+      return st.game.errors.seen;
+    }
+    function isSeen(id) { return !!seenMap()[id]; }
+    function setSeen(id, on) {
+      var m = seenMap();
+      if (on) m[id] = true; else delete m[id];
+      Ox.save();
+    }
+    function seenCount() { return EX.filter(function (e) { return isSeen(e.id); }).length; }
+
+    /* ---------------------------------------------------------- text helpers */
+    // Plain prose with `code` spans. Everything is escaped first.
+    function md(s) { return esc(s).replace(/`([^`]+)`/g, "<code>$1</code>"); }
+    function pad(n) { return String(n).padStart(2, "0"); }
+
+    // Lines that rustc points at. A `^` under a source line is the primary span,
+    // a `-` is a secondary span. Parsing stops at the first help or note line.
+    function lineMarks(text) {
+      var err = new Set(), hl = new Set(), cur = null, lines = text.split("\n");
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i];
+        if (/^\s*=\s|^help:/.test(line)) break;
+        var g = /^\s*(\d+)\s*\|/.exec(line);
+        if (g) { cur = +g[1]; continue; }
+        var m = /^\s*\|[ ]*([\^\-])/.exec(line);
+        if (m && cur !== null) (m[1] === "^" ? err : hl).add(cur);
+      }
+      return { err: err, hl: hl };
+    }
+
+    // Anatomy callouts: 1 header, 2 arrow, 3 primary span, 4 secondary span,
+    // 5 note or help, 6 explain line. Returns { lineIndex: number }.
+    function anatomySlots(text) {
+      var slots = {};
+      text.split("\n").forEach(function (line, i) {
+        if (/^error\[E\d{4}\]:/.test(line)) slots[i] = 1;
+        else if (/^\s*-->/.test(line)) slots[i] = 2;
+        else if (/^\s*\|[ ]*\^/.test(line)) slots[i] = 3;
+        else if (/^\s*\|[ ]*-/.test(line)) slots[i] = 4;
+        else if (/^\s*=\s*(note|help)|^help:/.test(line)) slots[i] = 5;
+        else if (/^For more information/.test(line)) slots[i] = 6;
+      });
+      return slots;
+    }
+
+    /* ---------------------------------------------------------- code plates */
+    // Builds the same markup as the engine's code plates (figure.ox-code), with
+    // highlighted lines, error lines marked, and optional numbered slots.
+    function plate(text, lang, o) {
+      o = o || {};
+      var marks = o.marks || { err: new Set(), hl: new Set() };
+      var lines = Ox.splitLines(Ox.highlight(text, lang));
+      var body = lines.map(function (l, i) {
+        var n = i + 1, cls = "ln";
+        if (marks.err.has(n)) cls += " is-err";
+        else if (marks.hl.has(n)) cls += " is-hl";
+        var slot = "";
+        if (o.slots) slot = '<span class="em-slot">' + (o.slots[i] ? '<span class="em-n">' + o.slots[i] + "</span>" : "") + "</span>";
+        return '<span class="' + cls + '">' + slot + (l || " ") + "</span>";
+      }).join("");
+      var tools = "";
+      if (o.badge === "error") tools += '<span class="ox-code-badge is-bad">won\'t compile</span>';
+      if (o.badge === "ok") tools += '<span class="ox-code-badge is-ok">compiles</span>';
+      if (o.playground) tools += '<a href="' + esc(Ox.playgroundUrl(text)) + '" target="_blank" rel="noopener" title="Open in the official Rust Playground">playground ↗</a>';
+      if (o.copy) { copies.push(text); tools += '<button type="button" data-copy="' + (copies.length - 1) + '" title="Copy code">copy</button>'; }
+      var bar = '<div class="ox-code-bar"><span class="ox-code-lang">' + esc(o.label || (lang === "rustc" ? "rustc output" : "Rust")) + "</span>" +
+        (o.title ? '<span class="ox-code-title">' + esc(o.title) + "</span>" : "") +
+        '<div class="ox-code-tools">' + tools + "</div></div>";
+      return '<figure class="ox-code' + (o.mini ? " em-mini" : "") + '" data-lang="' + (lang === "rustc" ? "rustc" : "rust") + '">' +
+        (o.mini ? "" : bar) +
+        '<div class="ox-code-scroll"><pre><code>' + body + "</code></pre></div></figure>";
+    }
+
+    /* ---------------------------------------------------------- museum */
+    function renderTags() {
+      var tags = [["All", EX.length]].concat(TAG_ORDER.filter(function (t) { return tagCount[t]; }).map(function (t) { return [t, tagCount[t]]; }));
+      tagsHost.innerHTML = tags.map(function (p) {
+        return '<button type="button" class="em-tag" data-tag="' + esc(p[0]) + '" aria-pressed="' + (activeTag === p[0]) + '">' + esc(p[0]) + "<span>" + p[1] + "</span></button>";
+      }).join("");
+    }
+    function matches(e) {
+      if (activeTag !== "All" && e.tags.indexOf(activeTag) < 0) return false;
+      if (!query) return true;
+      var hay = (e.id + " " + e.title + " " + e.plain + " " + e.tags.join(" ")).toLowerCase();
+      return query.split(/\s+/).every(function (w) { return hay.indexOf(w) >= 0; });
+    }
+    function card(e) {
+      var seen = isSeen(e.id);
+      return '<a class="em-card" href="#' + e.id + '" data-id="' + e.id + '" aria-label="' + esc(e.id + ": " + e.title + (seen ? ", seen" : "")) + '">' +
+        '<span class="em-card-head"><span class="em-code">' + e.id + "</span>" +
+        (seen ? '<span class="em-seen">' + icon.win + "seen</span>" : "") + "</span>" +
+        '<span class="em-card-title">' + esc(e.title) + "</span>" +
+        plate(e.rust, "rust", { mini: true, marks: lineMarks(e.error) }) +
+        '<span class="em-card-tags">' + e.tags.map(function (t) { return '<span class="ox-chip">' + esc(t) + "</span>"; }).join("") + "</span>" +
+        "</a>";
+    }
+    function renderGrid() {
+      copies = [];
+      var list = EX.filter(matches);
+      count.textContent = "Showing " + list.length + " of " + EX.length + " exhibits. Seen " + seenCount() + ".";
+      grid.innerHTML = list.length ? list.map(card).join("") :
+        '<div class="em-empty"><span>No exhibit matches that search and tag.</span><button type="button" class="ox-btn is-small" data-clear>Show all</button></div>';
+    }
+
+    /* ---------------------------------------------------------- exhibit view */
+    function fixTabs(fixes, uid) {
+      var tabs = fixes.map(function (f, i) {
+        return '<button type="button" role="tab" id="' + uid + "-t" + i + '" aria-controls="' + uid + "-p" + i + '" aria-selected="' + (i === 0) + '" tabindex="' + (i === 0 ? 0 : -1) + '">' + esc(f.title) + "</button>";
+      }).join("");
+      var panels = fixes.map(function (f, i) {
+        return '<div class="ox-tabpanel" role="tabpanel" id="' + uid + "-p" + i + '" aria-labelledby="' + uid + "-t" + i + '"' + (i ? " hidden" : "") + ">" +
+          plate(f.rust, "rust", { title: "src/main.rs", badge: "ok", playground: true, copy: true }) +
+          '<p class="em-note">' + md(f.note) + "</p></div>";
+      }).join("");
+      return '<div class="ox-tabs em-fixes"><div class="ox-tablist" role="tablist" aria-label="Fixes">' + tabs + "</div>" + panels + "</div>";
+    }
+    function wireTabs(root) {
+      root.querySelectorAll(".em-fixes").forEach(function (box) {
+        var tabs = Array.prototype.slice.call(box.querySelectorAll('[role="tab"]'));
+        var panels = Array.prototype.slice.call(box.querySelectorAll('[role="tabpanel"]'));
+        function select(i, focus) {
+          tabs.forEach(function (t, j) { t.setAttribute("aria-selected", String(i === j)); t.tabIndex = i === j ? 0 : -1; });
+          panels.forEach(function (p, j) { p.hidden = i !== j; });
+          if (focus) tabs[i].focus();
+        }
+        tabs.forEach(function (t, i) {
+          t.addEventListener("click", function () { select(i, false); });
+          t.addEventListener("keydown", function (ev) {
+            var n = tabs.length, to = null;
+            if (ev.key === "ArrowRight") to = (i + 1) % n;
+            else if (ev.key === "ArrowLeft") to = (i - 1 + n) % n;
+            else if (ev.key === "Home") to = 0;
+            else if (ev.key === "End") to = n - 1;
+            if (to !== null) { ev.preventDefault(); select(to, true); }
+          });
+        });
+      });
+    }
+    function exhibitHtml(e, idx) {
+      var prev = EX[(idx - 1 + EX.length) % EX.length], next = EX[(idx + 1) % EX.length];
+      var chapter = Ox.chapterByNum(e.chapter);
+      var seen = isSeen(e.id);
+      return '<div class="em-ex-nav">' +
+          '<button type="button" class="ox-btn is-small" data-back>← All exhibits</button>' +
+          '<nav class="em-pn" aria-label="Other exhibits">' +
+            '<a class="ox-btn is-small" href="#' + prev.id + '" rel="prev">← ' + prev.id + "</a>" +
+            '<a class="ox-btn is-small" href="#' + next.id + '" rel="next">' + next.id + " →</a>" +
+          "</nav></div>" +
+        '<header class="em-ex-head">' +
+          '<span class="ox-label">error[' + e.id + "]</span>" +
+          '<h2 class="em-ex-title" tabindex="-1">' + esc(e.title) + "</h2>" +
+          '<div class="em-ex-meta">' + e.tags.map(function (t) { return '<span class="ox-chip">' + esc(t) + "</span>"; }).join("") +
+            '<button type="button" class="ox-btn is-small em-seen-btn" data-seen aria-pressed="' + seen + '">' +
+              (seen ? icon.win + "<span>Seen</span>" : "<span>Mark as seen</span>") + "</button></div>" +
+        "</header>" +
+        '<section class="em-block"><h3>The program</h3>' +
+          '<p class="em-hint">Red lines are where rustc points. Orange lines are other places the error names.</p>' +
+          plate(e.rust, "rust", { title: "src/main.rs", badge: "error", marks: lineMarks(e.error), playground: true, copy: true }) +
+        "</section>" +
+        '<section class="em-block"><h3>What rustc says</h3>' + plate(e.error, "rustc", { label: "rustc output" }) + "</section>" +
+        '<section class="em-block"><h3>What it means</h3><p>' + md(e.plain) + "</p>" +
+          (e.php ? '<aside class="ox-callout" data-kind="php"><div class="ox-callout-head">' + icon.php + "<span>Your PHP brain says</span></div><p>" + md(e.php) + "</p></aside>" : "") +
+        "</section>" +
+        '<section class="em-block"><h3>Fix it</h3>' + fixTabs(e.fixes, "fx-" + e.id.toLowerCase()) + "</section>" +
+        '<div class="em-learn">' +
+          (chapter ? '<a class="ox-btn is-primary" href="' + Ox.chapterUrl(chapter) + '">Learn it in Chapter ' + pad(chapter.n) + " · " + esc(chapter.title) + " →</a>" : "") +
+        "</div>";
+    }
+    function showExhibit(e) {
+      lastId = e.id;
+      currentId = e.id;
+      museum.hidden = true;
+      exhibit.hidden = false;
+      copies = [];
+      exhibit.innerHTML = exhibitHtml(e, EX.indexOf(e));
+      wireTabs(exhibit);
+      document.title = e.id + " · Error Museum · Oxidize";
+      exhibit.scrollIntoView({ block: "start" });
+      var t = exhibit.querySelector(".em-ex-title");
+      if (t) t.focus({ preventScroll: true });
+    }
+    function showMuseum() {
+      currentId = null;
+      exhibit.hidden = true;
+      exhibit.innerHTML = "";
+      museum.hidden = false;
+      document.title = "Error Museum · Oxidize";
+      renderTags();
+      renderGrid();
+      if (lastId) {
+        var card = grid.querySelector('[data-id="' + lastId + '"]');
+        if (card) { card.focus({ preventScroll: true }); card.scrollIntoView({ block: "center" }); }
+        lastId = null;
+      }
+    }
+    function route() {
+      var id = decodeURIComponent((location.hash || "").replace(/^#/, "")).toUpperCase();
+      if (byId[id]) showExhibit(byId[id]); else showMuseum();
+    }
+    function backToMuseum() {
+      // Replace the exhibit entry with the museum, so Back never leaves the lab.
+      try { history.replaceState(null, "", location.pathname + location.search); } catch (e) { /* no history API */ }
+      route();
+    }
+
+    /* ---------------------------------------------------------- events */
+    anatomyHost.innerHTML = plate(byId.E0382.error, "rustc", { label: "rustc output", slots: anatomySlots(byId.E0382.error) });
+    search.addEventListener("input", function () { query = search.value.trim().toLowerCase(); renderGrid(); });
+    tagsHost.addEventListener("click", function (ev) {
+      var b = ev.target.closest("[data-tag]");
+      if (!b) return;
+      activeTag = b.getAttribute("data-tag");
+      renderTags();
+      renderGrid();
+    });
+    grid.addEventListener("click", function (ev) {
+      if (ev.target.closest("[data-clear]")) { query = ""; search.value = ""; activeTag = "All"; renderTags(); renderGrid(); }
+    });
+    exhibit.addEventListener("click", function (ev) {
+      var t = ev.target;
+      if (t.closest("[data-back]")) { backToMuseum(); return; }
+      var seenBtn = t.closest("[data-seen]");
+      if (seenBtn && currentId) {
+        var id = currentId;
+        var on = !isSeen(id);
+        setSeen(id, on);
+        seenBtn.setAttribute("aria-pressed", String(on));
+        seenBtn.innerHTML = on ? icon.win + "<span>Seen</span>" : "<span>Mark as seen</span>";
+        if (on) Ox.award(2, "exhibit seen", "err:" + id);
+        return;
+      }
+      var copy = t.closest("[data-copy]");
+      if (copy) {
+        var text = copies[+copy.getAttribute("data-copy")] || "";
+        navigator.clipboard.writeText(text).then(function () { copy.textContent = "copied"; })
+          .catch(function () { copy.textContent = "select + ⌘C"; });
+        setTimeout(function () { copy.textContent = "copy"; }, 1500);
+      }
+    });
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape" && !exhibit.hidden && !(ev.target.matches && ev.target.matches("input, textarea"))) backToMuseum();
+    });
+    window.addEventListener("hashchange", route);
+
+    renderTags();
+    renderGrid();
+    route();
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+  else start();
+})();
+</script>
+</body>
+</html>

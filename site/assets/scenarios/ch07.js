@@ -103,8 +103,8 @@ fn main() {
       {
         line: 4,
         error: true,
-        say: `<p>If the push were allowed, the buffer would move to a new place (here, six slots). <code>first</code> would still point at the old one, which is now freed, so its arrow has nowhere to go.</p><p><strong>error[E0502]: cannot borrow <code>v</code> as mutable because it is also borrowed as immutable</strong></p><p>Rust refuses the push while <code>first</code> is alive.</p>`,
-        ops: [["realloc", "h1", "h2", [1, 2, 3, 4], 6], ["err", "first"]]
+        say: `<p>If the push were allowed, the buffer would move to a new place (here, six slots). <code>first</code> would still point at the old one, which is now freed: follow its red arrow. Reading through it would read memory the program gave back.</p><p><strong>error[E0502]: cannot borrow <code>v</code> as mutable because it is also borrowed as immutable</strong></p><p>Rust refuses the push while <code>first</code> is alive.</p>`,
+        ops: [["realloc", "h1", "h2", [1, 2, 3, 4], 6], ["set", "v", { ptr: "h2", meta: { len: 4, cap: 6 } }], ["err", "first"]]
       },
       { line: 5, say: `<p><code>println!</code> still needs <code>first</code>, so <code>first</code> has to stay valid until this line. That is why the push is rejected.</p>` }
     ]

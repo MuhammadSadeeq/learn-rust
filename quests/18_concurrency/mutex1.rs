@@ -1,5 +1,5 @@
 // ============================================================================
-//  QUEST mutex1 · Shared counter               Chapter 18 · Fearless Concurrency
+//  QUEST mutex1 · Shared counter         Chapter 18 · Fearless Concurrency
 // ----------------------------------------------------------------------------
 //  count_to starts `threads` threads, and each one adds 1 to a shared counter
 //  `per_thread` times. The starter shares an Rc<RefCell<u32>>, and rustc refuses
