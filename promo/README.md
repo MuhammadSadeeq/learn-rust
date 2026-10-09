@@ -34,8 +34,8 @@ node promo/render.mjs --workers 4         # -> promo/out/frames/f%06d.jpg (3840 
 promo/encode.sh                           # -> promo/out/oxidize.mp4, oxidize-teaser.mp4, oxidize-poster.jpg
 ```
 
-`promo/out/` is gitignored: the rendered frames, film, teaser, poster and WAV are
-build outputs and are never committed. Rebuild them with the three commands above.
+`promo/out/` is gitignored: it holds build outputs (3840 frames, about 1.9 GB).
+The finished cut is committed in `promo/release/` (see below).
 
 ## Preview while editing
 
@@ -47,11 +47,14 @@ node promo/serve.mjs                              # then open promo/index.html?t
 python3 promo/music.py --stems                    # per-group stems in promo/out/stems/
 ```
 
-## Outputs
+## The finished cut
+
+Committed in `promo/release/`, copied from `promo/out/` after `encode.sh`:
 
 | File | What |
 |---|---|
-| `out/oxidize.mp4` | The full film: 64.0 s, 1920×1080, 60 fps, H.264 (CRF 19, capped at 10 Mb/s), AAC 256k. About 80 MB. |
-| `out/oxidize-teaser.mp4` | A 16 s cut (14–30 s): the wall of errors, the forge, the borrow checker. |
-| `out/oxidize-poster.jpg` | The end card at 61.6 s, for thumbnails. |
-| `out/music.wav` | The score: 48 kHz, stereo, 16-bit. |
+| `release/oxidize.mp4` | The full film: 64.0 s, 1920×1080, 60 fps, H.264 (CRF 19, capped at 10 Mb/s), AAC 256k. About 80 MB. |
+| `release/oxidize-teaser.mp4` | A 16 s cut (14–30 s): the wall of errors, the forge, the borrow checker. |
+| `release/oxidize-poster.jpg` | The end card at 61.6 s, for thumbnails. |
+
+The score itself (`out/music.wav`, 48 kHz stereo 16-bit) is a build output; `python3 promo/music.py` regenerates it bit for bit.
