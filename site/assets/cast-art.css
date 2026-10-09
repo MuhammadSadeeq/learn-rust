@@ -222,3 +222,42 @@
 @media (prefers-reduced-motion: reduce) {
   .ca *, .ca *::before, .ca *::after, .ca .ca-svg { animation: none !important; transition: none !important; }
 }
+
+/* ---------------------------------------------------------- bosses */
+.ca-golem { --c-body: #5b7083; --c-ink: #3d4d5c; --c-accent: #f2b632; }
+.ca-beetle { --c-body: #2f7d6d; --c-ink: #1f5a4e; }
+.ca-dragon { --c-body: #6d4fb0; --c-ink: #4e3787; }
+.ca-mimic { --c-body: #9a6a3a; --c-ink: #6e4622; }
+.ca-hydra { --c-body: #3d5a99; --c-ink: #2a4070; }
+.bo-screen { fill: #c9f2d0; stroke: #3d4d5c; stroke-width: 2; }
+.bo-paper { fill: #fffdf7; stroke: #c9bfa8; stroke-width: 1.2; }
+.bo-ink { stroke: #9c9178; stroke-width: 2.2; stroke-linecap: round; }
+.bo-arm { stroke-width: 9; }
+.bo-leg { stroke: var(--c-ink); stroke-width: 4; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.bo-quote { fill: var(--c-ink); font: 900 22px var(--font-display); }
+.bo-split { stroke: var(--c-ink); stroke-width: 3; }
+.bo-glyph { fill: #f3ead2; font: 800 19px var(--font-mono); text-anchor: middle; opacity: 0.9; }
+.bo-glyph.is-small { font-size: 13px; opacity: 0.7; }
+.bo-wing { fill: color-mix(in srgb, var(--c-body) 70%, #fff); stroke: var(--c-ink); stroke-width: 1.5; stroke-linejoin: round; }
+.bo-belly { fill: #e9c46a; }
+.bo-belly-line { stroke: #c9a04a; stroke-width: 2; stroke-linecap: round; }
+.bo-horn { fill: #f3ead2; stroke: var(--c-ink); stroke-width: 1.2; stroke-linejoin: round; }
+.bo-ledger { fill: var(--ok); font: 900 14px var(--font-mono); text-anchor: middle; }
+.bo-chest { fill: #7a5229; }
+.bo-trim { fill: #e3b23c; } .bo-trim-line { stroke: #e3b23c; stroke-width: 3; fill: none; }
+.bo-hole { fill: #2a1408; }
+.bo-mouth { fill: #2a1408; }
+.bo-tooth { fill: #fffdf7; }
+.bo-brace { fill: #fffdf7; font: 900 15px var(--font-mono); text-anchor: middle; }
+.bo-tongue { fill: #e07a8f; }
+.bo-string { stroke: #9aa7b5; stroke-width: 1.5; }
+.bo-tag { fill: #2b2a26; font: 700 7.5px var(--font-mono); text-anchor: middle; }
+.bo-neck { stroke: var(--c-body); stroke-width: 15; fill: none; stroke-linecap: round; }
+.ca-brow.is-angry { display: inline; }
+.ca-boss .ca-svg { animation: ca-loom 3.4s ease-in-out infinite; transform-origin: 50% 100%; }
+@keyframes ca-loom { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.03) translateY(-2px); } }
+/* Defeated: X eyes, a frown, knocked sideways and drained of color. */
+.ca.is-defeated .ca-eye, .ca.is-defeated .ca-brow { display: none; }
+.ca.is-defeated .ca-xeye, .ca.is-defeated .ca-sad { display: inline; }
+.ca.is-defeated .ca-smile { display: none; }
+.ca.is-defeated .ca-svg { animation: none; transform: rotate(-8deg) translateY(6px); filter: saturate(0.3); opacity: 0.75; }

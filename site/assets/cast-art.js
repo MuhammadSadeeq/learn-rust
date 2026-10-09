@@ -238,6 +238,89 @@
     </svg>`;
   }
 
+
+  /* ------------------------------------------------------------ bosses */
+  // One boss per act, guarding the act's boss quest. Each has HP = the
+  // quest's tests; the defeated pose is "is-defeated".
+  function golem() {
+    return `<svg class="ca-svg" viewBox="0 0 150 150" aria-hidden="true">
+      <path class="ca-limb bo-arm" d="M28 92 L10 112 M122 92 L140 70"/><circle class="ca-shade" cx="9" cy="114" r="8"/><circle class="ca-shade" cx="141" cy="68" r="8"/>
+      <rect class="ca-shade" x="40" y="114" width="20" height="18" rx="3"/><rect class="ca-shade" x="90" y="114" width="20" height="18" rx="3"/>
+      <rect class="ca-body" x="24" y="38" width="102" height="82" rx="12"/>
+      <rect class="ca-light" x="30" y="42" width="40" height="4" rx="2"/>
+      <rect class="bo-screen" x="38" y="48" width="74" height="32" rx="6"/>
+      <circle class="ca-accent" cx="34" cy="98" r="3.4"/><circle class="ca-accent" cx="34" cy="108" r="3.4"/><circle class="ca-accent" cx="116" cy="98" r="3.4"/><circle class="ca-accent" cx="116" cy="108" r="3.4"/>
+      <rect class="ca-shade" x="48" y="88" width="54" height="7" rx="3"/>
+      <path class="bo-paper" d="M54 91 H96 V146 L91 141 L86 146 L81 141 L76 146 L71 141 L66 146 L61 141 L54 146 Z"/>
+      <path class="bo-ink" d="M60 103 H88 M60 111 H80 M60 119 H88 M60 127 H74 M80 127 H88"/>
+      ${face({ x1: 62, x2: 88, y: 60, r: 6, mx: 75, my: 72, w: 6, cheeks: false })}
+    </svg>`;
+  }
+  function beetle() {
+    return `<svg class="ca-svg" viewBox="0 0 160 146" aria-hidden="true">
+      <path class="bo-leg" d="M48 74 L24 62 L14 70 M44 92 L18 92 L10 102 M50 108 L28 122 L24 134 M112 74 L136 62 L146 70 M116 92 L142 92 L150 102 M110 108 L132 122 L136 134"/>
+      <path class="bo-leg" d="M72 24 Q66 10 56 8 M88 24 Q94 10 104 8"/>
+      <text class="bo-quote" x="48" y="14">“</text><text class="bo-quote" x="102" y="14">”</text>
+      <ellipse class="ca-body" cx="80" cy="88" rx="50" ry="44"/>
+      <path class="bo-split" d="M80 48 V130"/>
+      <ellipse class="ca-light" cx="60" cy="64" rx="14" ry="6"/>
+      <text class="bo-glyph" x="58" y="82">A</text><text class="bo-glyph" x="100" y="80">é</text><text class="bo-glyph" x="62" y="110">ß</text><text class="bo-glyph" x="99" y="112">?</text><text class="bo-glyph is-small" x="68" y="96">ü</text><text class="bo-glyph is-small" x="94" y="96">#</text>
+      <circle class="ca-shade" cx="80" cy="40" r="20"/>
+      ${face({ x1: 72, x2: 88, y: 38, r: 5.6, mx: 80, my: 49, w: 4.5, cheeks: false })}
+    </svg>`;
+  }
+  function dragon() {
+    return `<svg class="ca-svg" viewBox="0 0 160 152" aria-hidden="true">
+      <path class="ca-body" d="M108 118 Q152 122 148 96 Q146 86 138 90 Q142 108 108 104 Z"/><path class="bo-horn" d="M146 92 L156 86 L150 98 Z"/>
+      <path class="bo-wing" d="M56 74 L16 40 L26 72 L10 80 L42 90 Z M104 74 L144 40 L134 72 L150 80 L118 90 Z"/>
+      <ellipse class="ca-body" cx="80" cy="102" rx="38" ry="34"/>
+      <ellipse class="bo-belly" cx="80" cy="110" rx="22" ry="22"/><path class="bo-belly-line" d="M64 102 H96 M62 112 H98 M66 122 H94"/>
+      <circle class="ca-body" cx="80" cy="52" r="26"/>
+      <path class="bo-horn" d="M62 32 L54 12 L72 28 Z M98 32 L106 12 L88 28 Z"/>
+      <ellipse class="bo-belly" cx="80" cy="64" rx="15" ry="9"/><circle class="ca-shade" cx="75" cy="62" r="1.6"/><circle class="ca-shade" cx="85" cy="62" r="1.6"/>
+      <rect class="ca-paper" x="104" y="88" width="28" height="22" rx="2" transform="rotate(-8 118 99)"/><text class="bo-ledger" x="118" y="104" transform="rotate(-8 118 99)">$</text>
+      <ellipse class="pr-gold" cx="38" cy="142" rx="15" ry="6"/><ellipse class="pr-gold" cx="62" cy="138" rx="15" ry="6"/><ellipse class="pr-gold" cx="98" cy="142" rx="15" ry="6"/><ellipse class="pr-gold" cx="124" cy="140" rx="14" ry="6"/><ellipse class="pr-gold" cx="80" cy="146" rx="16" ry="6"/>
+      ${face({ x1: 70, x2: 90, y: 46, r: 6.2, mx: 80, my: 70, w: 4, cheeks: true, mouth: false })}
+    </svg>`;
+  }
+  function mimic() {
+    return `<svg class="ca-svg" viewBox="0 0 160 142" aria-hidden="true">
+      <rect class="bo-chest" x="22" y="76" width="116" height="56" rx="7"/>
+      <rect class="bo-trim" x="22" y="76" width="116" height="8"/><rect class="bo-trim" x="42" y="76" width="9" height="56"/><rect class="bo-trim" x="109" y="76" width="9" height="56"/>
+      <rect class="bo-trim" x="72" y="98" width="16" height="16" rx="2"/><circle class="bo-hole" cx="80" cy="105" r="2.6"/>
+      <rect class="bo-mouth" x="26" y="64" width="108" height="16" rx="3"/>
+      <path class="bo-tooth" d="M30 64 L36 73 L42 64 Z M118 64 L124 73 L130 64 Z"/>
+      <text class="bo-brace" x="54" y="77">{{</text><text class="bo-brace" x="106" y="77">}}</text>
+      <path class="bo-tongue" d="M70 78 Q80 98 92 80 Z"/>
+      <path class="ca-body" d="M22 66 Q22 22 80 20 Q138 22 138 66 Z"/>
+      <path class="bo-trim-line" d="M22 64 H138 M44 62 Q46 30 52 26 M116 62 Q114 30 108 26"/>
+      <path class="bo-string" d="M134 62 L148 96"/><rect class="ca-paper" x="138" y="96" width="22" height="13" rx="2"/><text class="bo-tag" x="149" y="106">@if</text>
+      <path class="ca-line ca-brow is-angry" d="M60 34 L74 40 M100 34 L86 40"/>
+      ${face({ x1: 66, x2: 94, y: 46, r: 7.5, mx: 80, my: 56, cheeks: false, mouth: false })}
+    </svg>`;
+  }
+  function hydra() {
+    const head = (x, y, label) => `<path class="bo-neck" d="M${x < 85 ? 66 : x > 85 ? 104 : 85} 104 Q${(x + 85) / 2} ${y + 40} ${x} ${y + 10}"/>
+      <rect class="pr-ticket" x="${x - 16}" y="${y + 14}" width="32" height="14" rx="2"/><text class="bo-tag" x="${x}" y="${y + 24}">${label}</text>
+      <circle class="ca-body" cx="${x}" cy="${y}" r="16"/>${face({ x1: x - 6, x2: x + 6, y: y - 2, r: 4.4, mx: x, my: y + 8, w: 4, cheeks: false })}`;
+    return `<svg class="ca-svg" viewBox="0 0 170 152" aria-hidden="true">
+      <path class="ca-body" d="M134 122 Q166 124 160 102 Q156 94 150 98 Q154 112 134 110 Z"/>
+      <ellipse class="ca-body" cx="85" cy="120" rx="54" ry="26"/>
+      <ellipse class="bo-belly" cx="85" cy="128" rx="34" ry="12"/>
+      <path class="bo-horn" d="M52 100 L58 88 L64 100 Z M78 96 L85 84 L92 96 Z M106 100 L112 88 L118 100 Z"/>
+      ${head(34, 44, "job 1")}${head(85, 26, "job 2")}${head(136, 44, "job 3")}
+    </svg>`;
+  }
+  const BOSS_ART = { golem, beetle, dragon, mimic, hydra };
+  // The five bosses, one per act. `quest` is the boss quest they guard.
+  const BOSSES = [
+    { id: "golem", name: "The Receipt Golem", act: 1, ch: 4, quest: "boss1_receipt", weak: "functions, loops, match and format strings", role: "Prints receipts with wrong totals and crooked columns until your functions get every line right." },
+    { id: "beetle", name: "The Babel Beetle", act: 2, ch: 8, quest: "boss2_text_stats", weak: "borrowing, &str slices and UTF-8", role: "Hoards words in every alphabet. Counting them without a single needless clone breaks its shell." },
+    { id: "dragon", name: "The Ledger Dragon", act: 3, ch: 13, quest: "boss3_ledger", weak: "enums, Result, HashMap and iterators", role: "Sits on a pile of coins and a ledger full of transactions. Balance every account and it lets go." },
+    { id: "mimic", name: "The Template Mimic", act: 4, ch: 17, quest: "boss4_template", weak: "traits, lifetimes and smart pointers", role: "A chest that bites with {{ }}. Teach it to render templates properly and it opens up." },
+    { id: "hydra", name: "The Queue Hydra", act: 5, ch: 21, quest: "boss5_job_queue", weak: "threads, channels, Arc and Mutex", role: "Three heads, three jobs at once. Only a worker pool that never loses a job can calm all of them." },
+  ];
+
   /* ------------------------------------------------------------ props */
   const PEBBLE = {
     i32: (v) => `<ellipse class="pr-stone" cx="30" cy="22" rx="24" ry="17"/><ellipse class="pr-shine" cx="22" cy="14" rx="8" ry="3"/><text class="ca-label" x="30" y="26">${esc(v)}</text>`,
@@ -312,7 +395,7 @@
     { id: "graduate", name: "Rustacean Oxi", ch: 21, rust: "You", role: "Oxi after the last molt: a full Rustacean. So are you." },
   ];
 
-  function svg(name, o = {}) { return (ART[name] || PROPS[name] || ART.crab)(o); }
+  function svg(name, o = {}) { return (ART[name] || BOSS_ART[name] || PROPS[name] || ART.crab)(o); }
   // Art for a registry entry (a character or, for props like pebbles, the prop).
   function art(id, o = {}) { const e = LIST.find((x) => x.id === id); return e && e.prop ? prop(id, o) : el(id, o); }
   function el(name, o = {}) {
@@ -324,10 +407,12 @@
   function pose(node, p, ms) {
     if (!node) return;
     clearTimeout(node._caPose);
-    node.className = node.className.replace(/\bis-(happy|oops|think|wow|talk|sleep|ouch|chomp|stamp|catch)\b/g, "").replace(/\s+/g, " ").trim();
+    node.className = node.className.replace(/\bis-(happy|oops|think|wow|talk|sleep|ouch|chomp|stamp|catch|defeated)\b/g, "").replace(/\s+/g, " ").trim();
     if (p) node.classList.add("is-" + p);
     if (p && ms) node._caPose = setTimeout(() => node.classList.remove("is-" + p), ms);
   }
 
-  window.OxCast = { el, svg, prop, pose, entry: art, list: LIST, art: ART, props: PROPS, face, claw };
+  // A boss: OxCast.boss("golem") -> '<span class="ca ca-boss ca-golem">…</span>'.
+  function boss(id, o = {}) { return BOSS_ART[id] ? el(id, Object.assign({}, o, { cls: ((o.cls || "") + " ca-boss").trim() })) : ""; }
+  window.OxCast = { el, svg, prop, pose, boss, bosses: BOSSES, entry: art, list: LIST, art: ART, props: PROPS, face, claw };
 })();
