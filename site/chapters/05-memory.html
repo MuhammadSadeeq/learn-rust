@@ -305,6 +305,13 @@ fn main() {
 
 <p>Here is one of those reallocations as a picture. The Vec keeps its items, and only the plot under them changes.</p>
 
+<style>
+/* The plots are boxes, which the motion engine always draws, so a plot appears
+   and goes away by a class: .is-shown fades it in, and without it the plot is clear. */
+.ox-motion[data-scene="ch05-grow"] .mo-box.is-plot { opacity: 0; background: var(--surface); border-color: var(--heap); transition: opacity 0.35s ease; }
+.ox-motion[data-scene="ch05-grow"] .mo-box.is-plot.is-shown { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .ox-motion[data-scene="ch05-grow"] .mo-box.is-plot { transition: none; } }
+</style>
 <div class="ox-motion" data-scene="ch05-grow"></div>
 
 <aside class="ox-callout" data-kind="deep" data-label="with_capacity when you know the size">
@@ -729,16 +736,20 @@ document.addEventListener("DOMContentLoaded", function () {
   // The capacities come from the verified program output in OX_CH05_PUSH, so
   // the widget shows what rustc 1.97 prints, not a model of it.
   var MAX = 12;
-  var ITEMS = window.OX_CH05_PUSH || [];
+  var ITEMS = [];
   var MODES = {};
-  ITEMS.forEach(function (it) {
-    var caps = [];
-    String(it.stdout).trim().split("\n").forEach(function (line) {
-      var p = line.trim().split(/\s+/);
-      caps[Number(p[0])] = Number(p[1]);
+  // Read when the page is ready: the data file loads (defer) after this script.
+  function loadModes() {
+    ITEMS = window.OX_CH05_PUSH || [];
+    ITEMS.forEach(function (it) {
+      var caps = [];
+      String(it.stdout).trim().split("\n").forEach(function (line) {
+        var p = line.trim().split(/\s+/);
+        caps[Number(p[0])] = Number(p[1]);
+      });
+      MODES[it.id] = { name: it.name, rust: it.rust, caps: caps };
     });
-    MODES[it.id] = { name: it.name, rust: it.rust, caps: caps };
-  });
+  }
 
   var state = { mode: "new", len: 0, re: 0, seen: {}, awarded: false };
   var frame = root.querySelector(".pv-frame");
@@ -865,7 +876,8 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function init() {
-    if (!ITEMS.length || !MODES.new) { say.textContent = "The Push the Vec numbers did not load."; return; }
+    loadModes();
+    if (!ITEMS.length || !MODES.new || !MODES.cap8) { say.textContent = "The Push the Vec numbers did not load."; return; }
     if (window.OxCast && alloc) alloc.innerHTML = OxCast.el("alloc");
     pre.innerHTML = window.Ox && Ox.highlight ? Ox.highlight(cur().rust, "rust") : esc(cur().rust);
     modeBtns.forEach(function (b) { b.addEventListener("click", function () { setMode(b.dataset.mode); }); });

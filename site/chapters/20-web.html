@@ -1122,6 +1122,10 @@ snake_case key: missing field `createdAt` at line 1 column 42
 
 <h3>Unknown fields</h3>
 
+<style>
+.ox-motion .mo-text.is-val .mo-text-body { color: var(--ink); font-weight: 700; }
+</style>
+
 <div class="ox-motion" data-scene="ch20-extract"></div>
 
 <p>serde ignores keys it does not know, unless you tell it not to. The notes API works that way. Laravel ignores them by default too. A key that no rule mentions is never validated. Both frameworks have an opt-in that rejects extra keys. In Laravel 13 you add the <code>#[FailOnUnknownFields]</code> attribute to the Form Request:</p>

@@ -119,14 +119,14 @@
   ].join("\n"),
   check: "ok",
   actors: [
-    { id: "ca", cast: "crab", x: 40, y: 70, size: 56, label: "a", hidden: true },
-    { id: "fa", cast: "fluffy", x: 120, y: 100, size: 80, label: "Rc · 1", hidden: true },
-    { id: "fb", cast: "fluffy", x: 250, y: 190, size: 80, label: "Rc · 1", hidden: true },
-    { id: "cb", cast: "crab", x: 250, y: 252, size: 50, label: "b", hidden: true },
-    { id: "cc", cast: "crab", x: 360, y: 70, size: 56, label: "c", hidden: true },
-    { id: "fc", cast: "fluffy", x: 430, y: 100, size: 80, label: "Rc · 1", hidden: true },
-    { id: "fd", cast: "fluffy", x: 550, y: 190, size: 80, label: "Rc · 2", hidden: true },
-    { id: "cd", cast: "crab", x: 550, y: 252, size: 50, label: "d", hidden: true },
+    { id: "ca", cast: "crab", x: 40, y: 56, size: 56, label: "a", hidden: true },
+    { id: "fa", cast: "fluffy", x: 112, y: 80, size: 80, label: "Rc · 1", hidden: true },
+    { id: "fb", cast: "fluffy", x: 212, y: 206, size: 80, label: "Rc · 1", hidden: true },
+    { id: "cb", cast: "crab", x: 118, y: 232, size: 50, label: "b", hidden: true },
+    { id: "cc", cast: "crab", x: 360, y: 56, size: 56, label: "c", hidden: true },
+    { id: "fc", cast: "fluffy", x: 432, y: 80, size: 80, label: "Rc · 1", hidden: true },
+    { id: "fd", cast: "fluffy", x: 552, y: 196, size: 80, label: "Rc · 2", hidden: true },
+    { id: "cd", cast: "crab", x: 468, y: 232, size: 50, label: "d", hidden: true },
   ],
   beats: [
     {

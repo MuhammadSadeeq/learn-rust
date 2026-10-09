@@ -645,8 +645,7 @@ fn main() {
   var RUSTC = "error[E0382]: borrow of moved value: `b`\n  --> src/main.rs:11:16\n   |\n 7 |     let b = a;\n   |         - move occurs because `b` has type `String`, which does not implement the `Copy` trait\n 8 |     let c = b.clone();\n 9 |     consume(b);\n   |             - value moved here\n10 |     println!(\"{c}\");\n11 |     println!(\"{b}\");\n   |                ^ value borrowed here after move\n   |\nnote: consider changing this parameter type in function `consume` to borrow instead if owning the value isn't necessary\n  --> src/main.rs:1:15\n   |\n 1 | fn consume(s: String) {\n   |    -------    ^^^^^^ this parameter takes ownership of the value\n   |    |\n   |    in this function\nhelp: consider cloning the value if the performance cost is acceptable\n   |\n 9 |     consume(b.clone());\n   |              ++++++++\n\nerror: aborting due to 1 previous error\n\nFor more information about this error, try `rustc --explain E0382`.";
 
   var PROGRAM = "";
-  (window.OX_CH06_LEASH || []).forEach(function (p) { if (p.id === "bad") PROGRAM = p.rust; });
-  var prog = root.querySelector(".pl-prog"), codePre = root.querySelector(".pl-code pre"), q = root.querySelector(".pl-q");
+  var prog =root.querySelector(".pl-prog"), codePre = root.querySelector(".pl-code pre"), q = root.querySelector(".pl-q");
   var row = root.querySelector(".pl-row"), say = root.querySelector(".pl-say"), err = root.querySelector(".pl-err");
   var str = root.querySelector(".pl-string"), insp = root.querySelector(".pl-insp");
   var nextBtn = root.querySelector('[data-act="next"]'), restartBtn = root.querySelector('[data-act="restart"]');
@@ -725,6 +724,8 @@ fn main() {
   });
 
   function init() {
+    // Read at ready time: the data file (defer) loads after this script.
+    (window.OX_CH06_LEASH || []).forEach(function (p) { if (p.id === "bad") PROGRAM = p.rust; });
     if (!PROGRAM || !window.OxCast) { say.textContent = "The program for this widget did not load."; return; }
     lines = window.Ox && Ox.highlight ? Ox.splitLines(Ox.highlight(PROGRAM, "rust")) : PROGRAM.split("\n").map(esc);
     render();

@@ -18,6 +18,7 @@
 <script src="../assets/course-data.js" defer></script>
 <script src="../assets/quests-data.js" defer></script>
 <script src="../assets/cards/ch03.js" defer></script>
+<script src="../assets/motion/ch03.js" defer></script>
 <script src="../assets/oxidize.js" defer></script>
 <script src="../assets/cast-art.js" defer></script>
 <script src="../assets/cast.js" defer></script>
@@ -113,6 +114,8 @@ fn main() {
 <aside class="ox-callout" data-kind="insight">
   <p>Every value has one exact type, and the compiler settles it before the program runs. The type is either written in the source or inferred from how the value is used. In PHP you usually have to work it out from context, or find out at runtime.</p>
 </aside>
+
+<div class="ox-meet" data-cast="pebbles" data-say="We are small values, and each of us has a shape. A value only fits the slot cut for its shape."></div>
 </section>
 
 <section>
@@ -222,6 +225,8 @@ fn main() {
   <li><strong>Debug builds</strong> (<code>cargo run</code>) check every arithmetic operation. An overflow panics, which stops the program with a message.</li>
   <li><strong>Release builds</strong> (<code>cargo run --release</code>) skip the check. The result wraps around the range instead.</li>
 </ul>
+
+<div class="ox-motion" data-scene="ch03-overflow"></div>
 
 <p>Sometimes the compiler sees the overflow coming, and then it refuses to build the program at all:</p>
 
@@ -815,6 +820,158 @@ fn main() {
 </div>
 
 <p>Two rows deserve a second look. PHP's <code>"é"[0]</code> is a single byte, which is why the right-hand match is <code>u8</code> and not <code>char</code>. And PHP's <code>int</code> is 64 bits on a 64-bit build, so <code>i64</code> is the closest match, while <code>i32</code> is what Rust picks when nothing else decides the type.</p>
+
+<style>
+#sorter { margin: 24px 0; }
+#sorter .so-intro { margin: 0 0 12px; color: var(--ink-2); }
+#sorter .so-count { margin: 0 0 8px; font: 600 0.85rem/1 var(--font-mono); color: var(--muted); }
+#sorter .so-tray { display: flex; flex-wrap: wrap; gap: 8px; min-height: 96px; padding: 12px; border: 1px dashed var(--line); border-radius: var(--radius-lg); background: var(--surface-2); align-items: center; }
+#sorter .so-empty { margin: 0; color: var(--muted); }
+#sorter .so-pebble { display: grid; justify-items: center; gap: 4px; width: 88px; padding: 8px 6px 6px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); font: 700 0.85rem/1 var(--font-mono); cursor: pointer; }
+#sorter .so-pebble[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+#sorter .so-pebble:focus-visible, #sorter .so-bin:focus-visible { outline: 2px solid var(--oxide); outline-offset: 3px; }
+#sorter .so-pebble.is-bounce { animation: so-bounce 380ms ease-in-out; }
+#sorter .so-art { display: block; width: 46px; }
+#sorter .so-art .ca { display: block; width: 100%; }
+#sorter .so-art .ca-svg { display: block; width: 100%; height: auto; }
+#sorter .so-bins { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+@media (max-width: 620px) { #sorter .so-bins { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+#sorter .so-bin { display: grid; justify-items: center; align-content: start; gap: 6px; min-height: 124px; padding: 10px 6px; border: 1.5px dashed var(--line); border-radius: var(--radius-lg); background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
+#sorter .so-bin:hover { border-color: var(--ink-2); }
+#sorter .so-name { font: 800 1.05rem/1 var(--font-display); color: var(--ink); }
+#sorter .so-in { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; min-height: 1.4em; }
+#sorter .so-chip { padding: 2px 7px; border-radius: 999px; background: var(--ok-soft); color: var(--ok); font: 700 0.75rem/1.3 var(--font-mono); }
+#sorter .so-msg { min-height: 3em; margin: 12px 0 0; padding: 10px 12px; border-left: 3px solid var(--line); border-radius: 0 var(--radius) var(--radius) 0; background: var(--surface-2); color: var(--ink); }
+#sorter .so-msg.is-ok { border-left-color: var(--ok); }
+#sorter .so-msg.is-bad { border-left-color: var(--bad); }
+#sorter .so-end { margin-top: 12px; padding: 12px 14px; border-left: 3px solid var(--ok); border-radius: 0 var(--radius) var(--radius) 0; background: var(--ok-soft); }
+#sorter .so-end[hidden] { display: none; }
+#sorter .so-end p { margin: 0 0 6px; }
+#sorter .so-end p:last-child { margin-bottom: 0; }
+#sorter .so-bar { margin-top: 12px; }
+@keyframes so-bounce { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+@media (prefers-reduced-motion: reduce) { #sorter .so-pebble.is-bounce { animation: none; } }
+</style>
+
+<div class="ox-figure ox-wide" id="sorter">
+  <p class="ox-label">Shape sorter</p>
+  <p class="so-intro">Pick a pebble, then pick the slot it belongs in. A pebble only fits a slot of its type, and a wrong drop bounces back with the reason.</p>
+  <p class="so-count" aria-live="polite">Sorted 0 of 8</p>
+  <div class="so-tray" role="group" aria-label="Pebbles to sort"></div>
+  <div class="so-bins" role="group" aria-label="Slots, one per type"></div>
+  <p class="so-msg" aria-live="polite">Choose a pebble to start.</p>
+  <div class="so-end" hidden aria-live="polite"></div>
+  <div class="so-bar"><button type="button" class="ox-btn is-small" data-so-reset>Start over</button></div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  function init() {
+    var root = document.getElementById("sorter");
+    if (!root || !window.OxCast) return;
+    var items = window.OX_CH03_SORT || [];
+    // Each pebble is shown with the shape of the type its literal has by default.
+    var PEBBLES = [
+      { id: "42", shape: "i32" }, { id: "3.14", shape: "f64" }, { id: "true", shape: "bool" }, { id: "é", shape: "char" },
+      { id: "300", shape: "i32" }, { id: "-1", shape: "i32" }, { id: "255", shape: "i32" }, { id: "Z", shape: "char" }
+    ];
+    var SLOTS = [
+      { id: "i32", shape: "i32" }, { id: "f64", shape: "f64" }, { id: "bool", shape: "bool" }, { id: "char", shape: "char" }, { id: "u8", shape: "u8" }
+    ];
+    var reduced = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+    var tray = root.querySelector(".so-tray");
+    var bins = root.querySelector(".so-bins");
+    var msg = root.querySelector(".so-msg");
+    var count = root.querySelector(".so-count");
+    var endBox = root.querySelector(".so-end");
+    var reset = root.querySelector("[data-so-reset]");
+    var sel = null, placed = {}, awarded = false;
+
+    function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+    function art(shape) { return OxCast.prop("pebble", { type: shape, value: "" }); }
+    function find(p, s) { for (var i = 0; i < items.length; i++) if (items[i].pebble === p && items[i].slot === s) return items[i]; return null; }
+    function nPlaced() { return Object.keys(placed).length; }
+    function say(text, tone) { msg.className = "so-msg" + (tone ? " " + tone : ""); msg.textContent = text; }
+
+    function render(focusSlot) {
+      tray.innerHTML = "";
+      var left = PEBBLES.filter(function (p) { return !(p.id in placed); });
+      if (!left.length) tray.innerHTML = '<p class="so-empty">Every pebble is sorted.</p>';
+      left.forEach(function (p) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "so-pebble";
+        b.setAttribute("data-id", p.id);
+        b.setAttribute("aria-pressed", String(sel === p.id));
+        b.setAttribute("aria-label", "Pebble " + p.id + ", shape of " + p.shape);
+        b.innerHTML = '<span class="so-art">' + art(p.shape) + "</span><span>" + esc(p.id) + "</span>";
+        b.addEventListener("click", function () { choose(p.id); });
+        tray.appendChild(b);
+      });
+      bins.innerHTML = "";
+      SLOTS.forEach(function (s) {
+        var here = PEBBLES.filter(function (p) { return placed[p.id] === s.id; });
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "so-bin";
+        b.setAttribute("data-slot", s.id);
+        b.setAttribute("aria-label", "Slot " + s.id + ", " + (here.length ? "holding " + here.map(function (p) { return p.id; }).join(", ") : "empty"));
+        b.innerHTML = '<span class="so-art">' + art(s.shape) + '</span><span class="so-name">' + s.id + '</span><span class="so-in">' +
+          here.map(function (p) { return '<span class="so-chip">' + esc(p.id) + "</span>"; }).join("") + "</span>";
+        b.addEventListener("click", function () { drop(s.id); });
+        bins.appendChild(b);
+      });
+      count.textContent = "Sorted " + nPlaced() + " of " + PEBBLES.length;
+      if (focusSlot) { var f = bins.querySelector('[data-slot="' + focusSlot + '"]'); if (f) f.focus({ preventScroll: true }); }
+    }
+
+    function choose(id) {
+      sel = sel === id ? null : id;
+      tray.querySelectorAll(".so-pebble").forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-id") === sel)); });
+      say(sel ? "Now pick the slot for " + sel + "." : "Choose a pebble to start.", "");
+    }
+
+    function drop(slot) {
+      if (!sel) { say("Pick a pebble first, then a slot.", ""); return; }
+      var id = sel, it = find(id, slot);
+      if (it && it.check === "ok") {
+        placed[id] = slot;
+        sel = null;
+        say(id + " fits " + slot + ". Its program builds and prints " + it.stdout + ".", "is-ok");
+        render(slot);
+        if (nPlaced() === PEBBLES.length) finish();
+        return;
+      }
+      var pb = tray.querySelector('[data-id="' + id + '"]');
+      if (pb && !reduced) { pb.classList.remove("is-bounce"); void pb.offsetWidth; pb.classList.add("is-bounce"); }
+      say((it && it.code ? it.code : "no code") + " · " + (it ? it.why : id + " does not fit " + slot + "."), "is-bad");
+    }
+
+    function finish() {
+      endBox.hidden = false;
+      endBox.innerHTML =
+        "<p><strong>All eight sorted.</strong> 42 and 255 fit both i32 and u8, because both values are in range for either type. Either slot is right for them, and the sorter accepts either one.</p>" +
+        "<p>300 and -1 fit only i32, since u8 cannot hold them. 3.14, true, é and Z each have a single type that fits.</p>";
+      if (!awarded && window.Ox && Ox.award) { awarded = true; Ox.award(10, "sorted the pebbles", "ch03:shape-sorter"); }
+    }
+
+    function restart() {
+      placed = {};
+      sel = null;
+      endBox.hidden = true;
+      say("Choose a pebble to start.", "");
+      render(null);
+    }
+
+    reset.addEventListener("click", restart);
+    restart();
+  }
+  // cast-art.js and the scene data are deferred, so wait for them.
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
+</script>
 </section>
 
 <section>
