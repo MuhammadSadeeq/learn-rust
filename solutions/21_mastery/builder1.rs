@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION builder1 · Builder pattern             Chapter 21 · Mastery
+//  SOLUTION builder1 · Builder pattern                    Chapter 21 · Mastery
 // ----------------------------------------------------------------------------
 //  Each setter takes self, changes one field and returns self, so calls chain.
 //  Optional settings stay None until build() fills in the defaults. Headers go

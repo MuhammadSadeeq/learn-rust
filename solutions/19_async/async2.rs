@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION async2 · Hand-written future            Chapter 19 · Async Rust
+//  SOLUTION async2 · Hand-written future               Chapter 19 · Async Rust
 // ----------------------------------------------------------------------------
 //  poll runs once per round of the executor. A Pending answer must come with a
 //  wake, because a real executor only polls again after one. Countdown counts

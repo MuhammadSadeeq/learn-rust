@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION http1 · Parse a request                 Chapter 20 · Rust on the Web
+//  SOLUTION http1 · Parse a request               Chapter 20 · Rust on the Web
 // ----------------------------------------------------------------------------
 //  Split the message at the first blank line. The head becomes a request line
 //  plus header lines, and everything after the blank line is the body, copied

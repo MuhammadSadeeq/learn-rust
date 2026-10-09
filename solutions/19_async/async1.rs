@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION async1 · Drive a future                  Chapter 19 · Async Rust
+//  SOLUTION async1 · Drive a future                    Chapter 19 · Async Rust
 // ----------------------------------------------------------------------------
 //  Rust ships no executor. An async fn returns a future, and something has to
 //  poll it until it reports Ready. block_on is that something: pin the future,

@@ -94,6 +94,13 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use RenderError::*;
+
+    // Renders with the built-in filters and the given variables.
+    fn render(template: &str, vars: &[(&str, &str)]) -> Result<String, RenderError> {
+        let ctx: HashMap<&str, &str> = vars.iter().copied().collect();
+        Engine::new().render(template, &ctx)
+    }
 
     fn ok(text: &str) -> Result<String, RenderError> {
         Ok(text.to_string())
@@ -101,30 +108,25 @@ mod tests {
 
     #[test]
     fn renders_variables_with_or_without_spaces() {
-        let ctx = HashMap::from([("first", "Ana"), ("last", "Silva")]);
-        let engine = Engine::new();
+        let vars = [("first", "Ana"), ("last", "Silva")];
         assert_eq!(
-            engine.render("Hi {{ first }} {{last}}!", &ctx),
+            render("Hi {{ first }} {{last}}!", &vars),
             ok("Hi Ana Silva!")
         );
     }
 
     #[test]
     fn filters_run_left_to_right() {
-        let ctx = HashMap::from([("name", "  ana  ")]);
-        let engine = Engine::new();
-        assert_eq!(engine.render("{{ name | trim | upper }}", &ctx), ok("ANA"));
+        let vars = [("name", "  ana  ")];
+        assert_eq!(render("{{ name | trim | upper }}", &vars), ok("ANA"));
         // upper then lower ends lowercase. The reverse order would end uppercase.
-        assert_eq!(
-            engine.render("{{ name | upper | lower }}", &ctx),
-            ok("  ana  ")
-        );
+        assert_eq!(render("{{ name | upper | lower }}", &vars), ok("  ana  "));
     }
 
     #[test]
     fn text_without_tags_passes_through() {
         let text = "Single {braces} and a stray }} are plain text.";
-        assert_eq!(Engine::new().render(text, &HashMap::new()), ok(text));
+        assert_eq!(render(text, &[]), ok(text));
     }
 
     #[test]
@@ -147,31 +149,18 @@ mod tests {
     }
 
     #[test]
-    fn unknown_variables_and_filters_are_errors() {
-        let ctx = HashMap::from([("name", "ana")]);
-        let engine = Engine::new();
+    fn broken_templates_are_errors() {
+        let vars = [("name", "ana")];
         assert_eq!(
-            engine.render("Hi {{ nobody }}", &ctx),
-            Err(RenderError::UnknownVar("nobody".to_string()))
+            render("Hi {{ nobody }}", &vars),
+            Err(UnknownVar("nobody".into()))
         );
         assert_eq!(
-            engine.render("{{ name | reverse }}", &ctx),
-            Err(RenderError::UnknownFilter("reverse".to_string()))
+            render("{{ name | reverse }}", &vars),
+            Err(UnknownFilter("reverse".into()))
         );
-    }
-
-    #[test]
-    fn unclosed_tag_is_an_error() {
-        let ctx = HashMap::from([("name", "ana")]);
-        let engine = Engine::new();
-        assert_eq!(
-            engine.render("Hi {{ name", &ctx),
-            Err(RenderError::Unclosed)
-        );
-        assert_eq!(
-            engine.render("Hi {{ name }", &ctx),
-            Err(RenderError::Unclosed)
-        );
+        assert_eq!(render("Hi {{ name", &vars), Err(Unclosed));
+        assert_eq!(render("Hi {{ name }", &vars), Err(Unclosed));
     }
 
     #[test]

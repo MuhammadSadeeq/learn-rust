@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION macros1 · Your first macro              Chapter 21 · Mastery
+//  SOLUTION macros1 · Your first macro                    Chapter 21 · Mastery
 // ----------------------------------------------------------------------------
 //  The matcher captures each key and value as an expr. The body wraps every
 //  pair in a tuple and passes the array to HashMap::from. The $( ... )*

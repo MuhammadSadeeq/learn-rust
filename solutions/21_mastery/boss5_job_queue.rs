@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION boss5_job_queue · Job queue            Chapter 21 · Mastery
+//  SOLUTION boss5_job_queue · Job queue                   Chapter 21 · Mastery
 // ----------------------------------------------------------------------------
 //  Workers share one Receiver behind Arc<Mutex<..>>. Each one takes a job with
 //  the lock held only for recv(), so the others keep working while it runs. A

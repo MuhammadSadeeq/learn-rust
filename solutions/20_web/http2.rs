@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION http2 · A tiny router                   Chapter 20 · Rust on the Web
+//  SOLUTION http2 · A tiny router                 Chapter 20 · Rust on the Web
 // ----------------------------------------------------------------------------
 //  match_pattern walks both paths segment by segment. dispatch returns the
 //  first route whose method and pattern both match. It remembers whether some

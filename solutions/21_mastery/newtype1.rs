@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION newtype1 · Newtypes guard invariants    Chapter 21 · Mastery
+//  SOLUTION newtype1 · Newtypes guard invariants          Chapter 21 · Mastery
 // ----------------------------------------------------------------------------
 //  The check lives in try_from, and the field is private, so every Email in
 //  the program has passed it. send_welcome takes &Email, so an unchecked
