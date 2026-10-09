@@ -1328,16 +1328,17 @@ fn main() {
 <section>
 <h2 id="forge-source">Read the Forge CLI</h2>
 
-<p>The course has its own trainer, the Forge CLI, which you run as <code>cargo forge</code>. It watches your quest files, compiles each one with <code>rustc</code> (or runs <code>cargo test</code> for the quests that are small cargo projects), runs its tests, and moves you on when they pass. It is about 2,200 lines of standard-library Rust with no dependencies, tests included, so every technique in it comes from this course.</p>
+<p>The course has its own trainer, the Forge CLI, which you run as <code>cargo forge</code>. It watches your quest files, compiles each one with <code>rustc</code> (or runs <code>cargo test</code> for the quests that are small cargo projects), runs its tests, and moves you on when they pass. It is about 2,650 lines of standard-library Rust with no dependencies, tests included, so every technique in it comes from this course.</p>
 
 <div class="ox-table-wrap">
 <table class="ox-table">
   <thead><tr><th>File</th><th>What it does</th><th>Lines</th></tr></thead>
   <tbody>
-    <tr><td><code>forge/src/main.rs</code></td><td>Commands, the watch loop, and the thread that reads stdin</td><td>793</td></tr>
-    <tr><td><code>forge/src/runner.rs</code></td><td>Compiles one quest (with <code>rustc</code>, or <code>cargo test</code> for quests that are small cargo projects), runs its tests, and enforces the timeout</td><td>467</td></tr>
+    <tr><td><code>forge/src/main.rs</code></td><td>Commands, the watch loop, and the thread that reads stdin</td><td>851</td></tr>
+    <tr><td><code>forge/src/runner.rs</code></td><td>Compiles one quest (with <code>rustc</code>, or <code>cargo test</code> for quests that are small cargo projects), runs its tests, and enforces the timeout</td><td>577</td></tr>
     <tr><td><code>forge/src/quests.rs</code></td><td>Reads <code>quests/quests.toml</code> and records your progress</td><td>385</td></tr>
     <tr><td><code>forge/src/art.rs</code></td><td>The ASCII art: the celebrating Oxi and the five bosses, with their HP bars</td><td>361</td></tr>
+    <tr><td><code>forge/src/json.rs</code></td><td>A small JSON reader for the messages that <code>cargo test</code> prints, since the Forge has no dependencies</td><td>270</td></tr>
     <tr><td><code>forge/src/ui.rs</code></td><td>Terminal colors, the progress bar, animation and trimmed compiler output</td><td>212</td></tr>
   </tbody>
 </table>
@@ -1408,25 +1409,25 @@ fn main() {
 
 <h3>The timeout</h3>
 
-<p>A quest with an endless loop must not hang <code>cargo forge</code>. <code>runner.rs</code> starts the test binary, then checks it in a loop. <code>try_wait</code> returns straight away, with nothing, while the child is still running. After 20 seconds the loop kills the child. <code>wait</code> would block until the child exited, so it could never give up.</p>
+<p>A quest with an endless loop must not hang <code>cargo forge</code>. <code>runner.rs</code> starts the test program, then checks it in a loop. <code>try_wait</code> returns straight away, with nothing, while the child is still running. The limit is <code>TEST_TIMEOUT</code>, 20 seconds for each test program, and when it passes the loop kills the child. <code>wait</code> would block until the child exited, so it could never give up.</p>
 
-<pre class="rs" data-check="skip" data-title="forge/src/runner.rs, lines 101 to 112">
-    let started = Instant::now();
+<pre class="rs" data-check="skip" data-title="forge/src/runner.rs, lines 270 to 282">    let started = Instant::now();
     let status = loop {
         if let Some(status) = child.try_wait()? {
-            break Some(status);
+            break status;
         }
-        if started.elapsed() &gt; TEST_TIMEOUT {
-            let _ = child.kill();
-            let _ = child.wait();
-            break None;
+        if started.elapsed() &gt; limit {
+            kill(&amp;mut child, own_group);
+            // The helper threads are not joined: a grandchild that outlived the
+            // kill could hold the pipes open, and we must not wait for it.
+            return Ok(None);
         }
         thread::sleep(Duration::from_millis(20));
     };</pre>
 
 <p>The same file reads the child's stdout and stderr on helper threads. A pipe holds only a small buffer. A test that prints a lot, with nobody reading, blocks on its next write and never exits, and the Forge CLI then waits out the whole timeout. Reading on separate threads keeps the buffer empty.</p>
 
-<p>The file's header comment explains one more choice. The Forge CLI calls <code>rustc</code> directly instead of Cargo, because each quest is a single file, and one broken quest can never stop another from building. Read <code>runner.rs</code> from the top to see the other half of that decision.</p>
+<p>The file's header comment explains one more choice. A single-file quest is compiled with <code>rustc --test</code> and run as a test program, so one broken quest can never stop another from building. A cargo quest is a small package. Its test programs are built with <code>cargo test --no-run</code> under a longer limit, because the first build downloads crates. Then each test program runs under the same 20-second limit as above, so the same function times both kinds of quest.</p>
 
 <p>Look for the newer syntax as well. The Forge CLI uses <code>let ... else</code> in <code>quests.rs</code>, and <code>matches!</code> in <code>main.rs</code>. It avoids let chains on purpose in <code>check_toolchain</code>, so that check still compiles on the old toolchains it warns about. Read that comment. A real let chain looks like this:</p>
 
