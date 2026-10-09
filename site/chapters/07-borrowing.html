@@ -19,6 +19,7 @@
 <script src="../assets/quests-data.js" defer></script>
 <script src="../assets/cards/ch07.js" defer></script>
 <script src="../assets/scenarios/ch07.js" defer></script>
+<script src="../assets/motion/ch07.js" defer></script>
 <script src="../assets/oxidize.js" defer></script>
 <script src="../assets/cast-art.js" defer></script>
 <script src="../assets/cast.js" defer></script>
@@ -61,6 +62,8 @@ fn main() {
 </pre>
 
 <p>It works, but every caller has to unpack the tuple, and every function has to repeat the trick. A <strong>borrow</strong> removes the need. An <code>&amp;</code> in front of a value makes a reference: a pointer that lets the callee look at the value while the caller keeps ownership.</p>
+
+<div class="ox-meet" data-cast="borrows" data-say="Any number of you may look. One of you may lock the value, and then nobody else may look."></div>
 
 <pre class="rs" data-run data-stdout="hello has 5 bytes">
 fn len(s: &amp;String) -&gt; usize {
@@ -244,6 +247,10 @@ For more information about this error, try `rustc --explain E0596`.</pre>
 <div class="ox-xray ox-wide" data-scenario="mut-borrow"></div>
 
 <p>An exclusive borrow is the one key to the editing room. While it exists, nobody else may even look.</p>
+
+<p>Watch the rule play out. Three readers look at <code>v</code>, and then a fourth asks for the lock. Predict the verdict at the question.</p>
+
+<div class="ox-motion" data-scene="ch07-readers-writer"></div>
 </section>
 
 <section>
@@ -409,7 +416,7 @@ fn main() {
 <section>
 <h2 id="desk">Borrow Desk</h2>
 
-<p>This is a simulator of the checker, and it follows the rules in this chapter. The owner is <code>s</code>, and up to three borrows can exist at once. Press the buttons to build a program one line at a time. Each line gets a verdict, the way rustc would judge the finished program.</p>
+<p>This is a simulator of the checker, and it follows the rules in this chapter. The owner is <code>s</code>, and up to three borrows can exist at once. Press the buttons to build a program one line at a time. Each line gets a verdict, the way rustc would judge the finished program. After every call you make, the Inspector stamps the desk: APPROVED in green, or the error code in red.</p>
 
 <p>The judgment rests on one idea. A borrow is alive from the line that creates it to the last line that uses it. An access that conflicts with a live borrow is an error. The desk starts with two lines: <code>s</code> is owned, and <code>r1</code> borrows it.</p>
 
@@ -438,6 +445,17 @@ fn main() {
   #borrowdesk .bd-verdict { margin: 0 0 10px; font-weight: 700; color: var(--ok); }
   #borrowdesk .bd-verdict.is-bad { color: var(--bad); }
   #borrowdesk .bd-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 2rem; }
+  #borrowdesk .bd-check { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 0 0 14px; }
+  #borrowdesk .bd-inspector { display: inline-block; width: 64px; }
+  #borrowdesk .bd-inspector .ca { display: block; width: 100%; }
+  #borrowdesk .bd-stamp { display: inline-block; font: 900 0.95rem/1 var(--font-mono); letter-spacing: 0.06em; padding: 7px 11px; border: 2px solid currentColor; border-radius: 4px; color: var(--muted); transform: rotate(-3deg); }
+  #borrowdesk .bd-stamp.is-idle { border-style: dashed; }
+  #borrowdesk .bd-stamp.is-ok { color: var(--ok); background: var(--ok-soft); }
+  #borrowdesk .bd-stamp.is-bad { color: var(--bad); background: var(--bad-soft); }
+  #borrowdesk .bd-stamp.is-pop { animation: bd-stamp 0.42s cubic-bezier(.3, 1.4, .5, 1); }
+  #borrowdesk .bd-check-note { color: var(--muted); font-size: 0.86rem; }
+  @keyframes bd-stamp { from { transform: rotate(-3deg) scale(1.6); opacity: 0; } to { transform: rotate(-3deg) scale(1); opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { #borrowdesk .bd-stamp.is-pop { animation: none; } }
   @media (max-width: 560px) {
     #borrowdesk .bd-group { grid-template-columns: minmax(0, 1fr); gap: 6px; }
   }
@@ -445,6 +463,11 @@ fn main() {
   <div class="bd-head">
     <span class="ox-label">Borrow Desk</span>
     <span class="bd-owner" data-owner>s: String, owned</span>
+  </div>
+  <div class="bd-check">
+    <span class="bd-inspector" data-inspector aria-hidden="true"></span>
+    <span class="bd-stamp is-idle" data-stamp aria-hidden="true">No call yet</span>
+    <span class="bd-check-note">The Inspector stamps every call you make.</span>
   </div>
   <div class="bd-controls">
     <div class="bd-group"><span class="ox-label">Borrow</span>
@@ -694,7 +717,21 @@ document.addEventListener("DOMContentLoaded", function () {
       });
     }
     Array.prototype.forEach.call(uses.querySelectorAll("button"), function (btn) { btn.disabled = full; });
+    return firstErr;
   }
+
+  // The Inspector stamps every call: APPROVED in green, or the first error code in red.
+  function stamp(firstErr) {
+    var el = q("[data-stamp]"), ca = q("[data-inspector] .ca");
+    el.classList.remove("is-idle", "is-ok", "is-bad", "is-pop");
+    void el.offsetWidth;
+    el.textContent = firstErr ? firstErr.code : "APPROVED";
+    el.classList.add(firstErr ? "is-bad" : "is-ok", "is-pop");
+    if (ca && window.OxCast) OxCast.pose(ca, firstErr ? "oops" : "happy", 1200);
+  }
+
+  var insp = q("[data-inspector]");
+  if (insp && window.OxCast) insp.innerHTML = OxCast.el("inspector");
 
   root.addEventListener("click", function (e) {
     var b = e.target.closest && e.target.closest("button[data-act]");
@@ -702,7 +739,7 @@ document.addEventListener("DOMContentLoaded", function () {
     var next = deskAction(lines, b.getAttribute("data-act"));
     if (!next) return;
     lines = next;
-    refresh();
+    stamp(refresh());
   });
 
   refresh();

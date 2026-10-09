@@ -19,6 +19,7 @@
 <script src="../assets/quests-data.js" defer></script>
 <script src="../assets/cards/ch15.js" defer></script>
 <script src="../assets/scenarios/ch15.js" defer></script>
+<script src="../assets/motion/ch15.js" defer></script>
 <script src="../assets/oxidize.js" defer></script>
 <script src="../assets/cast-art.js" defer></script>
 <script src="../assets/cast.js" defer></script>
@@ -54,6 +55,8 @@
 
 <p>Every reference in Rust has a <em>lifetime</em>: the span of code where that reference must stay valid. The borrow bars from Chapter 07 were lifetimes. Each one ran from a borrow to the last place that borrow was used.</p>
 
+<div class="ox-meet" data-cast="tick" data-say="I am an hourglass for one scope. A reference tied to me has to finish before my sand runs out."></div>
+
 <p>The compiler works out nearly all of them for you, inside function bodies. That is why most Rust code never writes one down. You do write them in signatures, where the compiler needs a relationship spelled out. The next two sections show why.</p>
 
 <p>Here is a program the compiler rejects. Step through it and watch which bar outlives its owner.</p>
@@ -83,6 +86,22 @@ For more information about this error, try `rustc --explain E0597`.</pre>
     <p>Two fixes work. Move <code>let x = 5;</code> out of the inner block, so <code>x</code> lives until the end of <code>main</code>, past the <code>println!</code>. Or stop using <code>r</code> after the block. Neither fix changes a type. Both change where a span ends, and the borrow has to fit inside the owner's span.</p>
   </div>
 </details>
+
+<p>Watch the same program as a motion explainer. Each block has a Tick, and its sand runs out at the closing brace.</p>
+
+<div class="ox-motion" data-scene="ch15-sand"></div>
+
+<p>The fix is to use <code>r</code> while the sand still runs, by printing it inside the block. This version compiles and prints 5.</p>
+
+<pre class="rs" data-check="ok" data-stdout="5" data-run>
+fn main() {
+    let r;
+    {
+        let x = 5;
+        r = &amp;x;
+        println!("{r}");
+    }
+}</pre>
 </section>
 
 <section>
@@ -123,6 +142,27 @@ For more information about this error, try `rustc --explain E0106`.</pre>
 <p>The help line is the compiler's suggestion, and it is correct. It adds <code>&lt;'a&gt;</code> and gives the same name to both inputs and the output. That shared name says the output is tied to both inputs, which is the relationship the compiler was missing.</p>
 
 <p class="ox-pull">An annotation doesn't make anything live longer. It describes which borrow the output came from.</p>
+
+<p>The same idea with two inputs. Watch which value the result depends on, and when the sand runs out.</p>
+
+<div class="ox-motion" data-scene="ch15-longest"></div>
+
+<p>Printing <code>result</code> inside the block, while <code>y</code> still exists, compiles and prints the longer string:</p>
+
+<pre class="rs" data-check="ok" data-stdout="The longest string is long string" data-run>
+fn longest&lt;'a&gt;(x: &amp;'a str, y: &amp;'a str) -&gt; &amp;'a str {
+    if x.len() &gt; y.len() { x } else { y }
+}
+
+fn main() {
+    let x = String::from("long string");
+    let result;
+    {
+        let y = String::from("xyz");
+        result = longest(x.as_str(), y.as_str());
+        println!("The longest string is {result}");
+    }
+}</pre>
 
 <details class="ox-think">
   <summary>Why not let the compiler read the body and work the answer out?</summary>

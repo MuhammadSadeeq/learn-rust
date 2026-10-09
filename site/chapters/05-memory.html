@@ -19,6 +19,7 @@
 <script src="../assets/quests-data.js" defer></script>
 <script src="../assets/cards/ch05.js" defer></script>
 <script src="../assets/scenarios/ch05.js" defer></script>
+<script src="../assets/motion/ch05.js" defer></script>
 <script src="../assets/oxidize.js" defer></script>
 <script src="../assets/cast-art.js" defer></script>
 <script src="../assets/cast.js" defer></script>
@@ -139,6 +140,9 @@
 <p>The stack needs every size fixed before the program runs. A lot of data has no fixed size. The text a user typed, or the rows a database query returns, are as large as the input happens to be. For those values the program asks for room at runtime, from the <strong>heap</strong>.</p>
 
 <p>Think of the heap as a warehouse with numbered shelves. You tell the warehouse how much space you need, and it hands you a shelf number. That number is a pointer. You keep the pointer in a variable, usually on the stack, and reach the shelf through it. When you are finished, you have to give the shelf back. If you don't, it stays occupied, and nobody else can use it.</p>
+
+<div class="ox-meet" data-cast="fluffy" data-say="We are the bytes of your Strings and the items of your Vecs. We live on the sandbank, and we leave when our owner does."></div>
+<div class="ox-meet" data-cast="alloc" data-say="I hand out the plots. When a Vec outgrows its plot, I move it to a bigger one and give the old plot back."></div>
 
 <details class="ox-think">
   <summary>Think first: why can't a <code>Vec&lt;User&gt;</code> loaded from the database be a fixed local on the stack?</summary>
@@ -299,6 +303,10 @@ fn main() {
 
 <p>Five pushes caused two reallocations. If you know roughly how many elements you will need, ask for that capacity up front and the reallocations go away.</p>
 
+<p>Here is one of those reallocations as a picture. The Vec keeps its items, and only the plot under them changes.</p>
+
+<div class="ox-motion" data-scene="ch05-grow"></div>
+
 <aside class="ox-callout" data-kind="deep" data-label="with_capacity when you know the size">
   <p>A reallocation can mean a new allocation, a copy and a free. Reserving the capacity once avoids that series of steps. The standard library does not promise particular growth amounts, so the numbers you see are an implementation detail. What you can count on is that <code>capacity()</code> is never less than <code>len()</code>, and that <code>with_capacity</code> only reserves room. It does not put any text in the String.</p>
 </aside>
@@ -357,6 +365,70 @@ fn main() {
     println!("{}", s.capacity() &gt;= 10);
 }</pre>
   <div class="ox-why"><p><code>with_capacity(10)</code> reserves room for at least ten bytes before the first push, and <code>capacity()</code> reports that room. The number is a promise of at least that much room. It is not an exact figure.</p></div>
+</div>
+
+<p>Now make the growth happen yourself. Push items one at a time, then try the other starting point and compare the reallocation counts.</p>
+
+<style>
+#pushvec .pv-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 14px; margin-bottom: 12px; }
+#pushvec .pv-modes { display: flex; flex-wrap: wrap; gap: 6px; }
+#pushvec .pv-mode, #pushvec .pv-btn { min-height: 36px; padding: 6px 12px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 600 0.88rem/1.2 var(--font-mono); cursor: pointer; }
+#pushvec .pv-mode:hover, #pushvec .pv-btn:hover:not(:disabled) { border-color: var(--ink-2); }
+#pushvec .pv-mode[aria-pressed="true"] { background: var(--oxide); border-color: var(--oxide); color: #fff; }
+#pushvec .pv-btn.is-primary { background: var(--oxide); border-color: var(--oxide); color: #fff; }
+#pushvec .pv-btn:disabled { opacity: 0.45; cursor: default; }
+#pushvec .pv-mode:focus-visible, #pushvec .pv-btn:focus-visible { outline: 2px solid var(--oxide); outline-offset: 2px; }
+#pushvec .pv-stats { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-bottom: 12px; font: 600 0.84rem/1.3 var(--font-mono); color: var(--muted); }
+#pushvec .pv-stats b { display: block; font: 800 1.9rem/1 var(--font-display); color: var(--oxide-ink); }
+#pushvec .pv-stage { position: relative; display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 12px; align-items: center; padding: 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); }
+#pushvec .pv-alloc .ca { display: block; width: 76px; }
+#pushvec .pv-alloc .ca-svg { display: block; width: 100%; height: auto; }
+#pushvec .pv-frame { position: relative; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 4px; min-height: 52px; max-width: calc(8 * 34px + 16px); padding: 8px; border: 1.5px solid var(--heap); border-radius: 12px; background: var(--heap-soft); }
+#pushvec .pv-slot { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 6px; }
+#pushvec .pv-slot:not(.is-full) { border: 1px dashed var(--line); background: var(--surface); }
+#pushvec .pv-slot .ca { display: block; width: 30px; }
+#pushvec .pv-slot .ca-svg { display: block; width: 100%; height: auto; }
+#pushvec .pv-empty { padding: 4px 2px; font-size: 0.9rem; color: var(--muted); }
+#pushvec .pv-ghost { position: absolute; z-index: 1; margin: 0; pointer-events: none; }
+#pushvec .pv-say { margin: 12px 0 0; min-height: 2.6em; font-size: 0.95rem; color: var(--ink); }
+#pushvec .pv-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+#pushvec .pv-code { margin-top: 12px; }
+#pushvec .pv-code summary { cursor: pointer; font: 600 0.9rem/1.3 var(--font-body); color: var(--ink-2); }
+#pushvec .pv-pre { margin: 8px 0 0; padding: 12px 14px; background: var(--code-bg); color: var(--code-ink); border-radius: var(--radius); font: 400 0.82rem/1.55 var(--font-mono); white-space: pre; overflow-x: auto; }
+#pushvec .pv-note { margin: 12px 0 0; font-size: 0.88rem; color: var(--muted); }
+@keyframes pv-pop { 0% { transform: scale(0.4); opacity: 0; } 70% { transform: scale(1.12); opacity: 1; } 100% { transform: none; } }
+#pushvec .pv-slot.is-new { animation: pv-pop 0.45s cubic-bezier(0.3, 1.4, 0.5, 1) both; }
+@media (max-width: 520px) { #pushvec .pv-stage { grid-template-columns: minmax(0, 1fr); justify-items: start; } }
+@media (prefers-reduced-motion: reduce) { #pushvec .pv-slot.is-new { animation: none; } }
+</style>
+<div class="ox-figure ox-wide" id="pushvec">
+  <div class="pv-top">
+    <span class="ox-label">Push the Vec</span>
+    <div class="pv-modes" role="group" aria-label="How the Vec starts">
+      <button type="button" class="pv-mode" data-mode="new" aria-pressed="true">Vec::new()</button>
+      <button type="button" class="pv-mode" data-mode="cap8" aria-pressed="false">Vec::with_capacity(8)</button>
+    </div>
+  </div>
+  <div class="pv-stats">
+    <span>len <b class="pv-len">0</b></span>
+    <span>capacity <b class="pv-cap">0</b></span>
+    <span>reallocations <b class="pv-re">0</b></span>
+  </div>
+  <div class="pv-stage">
+    <div class="pv-alloc" aria-hidden="true"></div>
+    <div class="pv-frame" role="list" aria-label="The Vec's buffer"></div>
+  </div>
+  <p class="pv-say" aria-live="polite">Press Push to add the first item.</p>
+  <div class="pv-actions">
+    <button type="button" class="pv-btn is-primary" data-act="push">Push one item</button>
+    <button type="button" class="pv-btn" data-act="reset">Reset</button>
+  </div>
+  <details class="pv-code">
+    <summary>The program behind these numbers</summary>
+    <pre class="pv-pre"></pre>
+  </details>
+  <p class="pv-note">The growth policy is an implementation detail. The standard library may change these numbers. The ones here are what rustc 1.97 prints for <code>Vec&lt;i32&gt;</code>, and the reallocation count only counts growth from a plot that already existed.</p>
+  <noscript><p>Push the Vec needs JavaScript. The program above prints the same numbers.</p></noscript>
 </div>
 </section>
 
@@ -647,6 +719,163 @@ document.addEventListener("DOMContentLoaded", function () {
 
   render();
 });
+</script>
+<script>
+(function () {
+  "use strict";
+  var root = document.getElementById("pushvec");
+  if (!root) return;
+
+  // The capacities come from the verified program output in OX_CH05_PUSH, so
+  // the widget shows what rustc 1.97 prints, not a model of it.
+  var MAX = 12;
+  var ITEMS = window.OX_CH05_PUSH || [];
+  var MODES = {};
+  ITEMS.forEach(function (it) {
+    var caps = [];
+    String(it.stdout).trim().split("\n").forEach(function (line) {
+      var p = line.trim().split(/\s+/);
+      caps[Number(p[0])] = Number(p[1]);
+    });
+    MODES[it.id] = { name: it.name, rust: it.rust, caps: caps };
+  });
+
+  var state = { mode: "new", len: 0, re: 0, seen: {}, awarded: false };
+  var frame = root.querySelector(".pv-frame");
+  var stage = root.querySelector(".pv-stage");
+  var alloc = root.querySelector(".pv-alloc");
+  var say = root.querySelector(".pv-say");
+  var pre = root.querySelector(".pv-pre");
+  var lenOut = root.querySelector(".pv-len");
+  var capOut = root.querySelector(".pv-cap");
+  var reOut = root.querySelector(".pv-re");
+  var pushBtn = root.querySelector('[data-act="push"]');
+  var resetBtn = root.querySelector('[data-act="reset"]');
+  var modeBtns = Array.prototype.slice.call(root.querySelectorAll(".pv-mode"));
+
+  function reduced() { return !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches); }
+  function cur() { return MODES[state.mode]; }
+  function capAt(n) { var m = cur(); return m && m.caps[n] !== undefined ? m.caps[n] : 0; }
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  // A copy of the old plot that fades out, so the old block visibly goes away.
+  function ghostOf(node) {
+    var g = node.cloneNode(true);
+    g.classList.add("pv-ghost");
+    g.setAttribute("aria-hidden", "true");
+    g.style.left = node.offsetLeft + "px";
+    g.style.top = node.offsetTop + "px";
+    g.style.width = node.offsetWidth + "px";
+    g.style.height = node.offsetHeight + "px";
+    stage.appendChild(g);
+    var a = g.animate([
+      { opacity: 1, transform: "scale(1)" },
+      { opacity: 0, transform: "scale(0.9)" }
+    ], { duration: 600, easing: "ease-in", fill: "forwards" });
+    a.onfinish = function () { g.remove(); };
+  }
+
+  // Each fluffy that survives the move slides from its old slot to its new one on an arc.
+  function carry(oldRects) {
+    frame.querySelectorAll(".pv-slot.is-full").forEach(function (el) {
+      var i = el.dataset.i, old = oldRects[i];
+      if (!old) return;
+      var now = el.getBoundingClientRect();
+      var dx = old.left - now.left, dy = old.top - now.top;
+      if (!dx && !dy) return;
+      el.animate([
+        { transform: "translate(" + dx + "px, " + dy + "px)" },
+        { transform: "translate(" + dx / 2 + "px, " + (dy / 2 - 26) + "px)", offset: 0.5 },
+        { transform: "translate(0, 0)" }
+      ], { duration: 700, delay: Number(i) * 120, easing: "cubic-bezier(0.45, 0.05, 0.25, 1)", fill: "backwards" });
+    });
+  }
+
+  function render() {
+    var cap = capAt(state.len);
+    frame.innerHTML = "";
+    if (cap === 0) {
+      frame.innerHTML = '<span class="pv-empty">No plot yet. The first push asks Alloc for one.</span>';
+    } else {
+      for (var i = 0; i < cap; i++) {
+        var slot = document.createElement("span");
+        slot.setAttribute("role", "listitem");
+        slot.className = "pv-slot";
+        if (i < state.len) {
+          slot.classList.add("is-full");
+          slot.dataset.i = String(i);
+          slot.innerHTML = window.OxCast ? OxCast.el("fluffy") : "";
+        }
+        frame.appendChild(slot);
+      }
+    }
+    lenOut.textContent = String(state.len);
+    capOut.textContent = String(cap);
+    reOut.textContent = String(state.re);
+    pushBtn.disabled = state.len >= MAX;
+  }
+
+  function push() {
+    if (state.len >= MAX) return;
+    var before = capAt(state.len), after = capAt(state.len + 1);
+    var grew = after > before, realloc = grew && before > 0, motion = !reduced();
+    var oldRects = {};
+    frame.querySelectorAll(".pv-slot.is-full").forEach(function (el) { oldRects[el.dataset.i] = el.getBoundingClientRect(); });
+    if (realloc && motion) ghostOf(frame);
+    state.len += 1;
+    if (realloc) state.re += 1;
+    render();
+    var newest = frame.querySelector('.pv-slot[data-i="' + (state.len - 1) + '"]');
+    if (newest) newest.classList.add("is-new");
+    if (realloc && motion) carry(oldRects);
+    var node = root.querySelector(".pv-alloc .ca");
+    if (node && window.OxCast && grew) OxCast.pose(node, realloc ? "wow" : "happy", 900);
+
+    var msg;
+    if (realloc) msg = "The plot of " + before + " was full. Alloc moved the Vec to a plot with room for " + after + ". That is reallocation " + state.re + ".";
+    else if (grew) msg = "The Vec had no plot yet. Alloc hands it one with room for " + after + ".";
+    else msg = "There was room, so Alloc did nothing. Length " + state.len + " fits in capacity " + after + ".";
+    if (state.len === MAX) {
+      msg += " The Vec is full at 12 items.";
+      state.seen[state.mode] = true;
+      if (state.seen.new && state.seen.cap8 && !state.awarded && window.Ox && Ox.award) {
+        state.awarded = true;
+        Ox.award(10, "Pushed the Vec both ways", "ch05:push-the-vec");
+      }
+    }
+    say.textContent = msg;
+  }
+
+  function setMode(id) {
+    if (state.mode === id || !MODES[id]) return;
+    state.mode = id;
+    state.len = 0;
+    state.re = 0;
+    modeBtns.forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.mode === id)); });
+    pre.innerHTML = window.Ox && Ox.highlight ? Ox.highlight(cur().rust, "rust") : esc(cur().rust);
+    say.textContent = "Switched to " + cur().name + ". The Vec is empty again.";
+    render();
+  }
+
+  function reset() {
+    state.len = 0;
+    state.re = 0;
+    say.textContent = "Empty again. Push to fill it.";
+    render();
+  }
+
+  function init() {
+    if (!ITEMS.length || !MODES.new) { say.textContent = "The Push the Vec numbers did not load."; return; }
+    if (window.OxCast && alloc) alloc.innerHTML = OxCast.el("alloc");
+    pre.innerHTML = window.Ox && Ox.highlight ? Ox.highlight(cur().rust, "rust") : esc(cur().rust);
+    modeBtns.forEach(function (b) { b.addEventListener("click", function () { setMode(b.dataset.mode); }); });
+    pushBtn.addEventListener("click", push);
+    resetBtn.addEventListener("click", reset);
+    render();
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
 </script>
 </body>
 </html>

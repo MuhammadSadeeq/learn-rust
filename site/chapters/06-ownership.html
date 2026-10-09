@@ -19,6 +19,7 @@
 <script src="../assets/quests-data.js" defer></script>
 <script src="../assets/cards/ch06.js" defer></script>
 <script src="../assets/scenarios/ch06.js" defer></script>
+<script src="../assets/motion/ch06.js" defer></script>
 <script src="../assets/oxidize.js" defer></script>
 <script src="../assets/cast-art.js" defer></script>
 <script src="../assets/cast.js" defer></script>
@@ -83,6 +84,8 @@
   <div class="ox-rule"><div><p>When the owner goes out of scope, the value is <strong>dropped</strong>.</p><p>Dropping runs cleanup code and frees any heap memory. It happens at a <code>}</code> you can point to.</p></div></div>
 </div>
 
+<div class="ox-meet" data-cast="leash" data-say="One rope, one holder. Hand me over with a move, and the old crab turns grey."></div>
+
 <p class="ox-pull">A value is a parcel with exactly one name on its label.</p>
 
 <aside class="ox-callout" data-kind="insight">
@@ -103,6 +106,10 @@
 <div class="ox-xray ox-wide" data-scenario="scope-drop"></div>
 
 <p>The important line is 6. The inner block ends, <code>s</code> goes out of scope, and its heap bytes are freed <em>right there</em>. Nobody wrote <code>free</code> or <code>unset</code>. The compiler saw that <code>s</code> owns a <code>String</code> and inserted a call to <code>drop</code> at the closing brace.</p>
+
+<p>The same drop as a picture, with the line you can point to.</p>
+
+<div class="ox-motion" data-scene="ch06-scope"></div>
 
 <h3>Watching drops happen</h3>
 
@@ -186,6 +193,8 @@ let a = Noisy("a");
 <p>Now the line that surprises every PHP developer. Before you step through it, decide what you think <code>let b = a;</code> does.</p>
 
 <div class="ox-xray ox-wide" data-scenario="move-error"></div>
+
+<div class="ox-meet" data-cast="inspector" data-say="I check every leash before the program runs. When a rule breaks, I stamp the crab with the error code."></div>
 
 <p>Here is the real compiler output for that program. Learn to read it from the top: the error code and summary, then the arrows that tell the story in order: <em>move occurs because…</em>, <em>value moved here</em>, <em>value borrowed here after move</em>.</p>
 
@@ -367,6 +376,10 @@ fn main() {
 
 <div class="ox-xray ox-wide" data-scenario="fn-move,give-back"></div>
 
+<p>The same handoff, drawn with the function's own parameter. Watch where the leash goes.</p>
+
+<div class="ox-motion" data-scene="ch06-fn-move"></div>
+
 <p>That means a function signature tells you who owns what, before you read a single line of its body:</p>
 
 <div class="ox-table-wrap">
@@ -514,6 +527,212 @@ fn main() {
   </ol>
   <div class="ox-why"><p><code>shout</code> takes <code>String</code> by value, so calling it moves <code>word</code> in. It returns a <em>different</em> String; the original was dropped at the end of <code>shout</code>. Changing the parameter to <code>s: &amp;str</code> and calling <code>shout(&amp;word)</code> fixes it.</p></div>
 </div>
+
+<p>One longer program, read line by line. The question is always the same: after this line, who holds the leash to the first String? Pick a crab, the function, or nobody.</p>
+
+<style>
+#passleash .pl-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 14px; margin-bottom: 12px; }
+#passleash .pl-prog { font: 600 0.84rem/1.3 var(--font-mono); color: var(--muted); }
+#passleash .pl-body { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+#passleash .pl-code { min-width: 0; border: 1px solid var(--code-line); border-radius: 10px; background: var(--code-bg); color: var(--code-ink); overflow: hidden; }
+#passleash .pl-code-head { padding: 7px 12px; border-bottom: 1px solid var(--code-line); color: var(--code-dim); font: 600 0.7rem/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; }
+#passleash .pl-code pre { margin: 0; padding: 10px 0; overflow-x: auto; background: transparent; color: inherit; font: 400 0.8rem/1.65 var(--font-mono); }
+#passleash .pl-ln { display: block; padding-right: 14px; border-left: 3px solid transparent; white-space: pre; }
+#passleash .pl-ln.is-now { background: var(--c-hl); border-left-color: var(--c-kw); }
+#passleash .pl-lno { display: inline-block; width: 2.2em; padding-right: 0.7em; text-align: right; color: var(--code-dim); user-select: none; }
+#passleash .pl-stage { min-width: 0; display: grid; gap: 12px; }
+#passleash .pl-q { margin: 0; font-weight: 600; color: var(--ink); }
+#passleash .pl-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
+#passleash .pl-choice { position: relative; display: grid; justify-items: center; align-content: start; gap: 6px; min-height: 124px; padding: 8px 6px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); font: 600 0.82rem/1.2 var(--font-mono); cursor: pointer; }
+#passleash .pl-choice:hover:not(:disabled) { border-color: var(--ink-2); }
+#passleash .pl-choice:focus-visible, #passleash .pl-btn:focus-visible { outline: 2px solid var(--oxide); outline-offset: 2px; }
+#passleash .pl-choice:disabled { cursor: default; }
+#passleash .pl-choice.is-holder { border-color: var(--oxide); box-shadow: inset 0 0 0 1px var(--oxide); }
+#passleash .pl-choice.is-wrong { border-color: var(--bad); }
+#passleash .pl-art { display: grid; place-items: center; width: 100%; min-height: 62px; }
+#passleash .pl-art .ca { display: block; width: 66px; }
+#passleash .pl-art .ca-svg { display: block; width: 100%; height: auto; }
+#passleash .pl-art.is-pending { opacity: 0.32; }
+#passleash .pl-fn { display: grid; place-items: center; width: 74px; height: 50px; border: 1.5px dashed var(--ink-2); border-radius: 10px; font: 600 0.78rem/1 var(--font-mono); color: var(--ink); }
+#passleash .pl-fn.is-pending { opacity: 0.32; }
+#passleash .pl-none { display: grid; place-items: center; height: 62px; color: var(--muted); }
+#passleash .pl-rope { position: absolute; left: 50%; bottom: 4px; width: 70px; transform: translateX(-50%); pointer-events: none; }
+#passleash .pl-rope .ca { display: block; width: 100%; }
+#passleash .pl-rope .ca-svg { display: block; width: 100%; height: auto; }
+#passleash .pl-side { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+#passleash .pl-string { display: grid; justify-items: center; gap: 6px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); font: 600 0.82rem/1.2 var(--font-mono); color: var(--ink); }
+#passleash .pl-string .ca { display: block; width: 66px; }
+#passleash .pl-string .ca-svg { display: block; width: 100%; height: auto; }
+#passleash .pl-string.is-freed { color: var(--muted); }
+#passleash .pl-string.is-freed .ca { opacity: 0.3; }
+#passleash .pl-insp { display: grid; justify-items: center; gap: 6px; }
+#passleash .pl-insp[hidden] { display: none; }
+#passleash .pl-insp .ca { display: block; width: 66px; }
+#passleash .pl-insp .ca-svg { display: block; width: 100%; height: auto; }
+#passleash .pl-stamp { display: inline-block; padding: 3px 8px; border: 2px solid var(--bad); border-radius: 6px; color: var(--bad); font: 800 0.9rem/1 var(--font-mono); transform: rotate(-4deg); }
+#passleash .pl-say { margin: 12px 0 0; min-height: 3.2em; color: var(--ink); }
+#passleash .pl-err { margin: 12px 0 0; padding: 12px 14px; background: var(--code-bg); color: var(--code-ink); border-radius: var(--radius); font: 400 0.78rem/1.5 var(--font-mono); white-space: pre; overflow-x: auto; }
+#passleash .pl-err[hidden] { display: none; }
+#passleash .pl-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+#passleash .pl-btn { min-height: 36px; padding: 6px 12px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 600 0.88rem/1.2 var(--font-mono); cursor: pointer; }
+#passleash .pl-btn.is-primary { background: var(--oxide); border-color: var(--oxide); color: #fff; }
+#passleash .pl-btn:disabled { opacity: 0.45; cursor: default; }
+@media (max-width: 720px) { #passleash .pl-body { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: no-preference) { #passleash .pl-rope { animation: pl-rope-in 0.5s ease-out both; } }
+@keyframes pl-rope-in { from { opacity: 0; transform: translateX(-50%) translateY(-6px); } to { opacity: 1; transform: translateX(-50%); } }
+</style>
+<div class="ox-figure ox-wide" id="passleash">
+  <div class="pl-top">
+    <span class="ox-label">Pass the leash</span>
+    <span class="pl-prog" aria-live="polite">Step 1 of 6</span>
+  </div>
+  <div class="pl-body">
+    <div class="pl-code"><div class="pl-code-head">Rust</div><pre aria-label="Program"></pre></div>
+    <div class="pl-stage">
+      <p class="pl-q"></p>
+      <div class="pl-row" role="group" aria-label="Who holds the leash?"></div>
+      <div class="pl-side">
+        <div class="pl-string" aria-label="The first String"></div>
+        <div class="pl-insp" hidden></div>
+      </div>
+    </div>
+  </div>
+  <p class="pl-say" aria-live="polite"></p>
+  <pre class="pl-err" hidden></pre>
+  <div class="pl-actions">
+    <button type="button" class="pl-btn is-primary" data-act="next" disabled>Next line ▶</button>
+    <button type="button" class="pl-btn" data-act="restart">Start over</button>
+  </div>
+  <noscript><p>Pass the leash needs JavaScript. The program is shown above, and the holder of each leash is named in the text around it.</p></noscript>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var root = document.getElementById("passleash");
+  if (!root) return;
+
+  // The steps follow the program in OX_CH06_LEASH, whose "bad" entry compiles
+  // to E0382 on line 11. Lines are numbered as the program shows them.
+  var STEPS = [
+    { line: 6, holder: "a", hint: "Only one crab can own the new String at this point.",
+      say: "<code>String::from</code> makes the String, and crab <b>a</b> owns it. The leash is a's.",
+      st: { a: "ok", b: "pending", c: "pending", fn: "pending", alive: true } },
+    { line: 7, holder: "b", hint: "Read line 7 closely. What does <code>let b = a</code> do to the owner?",
+      say: "<code>let b = a</code> moves the String. The leash goes to <b>b</b>, and <b>a</b> turns grey.",
+      st: { a: "ghost", b: "ok", c: "pending", fn: "pending", alive: true } },
+    { line: 8, holder: "b", hint: "A clone makes a second String. Does it touch the first one's leash?",
+      say: "<code>b.clone()</code> makes a second String with its own leash for <b>c</b>. The first String's leash stays with <b>b</b>.",
+      st: { a: "ghost", b: "ok", c: "ok", fn: "pending", alive: true } },
+    { line: 9, holder: "fn", hint: "Passing <code>b</code> to a function moves it again, into the parameter.",
+      say: "<code>consume(b)</code> moves the leash into the function's parameter. <b>b</b> turns grey.",
+      st: { a: "ghost", b: "ghost", c: "ok", fn: "ok", alive: true } },
+    { line: 10, holder: "none", hint: "When a function ends, its parameter is dropped.",
+      say: "The function ended, so its parameter was dropped and the first String was freed. Nobody holds that leash now. <b>c</b> still has its own copy.",
+      st: { a: "ghost", b: "ghost", c: "ok", fn: "gone", alive: false } },
+    { line: 11, holder: "none", hint: "Line 11 reads <code>b</code>. Who holds the leash to what <code>b</code> names?",
+      say: "<b>b</b> is grey, and its String went into <code>consume</code>. The Inspector stamps E0382 on this line, and the program does not compile.",
+      st: { a: "ghost", b: "ghost", c: "ok", fn: "gone", alive: false }, bad: true },
+  ];
+  var CHOICES = [
+    { key: "a", name: "crab a" },
+    { key: "b", name: "crab b" },
+    { key: "c", name: "crab c" },
+    { key: "fn", name: "consume()" },
+    { key: "none", name: "nobody" },
+  ];
+  // The rustc output for the bad line, copied from a real compile of the program.
+  var RUSTC = "error[E0382]: borrow of moved value: `b`\n  --> src/main.rs:11:16\n   |\n 7 |     let b = a;\n   |         - move occurs because `b` has type `String`, which does not implement the `Copy` trait\n 8 |     let c = b.clone();\n 9 |     consume(b);\n   |             - value moved here\n10 |     println!(\"{c}\");\n11 |     println!(\"{b}\");\n   |                ^ value borrowed here after move\n   |\nnote: consider changing this parameter type in function `consume` to borrow instead if owning the value isn't necessary\n  --> src/main.rs:1:15\n   |\n 1 | fn consume(s: String) {\n   |    -------    ^^^^^^ this parameter takes ownership of the value\n   |    |\n   |    in this function\nhelp: consider cloning the value if the performance cost is acceptable\n   |\n 9 |     consume(b.clone());\n   |              ++++++++\n\nerror: aborting due to 1 previous error\n\nFor more information about this error, try `rustc --explain E0382`.";
+
+  var PROGRAM = "";
+  (window.OX_CH06_LEASH || []).forEach(function (p) { if (p.id === "bad") PROGRAM = p.rust; });
+  var prog = root.querySelector(".pl-prog"), codePre = root.querySelector(".pl-code pre"), q = root.querySelector(".pl-q");
+  var row = root.querySelector(".pl-row"), say = root.querySelector(".pl-say"), err = root.querySelector(".pl-err");
+  var str = root.querySelector(".pl-string"), insp = root.querySelector(".pl-insp");
+  var nextBtn = root.querySelector('[data-act="next"]'), restartBtn = root.querySelector('[data-act="restart"]');
+  var i = 0, answered = false, awarded = false, lines = [];
+
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  function crabArt(state) {
+    var kind = state === "ghost" ? { kind: "ghost" } : {};
+    return "<span class='pl-art" + (state === "pending" ? " is-pending" : "") + "'>" + OxCast.el("crab", kind) + "</span>";
+  }
+  function artFor(key, st) {
+    if (key === "none") return '<span class="pl-none">nobody</span>';
+    if (key === "fn") return '<span class="pl-fn' + (st.fn === "ok" ? "" : " is-pending") + '">consume()</span>';
+    return crabArt(st[key]);
+  }
+
+  function renderCode(line) {
+    codePre.innerHTML = lines.map(function (html, k) {
+      var n = k + 1;
+      return '<span class="pl-ln' + (n === line ? " is-now" : "") + '" data-line="' + n + '"><span class="pl-lno">' + n + "</span>" + (html || " ") + "</span>";
+    }).join("");
+  }
+
+  function render() {
+    var step = STEPS[i];
+    prog.textContent = "Step " + (i + 1) + " of " + STEPS.length + " · line " + step.line;
+    renderCode(step.line);
+    q.innerHTML = "After line " + step.line + ", who holds the leash to the first String?";
+    row.innerHTML = CHOICES.map(function (c) {
+      var rope = answered && c.key === step.holder ? '<span class="pl-rope">' + OxCast.prop("leash") + "</span>" : "";
+      return '<button type="button" class="pl-choice' + (answered && c.key === step.holder ? " is-holder" : "") + '" data-key="' + c.key + '"' +
+        (answered ? " disabled" : "") + ">" + artFor(c.key, step.st) + "<span>" + c.name + "</span>" + rope + "</button>";
+    }).join("");
+    str.innerHTML = step.st.alive
+      ? "<span>String</span>" + OxCast.el("fluffy")
+      : "<span>freed</span>" + OxCast.el("fluffy");
+    str.classList.toggle("is-freed", !step.st.alive);
+    insp.hidden = !(answered && step.bad);
+    if (!insp.hidden) {
+      insp.innerHTML = OxCast.el("inspector") + '<span class="pl-stamp">E0382</span>';
+    }
+    err.hidden = !(answered && step.bad);
+    if (!err.hidden) err.textContent = RUSTC;
+    say.innerHTML = answered ? step.say : "Pick one. A wrong pick gets a hint, and you can try again.";
+    nextBtn.disabled = !answered || i >= STEPS.length - 1;
+  }
+
+  row.addEventListener("click", function (e) {
+    var b = e.target.closest ? e.target.closest(".pl-choice") : null;
+    if (!b || answered) return;
+    var step = STEPS[i];
+    if (b.dataset.key === step.holder) {
+      answered = true;
+      render();
+      if (step.bad && !awarded) {
+        awarded = true;
+        if (window.Ox && Ox.award) Ox.award(10, "Passed the leash", "ch06:pass-the-leash");
+      }
+      return;
+    }
+    b.classList.add("is-wrong");
+    say.innerHTML = "Not this one. " + step.hint;
+  });
+
+  nextBtn.addEventListener("click", function () {
+    if (!answered || i >= STEPS.length - 1) return;
+    i += 1;
+    answered = false;
+    render();
+  });
+  restartBtn.addEventListener("click", function () {
+    i = 0;
+    answered = false;
+    render();
+  });
+
+  function init() {
+    if (!PROGRAM || !window.OxCast) { say.textContent = "The program for this widget did not load."; return; }
+    lines = window.Ox && Ox.highlight ? Ox.splitLines(Ox.highlight(PROGRAM, "rust")) : PROGRAM.split("\n").map(esc);
+    render();
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
+</script>
 
 <p>Want more? The <a href="../labs/borrow-checker.html">Be the Borrow Checker</a> lab has dozens of these, with a streak counter.</p>
 </section>

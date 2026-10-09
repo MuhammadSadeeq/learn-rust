@@ -18,6 +18,7 @@
 <script src="../assets/course-data.js" defer></script>
 <script src="../assets/quests-data.js" defer></script>
 <script src="../assets/cards/ch16.js" defer></script>
+<script src="../assets/motion/ch16.js" defer></script>
 <script src="../assets/oxidize.js" defer></script>
 <script src="../assets/cast-art.js" defer></script>
 <script src="../assets/cast.js" defer></script>
@@ -138,6 +139,8 @@ error: aborting due to 1 previous error
 For more information about this error, try `rustc --explain E0603`.</pre>
 
 <p>The error is on the call from <code>main</code>. The name <code>fee</code> exists inside <code>billing</code>, but <code>main</code> has no permission to use it. Calling <code>total</code> works, because <code>total</code> is declared <code>pub</code>. Read <code>E0603</code> as "this item is private to where it is declared".</p>
+
+<div class="ox-motion" data-scene="ch16-doors"></div>
 
 <p>Four levels control who can see an item. Read each row as "visible to".</p>
 
@@ -562,6 +565,8 @@ pub(crate) fn normalize_email(raw: &amp;str) -&gt; String {
 
 <p>Cargo.toml is the manifest for a package. Dependencies are where most decisions live, and most surprises come from version requirements. Here is an annotated example. Each comment explains the line it sits on.</p>
 
+<div class="ox-meet" data-cast="cargo" data-say="I fetch the crates you list. Cargo.lock is my receipt for the exact versions."></div>
+
 <pre class="toml" data-title="Cargo.toml">
 [package]
 name = "shop"          # the crate name. Other code writes `use shop::...`
@@ -622,6 +627,8 @@ serde = { version = "1.0.229", features = ["derive"] }</pre>
 </details>
 
 <p>Cargo keeps the resolved versions in <code>Cargo.lock</code>. <code>cargo update</code> moves those versions forward, but only inside the ranges that <code>Cargo.toml</code> allows. Composer's <code>composer.lock</code> plays the same role, and the same rule applies to both: commit the lock file for applications.</p>
+
+<div class="ox-motion" data-scene="ch16-fetch"></div>
 
 <div class="ox-table-wrap">
 <table class="ox-table">

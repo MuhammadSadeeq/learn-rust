@@ -19,6 +19,7 @@
 <script src="../assets/quests-data.js" defer></script>
 <script src="../assets/cards/ch02.js" defer></script>
 <script src="../assets/scenarios/ch02.js" defer></script>
+<script src="../assets/motion/ch02.js" defer></script>
 <script src="../assets/oxidize.js" defer></script>
 <script src="../assets/cast-art.js" defer></script>
 <script src="../assets/cast.js" defer></script>
@@ -46,6 +47,8 @@
 <h2 id="let"><code>let</code> makes a promise</h2>
 
 <p>In PHP a variable is a name you can refill on any line. Assign it, reassign it, and nothing complains. Rust starts from the other end. A name made with <code>let</code> keeps the value it was given, and the compiler checks every later line against that promise.</p>
+
+<div class="ox-meet" data-cast="crab" data-say="Each of us holds one value in our claw, with our name on a tag. Say mut if you want me to swap what I hold."></div>
 
 <div class="ox-bridge">
   <pre class="php">
@@ -104,6 +107,8 @@ For more information about this error, try `rustc --explain E0384`.</pre>
 <h2 id="mut"><code>mut</code>: changing your mind, on purpose</h2>
 
 <p>When a value really must change, say so on the <code>let</code>. The <code>mut</code> keyword tells the reader and the compiler that this name will be assigned again.</p>
+
+<div class="ox-motion" data-scene="ch02-mut"></div>
 
 <pre class="rs" data-run data-stdout="2">
 fn main() {
@@ -261,6 +266,8 @@ fn main() {
 <p>The second <code>let</code> doesn't change the first <code>input</code>. It creates a second variable with the same name. The first is a <code>&amp;str</code> and the second is a <code>u32</code>. <code>mut</code> could never do that, because a <code>mut</code> variable keeps its type.</p>
 
 <p><code>parse</code> returns a <code>Result</code>, which is an error if the text isn't a number. <code>unwrap</code> takes the number out, or panics on an error. Chapter 11 handles errors properly. For now, read <code>unwrap</code> as "the value, or crash".</p>
+
+<div class="ox-motion" data-scene="ch02-shadow"></div>
 
 <p>Two programs follow, and each one shows a different way to change a value. Step through both. The first keeps one box, and the second makes a new box each time.</p>
 

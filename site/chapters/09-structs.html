@@ -19,6 +19,7 @@
 <script src="../assets/quests-data.js" defer></script>
 <script src="../assets/cards/ch09.js" defer></script>
 <script src="../assets/scenarios/ch09.js" defer></script>
+<script src="../assets/motion/ch09.js" defer></script>
 <script src="../assets/oxidize.js" defer></script>
 <script src="../assets/cast-art.js" defer></script>
 <script src="../assets/cast.js" defer></script>
@@ -47,6 +48,8 @@
 
 <p>A struct groups related values under one name, and gives each piece a field name. If you have written a PHP class that only holds data, you have already written something like a struct. Here is one for a user account, with a program that creates a value, changes a field and reads the fields back.</p>
 
+<div class="ox-meet" data-cast="mold" data-say="Pour a value through me and it comes out with exactly my fields. Leave one out, and I won't let it through."></div>
+
 <pre class="rs" data-run data-stdout="Ana &lt;ana@x.io&gt;, active: true, logins: 1">
 struct User {
     name: String,
@@ -72,6 +75,10 @@ fn main() {
 <aside class="ox-callout" data-kind="insight">
   <p><code>mut</code> belongs to the binding, not to the fields. There is no way to make <code>logins</code> changeable while <code>name</code> stays fixed. Declare <code>u</code> as <code>mut</code> and every field can change. Leave it out and none of them can.</p>
 </aside>
+
+<p>Pour a few literals through the Mold and watch what comes out. The next question is about the one that leaves a field out.</p>
+
+<div class="ox-motion" data-scene="ch09-pour"></div>
 
 <p>When a local variable has the same name as a field, you can write the name once. This is called field init shorthand. The bridge below puts it next to the PHP constructor you already know.</p>
 
@@ -259,6 +266,10 @@ For more information about this error, try `rustc --explain E0382`.
 <aside class="ox-callout" data-kind="trap">
   <p>After <code>..u1</code>, <code>u1</code> is partly moved. Its <code>name</code> is gone, but <code>email</code>, <code>active</code> and <code>logins</code> are still usable, because the update never took them. Check which fields the update actually took before you reuse the original.</p>
 </aside>
+
+<p>The motion below uses the same idea with one change. The literal writes <code>name</code>, so the update takes <code>email</code> from <code>ana</code> and copies <code>age</code>. Watch which leash moves.</p>
+
+<div class="ox-motion" data-scene="ch09-update"></div>
 
 <p>PHP 8.5 has a relative of struct update syntax. <code>clone($obj, [...])</code> copies an object and overwrites the named properties. Inside the class, it also works on <code>readonly</code> properties. A method that wraps it and returns a changed copy is the usual shape of a with-er:</p>
 

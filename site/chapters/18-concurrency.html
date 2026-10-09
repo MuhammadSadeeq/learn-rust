@@ -18,6 +18,7 @@
 <script src="../assets/course-data.js" defer></script>
 <script src="../assets/quests-data.js" defer></script>
 <script src="../assets/cards/ch18.js" defer></script>
+<script src="../assets/motion/ch18.js" defer></script>
 <script src="../assets/oxidize.js" defer></script>
 <script src="../assets/cast-art.js" defer></script>
 <script src="../assets/cast.js" defer></script>
@@ -288,6 +289,8 @@ fn main() {
 
 <p>Cloning a <code>Sender</code> makes a new handle to the same queue. The receiver's loop ends only when <em>every</em> sender has been dropped. Each clone is dropped when its thread finishes. The original <code>tx</code> is still owned by <code>main</code>, which is why the program has the <code>drop(tx)</code> line.</p>
 
+<div class="ox-motion" data-scene="ch18-channel"></div>
+
 <aside class="ox-callout" data-kind="trap">
   <p>Forgetting <code>drop(tx)</code> is the most common channel bug. The loop waits for one more message that can never arrive, and the program hangs. It doesn't panic and it doesn't print an error. When you review code with <code>for msg in rx</code>, check that every sender gets dropped.</p>
 </aside>
@@ -384,6 +387,8 @@ fn main() {
 
 <p>Sometimes threads really do need the same value: a counter, a cache, a list of results. Rust splits that job in two. <code>Arc&lt;T&gt;</code> lets several owners hold one value. It works like <code>Rc</code> from Chapter 17, except its count is updated atomically, so it is safe across threads. <code>Mutex&lt;T&gt;</code> wraps the data and hands out access one thread at a time. It is the single key to the room.</p>
 
+<div class="ox-meet" data-cast="keeper" data-say="One key, one room. Whoever holds me goes in, and everyone else waits at the door."></div>
+
 <pre class="rs" data-run data-stdout="count = 8000">
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -411,6 +416,8 @@ fn main() {
 </pre>
 
 <p><code>lock()</code> returns a <code>MutexGuard</code>. The guard dereferences to the number, so <code>*guard += 1</code> changes the value inside the mutex. The lock is released when the guard is dropped. Here that happens at the end of each loop pass, so each thread holds the lock for exactly one increment. Keep critical sections that short. Anything slow inside the lock makes every other thread wait.</p>
+
+<div class="ox-motion" data-scene="ch18-key"></div>
 
 <aside class="ox-callout" data-kind="trap">
   <p>The guard <em>is</em> the lock. <code>let _ = counter.lock();</code> drops the guard at once, so nothing is protected. This is the same trap as in Chapter 06. Give the guard a name, as above.</p>
@@ -529,6 +536,14 @@ fn main() {
 #racesim .rs-log { margin: 12px 0 0; padding: 0; list-style: none; max-height: 11em; overflow: auto; font: 500 0.8rem/1.45 var(--font-mono); color: var(--muted); }
 #racesim .rs-log li { padding: 4px 0; border-bottom: 1px dashed var(--line); }
 #racesim .rs-log li.is-lost { color: var(--bad); }
+#racesim .rs-keeper { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+#racesim .rs-keeper[hidden] { display: none; }
+#racesim .rs-keeper-art { display: block; width: 84px; }
+#racesim .rs-keeper-art .ca, #racesim .rs-keyslot .ca { display: block; width: 100%; }
+#racesim .rs-keeper-art .ca-svg, #racesim .rs-keyslot .ca-svg { display: block; width: 100%; height: auto; }
+#racesim .rs-keyslot { display: block; width: 46px; }
+#racesim .rs-keyslot[hidden] { display: none; }
+#racesim .rs-keeper-say { margin: 0; font-size: 0.8rem; color: var(--muted); text-align: center; }
 </style>
 
 <figure class="ox-figure ox-wide" id="racesim" aria-labelledby="racesim-title">
@@ -551,10 +566,16 @@ fn main() {
         <li>WRITE back</li>
       </ol>
       <p class="rs-state" data-state="A">ready</p>
+      <span class="rs-keyslot" data-keyslot="A" aria-hidden="true" hidden></span>
       <button type="button" class="ox-btn is-small" data-step="A">Step A</button>
     </div>
 
     <div class="rs-shared">
+      <div class="rs-keeper" data-keeper hidden>
+        <span class="rs-keeper-art" data-keeper-art aria-hidden="true"></span>
+        <span class="rs-keyslot" data-keyslot="free" aria-hidden="true"></span>
+        <p class="rs-keeper-say">The Keeper holds the only key. A thread holding it is the only one inside.</p>
+      </div>
       <p class="rs-label">shared count</p>
       <p class="rs-count" data-count aria-live="polite">0</p>
       <p class="rs-lock" data-lock>no lock</p>
@@ -570,6 +591,7 @@ fn main() {
         <li>WRITE back</li>
       </ol>
       <p class="rs-state" data-state="B">ready</p>
+      <span class="rs-keyslot" data-keyslot="B" aria-hidden="true" hidden></span>
       <button type="button" class="ox-btn is-small" data-step="B">Step B</button>
     </div>
   </div>
@@ -1186,7 +1208,7 @@ function rsBatch(mode, seed, rounds) {
   var RS_LABEL = { READ: "READ count", ADD: "ADD 1", WRITE: "WRITE back", LOCK: "LOCK", UNLOCK: "UNLOCK", FETCH_ADD: "fetch_add(1)" };
   var RS_START = {
     none: "Both threads start at READ. Press Step A and Step B to interleave them yourself. To see a lost update, press A, B, A, B, A, B.",
-    mutex: "Each increment now takes the lock first. Press Step A and Step B. If one thread holds the lock, the other one waits.",
+    mutex: "The Keeper appears and holds the only key. Each increment takes the key first. If one thread holds it, the other waits at the door. Press Step A and Step B.",
     atomic: "Each increment is one fetch_add. Nothing can interleave inside it, so every step adds exactly one."
   };
   var RS_MODE_NAME = { none: "No lock", mutex: "Mutex", atomic: "Atomic" };
@@ -1204,11 +1226,24 @@ function rsBatch(mode, seed, rounds) {
     var tabs = qa(".rs-modes button");
     var out = q("[data-batch-out]"), bar = q("[data-bar]"), say = q("[data-say]");
     var log = q("[data-log]");
+    // The Keeper and the key are drawn only in Mutex mode: the key sits with the holder.
+    var keeperBox = q("[data-keeper]"), keeperArt = q("[data-keeper-art]");
+    var keySlots = qa("[data-keyslot]");
+    if (window.OxCast) {
+      keeperArt.innerHTML = OxCast.el("keeper");
+      keySlots.forEach(function (s) { s.innerHTML = OxCast.prop("key"); });
+    }
     var mode = "none", sim = rsNew(mode), current = RS_START.none, events = [], runs = 0, sawLoss = false;
     var batchStart = out.textContent;
 
     function render() {
       var prog = RS_PROG[mode];
+      var keyed = mode === "mutex";
+      keeperBox.hidden = !keyed;
+      keySlots.forEach(function (s) {
+        var at = sim.holder === null ? "free" : sim.holder;
+        s.hidden = !keyed || s.getAttribute("data-keyslot") !== at;
+      });
       ["A", "B"].forEach(function (w) {
         var th = sim.t[w];
         q('[data-reg="' + w + '"]').textContent = String(th.reg);

@@ -19,6 +19,7 @@
 <script src="../assets/quests-data.js" defer></script>
 <script src="../assets/cards/ch10.js" defer></script>
 <script src="../assets/scenarios/ch10.js" defer></script>
+<script src="../assets/motion/ch10.js" defer></script>
 <script src="../assets/oxidize.js" defer></script>
 <script src="../assets/cast-art.js" defer></script>
 <script src="../assets/cast.js" defer></script>
@@ -167,6 +168,8 @@ fn main() {
 
 <p>A <code>match</code> compares a value against a list of patterns, one arm at a time, from the top. The first arm whose pattern fits runs, and the rest are skipped. A <code>match</code> is also an expression, so it produces a value you can store, return or print.</p>
 
+<div class="ox-meet" data-cast="octo" data-say="An arm for every shape, or I won't start."></div>
+
 <pre class="rs" data-run data-stdout="move to (3, -1)">enum Message {
     Quit,
     Move { x: i32, y: i32 },
@@ -222,6 +225,8 @@ For more information about this error, try `rustc --explain E0308`.</pre>
 
 <p>The next rule is the important one. A <code>match</code> has to handle every possible value. If you leave a case out, the program doesn't compile, and the compiler says exactly what is missing.</p>
 
+<div class="ox-motion" data-scene="ch10-arms"></div>
+
 <p>The machine below is a real <code>match</code>. It is the <code>describe</code> function, written over the same <code>Message</code> enum. Pick a value and run it. Then use the <em>remove</em> box next to an arm to delete that arm.</p>
 
 <div class="ox-figure ox-wide" id="matchmachine">
@@ -262,6 +267,17 @@ For more information about this error, try `rustc --explain E0308`.</pre>
     #matchmachine .mm-out { margin-top: 12px; min-height: 3rem; font-size: 0.95rem; }
     #matchmachine .mm-out p { margin: 0 0 8px; }
     #matchmachine .mm-rustc { background: var(--code-bg); color: var(--code-ink); font-family: var(--font-mono); font-size: 0.78rem; line-height: 1.5; padding: 12px 14px; border-radius: var(--radius-lg); overflow-x: auto; white-space: pre; margin: 6px 0 0; }
+    #matchmachine .mm-octo { position: relative; width: min(100%, 270px); margin: 4px auto 14px; }
+    #matchmachine .mm-octo .ca { display: block; width: 100%; }
+    #matchmachine .mm-octo .ca-svg { display: block; width: 100%; height: auto; }
+    #matchmachine .mm-octo .ca-arm.is-caught .ca-sign { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 2.5; }
+    #matchmachine .mm-octo .ca-arm.is-lost .ca-sign { fill: var(--bad-soft); stroke: var(--bad); stroke-dasharray: 4 3; }
+    #matchmachine .mm-octo .ca-arm.is-lost .ca-label { fill: var(--bad); }
+    #matchmachine .mm-ticket { position: absolute; top: -18%; left: 0; width: 30%; transform: translate(-50%, -50%); opacity: 0; pointer-events: none; transition: top 0.5s cubic-bezier(.3, 1.2, .5, 1), opacity 0.3s; }
+    #matchmachine .mm-ticket.is-in { top: 88%; opacity: 1; }
+    #matchmachine .mm-ticket.is-gone { opacity: 0; }
+    #matchmachine .mm-ticket .ca-svg { display: block; width: 100%; height: auto; }
+    @media (prefers-reduced-motion: reduce) { #matchmachine .mm-ticket { transition: none; } }
   </style>
   <div class="mm-top">
     <span class="ox-label">Match Machine</span>
@@ -281,6 +297,7 @@ For more information about this error, try `rustc --explain E0308`.</pre>
     </div>
     <div class="mm-panel">
       <span class="ox-label">describe(&amp;msg)</span>
+      <div class="mm-octo" aria-hidden="true"></div>
       <div class="mm-code">
         <div class="mm-line">fn describe(msg: &amp;Message) -&gt; String {</div>
         <div class="mm-line">    match msg {</div>
@@ -614,6 +631,8 @@ note: `Option&lt;i32&gt;` does not implement `Add&lt;{integer}&gt;`
 For more information about this error, try `rustc --explain E0369`.</pre>
 
 <p>The compiler knows <code>n</code> might be <code>None</code>, so it refuses to add to it. The fix is to decide what should happen when the box is empty. The methods in the next part do exactly that.</p>
+
+<div class="ox-motion" data-scene="ch10-option"></div>
 
 <div class="ox-bridge">
   <pre class="php">final class UserRepository
@@ -1030,6 +1049,24 @@ final class Order
     var valueEl = box.querySelector(".mm-value");
     var kindBtns = Array.prototype.slice.call(box.querySelectorAll(".mm-kinds button"));
 
+    // Octo sits on top. Its four arms are the variants, and a value is caught
+    // by the arm of its variant. If a removed arm leaves a variant with no arm,
+    // that arm shows as lost.
+    var VARIANT_NAMES = ["Quit", "Move", "Write", "Color"];
+    var VARIANT_OF = [0, 1, 1, 1, 1, 2, 2, 3, 3];   // arm index -> variant index
+    var LOST_OF = { 0: 0, 4: 1, 6: 2, 8: 3 };       // removed arm -> variant with no arm left
+    var SIGN_X = [39, 97, 155, 213].map(function (x) { return (x / 252 * 100) + "%"; }); // arm centres in art units
+    var octoHost = box.querySelector(".mm-octo");
+    var octoNode = null, ticket = null;
+    if (octoHost && window.OxCast) {
+      octoHost.innerHTML = OxCast.el("octo", { arms: VARIANT_NAMES });
+      octoNode = octoHost.querySelector(".ca");
+      ticket = document.createElement("span");
+      ticket.className = "mm-ticket";
+      ticket.setAttribute("aria-hidden", "true");
+      octoHost.appendChild(ticket);
+    }
+
     var val = { kind: "move", x: 3, y: -1, text: "hi", r: 255, g: 0, b: 0 };
     var removed = -1;   // at most one arm is removed at a time
     var timers = [];
@@ -1135,6 +1172,7 @@ final class Order
       });
     }
     function paintStatus() {
+      paintOcto();
       if (isError()) {
         statusEl.textContent = "won't compile: E0004";
         statusEl.className = "mm-status is-bad";
@@ -1167,10 +1205,47 @@ final class Order
       if (list.some(function (k) { return k > hit.arm; })) html += "<p>The arms after arm " + (hit.arm + 1) + " are never tested.</p>";
       out.innerHTML = html;
     }
+    function resetTicket() {
+      if (!ticket) return;
+      ticket.style.transition = "none";
+      ticket.classList.remove("is-in", "is-gone");
+      void ticket.offsetWidth;
+      ticket.style.transition = "";
+    }
+    function resetOcto() {
+      if (!octoNode) return;
+      resetTicket();
+      octoHost.querySelectorAll(".ca-arm.is-caught").forEach(function (g) { g.classList.remove("is-caught"); });
+      OxCast.pose(octoNode, "");
+    }
+    // Octo marks the lost arm and thinks while the match does not compile.
+    function paintOcto() {
+      if (!octoNode) return;
+      var lost = isError() ? LOST_OF[removed] : -1;
+      octoHost.querySelectorAll(".ca-arm").forEach(function (g) {
+        g.classList.toggle("is-lost", +g.getAttribute("data-arm") === lost);
+      });
+      if (lost >= 0) OxCast.pose(octoNode, "think");
+      else if (octoNode.classList.contains("is-think")) OxCast.pose(octoNode, "");
+    }
+    // The value drops into the arm that matched, and Octo catches it.
+    function catchValue(v) {
+      if (!octoNode) return;
+      octoHost.querySelectorAll(".ca-arm").forEach(function (g) {
+        g.classList.toggle("is-caught", +g.getAttribute("data-arm") === v);
+      });
+      resetTicket();
+      ticket.innerHTML = OxCast.prop("ticket", { label: VARIANT_NAMES[v] });
+      ticket.style.left = SIGN_X[v];
+      ticket.classList.add("is-in");
+      if (!reduce) timers.push(setTimeout(function () { ticket.classList.add("is-gone"); }, 900));
+      OxCast.pose(octoNode, "catch", 1400);
+    }
     function clearTimers() { timers.forEach(clearTimeout); timers = []; }
     function changed() {
       clearTimers();
       busy = false;
+      resetOcto();
       paintArms(null);
       paintStatus();
       paintValue();
@@ -1187,10 +1262,13 @@ final class Order
         if (!reduce) timers.push(setTimeout(function () { setArm(s.arm, "is-try", "testing"); }, i * gap));
         timers.push(setTimeout(function () { setArm(s.arm, s.cls, s.note); }, i * gap + (reduce ? 0 : 240)));
       });
+      var hitStep = null;
+      steps.forEach(function (s) { if (s.cls === "is-hit") hitStep = s; });
       timers.push(setTimeout(function () {
         busy = false;
         paintStatus();
         resultView(steps);
+        if (hitStep) catchValue(VARIANT_OF[hitStep.arm]);
       }, steps.length * gap + (reduce ? 0 : 150)));
     }
 

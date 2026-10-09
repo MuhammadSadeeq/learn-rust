@@ -18,6 +18,7 @@
 <script src="../assets/course-data.js" defer></script>
 <script src="../assets/quests-data.js" defer></script>
 <script src="../assets/cards/ch01.js" defer></script>
+<script src="../assets/motion/ch01.js" defer></script>
 <script src="../assets/oxidize.js" defer></script>
 <script src="../assets/cast-art.js" defer></script>
 <script src="../assets/cast.js" defer></script>
@@ -64,6 +65,8 @@
     <p>Some good reasons: a CPU-heavy step that dominates response time, a long-running worker that must keep its memory small and predictable, a command-line tool you want to ship as one file that needs no PHP on the target machine, or a tool an agent will run constantly, where a compile-time check is worth having.</p>
   </div>
 </details>
+
+<div class="ox-meet" data-cast="oxi" data-say="I ask you to guess before each reveal. A wrong guess still teaches, so guess anyway."></div>
 </section>
 
 <section>
@@ -74,6 +77,10 @@
 <p>In a classic PHP-FPM setup, the web server hands each request to a PHP worker process. PHP loads the script and compiles it to opcodes. OPcache keeps those opcodes in shared memory, so the compile step is usually skipped after the first request. The script then runs. When the response is sent, PHP frees everything the request allocated. The worker process lives on for the next request, but nothing from the last request is still in memory.</p>
 
 <p>A Rust web service is built once, before you deploy. <code>cargo build</code> compiles the whole program into one native binary. You start that binary and it keeps running. Each request is handled by code that is already machine code, so nothing is compiled when a request arrives. The process also keeps whatever your program stores in memory, until your code removes it.</p>
+
+<div class="ox-meet" data-cast="forge" data-say="Hand me your source before anything runs. Clean code comes back as an ingot. Broken code comes back as a scroll that says why."></div>
+
+<div class="ox-motion" data-scene="ch01-two-worlds"></div>
 
 <style>
 #pipelines .pl-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 4px; }
@@ -504,6 +511,8 @@ For more information about this error, try `rustc --explain E0423`.</pre>
   <p>The compiler is your pair programmer. Its messages are specific, and they usually name the fix. Read the <code>help:</code> line before you search the web for the error.</p>
 </aside>
 
+<div class="ox-motion" data-scene="ch01-first-error"></div>
+
 <div class="ox-quiz" data-id="01:compiles">
   <p class="ox-q">Does this compile?</p>
   <pre class="rs" data-check="E0425">
@@ -517,6 +526,196 @@ fn main() {
   </ol>
   <div class="ox-why"><p>The name in the braces must be a variable in scope, and <code>totl</code> is a typo for <code>total</code>. The compiler even suggests the fix. In PHP, a typo in a variable name becomes an "Undefined variable" warning that appears only when that line runs. In Rust it is caught before the program exists.</p></div>
 </div>
+
+<style>
+#feed-forge { margin: 24px 0; }
+#feed-forge .ff-intro { margin: 0 0 14px; color: var(--ink-2); }
+#feed-forge .ff-bench { position: relative; display: grid; justify-items: center; gap: 6px; padding: 14px 12px 12px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface-2); }
+#feed-forge .ff-forge { width: 112px; }
+#feed-forge .ff-forge .ca { display: block; width: 100%; }
+#feed-forge .ff-forge .ca-svg { display: block; width: 100%; height: auto; }
+#feed-forge .ff-status { margin: 0; min-height: 1.5em; text-align: center; font: 600 0.9rem/1.4 var(--font-mono); color: var(--ink-2); }
+#feed-forge .ff-chip { position: absolute; left: 0; top: 0; z-index: 3; padding: 3px 10px; border: 1px solid var(--ink); border-radius: 999px; background: var(--surface); color: var(--ink); font: 700 0.78rem/1.2 var(--font-mono); white-space: nowrap; box-shadow: var(--shadow); pointer-events: none; }
+#feed-forge .ff-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 16px 0 0; padding: 0; list-style: none; }
+@media (max-width: 640px) { #feed-forge .ff-cards { grid-template-columns: minmax(0, 1fr); } }
+#feed-forge .ff-card { position: relative; display: grid; gap: 10px; min-width: 0; margin: 0; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
+#feed-forge .ff-card.is-right { border-color: var(--ok); }
+#feed-forge .ff-card.is-wrong { border-color: var(--bad); }
+#feed-forge .ff-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+#feed-forge .ff-name { margin: 0; font: 800 1.15rem/1.1 var(--font-display); color: var(--ink); }
+#feed-forge .ff-code { margin: 0; padding: 10px 12px; overflow-x: auto; border-radius: var(--radius); background: var(--code-bg); color: var(--code-ink); font: 400 0.8rem/1.6 var(--font-mono); }
+#feed-forge .ff-pick { display: flex; flex-wrap: wrap; gap: 8px; }
+#feed-forge .ff-out { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 12px; align-items: center; }
+#feed-forge .ff-out[hidden] { display: none; }
+#feed-forge .ff-out:focus { outline: 2px solid var(--oxide); outline-offset: 3px; border-radius: var(--radius); }
+#feed-forge .ff-art { display: block; width: 84px; }
+#feed-forge .ff-art .ca { display: block; width: 100%; }
+#feed-forge .ff-art .ca-svg { display: block; width: 100%; height: auto; }
+#feed-forge .ff-text { min-width: 0; font-size: 0.92rem; }
+#feed-forge .ff-text p { margin: 0 0 4px; }
+#feed-forge .ff-verdict.is-right strong { color: var(--ok); }
+#feed-forge .ff-verdict.is-wrong strong { color: var(--bad); }
+#feed-forge .ff-why { color: var(--muted); }
+#feed-forge .ff-end { margin: 14px 0 0; padding: 12px 14px; border-left: 3px solid var(--ok); border-radius: 0 var(--radius) var(--radius) 0; background: var(--ok-soft); }
+#feed-forge .ff-end[hidden] { display: none; }
+#feed-forge .ff-end p { margin: 0 0 6px; }
+#feed-forge .ff-end p:last-child { margin-bottom: 0; }
+#feed-forge .ff-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 14px; }
+#feed-forge .ff-count { margin: 0; font: 600 0.85rem/1 var(--font-mono); color: var(--muted); }
+</style>
+
+<div class="ox-figure ox-wide" id="feed-forge">
+  <p class="ox-label">Feed the Forge</p>
+  <p class="ff-intro">Each card is a whole program. Before you feed it, predict what the Forge does. <b>Accept</b> means it builds to an ingot. <b>Reject</b> means it hands back an error scroll.</p>
+  <div class="ff-bench">
+    <div class="ff-forge" aria-hidden="true"></div>
+    <p class="ff-status" aria-live="polite">Predict the first program. Then the Forge takes it.</p>
+  </div>
+  <ol class="ff-cards" aria-label="Five programs to predict"></ol>
+  <div class="ff-end" hidden aria-live="polite"></div>
+  <div class="ff-bar">
+    <p class="ff-count">0 of 5 fed</p>
+    <button type="button" class="ox-btn is-small" data-ff-reset>Start over</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  function init() {
+  var root = document.getElementById("feed-forge");
+  if (!root || !window.OxCast) return;
+  var items = window.OX_CH01_FORGE || [];
+  var bench = root.querySelector(".ff-bench");
+  var forgeBox = root.querySelector(".ff-forge");
+  var list = root.querySelector(".ff-cards");
+  var status = root.querySelector(".ff-status");
+  var endBox = root.querySelector(".ff-end");
+  var countBox = root.querySelector(".ff-count");
+  var reset = root.querySelector("[data-ff-reset]");
+  var reduced = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+  var fed = 0, awarded = false, timers = [], forgeNode = null;
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function later(fn, ms) { timers.push(setTimeout(fn, ms)); }
+  function code(src) { return window.Ox && Ox.highlight ? Ox.highlight(src, "rust") : esc(src); }
+
+  function buildCards() {
+    list.innerHTML = "";
+    items.forEach(function (it, i) {
+      var li = document.createElement("li");
+      li.className = "ff-card";
+      li.innerHTML =
+        '<div class="ff-head"><p class="ff-name">Program ' + (i + 1) + '</p><span class="ox-label">predict</span></div>' +
+        '<pre class="ff-code"><code>' + code(it.rust) + '</code></pre>' +
+        '<div class="ff-pick" role="group" aria-label="Predict program ' + (i + 1) + '">' +
+        '<button type="button" class="ox-btn is-small" data-pick="accept">Accept</button>' +
+        '<button type="button" class="ox-btn is-small" data-pick="reject">Reject</button></div>' +
+        '<div class="ff-out" tabindex="-1" hidden></div>';
+      li.querySelectorAll("[data-pick]").forEach(function (b) {
+        b.addEventListener("click", function () { predict(i, b.getAttribute("data-pick")); });
+      });
+      list.appendChild(li);
+    });
+  }
+
+  function predict(i, choice) {
+    var li = list.children[i];
+    if (li.dataset.state) return;
+    li.dataset.state = "flying";
+    li.querySelectorAll("[data-pick]").forEach(function (b) { b.disabled = true; });
+    li.dataset.right = (choice === "accept") === (items[i].check === "ok") ? "1" : "0";
+    status.textContent = "Program " + (i + 1) + " goes into the Forge.";
+    fly(i, function () { land(i); });
+  }
+
+  // The card's name flies from its place in the list to the Forge.
+  function fly(i, done) {
+    if (reduced) return done();
+    var b = bench.getBoundingClientRect();
+    var from = list.children[i].getBoundingClientRect();
+    var to = forgeBox.getBoundingClientRect();
+    var x0 = from.left + from.width / 2 - b.left, y0 = from.top + from.height / 2 - b.top;
+    var dx = to.left + to.width / 2 - b.left - x0, dy = to.top + to.height / 2 - b.top - y0;
+    var chip = document.createElement("span");
+    chip.className = "ff-chip";
+    chip.setAttribute("aria-hidden", "true");
+    chip.textContent = "Program " + (i + 1);
+    chip.style.left = x0 + "px";
+    chip.style.top = y0 + "px";
+    bench.appendChild(chip);
+    var a = chip.animate([
+      { transform: "translate(-50%, -50%)", opacity: 1 },
+      { transform: "translate(calc(-50% + " + dx + "px), calc(-50% + " + dy + "px)) scale(0.3)", opacity: 0 },
+    ], { duration: 650, easing: "cubic-bezier(.45,.05,.25,1)" });
+    a.addEventListener("finish", function () { chip.remove(); done(); });
+  }
+
+  function land(i) {
+    var li = list.children[i];
+    li.dataset.state = "fed";
+    OxCast.pose(forgeNode, "chomp", reduced ? 0 : 760);
+    later(function () {
+      OxCast.pose(forgeNode, items[i].check === "ok" ? "happy" : "oops");
+      show(i);
+      fed++;
+      countBox.textContent = fed + " of " + items.length + " fed";
+      if (fed === items.length) finish();
+    }, reduced ? 0 : 760);
+  }
+
+  function show(i) {
+    var it = items[i], li = list.children[i], out = li.querySelector(".ff-out");
+    var accepted = it.check === "ok", right = li.dataset.right === "1";
+    var art = accepted
+      ? OxCast.prop("ingot", { label: "ingot" })
+      : OxCast.prop("errscroll", { label: it.code || "no code" });
+    var head = accepted
+      ? "This compiles, and the ingot prints <code>" + esc(it.stdout) + "</code>."
+      : "The Forge rejects it: <code>" + esc(it.msg) + "</code>";
+    out.innerHTML = '<span class="ff-art">' + art + '</span>' +
+      '<div class="ff-text">' +
+      '<p class="ff-verdict ' + (right ? "is-right" : "is-wrong") + '"><strong>' + (right ? "You called it." : "Not this time.") + '</strong></p>' +
+      '<p>' + head + '</p>' +
+      '<p class="ff-why">' + esc(it.why) + '</p></div>';
+    out.hidden = false;
+    li.classList.add(right ? "is-right" : "is-wrong");
+    status.textContent = "Program " + (i + 1) + " is " + (accepted ? "accepted" : "rejected") + ". " + (right ? "You called it." : "Not this time.");
+    li.dispatchEvent(new CustomEvent("ox:answer", { bubbles: true, detail: { right: right } }));
+    out.focus({ preventScroll: true });
+  }
+
+  function finish() {
+    var acc = items.filter(function (it) { return it.check === "ok"; }).length;
+    endBox.innerHTML =
+      "<p><strong>All " + items.length + " fed.</strong> The Forge accepted " + acc + " and rejected " + (items.length - acc) + ". Every verdict came from rustc 1.97, not from a guess about style.</p>" +
+      "<p>One reject has no error code at all. Not every error has an E-number, but every one stops the build.</p>";
+    endBox.hidden = false;
+    if (!awarded && window.Ox && Ox.award) { awarded = true; Ox.award(10, "fed the Forge", "ch01:feed-forge"); }
+  }
+
+  function restart() {
+    timers.forEach(clearTimeout);
+    timers = [];
+    bench.querySelectorAll(".ff-chip").forEach(function (c) { c.remove(); });
+    fed = 0;
+    countBox.textContent = "0 of " + items.length + " fed";
+    endBox.hidden = true;
+    status.textContent = "Predict the first program. Then the Forge takes it.";
+    OxCast.pose(forgeNode, "sleep");
+    buildCards();
+  }
+
+  forgeBox.innerHTML = OxCast.el("forge", { pose: "sleep" });
+  forgeNode = forgeBox.querySelector(".ca");
+  buildCards();
+  reset.addEventListener("click", restart);
+  }
+  // cast-art.js and the scene data are deferred, so wait for them.
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
+</script>
 </section>
 
 <section>

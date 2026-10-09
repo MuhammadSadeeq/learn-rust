@@ -18,6 +18,7 @@
 <script src="../assets/course-data.js" defer></script>
 <script src="../assets/quests-data.js" defer></script>
 <script src="../assets/cards/ch13.js" defer></script>
+<script src="../assets/motion/ch13.js" defer></script>
 <script src="../assets/oxidize.js" defer></script>
 <script src="../assets/cast-art.js" defer></script>
 <script src="../assets/cast.js" defer></script>
@@ -110,6 +111,8 @@ fn main() {
 
 <p>A closure can use variables from the scope where it was written. It captures them. How its body uses them decides which of three traits the closure implements, and the trait tells you how the closure may be called. Read the trait off the body, and you know what the closure can do.</p>
 
+<div class="ox-meet" data-cast="clo" data-say="Anything my body uses from outside goes into my backpack. How I use it decides how it goes in."></div>
+
 <div class="ox-table-wrap">
 <table class="ox-table">
   <thead><tr><th>Trait</th><th>The body…</th><th>How you may call it</th></tr></thead>
@@ -120,6 +123,10 @@ fn main() {
   </tbody>
 </table>
 </div>
+
+<p>Watch Clo pack three closures, one after another. The code on the left is the program, and each beat marks the line it talks about.</p>
+
+<div class="ox-motion" data-scene="ch13-backpack"></div>
 
 <p>Three short programs, one for each trait. Each one compiles.</p>
 
@@ -267,6 +274,190 @@ For more information about this error, try `rustc --explain E0373`.</pre>
 <aside class="ox-callout" data-kind="insight">
   <p><code>move</code> changes how values are captured, not which trait the closure implements. A <code>move</code> closure that only reads is still <code>Fn</code>, and you can call it as often as you like. The body decides the trait; the keyword only decides who owns what.</p>
 </aside>
+
+<h3>Pack Clo's backpack</h3>
+
+<p>Each closure below uses one variable from <code>main</code>. For that variable, pick how Clo packs it: a <strong>look</strong> (a shared borrow, <code>&amp;</code>), a <strong>change</strong> (a mutable borrow, <code>&amp;mut</code>), or a <strong>take</strong> (the value moves in). Every answer is backed by a small program. The verdict is the one rustc gives it.</p>
+
+<style>
+#pack { display: grid; gap: 14px; padding: 16px; min-width: 0; }
+#pack .pk-top { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+#pack .pk-art { flex: 0 0 92px; width: 92px; }
+#pack .pk-art .ca { display: block; width: 92px; }
+#pack .pk-intro { margin: 0; flex: 1 1 260px; min-width: 0; color: var(--ink-2); }
+#pack .pk-grid { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 720px) { #pack .pk-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+#pack .pk-card { display: grid; gap: 10px; min-width: 0; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--line-2); border-radius: var(--radius); transition: border-color 0.25s; }
+#pack .pk-card.is-right { border-left-color: var(--ok); }
+#pack .pk-card.is-wrong { border-left-color: var(--bad); }
+#pack .pk-code { margin: 0; font-family: var(--font-mono); font-size: 0.86rem; color: var(--ink); overflow-wrap: anywhere; }
+#pack .pk-code code, #pack .pk-name code { background: none; padding: 0; }
+#pack .pk-var { display: grid; gap: 6px; min-width: 0; }
+#pack .pk-name { margin: 0; font-size: 0.92rem; color: var(--ink-2); overflow-wrap: anywhere; }
+#pack .pk-type { color: var(--muted); font-size: 0.82rem; }
+#pack .pk-modes { display: flex; flex-wrap: wrap; gap: 6px; }
+#pack .pk-modes .ox-btn[aria-pressed="true"][data-mode="look"] { background: var(--borrow-soft); border-color: var(--borrow); }
+#pack .pk-modes .ox-btn[aria-pressed="true"][data-mode="change"] { background: var(--mut-soft); border-color: var(--mut); }
+#pack .pk-modes .ox-btn[aria-pressed="true"][data-mode="take"] { background: var(--oxide-soft); border-color: var(--oxide); }
+#pack .pk-mark { margin: 0; min-height: 1.3em; font: 700 0.84rem/1.3 var(--font-mono); }
+#pack .pk-mark.is-right { color: var(--ok); }
+#pack .pk-mark.is-wrong { color: var(--bad); }
+#pack .pk-panel { min-width: 0; padding: 12px 14px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-lg); }
+#pack .pk-status { margin: 0; font-weight: 700; color: var(--ink); }
+#pack .pk-verdict { margin-top: 8px; min-width: 0; }
+#pack .pk-verdict p { margin: 6px 0; color: var(--ink-2); }
+#pack .pk-prog { margin: 8px 0; padding: 10px 12px; background: var(--code-bg); color: var(--code-ink); border-radius: var(--radius); font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+#pack .pk-result { font-family: var(--font-mono); font-size: 0.86rem; font-weight: 700; }
+#pack .pk-result.is-ok { color: var(--ok); }
+#pack .pk-result.is-err { color: var(--bad); }
+@media (prefers-reduced-motion: reduce) { #pack .pk-card { transition: none; } }
+</style>
+
+<div class="ox-figure ox-wide" id="pack" role="region" aria-label="Pack Clo's backpack: pick a look, change or take for each closure">
+  <div class="pk-top">
+    <span class="pk-art" aria-hidden="true"></span>
+    <p class="pk-intro">Four closures, one captured variable each. Pick an answer for every one.</p>
+  </div>
+  <div class="pk-grid">
+    <article class="pk-card" data-closure="greet" data-var="name">
+      <p class="pk-code"><code>let greet = || println!("hello {name}");</code></p>
+      <div class="pk-var">
+        <p class="pk-name"><code>name</code> <span class="pk-type">String</span></p>
+        <div class="pk-modes" role="group" aria-label="How greet packs name">
+          <button type="button" class="ox-btn is-small" data-mode="look" aria-pressed="false">Look (&amp;)</button>
+          <button type="button" class="ox-btn is-small" data-mode="change" aria-pressed="false">Change (&amp;mut)</button>
+          <button type="button" class="ox-btn is-small" data-mode="take" aria-pressed="false">Take (move)</button>
+        </div>
+        <p class="pk-mark" aria-live="polite"></p>
+      </div>
+    </article>
+    <article class="pk-card" data-closure="record" data-var="log">
+      <p class="pk-code"><code>let mut record = || log.push(4);</code></p>
+      <div class="pk-var">
+        <p class="pk-name"><code>log</code> <span class="pk-type">Vec&lt;i32&gt;</span></p>
+        <div class="pk-modes" role="group" aria-label="How record packs log">
+          <button type="button" class="ox-btn is-small" data-mode="look" aria-pressed="false">Look (&amp;)</button>
+          <button type="button" class="ox-btn is-small" data-mode="change" aria-pressed="false">Change (&amp;mut)</button>
+          <button type="button" class="ox-btn is-small" data-mode="take" aria-pressed="false">Take (move)</button>
+        </div>
+        <p class="pk-mark" aria-live="polite"></p>
+      </div>
+    </article>
+    <article class="pk-card" data-closure="finish" data-var="ticket">
+      <p class="pk-code"><code>let finish = || drop(ticket);</code></p>
+      <div class="pk-var">
+        <p class="pk-name"><code>ticket</code> <span class="pk-type">String</span></p>
+        <div class="pk-modes" role="group" aria-label="How finish packs ticket">
+          <button type="button" class="ox-btn is-small" data-mode="look" aria-pressed="false">Look (&amp;)</button>
+          <button type="button" class="ox-btn is-small" data-mode="change" aria-pressed="false">Change (&amp;mut)</button>
+          <button type="button" class="ox-btn is-small" data-mode="take" aria-pressed="false">Take (move)</button>
+        </div>
+        <p class="pk-mark" aria-live="polite"></p>
+      </div>
+    </article>
+    <article class="pk-card" data-closure="ship" data-var="order">
+      <p class="pk-code"><code>let ship = move || println!("shipping {order}");</code></p>
+      <div class="pk-var">
+        <p class="pk-name"><code>order</code> <span class="pk-type">String</span></p>
+        <div class="pk-modes" role="group" aria-label="How ship packs order">
+          <button type="button" class="ox-btn is-small" data-mode="look" aria-pressed="false">Look (&amp;)</button>
+          <button type="button" class="ox-btn is-small" data-mode="change" aria-pressed="false">Change (&amp;mut)</button>
+          <button type="button" class="ox-btn is-small" data-mode="take" aria-pressed="false">Take (move)</button>
+        </div>
+        <p class="pk-mark" aria-live="polite"></p>
+      </div>
+    </article>
+  </div>
+  <div class="pk-panel">
+    <p class="pk-status" aria-live="polite">0 of 4 packed. Pick an answer on any closure to see what rustc says about it.</p>
+    <div class="pk-verdict" aria-live="polite"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  function init() {
+    var root = document.getElementById("pack");
+    var data = window.OX_CH13_PACK;
+    if (!root || !data) return;
+    var art = root.querySelector(".pk-art");
+    var verdict = root.querySelector(".pk-verdict");
+    var status = root.querySelector(".pk-status");
+    var cards = Array.prototype.slice.call(root.querySelectorAll(".pk-card"));
+    var TOTAL = cards.length;
+    var picks = {};
+    var awarded = false;
+    var LABEL = { look: "a look (&)", change: "a change (&mut)", take: "a take (move)" };
+
+    function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+    function code(src) { return window.Ox && Ox.highlight ? Ox.highlight(src, "rust") : esc(src); }
+    function find(closure, mode) {
+      for (var i = 0; i < data.length; i++) if (data[i].closure === closure && data[i].mode === mode) return data[i];
+      return null;
+    }
+    function truthOf(closure) {
+      for (var i = 0; i < data.length; i++) if (data[i].closure === closure && data[i].truth) return data[i];
+      return null;
+    }
+    function cloPose(p) {
+      var ca = art && art.querySelector(".ca");
+      if (window.OxCast && ca) OxCast.pose(ca, p, 900);
+    }
+    if (window.OxCast && art) art.innerHTML = OxCast.el("clo");
+
+    function showVerdict(card, entry, right) {
+      var closure = card.getAttribute("data-closure");
+      var v = card.getAttribute("data-var");
+      var truth = truthOf(closure);
+      var head = right
+        ? "<p><strong>Right.</strong> Clo packs <code>" + v + "</code> as " + LABEL[entry.mode] + ".</p>"
+        : "<p><strong>Not this time.</strong> Clo packs <code>" + v + "</code> as " + LABEL[truth.mode] + ". Here is what " + LABEL[entry.mode] + " would mean:</p>";
+      var result = entry.check === "ok"
+        ? '<p class="pk-result is-ok">rustc: compiles. It prints:</p><pre class="pk-prog">' + esc(entry.stdout) + "</pre>"
+        : '<p class="pk-result is-err">rustc: error ' + esc(entry.check) + ". The program does not compile.</p>";
+      verdict.innerHTML = head + "<p>" + esc(entry.say) + '</p><pre class="pk-prog">' + code(entry.rust) + "</pre>" + result;
+    }
+
+    function choose(card, mode) {
+      var closure = card.getAttribute("data-closure");
+      var entry = find(closure, mode);
+      if (!entry) return;
+      var truth = truthOf(closure);
+      var right = mode === truth.mode;
+      picks[closure] = mode;
+      card.querySelectorAll("[data-mode]").forEach(function (b) {
+        b.setAttribute("aria-pressed", String(b.getAttribute("data-mode") === mode));
+      });
+      card.classList.toggle("is-right", right);
+      card.classList.toggle("is-wrong", !right);
+      var mark = card.querySelector(".pk-mark");
+      mark.className = "pk-mark " + (right ? "is-right" : "is-wrong");
+      mark.textContent = right ? "Right." : "Not this time.";
+      showVerdict(card, entry, right);
+      cloPose(right ? "happy" : "oops");
+      var n = Object.keys(picks).length;
+      status.textContent = n + " of " + TOTAL + " packed.";
+      if (n === TOTAL) {
+        status.textContent = "All four packed. Every program behind these answers was compiled with rustc.";
+        if (!awarded) {
+          awarded = true;
+          if (window.Ox && typeof window.Ox.award === "function") window.Ox.award(10, "packed Clo's backpack", "ch13:backpack");
+        }
+      }
+    }
+
+    root.addEventListener("click", function (e) {
+      var b = e.target.closest ? e.target.closest("[data-mode]") : null;
+      if (!b || !root.contains(b)) return;
+      var card = b.closest(".pk-card");
+      if (card) choose(card, b.getAttribute("data-mode"));
+    });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
+</script>
 
 <h3>Passing closures to functions</h3>
 

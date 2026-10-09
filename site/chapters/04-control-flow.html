@@ -19,6 +19,7 @@
 <script src="../assets/quests-data.js" defer></script>
 <script src="../assets/cards/ch04.js" defer></script>
 <script src="../assets/scenarios/ch04.js" defer></script>
+<script src="../assets/motion/ch04.js" defer></script>
 <script src="../assets/oxidize.js" defer></script>
 <script src="../assets/cast-art.js" defer></script>
 <script src="../assets/cast.js" defer></script>
@@ -195,6 +196,8 @@ fn main() {
 
 <p>Now the rule that trips up nearly everyone at first. Put a semicolon after the last expression of a function, and the function stops returning that value. Here is what the compiler says about a small example:</p>
 
+<div class="ox-meet" data-cast="semi" data-say="I eat the value before me and leave an empty box. Keep me off the last line of a function."></div>
+
 <pre class="rs" data-check="E0308">
 fn plus_one(x: i32) -> i32 {
     x + 1;
@@ -217,6 +220,10 @@ For more information about this error, try `rustc --explain E0308`.
 </pre>
 
 <p>Read it from the top. The error is <code>mismatched types</code>. The arrow under the return type says the function expects <code>i32</code>, but the body has type <code>()</code>, the unit type. The note on line 1 gives the reason: the body has no <strong>tail expression</strong>, which is Rust's name for a block's last expression, and it has no <code>return</code>. The help on line 2 is the fix.</p>
+
+<p>The same rule works for a block. Watch the value leave the block, then see what one semicolon does to it.</p>
+
+<div class="ox-motion" data-scene="ch04-semicolon"></div>
 
 <p>The Semicolon Switch below is the same function, with a toggle at the end of the line. Flip it, and watch the type of the block change. The second tab does the same job for an <code>if</code>.</p>
 
@@ -245,6 +252,16 @@ For more information about this error, try `rustc --explain E0308`.
 #semiswitch .semi-out-wrap { margin-top: 12px; }
 #semiswitch .semi-out { margin: 6px 0 0; padding: 12px 14px; background: var(--code-bg); color: var(--code-ink); border-radius: var(--radius); font: 400 0.8rem/1.5 var(--font-mono); white-space: pre; overflow-x: auto; max-height: 360px; }
 #semiswitch .semi-hint { margin: 12px 0 0; font-size: 0.88rem; color: var(--muted); }
+#semiswitch .semi-left { min-width: 0; display: grid; gap: 12px; align-content: start; }
+#semiswitch .semi-buddy { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; padding: 0 4px; }
+#semiswitch .semi-buddy .ca { display: block; width: 64px; flex: none; }
+#semiswitch .semi-buddy .ca-svg { display: block; width: 100%; height: auto; }
+#semiswitch .semi-unit-slot { display: block; width: 62px; flex: none; }
+#semiswitch .semi-unit-slot[hidden] { display: none; }
+#semiswitch .semi-unit-slot .ca-svg { display: block; width: 100%; height: auto; }
+#semiswitch .semi-said { flex: 1 1 160px; margin: 0; font-size: 0.86rem; color: var(--muted); }
+@keyframes semi-unit-in { from { transform: scale(0.4); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: no-preference) { #semiswitch .semi-unit-slot:not([hidden]) { animation: semi-unit-in 0.45s cubic-bezier(0.3, 1.4, 0.5, 1) both; } }
 @media (max-width: 720px) { #semiswitch .semi-body { grid-template-columns: minmax(0, 1fr); } }
 </style>
 
@@ -257,10 +274,13 @@ For more information about this error, try `rustc --explain E0308`.
     </div>
   </div>
   <div class="semi-body">
-    <div class="semi-code" role="group" aria-label="Program"></div>
+    <div class="semi-left">
+      <div class="semi-code" role="group" aria-label="Program"></div>
+      <div class="semi-buddy" aria-hidden="true"></div>
+    </div>
     <div class="semi-panel" aria-live="polite"></div>
   </div>
-  <p class="semi-hint">Use the buttons at the end of the lines. Watch the type in the panel change, then read what the compiler says.</p>
+  <p class="semi-hint">Use the buttons at the end of the lines. Watch the type in the panel change, then read what the compiler says. Semi, beside the code, chomps the value whenever a semicolon is on.</p>
   <noscript><p>The Semicolon Switch needs JavaScript. The compiler output for both examples is shown in the text around it.</p></noscript>
 </div>
 
@@ -304,6 +324,10 @@ fn label(n: i32) -> &amp;'static str {
 }</pre>
   <div class="ox-bridge-note"><p>The ternary becomes an <code>if</code> with a block for each branch. The difference is in the condition. PHP treats most values as true or false, so <code>if ($items)</code> works on an array. Rust has no such rule, and the condition must be a <code>bool</code>.</p></div>
 </div>
+
+<p>Watch one <code>if</code> run twice, with two values of <code>n</code>. Each pass sends the value of the branch that ran into <code>label</code>.</p>
+
+<div class="ox-motion" data-scene="ch04-if-value"></div>
 
 <p>Both branches have to produce the same type, because <code>label</code> can have only one. Here the compiler rejects an integer in one branch:</p>
 
@@ -701,6 +725,9 @@ fn main() {
   };
 
   var codeBox = root.querySelector(".semi-code");
+  var buddy = root.querySelector(".semi-buddy");
+  var semiNode = null, unitNode = null;
+  var wasOn = { fn: false, "if": false };
   var panel = root.querySelector(".semi-panel");
   var tabs = Array.prototype.slice.call(root.querySelectorAll("[data-ex]"));
   var cur = "fn";
@@ -762,7 +789,27 @@ fn main() {
     note(cur, s.ok);
   }
 
-  function renderAll() { renderCode(); renderPanel(); }
+  // Semi sits beside the code. When a semicolon turns on, Semi chomps the value
+  // and the empty box () appears; when every semicolon is off, the box goes.
+  function buildBuddy() {
+    if (!buddy || !window.OxCast) return;
+    buddy.innerHTML = OxCast.el("semi") +
+      '<span class="semi-unit-slot" aria-hidden="true"></span>' +
+      '<p class="semi-said">Semi eats the value when a <code>;</code> is on.</p>';
+    semiNode = buddy.querySelector(".ca");
+    unitNode = buddy.querySelector(".semi-unit-slot");
+    unitNode.innerHTML = OxCast.prop("unit");
+    unitNode.hidden = true;
+  }
+  function syncBuddy() {
+    if (!unitNode) return;
+    var now = on[cur].some(function (b) { return b; });
+    unitNode.hidden = !now;
+    if (now && !wasOn[cur] && semiNode) OxCast.pose(semiNode, "chomp", 900);
+    wasOn[cur] = now;
+  }
+
+  function renderAll() { renderCode(); renderPanel(); syncBuddy(); }
 
   function select(ex) {
     cur = ex;
@@ -795,7 +842,7 @@ fn main() {
     });
   });
 
-  function init() { select("fn"); }
+  function init() { buildBuddy(); select("fn"); }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
 })();

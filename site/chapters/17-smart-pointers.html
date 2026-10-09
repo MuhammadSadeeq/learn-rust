@@ -19,6 +19,7 @@
 <script src="../assets/quests-data.js" defer></script>
 <script src="../assets/cards/ch17.js" defer></script>
 <script src="../assets/scenarios/ch17.js" defer></script>
+<script src="../assets/motion/ch17.js" defer></script>
 <script src="../assets/oxidize.js" defer></script>
 <script src="../assets/cast-art.js" defer></script>
 <script src="../assets/cast.js" defer></script>
@@ -262,6 +263,8 @@ For more information about this error, try `rustc --explain E0596`.</pre>
 
 <p>Chapter 07 gave you the borrow rules: any number of shared borrows, or one exclusive borrow, never both. The compiler checks them before the program runs. Some programs only know who is borrowing once they run. <code>RefCell&lt;T&gt;</code> moves the same rules into the running program. It hands out a guard for each borrow, and it panics if you break a rule.</p>
 
+<div class="ox-meet" data-cast="guard" data-say="I check every borrow while the program runs. Break a rule and the alarm sounds."></div>
+
 <p>The useful trick is that a <code>RefCell</code> can change its contents through a plain <code>&amp;</code>. This is called interior mutability. The cell itself is shared, and each change goes through a short borrow that the cell checks.</p>
 
 <details class="ox-think">
@@ -270,6 +273,8 @@ For more information about this error, try `rustc --explain E0596`.</pre>
     <p>Refuse. A shared borrow is still alive, and an exclusive borrow must be the only one. A <code>RefCell</code> cannot know, when the code is written, which borrows will overlap. So it checks each call as the program makes it, and panics if the rule is broken.</p>
   </div>
 </details>
+
+<div class="ox-motion" data-scene="ch17-guard"></div>
 
 <pre class="rs" data-check="panic" data-stdout="0 entries" data-run>
 use std::cell::RefCell;
@@ -628,6 +633,8 @@ end</pre>
 <p>The output shows the same loop as the Rust program above, with the collector added. The two <code>drop</code> lines wait until <code>gc_collect_cycles()</code> runs. Then the collector frees both objects and reports how many it freed.</p>
 
 <p>The fix is to make one direction of the link a <code>Weak</code>. A <code>Weak&lt;T&gt;</code> points at a value without owning it. It does not add to the strong count, so it cannot keep the value alive. You create one with <code>Rc::downgrade(&amp;rc)</code>, and you read it with <code>upgrade()</code>, which returns <code>Option&lt;Rc&lt;T&gt;&gt;</code>. <code>Some</code> means the value is still alive. <code>None</code> means it was freed.</p>
+
+<div class="ox-motion" data-scene="ch17-cycle"></div>
 
 <p>The classic use is a tree. A parent owns its children with strong handles, and each child points back at its parent with a weak one:</p>
 

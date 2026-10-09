@@ -19,6 +19,7 @@
 <script src="../assets/quests-data.js" defer></script>
 <script src="../assets/cards/ch12.js" defer></script>
 <script src="../assets/scenarios/ch12.js" defer></script>
+<script src="../assets/motion/ch12.js" defer></script>
 <script src="../assets/oxidize.js" defer></script>
 <script src="../assets/cast-art.js" defer></script>
 <script src="../assets/cast.js" defer></script>
@@ -507,6 +508,8 @@ fn main() {
 
 <p>A <code>HashSet</code> is a <code>HashMap</code> without values. Each value is stored once. <code>insert</code> returns whether the value was new. The set operations, <code>intersection</code>, <code>union</code> and <code>difference</code>, return iterators, so you collect them, and sort them when you want a stable print.</p>
 
+<div class="ox-meet" data-cast="bouncer" data-say="One visit per name. Come back a second time, and you're turned away."></div>
+
 <pre class="rs" data-run data-stdout="both [3, 4]
 either [1, 2, 3, 4, 5]
 only a [1, 2]">
@@ -544,6 +547,180 @@ fn main() {
   </ol>
   <div class="ox-why"><p><code>insert</code> returns <code>true</code> when the value was new and <code>false</code> when it was already there. It never panics for a duplicate. That return value is how you de-duplicate a stream of values in a single pass.</p></div>
 </div>
+
+<div class="ox-motion" data-scene="ch12-door"></div>
+
+<p>Now try the door yourself. The Bouncer keeps a set of names and shows what each <code>insert</code> returns.</p>
+
+<div class="ox-figure ox-wide" id="bouncer-door">
+  <style>
+    #bouncer-door .bd-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin-bottom: 12px; }
+    #bouncer-door .bd-hint { margin: 0; color: var(--muted); font-size: 0.95rem; }
+    #bouncer-door .bd-grid { display: grid; gap: 16px; }
+    @media (min-width: 680px) { #bouncer-door .bd-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; } }
+    #bouncer-door .bd-panel { min-width: 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface-2); }
+    #bouncer-door .bd-bouncer { width: 92px; margin: 0 0 8px; }
+    #bouncer-door .bd-bouncer .ca { display: block; width: 100%; }
+    #bouncer-door .bd-bouncer .ca-svg { display: block; width: 100%; height: auto; }
+    #bouncer-door form { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin: 0; }
+    #bouncer-door label { display: grid; gap: 4px; flex: 1 1 14ch; min-width: 0; font-size: 0.85rem; color: var(--muted); }
+    #bouncer-door input { width: 100%; min-width: 0; padding: 6px 8px; font-family: var(--font-mono); font-size: 0.95rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); }
+    #bouncer-door .bd-verdict { margin: 10px 0 0; min-height: 3em; font-size: 0.95rem; overflow-wrap: anywhere; }
+    #bouncer-door .bd-verdict.is-in { color: var(--ok); }
+    #bouncer-door .bd-verdict.is-out { color: var(--bad); }
+    #bouncer-door .bd-chips { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; min-height: 2.2rem; }
+    #bouncer-door .bd-chip { font-family: var(--font-mono); font-size: 0.85rem; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--oxide); background: var(--oxide-soft); color: var(--ink); overflow-wrap: anywhere; }
+    #bouncer-door .bd-chip.is-new { animation: bd-pop 0.4s cubic-bezier(.3, 1.4, .5, 1); }
+    #bouncer-door .bd-empty { margin: 0; color: var(--muted); font-size: 0.9rem; }
+    #bouncer-door .bd-note { margin: 10px 0 0; color: var(--muted); font-size: 0.85rem; }
+    #bouncer-door .bd-log { margin: 8px 0 0; padding: 0 0 0 1.4em; font-family: var(--font-mono); font-size: 0.85rem; overflow-wrap: anywhere; }
+    #bouncer-door .bd-log li { padding: 1px 0; }
+    #bouncer-door .bd-check { margin-top: 14px; }
+    #bouncer-door .bd-result { margin: 10px 0 0; font-size: 0.95rem; overflow-wrap: anywhere; }
+    @keyframes bd-pop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) { #bouncer-door .bd-chip.is-new { animation: none; } }
+  </style>
+  <div class="bd-head">
+    <span class="ox-label">The Bouncer's door</span>
+    <p class="bd-hint">Type a name and let it in. Then try the same name again.</p>
+  </div>
+  <div class="bd-grid">
+    <div class="bd-panel">
+      <div class="bd-bouncer" aria-hidden="true"></div>
+      <form id="bd-form">
+        <label for="bd-name">Name
+          <input id="bd-name" type="text" maxlength="20" autocomplete="off" placeholder="ana">
+        </label>
+        <button type="submit" class="ox-btn is-primary is-small">Let in</button>
+      </form>
+      <p class="bd-verdict" aria-live="polite">Nobody has knocked yet.</p>
+    </div>
+    <div class="bd-panel">
+      <span class="ox-label">The set</span>
+      <ul class="bd-chips" aria-label="Names in the set"></ul>
+      <p class="bd-note">The names are sorted here so you can read them. A <code>HashSet</code> has no order of its own, so its names can come out in another order on another run.</p>
+      <span class="ox-label">Each insert</span>
+      <ol class="bd-log" aria-live="polite"><li>No inserts yet.</li></ol>
+    </div>
+  </div>
+  <form class="bd-check" id="bd-check">
+    <label for="bd-probe">Check a name with <code>contains</code>
+      <input id="bd-probe" type="text" maxlength="20" autocomplete="off" placeholder="bo">
+    </label>
+    <button type="submit" class="ox-btn is-small">Check</button>
+  </form>
+  <p class="bd-result" aria-live="polite"></p>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var root = document.getElementById("bouncer-door");
+  if (!root) return;
+
+  var form = root.querySelector("#bd-form");
+  var nameIn = root.querySelector("#bd-name");
+  var check = root.querySelector("#bd-check");
+  var probe = root.querySelector("#bd-probe");
+  var verdict = root.querySelector(".bd-verdict");
+  var chips = root.querySelector(".bd-chips");
+  var log = root.querySelector(".bd-log");
+  var result = root.querySelector(".bd-result");
+  var bouncerEl = root.querySelector(".bd-bouncer");
+
+  var names = [];          // the set; shown sorted, because a HashSet has no order of its own
+  var entries = [];        // one line per insert, newest first
+  var lastNew = null;      // the name that got in last, to pop its chip
+  var seen = { in: false, out: false, check: false };
+  var rewarded = false;
+
+  function say(text, kind) {
+    verdict.textContent = text;
+    verdict.classList.remove("is-in", "is-out");
+    if (kind) verdict.classList.add(kind);
+  }
+  function pose(p) {
+    var n = bouncerEl.querySelector(".ca");
+    if (n && window.OxCast) OxCast.pose(n, p, 1400);
+  }
+  function renderSet() {
+    chips.textContent = "";
+    if (!names.length) {
+      var none = document.createElement("li");
+      none.className = "bd-empty";
+      none.textContent = "The set is empty.";
+      chips.appendChild(none);
+      return;
+    }
+    names.slice().sort().forEach(function (name) {
+      var li = document.createElement("li");
+      li.className = "bd-chip" + (name === lastNew ? " is-new" : "");
+      li.textContent = name;
+      chips.appendChild(li);
+    });
+  }
+  function renderLog() {
+    log.textContent = "";
+    if (!entries.length) {
+      var li = document.createElement("li");
+      li.textContent = "No inserts yet.";
+      log.appendChild(li);
+      return;
+    }
+    entries.slice(0, 8).forEach(function (text) {
+      var li = document.createElement("li");
+      li.textContent = text;
+      log.appendChild(li);
+    });
+  }
+  function maybeReward() {
+    if (rewarded || !(seen.in && seen.out && seen.check)) return;
+    rewarded = true;
+    if (window.Ox && Ox.award) Ox.award(10, "the Bouncer's door", "ch12:bouncer-door");
+  }
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var name = nameIn.value.trim();
+    if (!name) { say("Type a name first, then press Let in."); return; }
+    if (names.indexOf(name) === -1) {
+      names.push(name);
+      lastNew = name;
+      entries.unshift('insert("' + name + '") returns true');
+      say('insert("' + name + '") returned true. ' + name + " is new, so the Bouncer lets them in.", "is-in");
+      pose("happy");
+      seen.in = true;
+    } else {
+      lastNew = null;
+      entries.unshift('insert("' + name + '") returns false');
+      say('insert("' + name + '") returned false. ' + name + " is already in the set, so the Bouncer turns them away.", "is-out");
+      pose("oops");
+      seen.out = true;
+    }
+    renderSet();
+    renderLog();
+    maybeReward();
+  });
+
+  check.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var name = probe.value.trim();
+    if (!name) { result.textContent = "Type a name to check."; return; }
+    result.textContent = 'contains("' + name + '") returns ' + (names.indexOf(name) !== -1) + ".";
+    seen.check = true;
+    maybeReward();
+  });
+
+  function init() {
+    if (window.OxCast && bouncerEl) bouncerEl.innerHTML = OxCast.el("bouncer");
+    renderSet();
+    renderLog();
+    result.textContent = 'contains("x") returns false. Nobody named x is in the set yet.';
+  }
+  if (window.Ox && window.Ox.ready) init();
+  else document.addEventListener("ox:ready", init, { once: true });
+})();
+</script>
 
 <h3>BTreeMap: keys in order</h3>
 

@@ -19,6 +19,7 @@
 <script src="../assets/quests-data.js" defer></script>
 <script src="../assets/cards/ch21.js" defer></script>
 <script src="../assets/scenarios/ch21.js" defer></script>
+<script src="../assets/motion/ch21.js" defer></script>
 <script src="../assets/oxidize.js" defer></script>
 <script src="../assets/cast-art.js" defer></script>
 <script src="../assets/cast.js" defer></script>
@@ -48,6 +49,8 @@
 <p>You have called macros since your first program. <code>println!</code>, <code>vec!</code> and <code>format!</code> all end in <code>!</code>, and that bang is the signal. A macro is not a function call. The compiler expands it early, before it type-checks anything. The macro replaces the tokens you wrote with other tokens, and then the compiler checks the result as if you had typed it yourself.</p>
 
 <p>That is why <code>println!</code> can check your format string when you compile. A function receives values, so it has to take a fixed number of arguments with fixed types. A macro receives the raw tokens, so it can accept any number of arguments and any syntax its author allows.</p>
+
+<div class="ox-motion" data-scene="ch21-macro"></div>
 
 <aside class="ox-callout" data-kind="php">
   <p>Laravel's <code>Macroable</code> trait adds methods at runtime, as in <code>Collection::macro('avg', ...)</code>. The program is different while it runs. A Rust macro changes the source before the binary exists, and the result is fixed at build time. The nearest PHP idea is a code generator that writes <code>.php</code> files before you deploy.</p>
@@ -1386,7 +1389,11 @@ fn main() {
 
 <p>That does not finish Rust, and nobody finishes it. What changes is how you read a compiler error. It stops being a wall of text and becomes a note about one line, written by a reviewer who has read every line of your program.</p>
 
+<div class="ox-meet" data-cast="graduate" data-say="Every molt was an idea you learned, and none of them came off. The next one is yours to find."></div>
+
 <p class="ox-pull">The compiler reads every line. Review is deciding whether it read the right thing.</p>
+
+<div class="ox-motion" data-scene="ch21-parade"></div>
 
 <p>The last quest is the job queue, <code>boss5_job_queue</code>. It is a worker pool built from threads and channels, the same kind of machine a Laravel queue worker runs, and it combines most of the course. Pass it in the Forge. Then keep the two labs you will return to: the <a href="../labs/ai-dojo.html">Agent Code Review Dojo</a> for review practice, and the Recall Deck for the cards in this chapter.</p>
 

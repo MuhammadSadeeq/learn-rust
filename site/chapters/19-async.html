@@ -18,6 +18,7 @@
 <script src="../assets/course-data.js" defer></script>
 <script src="../assets/quests-data.js" defer></script>
 <script src="../assets/cards/ch19.js" defer></script>
+<script src="../assets/motion/ch19.js" defer></script>
 <script src="../assets/oxidize.js" defer></script>
 <script src="../assets/cast-art.js" defer></script>
 <script src="../assets/cast.js" defer></script>
@@ -133,6 +134,8 @@ warning: unused implementer of `Future` that must be used
 
 <p>Every future implements one trait from the standard library. It has one method, <code>poll</code>. An executor calls <code>poll</code>, and the future answers with one of two results.</p>
 
+<div class="ox-meet" data-cast="waiter" data-say="When an order has to wait, I set it down. I only hold a ticket while I am working on it."></div>
+
 <pre class="rs" data-title="the shape of std::future::Future">
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -158,7 +161,7 @@ fn main() {}</pre>
 <p>The <code>Waker</code> is what makes <code>Pending</code> workable. When a future returns <code>Pending</code>, it hands its waker to the thing it is waiting on, such as a socket. When the data arrives, that source calls <code>wake()</code>, and the executor knows which task to poll again. A task that never gets its <code>wake()</code> is never polled again.</p>
 
 <aside class="ox-callout" data-kind="insight">
-  <p>A future is a <strong>paused recipe</strong>. The executor is the cook who resumes whichever recipe is ready. <code>.await</code> means "pause here, and let the cook work on something else".</p>
+  <p>A future is a <strong>paused recipe</strong>. The executor is the Waiter who picks up whichever recipe is ready. <code>.await</code> means "pause here, and let the Waiter work on something else".</p>
 </aside>
 
 <figure class="ox-figure">
@@ -294,11 +297,11 @@ fn main() {
 </section>
 
 <section>
-<h2 id="executor-sim">One cook, many orders</h2>
+<h2 id="executor-sim">One Waiter, many orders</h2>
 
-<p>A kitchen has one cook and several orders. Some dishes need the cook's hands for a minute. Others go in the oven and need nothing from the cook for ten minutes. A good cook puts the oven dish in, and starts another order. That is an executor. It runs whichever task is ready, and it never stands still waiting for a task that is waiting on I/O.</p>
+<p>A restaurant has one Waiter and several orders. Some orders need the Waiter's hands for a minute. Others go to the kitchen and need nothing from the Waiter for ten minutes. A good Waiter sets the kitchen order down and takes the next one. That is an executor. It runs whichever task is ready, and it never stands still waiting for a task that is waiting on I/O.</p>
 
-<p>Each task below is a script of steps. A compute step takes one tick of the cook's time. An I/O wait takes the number of ticks shown, and the task cannot run during that wait. Each tick, the cook polls the first ready task in the queue. When an I/O finishes, <code>wake()</code> puts that task at the back of the queue.</p>
+<p>Each task below is a script of steps. A compute step takes one tick of the Waiter's time. An I/O wait takes the number of ticks shown, and the task cannot run during that wait. Each tick, the Waiter polls the first ready task in the queue. When an I/O finishes, <code>wake()</code> puts that task at the back of the queue.</p>
 
 <style>
 #execsim .es-controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
@@ -336,6 +339,30 @@ fn main() {
 #execsim .es-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 14px; font-size: 0.82rem; color: var(--muted); }
 #execsim .es-key { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; height: 20px; margin-right: 4px; padding: 0 4px; border-radius: 4px; font: 600 0.62rem/1 var(--font-mono); vertical-align: middle; }
 </style>
+<style>
+#execsim .es-desk { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 14px; margin: 0 0 12px; }
+#execsim .es-waiter { flex: 0 0 116px; margin: 0; text-align: center; }
+#execsim .es-waiter[hidden] { display: none; }
+#execsim .es-waiter-art { display: block; width: 100px; margin: 0 auto; }
+#execsim .es-waiter-art .ca { display: block; width: 100%; }
+#execsim .es-waiter-art svg { height: auto; }
+#execsim .es-waiter-name { margin-top: 2px; font: 700 0.74rem/1.3 var(--font-mono); color: var(--ink-2); }
+#execsim .es-cards { flex: 1 1 300px; min-width: 0; }
+#execsim .es-ticket { display: inline-block; flex: none; width: 70px; transition: transform 0.3s ease, opacity 0.3s ease; }
+#execsim .es-ticket .ca { display: block; width: 100%; }
+#execsim .es-ticket svg { height: auto; }
+#execsim .es-ticket.is-carried { transform: translateY(-6px); }
+#execsim .es-ticket.is-hanging { opacity: 0.55; }
+#execsim .es-ticket.is-done { opacity: 0.4; }
+#execsim .es-bell { display: inline-block; flex: none; width: 24px; height: auto; color: var(--oxide); }
+#execsim .es-bell .ca { display: block; width: 100%; }
+#execsim .es-bell svg { height: auto; }
+#execsim .es-card-head { gap: 8px; }
+@media (prefers-reduced-motion: reduce) {
+  #execsim .es-ticket { transition: none; }
+  #execsim .es-bell.is-ring { animation: none; }
+}
+</style>
 <div class="ox-figure ox-wide" id="execsim">
   <p class="ox-label">Executor Simulator · the same three tasks, run two ways</p>
   <div class="es-controls">
@@ -353,22 +380,25 @@ fn main() {
   <div class="es-board" id="es-board" aria-hidden="true"></div>
   <p class="es-log" id="es-log" aria-live="polite"></p>
   <p class="es-queue" id="es-queue"></p>
-  <div class="es-cards" id="es-cards"></div>
+  <div class="es-desk">
+    <figure class="es-waiter" id="es-waiter" aria-hidden="true"><span class="es-waiter-art"></span><figcaption class="es-waiter-name">The Waiter</figcaption></figure>
+    <div class="es-cards" id="es-cards"></div>
+  </div>
   <div class="es-legend">
     <span><span class="es-key es-c-run">run</span>computing</span>
     <span><span class="es-key es-c-wait">io</span>waiting on I/O</span>
     <span><span class="es-key es-c-ready">q</span>in the ready queue</span>
     <span><span class="es-key es-c-done">&nbsp;&nbsp;&nbsp;</span>finished</span>
-    <span><span class="es-key es-c-idle">idle</span>cook has nothing ready</span>
+    <span><span class="es-key es-c-idle">idle</span>Waiter has nothing ready</span>
   </div>
 </div>
 
 <p>Press Tick a few times and watch the queue. Then press Run to completion, and turn on Thread per task. Both versions run the same scripts on the same tick count.</p>
 
-<p>With these scripts, the thread version finishes at tick 8 and the async version at tick 10. Threads win on wall-clock time here, because each task gets a cook of its own for its compute steps. Async wins on the cost of waiting. The async version used one thread. Its three waiting tasks cost saved state, not threads. The thread version used three threads, and they sat blocked for 13 thread-ticks, doing nothing.</p>
+<p>With these scripts, the thread version finishes at tick 8 and the async version at tick 10. Threads win on wall-clock time here, because each task gets a worker of its own for its compute steps. Async wins on the cost of waiting. The async version used one thread. Its three waiting tasks cost saved state, not threads. The thread version used three threads, and they sat blocked for 13 thread-ticks, doing nothing.</p>
 
 <aside class="ox-callout" data-kind="insight">
-  <p><strong>Async is cheap waiting, not extra speed.</strong> It wins when tasks mostly wait: a thousand connections that each spend most of their time on a database cost a thousand small tasks, not a thousand threads. It loses when tasks mostly compute. Then the one cook is the bottleneck, and you need more cooks, which means more threads or more cores.</p>
+  <p><strong>Async is cheap waiting, not extra speed.</strong> It wins when tasks mostly wait: a thousand connections that each spend most of their time on a database cost a thousand small tasks, not a thousand threads. It loses when tasks mostly compute. Then the one Waiter is the bottleneck, and you need more Waiters, which means more threads or more cores.</p>
 </aside>
 
 <div class="ox-quiz" data-id="19:sim-thread" data-xp="10" data-label="Check yourself">
@@ -614,6 +644,8 @@ async fn handler() {
 }</pre>
 
 <p>The first line freezes the thread that runs the executor. Every task scheduled on that thread waits, including tasks that have nothing to do with this one. The second line yields to the executor. A blocking call inside async code compiles without any complaint, and it shows up later as latency under load.</p>
+
+<div class="ox-motion" data-scene="ch19-blocking"></div>
 
 <p>Use the async version: <code>tokio::time::sleep</code>, <code>tokio::fs</code>, or an async database driver. For CPU-heavy work or a blocking library, use <code>spawn_blocking</code>, which runs the closure on a separate pool of threads:</p>
 
@@ -932,7 +964,7 @@ fn main() {
     <li>An <code>async fn</code> returns a <strong>future</strong>. Nothing runs until something polls it: an <code>.await</code> in another async function, or an executor.</li>
     <li><code>poll</code> returns <code>Ready(value)</code> or <code>Pending</code>. <code>Pending</code> means the future gave its waker to whatever it waits on, and it will be polled again after <code>wake()</code>.</li>
     <li><code>.await</code> polls the inner future, and pauses the current one whenever that future returns <code>Pending</code>.</li>
-    <li>The executor, such as tokio's runtime, is the cook. It polls ready tasks, one step at a time.</li>
+    <li>The executor, such as tokio's runtime, is the Waiter. It polls ready tasks, one step at a time.</li>
     <li><code>tokio::spawn</code> needs <code>Send + 'static</code>. <code>join!</code> waits for all branches. <code>select!</code> takes the first and drops the rest. Dropping a future cancels it at its last <code>.await</code>.</li>
     <li>Never block a worker thread with <code>std::thread::sleep</code>, heavy CPU work or blocking I/O. Use the async version, or <code>spawn_blocking</code>.</li>
     <li>Never hold a <code>std</code> <code>MutexGuard</code> across an <code>.await</code>. Drop it first, or use <code>tokio::sync::Mutex</code>.</li>
@@ -964,17 +996,17 @@ fn main() {
   /* ES-CORE-BEGIN */
   /* Executor Simulator core: pure logic, no DOM.
      A script is a list of steps. Steps alternate: ["c"] = compute (1 tick, the
-     cook runs it), ["io", n] = I/O wait (n ticks, the task cannot run). A script
+     Waiter runs it), ["io", n] = I/O wait (n ticks, the task cannot run). A script
      starts and ends with a compute step.
 
-     Tick model (one tick = one unit of the cook's time):
+     Tick model (one tick = one unit of the Waiter's time):
      - Start of tick: every task that is Ready is a candidate.
-     - Async mode: the cook polls the front of the ready queue (round robin, FIFO).
+     - Async mode: the Waiter polls the front of the ready queue (round robin, FIFO).
        That poll runs one compute step. If the next step is I/O, the task returns
        Pending and keeps the I/O count. If there is no next step, it is Done.
-       If the queue is empty, the cook is idle this tick.
+       If the queue is empty, the Waiter is idle this tick.
      - Thread mode: every Ready task runs on its own thread, so all of them run
-       their compute step in the same tick. There is no queue and no idle cook.
+       their compute step in the same tick. There is no queue and no idle Waiter.
      - End of tick: every task that was Pending at the start of the tick counts
        its I/O down by one. A task that reaches 0 is woken: wake() puts it at the
        back of the ready queue, and it can run from the next tick on.
@@ -1065,7 +1097,7 @@ fn main() {
     if (t === 0) {
       return threads
         ? "Three threads are ready to start, one per task. Press Tick."
-        : "All three tasks are ready and the ready queue holds A, B, C. The cook has not started. Press Tick.";
+        : "All three tasks are ready and the ready queue holds A, B, C. The Waiter has not started. Press Tick.";
     }
     const s = snaps[t];
     const parts = [];
@@ -1085,11 +1117,11 @@ fn main() {
     if (s.polled.length) {
       const i = s.polled[0];
       const k = s.tasks[i];
-      parts.push("The cook polls " + names[i] + ", and its compute step runs for one tick.");
+      parts.push("The Waiter polls " + names[i] + ", and its compute step runs for one tick.");
       if (k.state === "pending") parts.push(names[i] + " reaches I/O, returns Pending and gives its waker to the I/O source. It waits " + esTicks(k.left) + ".");
       else parts.push(names[i] + " has no steps left, so it returns Ready.");
     } else if (s.tasks.some((k) => k.state !== "done")) {
-      parts.push("No task is ready, so the cook is idle this tick.");
+      parts.push("No task is ready, so the Waiter is idle this tick.");
     }
     s.woke.forEach((i) => parts.push("The I/O for " + names[i] + " completes, and wake() puts " + names[i] + " at the back of the ready queue."));
     if (s.tasks.every((k) => k.state === "done")) parts.push("All tasks are done.");
@@ -1141,7 +1173,7 @@ fn main() {
         html += '<div class="es-tick-h' + (c === t ? " is-now" : "") + '">' + c + "</div>";
       }
       var rows = [];
-      if (!st.threads) rows.push({ label: "Cook", kind: "cook" });
+      if (!st.threads) rows.push({ label: "Waiter", kind: "waiter" });
       NAMES.forEach(function (n, i) {
         rows.push({ label: (st.threads ? "Thread " : "Task ") + n, kind: "task", i: i });
       });
@@ -1151,7 +1183,7 @@ fn main() {
           var cls = "es-c-empty", txt = "";
           if (c2 <= t && c2 <= r.length - 1) {
             var s = r[c2];
-            if (row.kind === "cook") {
+            if (row.kind === "waiter") {
               if (s.polled.length) { cls = "es-c-run"; txt = NAMES[s.polled[0]]; }
               else if (s.idle) { cls = "es-c-idle"; txt = "idle"; }
             } else {
@@ -1196,11 +1228,14 @@ fn main() {
           else if (allPast || j < cur) c += " is-past";
           return '<span class="' + c + '">' + stepLabel(step) + "</span>";
         }).join("");
-        var bell = (t > 0 && t <= r.length - 1 && s.woke.indexOf(i) !== -1)
-          ? '<svg class="es-bell is-ring" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3a6 6 0 0 0-6 6v4l-2 3h16l-2-3V9a6 6 0 0 0-6-6zM10 19a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>'
-          : "";
-        html += '<div class="es-card"><div class="es-card-head"><span class="es-name">' + n +
-          '</span><span class="es-state ' + cls + '">' + state + bell + "</span></div>" +
+        // The bell rings when the task's I/O completes (the waker fires).
+        var woke = t > 0 && t <= r.length - 1 && s.woke.indexOf(i) !== -1;
+        var bell = woke ? '<span class="es-bell is-ring" aria-hidden="true">' + OxCast.prop("bell") + "</span>" : "";
+        // The ticket is carried while polled, hangs while waiting, and is done at the end.
+        var tk = polled ? "is-carried" : k.state === "pending" ? "is-hanging" : k.state === "done" ? "is-done" : "";
+        var ticket = '<span class="es-ticket ' + tk + '">' + OxCast.prop("ticket", { label: n }) + "</span>";
+        html += '<div class="es-card"><div class="es-card-head">' + ticket +
+          '<span class="es-name">' + n + '</span><span class="es-state ' + cls + '">' + state + bell + "</span></div>" +
           '<div class="es-steps">' + chips + "</div></div>";
       });
       el.cards.innerHTML = html;
@@ -1227,6 +1262,12 @@ fn main() {
       el.run.disabled = t >= maxT;
       renderBoard(r);
       renderCards(r);
+      var wEl = document.getElementById("es-waiter"), wn = wEl ? wEl.querySelector(".ca") : null;
+      if (wEl) wEl.hidden = !!st.threads;
+      if (wn && window.OxCast) {
+        var allDone = s.tasks.every(function (k) { return k.state === "done"; });
+        OxCast.pose(wn, t === 0 ? "think" : s.polled.length ? "talk" : allDone ? "happy" : "sleep");
+      }
       if (t > total) {
         el.log.textContent = "Tick " + t + ". Every task finished by tick " + total + ". Nothing else happens.";
       } else {
@@ -1250,6 +1291,8 @@ fn main() {
     el.run.addEventListener("click", function () { st.t = maxT; render(); });
     el.reset.addEventListener("click", function () { st.t = 0; render(); });
     el.mode.addEventListener("click", function () { st.threads = !st.threads; render(); });
+    var wa = root.querySelector(".es-waiter-art");
+    if (wa && window.OxCast) wa.innerHTML = OxCast.el("waiter");
     render();
   }
 

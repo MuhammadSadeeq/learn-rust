@@ -18,6 +18,7 @@
 <script src="../assets/course-data.js" defer></script>
 <script src="../assets/quests-data.js" defer></script>
 <script src="../assets/cards/ch14.js" defer></script>
+<script src="../assets/motion/ch14.js" defer></script>
 <script src="../assets/oxidize.js" defer></script>
 <script src="../assets/cast-art.js" defer></script>
 <script src="../assets/cast.js" defer></script>
@@ -362,6 +363,10 @@ fn main() {
 </table>
 </div>
 
+<p>The door works like a bound, and the badge decides who gets through. Watch the program above as motion: Post passes, and Note is turned away at the call.</p>
+
+<div class="ox-motion" data-scene="ch14-badges"></div>
+
 <p>A return type can be <code>-&gt; impl Summary</code>. The caller can call the trait's methods, but it cannot name the concrete type. There is one limit. The function must return the same concrete type on every path. If one branch returns a <code>Tweet</code> and the other an <code>Article</code>, the compiler reports <code>error[E0308]: `if` and `else` have incompatible types</code>. For that you need a trait object, which is section 6.</p>
 
 <h3>A missing bound</h3>
@@ -553,6 +558,8 @@ fn main() {
 
 <p>How does a generic function run at full speed? The compiler does not pass around a value that could be any type. At build time it finds every concrete type that each generic function is used with, and it generates a specialized copy for each one. That step is called <strong>monomorphization</strong>. Picture a stamp: one template, one stamped copy per type.</p>
 
+<div class="ox-meet" data-cast="press" data-say="One template, and one stamped copy for each type you use. I do the stamping before the program runs."></div>
+
 <p>In a debug build you can see the copies. Take a program that calls <code>describe</code> six times with five different types. Two of the calls pass an <code>i32</code>, so the binary holds five copies, not six. This is the list <code>nm -C</code> prints for that program:</p>
 
 <pre class="text">
@@ -564,6 +571,10 @@ main::describe::&lt;i32&gt;
 </pre>
 
 <p>The exact names depend on the compiler version, and a release build may inline the copies away. The idea holds either way. Each copy is more machine code. Each call goes straight to its copy, with no lookup at runtime. The press below shows the same process one call at a time.</p>
+
+<p>Here is the stamping for two calls to one generic function, as motion. The template is written once, and each type it is called with gets its own plate.</p>
+
+<div class="ox-motion" data-scene="ch14-stamp"></div>
 
 <style>
 #press [hidden] { display: none !important; }
@@ -594,6 +605,11 @@ main::describe::&lt;i32&gt;
 #press .press-fill { height: 100%; width: 0%; background: var(--oxide); border-radius: 999px; transition: width 0.4s ease; }
 #press .press-meter small { grid-column: 1 / -1; color: var(--muted); font-size: 0.82rem; }
 #press .press-log { margin: 12px 0 0; min-height: 2.6em; font-size: 0.95rem; color: var(--ink-2); }
+#press .press-top { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; margin: 0 0 12px; }
+#press .press-top > pre { flex: 1 1 260px; min-width: 0; margin: 0; }
+#press .press-desk { flex: 0 0 136px; min-height: 120px; display: grid; place-items: center; }
+#press .press-art .ca { display: block; width: 124px; }
+@media (max-width: 560px) { #press .press-desk { flex: 1 1 100%; min-height: 0; } }
 @keyframes press-stamp { 0% { opacity: 0; transform: scale(1.08); } 100% { opacity: 1; transform: scale(1); } }
 @media (max-width: 560px) { #press .press-ptrs { grid-template-columns: minmax(0, 1fr); } }
 @media (prefers-reduced-motion: reduce) { #press * { animation: none !important; transition: none !important; } }
@@ -605,11 +621,14 @@ main::describe::&lt;i32&gt;
     <button type="button" class="ox-btn is-small" data-mode="dyn" aria-pressed="false">dyn Display: one copy</button>
   </div>
 
-  <pre class="rs">use std::fmt::Display;
+  <div class="press-top">
+    <pre class="rs">use std::fmt::Display;
 
 fn describe&lt;T: Display&gt;(x: T) -&gt; String {
     format!("&lt;{x}&gt;")
 }</pre>
+    <div class="press-desk" aria-hidden="true"><span class="press-art"></span></div>
+  </div>
 
   <p class="press-label">Press a call. Each button is a call in your program.</p>
   <div class="press-calls">
@@ -1120,6 +1139,19 @@ fn main() {
     var out = function (name) { return fig.querySelector('[data-out="' + name + '"]'); };
 
     var copies = q(".press-copies");
+    var pressArt = q(".press-art");
+
+    // The Press character sits beside the code. It is drawn with the label of the
+    // type it is working on; a generic call stamps a plate, the dyn mode does not.
+    function drawPress(label) {
+      if (!pressArt || !window.OxCast) return null;
+      pressArt.innerHTML = OxCast.el("press", { label: label });
+      return pressArt.querySelector(".ca");
+    }
+    function stampPress(label) {
+      var node = drawPress(label);
+      if (node) OxCast.pose(node, "stamp", 700);
+    }
     var dynBox = q(".press-dyn");
     var empty = q(".press-empty");
     var log = out("log");
@@ -1136,6 +1168,7 @@ fn main() {
 
     function setMode(m) {
       mode = m;
+      drawPress(m === "generic" ? "<T>" : "dyn");
       qa("[data-mode]").forEach(function (b) {
         b.setAttribute("aria-pressed", String(b.getAttribute("data-mode") === m));
       });
@@ -1152,6 +1185,7 @@ fn main() {
       var t = TYPES[i];
       var shown = "<" + t.shown + ">";
       seq++;
+      stampPress(t.ty);
       if (stamped.indexOf(t.ty) === -1) {
         stamped.push(t.ty);
         var card = document.createElement("div");
@@ -1180,6 +1214,8 @@ fn main() {
     function callDyn(i) {
       var t = TYPES[i];
       var my = ++seq;
+      var dn = drawPress("dyn");
+      if (dn) OxCast.pose(dn, "think", 900);
       var shown = "<" + t.shown + ">";
       qa(".is-live").forEach(function (n) { n.classList.remove("is-live"); });
       out("data").textContent = "points to the value";

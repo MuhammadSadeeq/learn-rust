@@ -19,6 +19,7 @@
 <script src="../assets/quests-data.js" defer></script>
 <script src="../assets/cards/ch08.js" defer></script>
 <script src="../assets/scenarios/ch08.js" defer></script>
+<script src="../assets/motion/ch08.js" defer></script>
 <script src="../assets/oxidize.js" defer></script>
 <script src="../assets/cast-art.js" defer></script>
 <script src="../assets/cast.js" defer></script>
@@ -212,6 +213,8 @@ fn main() {
 
 <p>Rust strings are UTF-8. Each character takes between one and four bytes. An ASCII letter takes one, <code>é</code> takes two, most CJK characters take three, and emoji usually take four. The length in bytes and the length in characters are different numbers, and Rust makes you pick the one you mean.</p>
 
+<div class="ox-meet" data-cast="glyph" data-say="Every byte of me is a segment. You may cut between letters, but never through one."></div>
+
 <details class="ox-think">
   <summary>Predict: what do <code>"héllo".len()</code> and <code>"héllo".chars().count()</code> return?</summary>
   <div class="ox-think-body">
@@ -274,6 +277,10 @@ fn main() {
 <aside class="ox-callout" data-kind="trap">
   <p><code>s.get(0..2)</code> returns <code>None</code> instead of panicking. Use it whenever the boundaries come from input you don't control.</p>
 </aside>
+
+<p>Glyph makes the same cut visible. Predict the second cut before the verdict.</p>
+
+<div class="ox-motion" data-scene="ch08-boundary"></div>
 
 <h3>Bytes, chars and graphemes</h3>
 
@@ -386,6 +393,161 @@ fn main() {
 </div>
 
 <p>Try the presets first, then type your own text. Include an accent, a flag or a Chinese character, and find the byte positions where a slice is allowed to start.</p>
+
+<p>Now cut a string yourself. Choose a text, then move the slider across its bytes. Glyph shows where the cut lands, and the panel shows what the two slices do.</p>
+
+<div class="ox-figure ox-wide" id="cutter" role="group" aria-label="Caterpillar cutter: move a cut across a string and see whether Rust allows it">
+<style>
+  #cutter .ct-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 12px; }
+  #cutter .ct-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+  #cutter .ct-presets .ox-btn { font-family: var(--font-mono); font-size: 0.85rem; }
+  #cutter .ct-text { display: grid; gap: 5px; margin-bottom: 8px; }
+  #cutter .ct-text label, #cutter .ct-cut label { font: 700 0.72rem/1.2 var(--font-mono); letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+  #cutter .ct-stage { min-height: 110px; display: grid; place-items: center; }
+  #cutter .ct-stage .ca { display: block; width: 100%; max-width: 560px; }
+  #cutter .ct-cut { display: grid; gap: 6px; margin: 10px 0 14px; }
+  #cutter .ct-cut input[type="range"] { width: 100%; accent-color: var(--oxide); }
+  #cutter .ct-cut output { font: 900 1.2rem/1 var(--font-display); color: var(--ink); font-variant-numeric: tabular-nums; margin-left: 4px; }
+  #cutter .ct-result { margin: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); color: var(--ink); overflow-wrap: anywhere; }
+  #cutter .ct-result.is-ok { border-color: var(--ok); background: var(--ok-soft); }
+  #cutter .ct-result.is-bad { border-color: var(--bad); background: var(--bad-soft); }
+  #cutter .ct-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  #cutter .ct-chip { font: 600 0.9rem/1.3 var(--font-mono); padding: 4px 10px; border-radius: 999px; background: var(--surface-3); color: var(--ink); }
+  #cutter .ct-msg { font: 0.88rem/1.5 var(--font-mono); white-space: normal; }
+  #cutter .ct-empty { color: var(--muted); }
+  #cutter .ct-code { margin: 12px 0 0; padding: 8px 0; background: var(--code-bg); color: var(--code-ink); border-radius: var(--radius); font: 0.9rem/1.5 var(--font-mono); white-space: pre; overflow-x: auto; }
+  #cutter .ct-line { display: block; padding: 0 14px; border-left: 3px solid transparent; }
+  #cutter .ct-line.is-bad { background: color-mix(in srgb, var(--bad) 20%, transparent); border-left-color: var(--bad); }
+  #cutter .ct-note { min-height: 1.3em; margin: 8px 0 0; color: var(--ink-2); font-size: 0.95rem; }
+</style>
+  <div class="ct-head">
+    <span class="ox-label">Caterpillar cutter</span>
+    <div class="ct-presets" role="group" aria-label="Presets">
+      <button type="button" class="ox-btn is-small" data-preset="0">café</button>
+      <button type="button" class="ox-btn is-small" data-preset="1">naïve</button>
+      <button type="button" class="ox-btn is-small" data-preset="2">日本</button>
+      <button type="button" class="ox-btn is-small" data-preset="3">🦀 crab</button>
+    </div>
+  </div>
+  <div class="ct-text">
+    <label for="ct-text">Your text</label>
+    <input class="ox-input" id="ct-text" type="text" value="café" maxlength="24" spellcheck="false" autocomplete="off">
+  </div>
+  <div class="ct-stage" data-stage aria-hidden="true"></div>
+  <div class="ct-cut">
+    <label for="ct-cut">Cut at byte <output id="ct-pos" for="ct-cut">4</output></label>
+    <input id="ct-cut" type="range" min="0" max="5" step="1" value="4">
+  </div>
+  <div class="ct-result" id="ct-result" aria-live="polite"></div>
+  <pre class="ct-code" data-code aria-label="The Rust lines for this cut"></pre>
+  <p class="ct-note" id="ct-note" aria-live="polite"></p>
+  <p class="ox-caption">Move the slider with the arrow keys. A cut between two characters gives two slices. A cut inside a character panics, and the message is rustc's.</p>
+  <script>
+(function () {
+  "use strict";
+  var PRESETS = [
+    { text: "café", cut: 4 },
+    { text: "naïve", cut: 3 },
+    { text: "日本", cut: 1 },
+    { text: "🦀 crab", cut: 2 }
+  ];
+  var MAX_CHARS = 12;
+
+  function init() {
+    var root = document.getElementById("cutter");
+    if (!root || !window.OxUtf8) return;
+    var U = window.OxUtf8;
+    var textIn = root.querySelector("#ct-text");
+    var slider = root.querySelector("#ct-cut");
+    var pos = root.querySelector("#ct-pos");
+    var stage = root.querySelector("[data-stage]");
+    var result = root.querySelector("#ct-result");
+    var codeEl = root.querySelector("[data-code]");
+    var note = root.querySelector("#ct-note");
+    var tried = {}, ntried = 0, awarded = false;
+
+    function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+    // A Rust string literal for t: escape the backslash, the quote and the line breaks.
+    function rustStr(t) { return '"' + t.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\t/g, "\\t").replace(/\r/g, "\\r").replace(/\n/g, "\\n") + '"'; }
+
+    function render() {
+      var raw = Array.from(textIn.value);
+      var chars = raw.slice(0, MAX_CHARS);
+      var text = chars.join("");
+      var bytes = U.u8Spans(text).len;
+      slider.max = String(bytes);
+      if (Number(slider.value) > bytes) slider.value = String(bytes);
+      slider.disabled = bytes === 0;
+      var cut = Number(slider.value);
+      pos.textContent = String(cut);
+      var truncNote = raw.length > MAX_CHARS ? "Only the first " + MAX_CHARS + " characters are used." : "";
+      var explain = "";
+      if (!text) {
+        note.textContent = "";
+        stage.innerHTML = "";
+        result.className = "ct-result";
+        result.innerHTML = '<span class="ct-empty">Type some text, or press a preset.</span>';
+        codeEl.innerHTML = "";
+        return;
+      }
+      var left = U.u8Slice(text, 0, cut);
+      var right = U.u8Slice(text, cut, bytes);
+      var ok = left.ok && right.ok;
+      var failed = left.ok ? right : left;
+      if (window.OxCast) stage.innerHTML = OxCast.el("glyph", { chars: chars, cut: cut, pose: ok ? "happy" : "ouch" });
+      if (ok) {
+        result.className = "ct-result is-ok";
+        result.innerHTML = "<strong>Both cuts are valid.</strong>" +
+          '<div class="ct-chips"><span class="ct-chip">&amp;s[..' + cut + '] = "' + esc(left.text) + '"</span>' +
+          '<span class="ct-chip">&amp;s[' + cut + '..] = "' + esc(right.text) + '"</span></div>';
+        explain = "Each cut falls between two characters, so each slice is a valid &str that borrows from s.";
+      } else {
+        result.className = "ct-result is-bad";
+        result.innerHTML = "<strong>Rust panics.</strong> <code class=\"ct-msg\">" + esc(failed.message) + "</code>";
+        explain = "The cut falls inside a character, and a &str must hold whole characters. Move the cut to a boundary between characters.";
+      }
+      note.textContent = [truncNote, explain].filter(Boolean).join(" ");
+      var lines = [
+        { text: "let s = " + rustStr(text) + ";" },
+        { text: "let left = &s[.." + cut + "];", bad: !left.ok },
+        { text: "let right = &s[" + cut + "..];", bad: left.ok && !right.ok },
+        { text: 'println!("{left} | {right}");' }
+      ];
+      codeEl.innerHTML = lines.map(function (l) {
+        return '<span class="ct-line' + (l.bad ? " is-bad" : "") + '">' + esc(l.text) + "</span>";
+      }).join("");
+    }
+
+    // Finishing: try every preset once.
+    function visitPreset(i) {
+      if (!tried[i]) { tried[i] = true; ntried++; }
+      if (ntried === PRESETS.length && !awarded) {
+        awarded = true;
+        if (window.Ox && typeof Ox.award === "function") Ox.award(10, "tried every preset in the cutter", "08:cutter");
+      }
+    }
+
+    root.querySelectorAll("[data-preset]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var i = Number(btn.getAttribute("data-preset"));
+        var p = PRESETS[i];
+        textIn.value = p.text;
+        slider.max = String(U.u8Spans(p.text).len);
+        slider.value = String(p.cut);
+        render();
+        visitPreset(i);
+      });
+    });
+    textIn.addEventListener("input", function () { render(); });
+    slider.addEventListener("input", function () { render(); });
+    render();
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
+  </script>
+</div>
 </section>
 
 <section>
@@ -764,6 +926,8 @@ fn main() {
     return { ok: true, text: new TextDecoder().decode(all.subarray(start, end)) };
   }
   /*u8-logic:end*/
+  // Shared with the Caterpillar cutter, so both print the same panic text.
+  window.OxUtf8 = { u8Spans: u8Spans, u8Slice: u8Slice, u8Debug: u8Debug };
 
   const ORDINAL = ["first", "second", "third", "fourth"];
 
