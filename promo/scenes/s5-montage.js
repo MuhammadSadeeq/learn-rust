@@ -53,6 +53,9 @@
   .s-s5 .h2s5-rings { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: visible; }
   .s-s5 .h2s5-ring { fill: none; stroke: var(--molten); stroke-width: 6; stroke-linecap: round; }
   .s-s5 .h2s5-grain { fill: var(--molten); }
+  .s-s5 .h2s5-lane { position: absolute; border: 1.5px dashed var(--steel); border-radius: 14px; background: none; }
+  .s-s5 .h2s5-wait { position: absolute; font: 500 26px/34px var(--font-mono); color: var(--muted); text-align: center; white-space: pre; }
+  .s-s5 .h2s5-door { position: absolute; width: 10px; height: 90px; background: var(--ink); }
   .s-s5 .h2s5-act > .h2s5-tk { position: absolute; left: 0; top: 0; width: 100%; height: 100%; border: 3px solid var(--molten); border-radius: 10px; background: var(--cream); color: var(--ink); font: 700 30px/66px var(--font-mono); text-align: center; white-space: pre; }
   `;
   function injectCSS() {
@@ -245,13 +248,13 @@
   // Only the crab holding the key walks in, through the door; leavers go out lower, to the back.
   // Each worker follows straight-leg waypoints [t, x, y]; every position is a function of T.
   const QUEUE_X = 1060;
-  const KEEPER = [1060, 300];
+  const KEEPER = [1060, 250];
   const TRACK = [
-    [[36.0, 1060, 450], [36.5, 1060, 450], [36.7, 1330, 430], [36.85, 1480, 500], [37.0, 1480, 500], [37.2, 1330, 550], [37.35, 1200, 550], [37.6, 1200, 860], [37.85, 1060, 860]],
-    [[36.0, 1060, 580], [36.5, 1060, 580], [36.8, 1060, 450], [37.0, 1060, 450], [37.2, 1330, 430], [37.36, 1480, 500], [37.5, 1480, 500], [37.7, 1330, 550], [37.85, 1200, 550], [38.0, 1200, 860]],
-    [[36.0, 1060, 710], [37.0, 1060, 710], [37.2, 1060, 580], [37.4, 1060, 450], [37.5, 1060, 450], [37.7, 1330, 430], [37.86, 1480, 500]],
+    [[36.0, 1060, 450], [36.5, 1060, 450], [36.7, 1330, 455], [36.85, 1480, 500], [37.0, 1480, 500], [37.1, 1330, 525], [37.15, 1200, 525], [37.3, 1200, 760], [37.85, 1060, 860]],
+    [[36.0, 1060, 580], [36.5, 1060, 580], [36.8, 1060, 450], [37.15, 1060, 450], [37.3, 1330, 455], [37.42, 1480, 500], [37.5, 1480, 500], [37.6, 1330, 525], [37.7, 1200, 525], [37.8, 1200, 700], [38.0, 1200, 860]],
+    [[36.0, 1060, 710], [37.0, 1060, 710], [37.3, 1060, 580], [37.55, 1060, 450], [37.7, 1060, 450], [37.85, 1330, 455], [37.95, 1480, 500]],
   ];
-  const ARRIVE = [36.85, 37.36, 37.86];
+  const ARRIVE = [36.85, 37.42, 37.95];
   const LEAVE = [37.0, 37.5, 99];
   function track(T, pts) {
     if (T <= pts[0][0]) return [pts[0][1], pts[0][2]];
@@ -272,8 +275,11 @@
   function buildMutex(parent) {
     const F = frame(parent, { tint: "lock", term: "MUTEX", meaning: "one thread at a time.", chip: "ch18" });
     const pic = F.pic;
-    el(pic, "h2s5-slot", "left:980px; top:380px; width:160px; height:440px;");
+    el(pic, "h2s5-lane", "left:980px; top:380px; width:160px; height:440px;");
+    el(pic, "h2s5-wait", "left:980px; top:340px; width:160px;", "waiting");
     const room = el(pic, "h2s5-room", "left:1330px; top:300px; width:470px; height:320px;");
+    // A door gap in the left border, 90 px tall, centred on the entry and exit lanes (y 490).
+    el(pic, "h2s5-door", "left:1326px; top:445px;");
     const roomLabel = el(pic, "h2s5-label", "left:1356px; top:322px; color: var(--lock);", "Mutex<i32>");
     const count = el(pic, "h2s5-count", "left:1600px; top:372px;", "0");
     const keeper = actor(pic, oxi("keeper"), KEEPER[0], KEEPER[1], 150, 150 * (102 / 120));

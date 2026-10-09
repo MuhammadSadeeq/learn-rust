@@ -8,8 +8,9 @@
      (8 tests, so 2 cells per test: 16 cells at full HP).
    Beside the terminal, the real SVG Ledger Dragon (OxCast.boss) fights: each of the
    8 hits knocks it back and makes it "ouch", and the K.O. puts it in the "defeated" pose.
-   Everything is a pure function of T. A real terminal scrolls when its output is taller
-   than the window, so the body is bottom-anchored when it overflows. */
+   The window re-frames with its content, as a camera move (no scrolling): 1560x880 for the
+   failing screen, 1560x620 for the pass, 1240x640 for the boss. Everything is a pure
+   function of T. */
 (function () {
   "use strict";
 
@@ -36,7 +37,7 @@
   const TESTS = 8; // #[test] functions in quests/13_iterators_closures/boss3_ledger.rs
   const BOSS_WIDTH = 26;
   const MOOD_WIDTH = 50;
-  const OXI_RIGHT = 49; // the Oxi column is 24 cols; a 73-col window leaves 49 for its text
+  const OXI_RIGHT = 69; // the pass window is 93 cols wide: the Oxi column is 24, so 69 are left for its text
 
   // The real rustc output for borrow2 (E0596), from the watch-mode run.
   const RUSTC_ERROR = [
@@ -57,8 +58,19 @@
   const CAR = "▰";
   const EMP = "▱";
 
-  // The terminal: 1240 x 700, left in the safe area, centred vertically.
-  const TERM = { x: 96, y: 190, w: 1240, h: 700 };
+  // The window's rectangle at T: centred on (960, 540) for the fail and pass screens, then
+  // it moves to the boss's place (96, 220) while the dragon enters.
+  function winRect(T) {
+    const fail = { x: 180, y: 100, w: 1560, h: 880 };
+    if (T < 42.0) return fail;
+    if (T < 44.0) {
+      const h = V.lerp(880, 620, P(T, 42.0, 42.3, E.outExpo));
+      return { x: 180, y: 540 - h / 2, w: 1560, h };
+    }
+    const e = P(T, 44.0, 44.35, E.outExpo);
+    const h = V.lerp(620, 640, e);
+    return { x: V.lerp(180, 96, e), y: 540 - h / 2, w: V.lerp(1560, 1240, e), h };
+  }
 
   // ------------------------------------------------------------ forge helpers
   const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -125,13 +137,13 @@
 .s6-bg { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px;
   background: radial-gradient(ellipse 58% 60% at 50% 46%, #161b22 0%, #0b0d10 72%); }
 .s6-cam { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
-.s6-term { position: absolute; left: ${TERM.x}px; top: ${TERM.y}px; width: ${TERM.w}px; height: ${TERM.h}px;
+.s6-term { position: absolute; left: 180px; top: 100px; width: 1560px; height: 880px;
   background: #0d1117; border: 1px solid var(--steel); border-radius: 18px; overflow: hidden;
   box-shadow: 0 40px 120px rgba(0,0,0,0.6), 0 0 90px rgba(232,89,12,0.07); transform-origin: 50% 50%; }
 .s6-bar { position: absolute; left: 0; top: 0; width: 100%; height: 58px; border-bottom: 1px solid #1c232c; }
 .s6-bar i { position: absolute; top: 21px; width: 16px; height: 16px; border-radius: 50%; background: #39414b; }
 .s6-bar span { position: absolute; left: 0; right: 0; top: 14px; text-align: center; font: 500 28px/30px var(--font-mono); color: #7d8792; }
-.s6-body { position: absolute; left: 26px; top: 84px; width: 1188px; height: 596px; overflow: hidden;
+.s6-body { position: absolute; left: 26px; top: 84px; right: 26px; bottom: 20px; overflow: hidden;
   font: 500 27px/30px var(--font-mono); color: #e9e4da; white-space: pre; font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
 .s6-rows { position: absolute; left: 0; top: 0; width: 100%; }
 .s6-body .r { position: relative; height: 30px; overflow: hidden; }
@@ -374,16 +386,23 @@
       const hits = cue("bossHits", [44.5, 44.75, 45.0, 45.25, 45.5, 45.75, 46.0, 46.25]);
       const koAt = cue("ko", 46.5);
 
-      // The window: a 1.00 -> 1.05 push over 40.0 - 44.0 (inOutSine), reset by the clear at 44.0.
-      const push = T < 44.0 ? 1 + 0.05 * P(T, 40.0, 44.0, E.inOutSine) : 1;
-      // The tilt in at 40.0 (rotateX 8 -> 0), the glide up at 41.6 - 42.2 (now centred: no glide needed),
-      // the boss shake, and the shrink into one point (inExpo) at 47.5 - 48.0.
+      // The window re-frames with its content (winRect), then tilts in at 40.0 (rotateX 8 -> 0).
+      // The push is 1.00 -> 1.03 over 40.0 - 44.0 (inOutSine), reset by the clear at 44.0.
+      // At 47.5 - 48.0 the window shrinks into one point at the centre (inExpo).
+      const w = winRect(T);
+      term.style.left = `${round(w.x)}px`;
+      term.style.top = `${round(w.y)}px`;
+      term.style.width = `${round(w.w)}px`;
+      term.style.height = `${round(w.h)}px`;
+      const push = T < 44.0 ? 1 + 0.03 * P(T, 40.0, 44.0, E.inOutSine) : 1;
       const tilt = 8 * (1 - P(T, 40.0, 40.6, E.outExpo));
       const forgeOut = P(T, cue("forgeOut", 47.5), 48.0, E.inExpo);
       const shk = V.shake(T, hits, 6, 0.3);
-      const koShk = V.shake(T, [koAt], 8, 0.35);
-      const sx = shk.x + koShk.x;
-      const sy = shk.y + koShk.y;
+      const koShk = V.shake(T, [cue("ko", 46.5)], 8, 0.35);
+      const cx = w.x + w.w / 2;
+      const cy = w.y + w.h / 2;
+      const sx = shk.x + koShk.x + (960 - cx) * forgeOut;
+      const sy = shk.y + koShk.y + (540 - cy) * forgeOut;
       term.style.transform = `perspective(2400px) translate(${round(sx)}px, ${round(sy)}px) rotateX(${round(tilt)}deg) scale(${round(push * (1 - forgeOut))})`;
       term.style.opacity = T >= 47.99 ? 0 : 1;
 
@@ -395,21 +414,7 @@
       if (body.dataset.last !== html) {
         body.dataset.last = html;
         rows.innerHTML = html;
-        // bottom-anchored like a real terminal: the newest lines stay in view. The scroll
-        // moves whole rows, so the top row is never cut through a glyph.
-        const need = rows.offsetHeight - body.clientHeight;
-        let shift = 0;
-        if (need > 0) {
-          for (const c of rows.children) {
-            if (c.offsetTop >= need) {
-              shift = c.offsetTop;
-              break;
-            }
-          }
-        }
-        body.dataset.over = String(shift);
       }
-      rows.style.transform = `translateY(${-Number(body.dataset.over || 0)}px)`;
 
       // The dragon: enters at 44.0 (outBack, 450 ms), is knocked back at each hit, drops at the K.O.
       const dragon = q("dragon");
@@ -456,7 +461,7 @@
 
       // The captions: 88 QUESTS. (42.0 - 44.0), 5 BOSSES. (46.5 - 47.5).
       const qc = q("qcap");
-      const qIn = P(T, 42.0, 42.45, E.outExpo);
+      const qIn = P(T, 42.3, 42.75, E.outExpo);
       const qOut = P(T, 43.7, 44.0, E.inQuad);
       V.set(qc, { x: 0, y: 36 * (1 - qIn), o: Math.max(0, qIn - qOut) });
       const bc = q("bcap");
