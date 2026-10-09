@@ -42,13 +42,16 @@ recompiles every time you save, and moves you on when the tests pass.
 | **Predict first** | Before every surprising step you commit to an answer. Being wrong first is what makes the right answer stick. |
 | **Become the compiler** | "Does this compile?" checks throughout, real `rustc` errors decoded, and a borrow-checker game. Once you can predict the compiler, Rust stops being a fight. |
 | **Start from PHP** | Every concept starts next to the PHP you write today (PHP 8.5, Laravel 13: arrays, Collections, Eloquent, middleware, queues, enums, property hooks, the pipe operator) and then shows exactly where the comparison breaks. |
-| **Write real code** | 88 quests and 5 boss projects, checked by the real compiler. |
+| **Write real code** | 88 quests and 5 boss projects, checked by the real compiler. Some quests are small cargo projects with real crates (clap, tokio, serde, reqwest, axum). The course ends by building an AI agent harness. |
 | **Remember it** | Recall cards at the end of every chapter, reviewed on a spaced-repetition schedule in the Recall Deck. |
+| **Know the words** | The characters are a way in, never a replacement: every one is introduced with the real term it stands for (the Inspector *is* the borrow checker). Each chapter ends with the terms you now know, and the Glossary lab holds every keyword, concept and error code with a compiled example and a keyword drill. |
 | **Agent era** | Every chapter shows how its concept appears in AI-written Rust, and the Agent Code Review Dojo trains you to review it. |
 
 Every code sample on the site is compiled with `rustc` (edition 2024) before
 it ships, including the ones that are *supposed* to fail: the checker confirms
-they fail with exactly the error code the page claims.
+they fail with exactly the error code the page claims. Samples that use crates
+(tokio, axum, reqwest, serde, clap and others) are compiled against the real
+crates too.
 
 ## The route
 
@@ -74,10 +77,11 @@ test you pass is a hit: the Forge draws its HP bar draining in your terminal.
 
 - **Memory X-Ray**: every step-through program in the course in one place.
 - **Be the Borrow Checker**: an arcade game of 45 programs. Accept or reject each one, then name the rule it breaks.
-- **Error Museum**: the 25 compiler errors you'll meet most, each with real `rustc` output and fixes that compile.
+- **Error Museum**: 27 compiler errors you'll meet most (including async's `Send` error and E0038), each with real `rustc` output and fixes that compile.
 - **PHP → Rust Rosetta**: 119 PHP 8.5 and Laravel 13 habits next to the Rust that replaces them, searchable.
 - **Agent Code Review Dojo**: 18 programs an AI agent wrote. Flag the lines a senior reviewer would question, then compare with the reviewed version.
 - **Recall Deck**: spaced-repetition review of every chapter's cards.
+- **Glossary & keyword index**: 200 terms, keywords and error codes, each with a plain definition, a compiled example and the chapter that teaches it, plus a keyword drill.
 - **Field Guide**: every character of Rustopia, in color once you have met it, with the Rust idea it stands for, plus a WANTED wall of the five act bosses.
 
 ## The Forge
@@ -114,6 +118,7 @@ commit it with your work. The Forge is about 2,200 lines of std-only Rust (tests
 | `solutions/` | Reference solutions. Look after you've passed. |
 | `forge/` | The quest trainer behind `cargo forge`. |
 | `projects/notes-api/` | A complete JSON API in axum, built in Chapter 20, with a map to its Laravel equivalents. |
+| `projects/tool-runner/` | The capstone (Chapter 21): an AI agent harness with streaming, tool calls, retries, a sandbox, concurrency limits and cancellation, tested against a mock model server. |
 | `tools/` | Maintainer scripts (see below). |
 | `docs/AUTHORING.md` | How chapters, quests and labs are written. |
 | `docs/CAST.md` | The characters, what each one stands for, and the motion rules. |
@@ -121,16 +126,18 @@ commit it with your work. The Forge is about 2,200 lines of std-only Rust (tests
 ## For maintainers
 
 ```sh
-node tools/check-snippets.mjs    # compile every Rust snippet on the site
-node tools/check-php.mjs         # every PHP sample parses on PHP 8.5, no outdated idioms
-node tools/check-quests.mjs      # starters must fail, solutions must pass
-node tools/sync-quests.mjs       # regenerate quests/Cargo.toml + site data from quests.toml
-cargo forge verify --solutions   # the same check from Rust
+node tools/check-snippets.mjs           # compile every Rust snippet on the site
+node tools/check-snippets.mjs --crates  # also the ones that use crates (tools/snippet-crates)
+node tools/check-php.mjs                # every PHP sample parses on PHP 8.5, no outdated idioms
+node tools/check-quests.mjs             # starters must fail, solutions must pass
+node tools/sync-quests.mjs              # regenerate quests/Cargo.toml + site data from quests.toml
+cargo forge verify --solutions          # the same check from Rust
 ```
 
-CI (`.github/workflows/ci.yml`) runs all of these, plus the Forge's fmt,
-clippy and tests and the notes-api tests, on every pull request and every
-push to `main`.
+CI (`.github/workflows/ci.yml`) runs all of these (snippets with `--crates`),
+plus the Forge's fmt, clippy and tests, the notes-api tests, and
+tool-runner's fmt, clippy and tests, on every pull request and every push to
+`main`.
 
 To put the course online, go to *Settings → Pages* and set the source to
 *GitHub Actions*, then run the *Publish site* workflow from the Actions tab.
