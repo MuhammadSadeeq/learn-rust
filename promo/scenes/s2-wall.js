@@ -33,7 +33,7 @@
   ];
   const WORD_TIMES = [10.0, 12.0, 14.0];
   const WALL_END = 15.5; // @breath: hard cut to black
-  const CARD_W = 700;
+  const CARD_W = 460;
 
   // The center 900 x 260 box (x 510..1410, y 410..670) stays clear of cards.
   // Cards live in two bands: above it (y 84..380) and below it (y 700..1008).
@@ -65,10 +65,16 @@
     const cardsEl = q(".s2-cards");
     const wordsEl = q(".s2-words");
 
-    // Measure cards while the layer is shown (layout needs a displayed box).
+    // Measure cards while the layer is shown (layout needs a displayed box),
+    // then place each by seeded rejection sampling: anywhere on the screen,
+    // outside the center box, and clear of the cards already placed.
     const prev = layer.style.display;
     layer.style.display = "block";
     const rnd = V.rand(20261009);
+    const placed = [];
+    const CENTER = { x0: 510 - 30, y0: 410 - 30, x1: 1410 + 30, y1: 670 + 30 };
+    const hit = (a, b) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+    const area = (a, b) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0));
     const cards = ERRORS.map(([code, msg], i) => {
       const el = document.createElement("div");
       el.className = "s2-card";
@@ -79,13 +85,22 @@
       el.appendChild(document.createTextNode(" " + msg));
       cardsEl.appendChild(el);
       const h = el.offsetHeight;
-      const top = rnd() < 0.5;
-      const x = 96 + rnd() * (1824 - CARD_W - 96);
-      let y;
-      if (top) y = 84 + rnd() * Math.max(0, 380 - h - 26 - 84);
-      else y = 700 + rnd() * Math.max(0, 1008 - h - 700);
       const r = (rnd() * 2 - 1) * 4;
-      return { el, x, y, r, t: CARD_TIMES[i] };
+      const m = 26; // rotation margin
+      let best = null, bestOv = Infinity;
+      for (let k = 0; k < 500 && !best; k++) {
+        const x = 84 + rnd() * (1920 - 168 - CARD_W);
+        const y = 72 + rnd() * (1008 - 72 - h);
+        const box = { x0: x - m, y0: y - m, x1: x + CARD_W + m, y1: y + h + m };
+        if (hit(box, CENTER)) continue;
+        let ov = 0;
+        for (const q of placed) ov += area(box, q);
+        if (ov === 0) best = { x, y, box };
+        else if (ov < bestOv) { bestOv = ov; best = { x, y, box }; }
+      }
+      if (!best) best = { x: 96, y: 84, box: { x0: 0, y0: 0, x1: 0, y1: 0 } };
+      placed.push({ x0: best.box.x0 - 10, y0: best.box.y0 - 10, x1: best.box.x1 + 10, y1: best.box.y1 + 10 });
+      return { el, x: best.x, y: best.y, r, t: CARD_TIMES[i] };
     });
     layer.style.display = prev;
 
@@ -153,9 +168,10 @@
     cards.forEach((c, i) => {
       const e = P(T, c.t, c.t + 0.12, E.outQuad);
       const a = P(T, c.t, c.t + 0.12, E.linear);
-      let o = a;
-      if (i < cards.length - 1) o *= lerp(1, 0.6, P(T, cards[i + 1].t, cards[i + 1].t + 0.15, E.linear));
-      V.set(c.el, { x: c.x, y: c.y, r: c.r, s: lerp(1.18, 1, e), o: o, origin: "50% 50%" });
+      // Older cards dim by brightness (they stay opaque, so they still cover what is below).
+      const dim = i < cards.length - 1 ? lerp(1, 0.6, P(T, cards[i + 1].t, cards[i + 1].t + 0.15, E.linear)) : 1;
+      V.set(c.el, { x: c.x, y: c.y, r: c.r, s: lerp(1.18, 1, e), o: a, origin: "50% 50%" });
+      c.el.style.filter = (dim < 1 ? `brightness(${dim.toFixed(3)})` : "none");
     });
 
     // The plate and the giant words: each word is a hard cut, drifting 1.00 -> 1.04.
