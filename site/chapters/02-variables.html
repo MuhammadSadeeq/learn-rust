@@ -395,7 +395,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try `rustc --explain E0381`.</pre>
 
-<p>E0381 says the name might be uninitialized. The labels trace one path through the code. The <code>if</code> can be false, and on that path nothing sets <code>status</code>. The compiler isn't guessing. It follows the branches the way you would on paper.</p>
+<p>E0381 says the name might be uninitialized. The labels trace one path through the code. The <code>if</code> can be false, and on that path nothing sets <code>status</code>. The compiler follows the branches the way you would on paper.</p>
 
 <p>Most Rust code writes this differently. An <code>if</code> produces a value, so you can bind it directly:</p>
 

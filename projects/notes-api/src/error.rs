@@ -12,6 +12,9 @@ use serde_json::json;
 pub enum AppError {
     /// 404: no note with this id.
     NotFound(u64),
+    /// 404: no route matches the URL. Laravel: the router's
+    /// `NotFoundHttpException`, rendered by the exception handler.
+    NoRoute,
     /// 422: the JSON was well-formed but a rule failed.
     Validation {
         field: &'static str,
@@ -43,6 +46,10 @@ impl IntoResponse for AppError {
             AppError::NotFound(id) => (
                 StatusCode::NOT_FOUND,
                 json!({ "message": format!("Note {id} not found.") }),
+            ),
+            AppError::NoRoute => (
+                StatusCode::NOT_FOUND,
+                json!({ "message": "Route not found." }),
             ),
             AppError::Validation { field, message } => (
                 StatusCode::UNPROCESSABLE_ENTITY,

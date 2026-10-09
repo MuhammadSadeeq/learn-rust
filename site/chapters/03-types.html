@@ -337,7 +337,7 @@ fn main() {
   <p class="bb-note" id="bb-note">Press +1 and watch the boxes. Five presses reach 255.</p>
 </div>
 
-<p>Some things to try, in order. Press +1 six times in debug mode. Go back to the start, switch to <code>wrapping_*</code> and press +1 at 255. Set the value to 300 and read the message. Finally, switch the type to <code>i8</code> with 250 in the box. The value becomes −6, because switching type is an <code>as</code> cast, and the expression line shows it.</p>
+<p>Some things to try, in order. Press +1 six times in debug mode. Then press reset, switch the mode to <code>wrapping_*</code>, and press +1 six times: the box goes from 255 to 0 and carries on counting. Set the value to 300 and read the message. Last, press reset and switch the type to <code>i8</code>. The 250 becomes −6, because switching type is an <code>as</code> cast, and the expression line shows it.</p>
 
 <div class="ox-quiz" data-id="03:overflow" data-xp="10" data-label="Check yourself">
   <p class="ox-q">What does <code>250u8.checked_add(10)</code> return?</p>
@@ -520,25 +520,27 @@ fn main() {
 
 <p><code>[0; 5]</code> means five copies of <code>0</code>. <code>len()</code> reports the length, and <code>for x in typed</code> walks the slots in order.</p>
 
+<p>The size of an array is known at compile time, so the whole array lives in the function's stack frame, next to the other local values. The figure shows <code>typed</code>.</p>
+
 <figure class="ox-figure">
-<svg viewBox="0 0 600 180" width="600" style="max-width:100%" role="img" aria-label="The array typed holds 10, 20 and 30 in three neighboring slots on the stack, at offsets 0, 4 and 8. A dashed box marks the heap, which holds nothing for this array.">
-  <text x="20" y="22" class="t-muted" font-size="12">STACK</text>
-  <text x="400" y="22" class="t-muted" font-size="12">HEAP</text>
-  <text x="40" y="58" font-size="14" font-weight="700">typed: [i32; 3] · 12 bytes</text>
-  <rect x="40" y="70" width="110" height="52" rx="6" class="f-stack" stroke-width="1.5"/>
-  <rect x="150" y="70" width="110" height="52" rx="6" class="f-stack" stroke-width="1.5"/>
-  <rect x="260" y="70" width="110" height="52" rx="6" class="f-stack" stroke-width="1.5"/>
-  <text x="95" y="102" font-size="18" font-weight="700" text-anchor="middle">10</text>
-  <text x="205" y="102" font-size="18" font-weight="700" text-anchor="middle">20</text>
-  <text x="315" y="102" font-size="18" font-weight="700" text-anchor="middle">30</text>
-  <text x="95" y="142" font-size="12" class="t-muted" text-anchor="middle">[0] · offset 0</text>
-  <text x="205" y="142" font-size="12" class="t-muted" text-anchor="middle">[1] · offset 4</text>
-  <text x="315" y="142" font-size="12" class="t-muted" text-anchor="middle">[2] · offset 8</text>
-  <rect x="400" y="70" width="170" height="52" rx="6" class="f-ghost" stroke-width="1.5"/>
-  <text x="485" y="101" font-size="12" class="t-muted" text-anchor="middle">no allocation</text>
-  <text x="20" y="172" font-size="12" class="t-muted">Three 4-byte numbers side by side. The size is known at compile time, so the whole array fits in the function's stack frame.</text>
+<svg viewBox="0 0 480 196" width="480" style="max-width:100%" role="img" aria-label="The array typed holds 10, 20 and 30 in three neighboring slots on the stack, at offsets 0, 4 and 8. A dashed box marks the heap, which holds nothing for this array.">
+  <text x="16" y="20" class="t-muted" font-size="12">STACK</text>
+  <text x="368" y="20" class="t-muted" font-size="12">HEAP</text>
+  <text x="16" y="52" font-size="14" font-weight="700">typed: [i32; 3] · 12 bytes</text>
+  <rect x="16" y="64" width="104" height="54" rx="6" class="f-stack" stroke-width="1.5"/>
+  <rect x="130" y="64" width="104" height="54" rx="6" class="f-stack" stroke-width="1.5"/>
+  <rect x="244" y="64" width="104" height="54" rx="6" class="f-stack" stroke-width="1.5"/>
+  <text x="68" y="97" font-size="18" font-weight="700" text-anchor="middle">10</text>
+  <text x="182" y="97" font-size="18" font-weight="700" text-anchor="middle">20</text>
+  <text x="296" y="97" font-size="18" font-weight="700" text-anchor="middle">30</text>
+  <text x="68" y="136" font-size="12" class="t-muted" text-anchor="middle">[0] · offset 0</text>
+  <text x="182" y="136" font-size="12" class="t-muted" text-anchor="middle">[1] · offset 4</text>
+  <text x="296" y="136" font-size="12" class="t-muted" text-anchor="middle">[2] · offset 8</text>
+  <rect x="368" y="64" width="112" height="54" rx="6" class="f-ghost" stroke-width="1.5"/>
+  <text x="424" y="96" font-size="12" class="t-muted" text-anchor="middle">no allocation</text>
+  <text x="16" y="182" font-size="12" class="t-muted">Three 4-byte numbers side by side, 12 bytes in all.</text>
 </svg>
-<figcaption>An array is one block of values next to each other. It has no pointer and no heap buffer, so it is cheap to create and cheap to drop.</figcaption>
+<figcaption>An array is one block of values next to each other. It has no pointer and no heap buffer, so there is nothing extra to allocate or free.</figcaption>
 </figure>
 
 <h3>Indexing is checked</h3>

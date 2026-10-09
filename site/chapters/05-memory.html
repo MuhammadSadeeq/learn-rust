@@ -292,7 +292,7 @@ fn main() {
 <p>Five pushes caused two reallocations. If you know roughly how many elements you will need, ask for that capacity up front and the reallocations go away.</p>
 
 <aside class="ox-callout" data-kind="deep" data-label="with_capacity when you know the size">
-  <p>Each reallocation is a new allocation, a copy and a free. Reserving the capacity once replaces that series with one allocation. The Rust standard library does not promise particular growth amounts, so the numbers you see are an implementation detail. What you can count on is that <code>capacity()</code> is at least <code>len()</code>, and that <code>with_capacity</code> never makes a String shorter.</p>
+  <p>A reallocation can mean a new allocation, a copy and a free. Reserving the capacity once avoids that series of steps. The standard library does not promise particular growth amounts, so the numbers you see are an implementation detail. What you can count on is that <code>capacity()</code> is never less than <code>len()</code>, and that <code>with_capacity</code> only reserves room. It does not put any text in the String.</p>
 </aside>
 
 <p>Here is the same growth in code. Run it, and watch <code>len</code> climb while <code>capacity</code> jumps in steps. Don't write code that depends on the exact numbers.</p>

@@ -181,3 +181,57 @@ async fn delete_removes_the_note() {
     let (status, _) = send(&app, "DELETE", "/api/notes/1", None).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn list_is_empty_before_any_note_exists() {
+    let app = app(AppState::default());
+    let (status, list) = send(&app, "GET", "/api/notes", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(list, json!([]));
+}
+
+#[tokio::test]
+async fn wrong_json_type_is_a_422_and_stores_nothing() {
+    let app = app(AppState::default());
+
+    // `title` is a number, not a string: serde rejects it in the extractor.
+    let (status, body) = send(&app, "POST", "/api/notes", Some(json!({ "title": 42 }))).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(body["message"].as_str().unwrap().contains("invalid type"));
+
+    // The handler never ran, so the list is still empty.
+    let (_, list) = send(&app, "GET", "/api/notes", None).await;
+    assert_eq!(list, json!([]));
+}
+
+#[tokio::test]
+async fn body_without_json_content_type_is_a_415() {
+    let app = app(AppState::default());
+    let request = Request::post("/api/notes")
+        .body(Body::from(r#"{"title":"no header"}"#))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+}
+
+#[tokio::test]
+async fn patch_on_a_missing_note_is_a_404() {
+    let app = app(AppState::default());
+    let (status, body) = send(
+        &app,
+        "PATCH",
+        "/api/notes/9",
+        Some(json!({ "pinned": true })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body, json!({ "message": "Note 9 not found." }));
+}
+
+#[tokio::test]
+async fn unknown_url_is_a_json_404() {
+    let app = app(AppState::default());
+    let (status, body) = send(&app, "GET", "/nope", None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body, json!({ "message": "Route not found." }));
+}

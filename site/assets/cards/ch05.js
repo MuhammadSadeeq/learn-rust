@@ -1,4 +1,4 @@
-/* Recall cards — Chapter 05: The Stack & The Heap */
+/* Recall cards, Chapter 05: The Stack & The Heap */
 (window.OX_CARDS = window.OX_CARDS || []).push(
   { id: "c05-stack", ch: 5, q: "What is the stack, and what goes on it?", a: "The stack holds one **frame** per function call. A frame has room for that call's parameters and local variables, and every size is known at compile time. Making room means moving a pointer, and giving it back means moving it back.\n\nFixed-size values such as `i32`, `bool`, `char` and the 24-byte header of a `String` live there." },
   { id: "c05-heap", ch: 5, q: "What is the heap, and what goes on it?", a: "The heap is memory you ask for at runtime, for data whose size is not known when the program is compiled, or that can grow. The allocator returns an address, and someone has to give the block back.\n\nThe text of a `String`, the elements of a `Vec`, and the value a `Box` points to live there." },

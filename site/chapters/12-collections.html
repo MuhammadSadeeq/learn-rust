@@ -1,0 +1,946 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Collections · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/quests-data.js" defer></script>
+<script src="../assets/cards/ch12.js" defer></script>
+<script src="../assets/scenarios/ch12.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+<script src="../assets/xray.js" defer></script>
+</head>
+<body data-chapter="12">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<div class="ox-page">
+<aside class="ox-rail" aria-label="Chapter contents"></aside>
+<main class="ox-main" id="main">
+
+<header class="ox-hero" data-auto>
+  <ul>
+    <li>Pick the right collection for a job that PHP gives to one <code>array</code>.</li>
+    <li>Use <code>Vec</code> safely: tell <code>get</code> from indexing, and iterate by reference.</li>
+    <li>Count and group with the <code>HashMap</code> entry API, knowing that map order is not promised.</li>
+    <li>Avoid the ownership traps of moving values out of a collection.</li>
+  </ul>
+</header>
+
+<section>
+<h2 id="trench-coat">Five jobs in one array</h2>
+
+<p>A PHP array does almost everything. The same value can be a list, a lookup table, a set, a queue or a stack, and the code that uses it decides which job it does. Underneath, a PHP array is an ordered hash map, which is why one type can stand in for all of them.</p>
+
+<p>Rust splits those jobs into separate types. Each type makes a different promise about speed and about order. Several of these jobs can be done with more than one type, so the choice is yours to make, and a reader of your code has to be able to see it. Before you read on, guess the type for each PHP line below.</p>
+
+<p class="ox-pull">The collection you pick is a promise about cost and order.</p>
+
+<div class="ox-figure ox-wide" id="trenchcoat">
+  <style>
+    #trenchcoat .tc-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin-bottom: 12px; }
+    #trenchcoat .tc-hint { color: var(--muted); font-size: 0.95rem; }
+    #trenchcoat .tc-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+    #trenchcoat .tc-card { display: grid; gap: 4px; align-content: start; text-align: left; min-height: 58px; padding: 9px 11px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); color: var(--ink); font: inherit; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+    #trenchcoat .tc-card:hover { border-color: var(--ink-2); }
+    #trenchcoat .tc-card[aria-pressed="true"] { border-color: var(--oxide); background: var(--oxide-soft); }
+    #trenchcoat .tc-card code { font: 600 0.9rem/1.3 var(--font-mono); background: none; border: 0; padding: 0; overflow-wrap: anywhere; }
+    #trenchcoat .tc-card small { color: var(--muted); font-size: 0.85rem; line-height: 1.3; }
+    #trenchcoat .tc-panel { margin-top: 14px; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface-2); min-width: 0; }
+    #trenchcoat .tc-q { margin: 0 0 10px; font-weight: 700; }
+    #trenchcoat .tc-guess { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    #trenchcoat .tc-verdict { margin: 0 0 8px; font-weight: 700; }
+    #trenchcoat .tc-type { margin: 0 0 4px; }
+    #trenchcoat .tc-panel .ox-code { margin: 10px 0; }
+    #trenchcoat .tc-costs th { width: 6.5rem; text-align: left; color: var(--muted); font-weight: 600; }
+    #trenchcoat .tc-why { margin: 10px 0 0; }
+  </style>
+  <div class="tc-head">
+    <span class="ox-label">Unpack the trench coat</span>
+    <span class="tc-hint">Pick a PHP line. Guess the Rust collection, then open it.</span>
+  </div>
+  <div class="tc-cards" role="group" aria-label="PHP usages"></div>
+  <div class="tc-panel" aria-live="polite"></div>
+</div>
+
+<aside class="ox-callout" data-kind="php">
+  <p>In PHP, the code is the only sign of what you meant. <code>$list[] = $x;</code> and <code>$byId[$id] = $user;</code> use the same syntax on the same kind of value. Nothing in the file says which one is a list and which one is a lookup table.</p>
+  <p>In Rust the type says it. <code>Vec&lt;i32&gt;</code> and <code>HashMap&lt;u64, User&gt;</code> are different types, and each one is a visible promise about how the value is used.</p>
+</aside>
+
+<details class="ox-think">
+  <summary>Question to think about: a PHP array with keys 0, 1 and 2 is a list. What changes after <code>unset($list[1])</code>?</summary>
+  <div class="ox-think-body">
+    <p>The key 1 disappears, so the keys become 0 and 2. The array still holds its values in order, but its keys now have a gap, and PHP keeps the gap.</p>
+    <p>A <code>Vec</code> has no keys to leave gaps in. <code>remove(1)</code> shifts the later elements down, so index 1 then holds what used to be at index 2. The two languages agree on the values and disagree on what the position means.</p>
+  </div>
+</details>
+</section>
+
+<section>
+<h2 id="vec">Vec&lt;T&gt;: the list</h2>
+
+<p>A <code>Vec&lt;T&gt;</code> is a growable list. Its elements sit side by side in one heap buffer, the same idea as the buffer you met in Chapter 05. On the stack, the <code>Vec</code> itself is three numbers: a pointer to the buffer, a length and a capacity. The length counts the elements in use. The capacity counts the slots in the buffer.</p>
+
+<p>There are three ways to create one. They differ only in what they allocate up front.</p>
+
+<pre class="rs" data-run data-stdout="0 0 true">
+fn main() {
+    let a: Vec&lt;i32&gt; = vec![];                  // a literal, empty
+    let b = Vec::&lt;i32&gt;::new();                 // allocates nothing yet
+    let c: Vec&lt;i32&gt; = Vec::with_capacity(10); // room for 10, length 0
+    println!("{} {} {}", a.len(), b.len(), c.capacity() &gt;= 10);
+}</pre>
+
+<p><code>vec![]</code> is a literal. <code>Vec::new()</code> allocates nothing until the first push. <code>with_capacity(n)</code> allocates the buffer now, so pushing up to <code>n</code> elements never has to grow it. The length is still 0 in every case. Capacity is room, and length is what is in use.</p>
+
+<pre class="rs" data-run data-stdout="[0] 1 Some(3) false
+0 true">
+fn main() {
+    let mut v = Vec::new();
+    v.push(1);
+    v.extend([2, 3]);
+    v.insert(0, 0);
+    let gone = v.remove(1);
+    let last = v.pop();
+    v.truncate(1);
+    println!("{v:?} {gone} {last:?} {}", v.is_empty());
+    v.clear();
+    println!("{} {}", v.len(), v.is_empty());
+}</pre>
+
+<p><code>push</code> and <code>pop</code> work at the end, and they are cheap. <code>insert</code> and <code>remove</code> work at any position, but every element after that position moves one slot, to make room or to close the gap. <code>truncate</code> and <code>clear</code> drop elements from the end.</p>
+
+<h3>Reading one element: index or get</h3>
+
+<p>Indexing with <code>v[i]</code> gives you the element itself, and it panics if <code>i</code> is out of range. <code>get(i)</code> returns an <code>Option</code>, either <code>Some(&amp;element)</code> or <code>None</code>. The caller then has to decide what a missing index means.</p>
+
+<pre class="rs" data-run data-stdout="None
+Some(2)">
+fn main() {
+    let v = vec![1, 2, 3];
+    println!("{:?}", v.get(10));
+    println!("{:?}", v.get(1));
+}</pre>
+
+<p>Now the other one. This program asks for an index that is not there, and it stops.</p>
+
+<pre class="rs" data-run data-check="panic">
+fn main() {
+    let v = vec![1, 2, 3];
+    println!("{}", v[10]);
+}</pre>
+
+<pre class="text">
+thread 'main' (process id) panicked at src/main.rs:3:21:
+index out of bounds: the len is 3 but the index is 10
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace</pre>
+
+<p>A panic stops the program with a message. It is not an error value that you handle in the normal flow. Use indexing when a missing index is a bug in your code, and use <code>get</code> when the index comes from outside, such as a query string or a form.</p>
+
+<div class="ox-quiz" data-id="12:get-index" data-label="Check yourself">
+  <p class="ox-q">Which line can't panic when <code>i</code> is 10 and <code>v</code> holds three elements?</p>
+  <ol class="ox-choices">
+    <li data-feedback="Indexing panics when the index is out of range."><code>let x = v[i];</code></li>
+    <li data-correct><code>let x = v.get(i);</code></li>
+    <li data-feedback="unwrap panics on None, which is the same failure as indexing."><code>let x = v.get(i).unwrap();</code></li>
+  </ol>
+  <div class="ox-why"><p><code>get</code> never panics. It returns <code>None</code> and leaves the decision to you. Calling <code>unwrap</code> on that <code>None</code> brings the panic back, so the safe form is the one that keeps the <code>Option</code> around until you have a plan.</p></div>
+</div>
+
+<h3>Iterating: three forms, three meanings</h3>
+
+<p>A loop over a <code>Vec</code> can borrow the list, borrow it mutably, or take it. The form you write decides whether the list is still there after the loop.</p>
+
+<pre class="rs" data-run data-stdout="1
+2
+3
+[11, 12, 13]">
+fn main() {
+    let mut v = vec![1, 2, 3];
+
+    for x in &amp;v {
+        println!("{x}");
+    }
+
+    for x in &amp;mut v {
+        *x += 10;
+    }
+    println!("{v:?}");
+}</pre>
+
+<p><code>for x in &amp;v</code> reads each element through a shared reference. <code>for x in &amp;mut v</code> gives you a mutable reference, so <code>*x += 10</code> changes the element in place. Both leave <code>v</code> usable afterward. The third form, <code>for x in v</code>, takes the vector itself, and that brings ownership back into the picture.</p>
+
+<div class="ox-quiz" data-id="12:for-consume" data-label="Does this compile?">
+  <pre class="rs" data-check="E0382">
+fn main() {
+    let scores = vec![90, 75, 82];
+    let mut total = 0;
+    for s in scores {
+        total += s;
+    }
+    println!("total {total}, count {}", scores.len());
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. The numbers are Copy, so <code>scores</code> is still usable.</li>
+    <li data-correct>No. The loop moved the Vec, even though each number is Copy.</li>
+  </ol>
+  <div class="ox-why"><p>Copy applies to the elements. The <code>Vec</code> owns a heap buffer, so the <code>Vec</code> itself is not Copy, which is the rule from Chapter 06. <code>for s in scores</code> moved it into the loop. Write <code>for s in &amp;scores</code> to read the elements and keep the Vec.</p></div>
+</div>
+
+<h3>Sorting, de-duplicating and searching</h3>
+
+<p>These are methods on the <code>Vec</code> itself, and they change it in place. Two rules keep them honest. <code>dedup</code> only removes neighbors that are equal, so sort first. <code>binary_search</code> needs a sorted list, or its answer means nothing.</p>
+
+<pre class="rs" data-run data-stdout="[1, 3, 5, 8]
+[1, 3, 8] has 8: true
+Ok(1)
+[1, 3] [8]
+[&quot;fig&quot;, &quot;pear&quot;, &quot;banana&quot;]">
+fn main() {
+    let mut v = vec![5, 3, 8, 3, 1, 8];
+    v.sort();
+    v.dedup();
+    println!("{v:?}");
+    v.retain(|&amp;x| x != 5);
+    println!("{v:?} has 8: {}", v.contains(&amp;8));
+    println!("{:?}", v.binary_search(&amp;3));
+    let front: Vec&lt;i32&gt; = v.drain(..2).collect();
+    println!("{front:?} {v:?}");
+    let mut words = vec!["pear", "fig", "banana"];
+    words.sort_by_key(|w| w.len());
+    println!("{words:?}");
+}</pre>
+
+<p><code>retain</code> keeps the elements that match a closure. <code>drain(..2)</code> removes a range and gives you the removed elements as an iterator, so you collect them if you want to keep them. <code>sort_by_key</code> sorts by a value you compute from each element.</p>
+
+<h3>Growth</h3>
+
+<p>When a push finds the buffer full, the Vec gets a bigger buffer, copies the elements over and frees the old one. Watch it happen on the fifth push.</p>
+
+<div class="ox-xray ox-wide" data-scenario="vec-grow"></div>
+
+<p>Exact growth is an implementation detail, not a promise. In Rust 1.97, a vector of <code>i32</code> gets room for four elements on its first push, and then it doubles: 8, 16, 32. If you know the count in advance, <code>with_capacity</code> means the copy never happens at all.</p>
+</section>
+
+<section>
+<h2 id="vec-traps">Ownership traps</h2>
+
+<p>A <code>Vec</code> owns its elements, and that changes what it means to take one out. In Chapter 06 you learned that moving a value gives its name away. Try to move a <code>String</code> out of a Vec by index, and the compiler stops you.</p>
+
+<pre class="rs" data-check="E0507">
+fn main() {
+    let names = vec![String::from("Ana"), String::from("Bo")];
+    let name = names[0];
+    println!("{name}");
+}</pre>
+
+<pre class="rustc">
+error[E0507]: cannot move out of index of `Vec&lt;String&gt;`
+ --&gt; src/main.rs:3:16
+  |
+3 |     let name = names[0];
+  |                ^^^^^^^^ move occurs because value has type `String`, which does not implement the `Copy` trait
+  |
+help: consider borrowing here
+  |
+3 |     let name = &amp;names[0];
+  |                +
+help: consider cloning the value if the performance cost is acceptable
+  |
+3 |     let name = names[0].clone();
+  |                        ++++++++
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0507`.</pre>
+
+<p>The error is <code>E0507</code>, and the caret points at <code>names[0]</code>, not at the <code>let</code>. Rust refuses for a reason. The buffer is a row of slots, and each slot holds a String that the Vec owns. Moving <code>names[0]</code> out would leave a hole in that row. When the Vec is dropped, it would try to drop every slot, including the one you took. That is a double free.</p>
+
+<aside class="ox-callout" data-kind="trap">
+  <p>The same line compiles for a <code>Vec&lt;i32&gt;</code>. An <code>i32</code> is Copy, so <code>let x = v[0];</code> copies the number and leaves the Vec alone. The rule only bites for elements that own heap memory.</p>
+</aside>
+
+<p>There are five ways out. Each one says something different about what you want to happen to the element.</p>
+
+<div class="ox-tabs">
+  <div data-tab="1 · Borrow">
+    <pre class="rs" data-run data-stdout="Ana">
+fn main() {
+    let names = vec![String::from("Ana"), String::from("Bo")];
+    let first = &amp;names[0];
+    println!("{first}");
+}</pre>
+    <p><strong>Use when</strong> the code only needs to read the element. Nothing is copied and nothing leaves the Vec.</p>
+  </div>
+  <div data-tab="2 · Clone">
+    <pre class="rs" data-run data-stdout="Ana 2">
+fn main() {
+    let names = vec![String::from("Ana"), String::from("Bo")];
+    let first = names[0].clone();
+    println!("{first} {}", names.len());
+}</pre>
+    <p><strong>Use when</strong> you need your own copy and the Vec must keep its element. It costs an allocation.</p>
+  </div>
+  <div data-tab="3 · Remove">
+    <pre class="rs" data-run data-stdout="Ana [&quot;Bo&quot;]">
+fn main() {
+    let mut names = vec![String::from("Ana"), String::from("Bo")];
+    let first = names.remove(0);
+    println!("{first} {names:?}");
+}</pre>
+    <p><strong>Use when</strong> the element should leave the list and the order of the rest matters. Every later element moves one slot left, so the cost is O(n).</p>
+  </div>
+  <div data-tab="4 · Swap remove">
+    <pre class="rs" data-run data-stdout="Ana [&quot;Cy&quot;, &quot;Bo&quot;]">
+fn main() {
+    let mut names = vec![String::from("Ana"), String::from("Bo"), String::from("Cy")];
+    let first = names.swap_remove(0);
+    println!("{first} {names:?}");
+}</pre>
+    <p><strong>Use when</strong> the element should leave the list and the order does not matter. The last element moves into the gap, so the cost is O(1) and the order changes.</p>
+  </div>
+  <div data-tab="5 · Take">
+    <pre class="rs" data-run data-stdout="Ana [] 2">
+fn main() {
+    let mut names = vec![String::from("Ana"), String::from("Bo")];
+    let first = std::mem::take(&amp;mut names[0]);
+    println!("{first} [{}] {}", names[0], names.len());
+}</pre>
+    <p><strong>Use when</strong> you want the value out and something harmless left in its slot. <code>take</code> leaves an empty value behind, which works for any type with a <code>Default</code>.</p>
+  </div>
+</div>
+
+<p>One more way is <code>for name in names</code>. It takes every element and consumes the Vec, so use it when you are finished with the whole list.</p>
+
+<h3>Holding a borrow while you push</h3>
+
+<p>This trap comes from Chapter 07. A reference into a Vec is a borrow of its buffer. A push can need a bigger buffer, and then the old one is gone, so Rust does not let a reference live across a push.</p>
+
+<div class="ox-quiz" data-id="12:push-borrow" data-label="Does this compile?">
+  <pre class="rs" data-check="E0502">
+fn main() {
+    let mut scores = vec![10, 20, 30];
+    let first = &amp;scores[0];
+    scores.push(40);
+    println!("{first}");
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. <code>first</code> is a copy of the number, so it doesn't hold on to <code>scores</code>.</li>
+    <li data-correct>No. <code>first</code> borrows <code>scores</code>, and <code>push</code> needs a mutable borrow while that borrow is still used.</li>
+    <li>No, because <code>push</code> can't be used on a Vec of numbers.</li>
+  </ol>
+  <div class="ox-why"><p><code>first</code> is a reference into the buffer. The push may move the buffer, which would free the old one and leave <code>first</code> pointing at freed memory. The borrow checker refuses the program before it runs. Chapter 07 covers the rule in full.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="hashmap">HashMap&lt;K, V&gt;: the map</h2>
+
+<p>A <code>HashMap</code> finds a value from its key without scanning the others. It hashes the key to pick a bucket, then compares keys inside that bucket. Four methods cover most of the work.</p>
+
+<pre class="rs" data-run data-stdout="Some(31)
+false
+Some(27)
+1">
+use std::collections::HashMap;
+
+fn main() {
+    let mut ages: HashMap&lt;String, u32&gt; = HashMap::new();
+    ages.insert(String::from("Ana"), 31);
+    ages.insert(String::from("Bo"), 27);
+
+    println!("{:?}", ages.get("Ana"));
+    println!("{}", ages.contains_key("Cy"));
+    println!("{:?}", ages.remove("Bo"));
+    println!("{}", ages.len());
+}</pre>
+
+<p><code>get</code> returns an <code>Option&lt;&amp;V&gt;</code>. Notice that it took a <code>&amp;str</code> even though the keys are <code>String</code>. That works because <code>String</code> can be borrowed as a <code>str</code>, so the map can compare keys through the borrowed form. <code>contains_key</code> and <code>remove</code> accept a <code>&amp;str</code> in the same way.</p>
+
+<p>Keys and values move in. <code>insert</code> takes both by value, so the map owns them afterward.</p>
+
+<div class="ox-quiz" data-id="12:moved-key" data-label="Does this compile?">
+  <pre class="rs" data-check="E0382">
+use std::collections::HashMap;
+
+fn main() {
+    let mut ages: HashMap&lt;String, u32&gt; = HashMap::new();
+    let name = String::from("Ana");
+    ages.insert(name, 31);
+    println!("{name} is {}", ages.len());
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. <code>insert</code> borrows the key.</li>
+    <li data-correct>No. <code>insert</code> takes ownership of <code>name</code>, so the map owns the String now.</li>
+    <li>No. HashMap keys must be <code>&amp;str</code>.</li>
+  </ol>
+  <div class="ox-why"><p>This is the move rule from Chapter 06, applied to a key. Clone the key if you need it after the insert: <code>ages.insert(name.clone(), 31)</code>. The value <code>31</code> is a number, so it is copied, and only the key moves.</p></div>
+</div>
+
+<h3>The order trap</h3>
+
+<p>PHP arrays remember the order you inserted things in. A <code>HashMap</code> promises no order at all. Rust seeds each map's hash with random values, so the iteration order can change from one run to the next.</p>
+
+<pre class="rs" data-run data-check="ok">
+use std::collections::HashMap;
+
+fn main() {
+    let mut ages = HashMap::new();
+    ages.insert("ana", 31);
+    ages.insert("bo", 27);
+    ages.insert("cy", 44);
+    for (name, age) in &amp;ages {
+        println!("{name} {age}");
+    }
+}</pre>
+
+<p>This program is valid, and it prints all three people. Run it several times and the lines can come out in a different order. If that order reaches a user, an export or a test expectation, you have a bug that shows up only some of the time. Choose a type for the job: <code>BTreeMap</code> for key order, or a <code>Vec</code> of pairs for insertion order.</p>
+
+<h3>Counting with the entry API</h3>
+
+<p>Counting is the classic map job. In PHP you read the key, add one and write it back. The entry API does the lookup once, and it says what to do when the key is missing.</p>
+
+<pre class="rs" data-run data-stdout="and 2
+bat 1
+cat 1
+hat 1
+the 3">
+use std::collections::HashMap;
+
+fn main() {
+    let text = "the cat and the hat and the bat";
+    let mut counts: HashMap&lt;&amp;str, u32&gt; = HashMap::new();
+    for word in text.split_whitespace() {
+        *counts.entry(word).or_insert(0) += 1;
+    }
+
+    // The map has no order, so sort the pairs before printing.
+    let mut pairs: Vec&lt;(&amp;str, u32)&gt; = counts.into_iter().collect();
+    pairs.sort();
+    for (word, n) in pairs {
+        println!("{word} {n}");
+    }
+}</pre>
+
+<p><code>entry(word)</code> finds the slot for the key. <code>or_insert(0)</code> inserts 0 if the slot is empty, and it returns a mutable reference to the value either way. The <code>*</code> writes through that reference. The map still has no order, so the program sorts the pairs before it prints them.</p>
+
+<pre class="rs" data-run data-stdout="apple 2
+pear 21
+plum 5">
+use std::collections::HashMap;
+
+fn main() {
+    let mut stock: HashMap&lt;&amp;str, u32&gt; = HashMap::new();
+    stock.entry("apple").and_modify(|n| *n += 1).or_insert(1);
+    stock.entry("apple").and_modify(|n| *n += 1).or_insert(1);
+
+    let pears = stock.entry("pear").or_insert_with(|| 10 * 2);
+    *pears += 1;
+
+    *stock.entry("plum").or_default() += 5;
+
+    println!("apple {}", stock["apple"]);
+    println!("pear {}", stock["pear"]);
+    println!("plum {}", stock["plum"]);
+}</pre>
+
+<p>Three more methods cover the other cases. <code>and_modify</code> runs only when the key exists. <code>or_insert_with</code> takes a closure that runs only when the key is missing, which matters when the default is expensive to build. <code>or_default</code> uses the value type's <code>Default</code>, which is 0 for numbers and an empty list for a <code>Vec</code>.</p>
+</section>
+
+<section>
+<h2 id="others">Sets, sorted maps, queues</h2>
+
+<p>These three types fill the gaps that a <code>Vec</code> and a <code>HashMap</code> leave. Each one answers a question that the other two answer badly.</p>
+
+<h3>HashSet: membership without values</h3>
+
+<p>A <code>HashSet</code> is a <code>HashMap</code> without values. Each value is stored once. <code>insert</code> returns whether the value was new. The set operations, <code>intersection</code>, <code>union</code> and <code>difference</code>, return iterators, so you collect them, and sort them when you want a stable print.</p>
+
+<pre class="rs" data-run data-stdout="both [3, 4]
+either [1, 2, 3, 4, 5]
+only a [1, 2]">
+use std::collections::HashSet;
+
+fn main() {
+    let a: HashSet&lt;i32&gt; = [1, 2, 3, 4].into_iter().collect();
+    let b: HashSet&lt;i32&gt; = [3, 4, 5].into_iter().collect();
+
+    let mut both: Vec&lt;i32&gt; = a.intersection(&amp;b).copied().collect();
+    both.sort();
+    let mut either: Vec&lt;i32&gt; = a.union(&amp;b).copied().collect();
+    either.sort();
+    let mut only_a: Vec&lt;i32&gt; = a.difference(&amp;b).copied().collect();
+    only_a.sort();
+
+    println!("both {both:?}");
+    println!("either {either:?}");
+    println!("only a {only_a:?}");
+}</pre>
+
+<div class="ox-quiz" data-id="12:set-insert" data-label="What does this print?">
+  <pre class="rs" data-stdout="false">
+use std::collections::HashSet;
+
+fn main() {
+    let mut seen = HashSet::new();
+    seen.insert(3);
+    println!("{}", seen.insert(3));
+}</pre>
+  <ol class="ox-choices">
+    <li>true</li>
+    <li data-correct>false</li>
+    <li>It panics, because the value is already in the set.</li>
+  </ol>
+  <div class="ox-why"><p><code>insert</code> returns <code>true</code> when the value was new and <code>false</code> when it was already there. It never panics for a duplicate. That return value is how you de-duplicate a stream of values in a single pass.</p></div>
+</div>
+
+<h3>BTreeMap: keys in order</h3>
+
+<p>A <code>BTreeMap</code> keeps its keys sorted at all times. Use it when order is part of the output, or when you need range queries. A lookup costs O(log n), where a <code>HashMap</code> averages O(1). That is the price of the order.</p>
+
+<pre class="rs" data-run data-stdout="bread 2
+milk 1
+tea 3
+in c..n: milk 1">
+use std::collections::BTreeMap;
+
+fn main() {
+    let mut prices = BTreeMap::new();
+    prices.insert("tea", 3);
+    prices.insert("bread", 2);
+    prices.insert("milk", 1);
+
+    for (item, price) in &amp;prices {
+        println!("{item} {price}");
+    }
+    for (item, price) in prices.range("c".."n") {
+        println!("in c..n: {item} {price}");
+    }
+}</pre>
+
+<h3>VecDeque: a queue from both ends</h3>
+
+<p>A <code>VecDeque</code> is a double-ended queue. Pushing and popping at either end are cheap. PHP does this job with <code>array_shift</code>, which has to renumber the rest of the array on every call. A <code>VecDeque</code> keeps its elements in a ring, so taking from the front moves nothing else.</p>
+
+<pre class="rs" data-run data-stdout="run email
+run invoice
+run report">
+use std::collections::VecDeque;
+
+fn main() {
+    let mut jobs = VecDeque::new();
+    jobs.push_back("email");
+    jobs.push_back("invoice");
+    jobs.push_back("report");
+
+    while let Some(job) = jobs.pop_front() {
+        println!("run {job}");
+    }
+}</pre>
+</section>
+
+<section>
+<h2 id="choose">Which collection?</h2>
+
+<p>Start from the operation that happens most often, not from the data. The table below is the check to run your choice against.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>You need</th><th>Use</th><th>Typical cost</th></tr></thead>
+  <tbody>
+    <tr><td>An ordered list, read and changed by position</td><td><code>Vec&lt;T&gt;</code></td><td>push and index O(1); search O(n)</td></tr>
+    <tr><td>A stack, last in first out</td><td><code>Vec&lt;T&gt;</code></td><td>push and pop at the end, O(1) amortized</td></tr>
+    <tr><td>A queue, first in first out</td><td><code>VecDeque&lt;T&gt;</code></td><td>push and pop at either end, O(1) amortized</td></tr>
+    <tr><td>To know whether a value is present, or to remove duplicates</td><td><code>HashSet&lt;T&gt;</code></td><td>insert and contains, O(1) on average</td></tr>
+    <tr><td>Find a value by its key</td><td><code>HashMap&lt;K, V&gt;</code></td><td>get, insert and remove, O(1) on average; no order</td></tr>
+    <tr><td>Keys kept in sorted order, or range queries</td><td><code>BTreeMap&lt;K, V&gt;</code></td><td>O(log n) for each operation; always sorted</td></tr>
+    <tr><td>A few key-value pairs, in the order you wrote them</td><td><code>Vec&lt;(K, V)&gt;</code></td><td>scan O(n) by key; keeps the order</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="ox-quiz" data-id="12:log-queue" data-label="Check yourself">
+  <p class="ox-q">You keep the last 100 log lines, newest first. New lines arrive at one end, and the oldest line leaves from the other. Which type fits best?</p>
+  <ol class="ox-choices">
+    <li><code>Vec&lt;String&gt;</code>, and <code>remove(0)</code> when it is full</li>
+    <li><code>HashMap&lt;usize, String&gt;</code></li>
+    <li data-correct><code>VecDeque&lt;String&gt;</code></li>
+  </ol>
+  <div class="ox-why"><p>Adding and removing at the two ends are both cheap in a <code>VecDeque</code>. A <code>Vec</code> with <code>remove(0)</code> would shift all 100 lines on every new entry. A <code>HashMap</code> would keep the lines but say nothing about which one is oldest.</p></div>
+</div>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Agents often reach for a <code>Vec</code> and call <code>contains</code> inside a loop. When both lists grow with the input, that is O(n·m), which is O(n²) in the worst case. The code is correct, and it gets slow as the data grows. The review question is the one from the table: which operation happens most? If it is membership, build a <code>HashSet</code> once.</p>
+  <p>Agents also choose a <code>HashMap</code> when the output has to come out in a stable order. The output then changes from run to run, and tests start to fail now and then. Ask for a <code>BTreeMap</code>, or a sorted <code>Vec</code>, when the order matters.</p>
+</aside>
+
+<div class="ox-bridge">
+  <pre class="php">
+$byRole = collect($users)-&gt;groupBy('role');
+  </pre>
+  <pre class="rs" data-run data-stdout="Ana, Cy">
+use std::collections::HashMap;
+
+struct User {
+    name: String,
+    role: String,
+}
+
+fn main() {
+    let users = vec![
+        User { name: String::from("Ana"), role: String::from("admin") },
+        User { name: String::from("Bo"), role: String::from("member") },
+        User { name: String::from("Cy"), role: String::from("admin") },
+    ];
+
+    let mut by_role: HashMap&lt;String, Vec&lt;User&gt;&gt; = HashMap::new();
+    for user in users {
+        by_role.entry(user.role.clone()).or_default().push(user);
+    }
+    let names: Vec&lt;&amp;str&gt; = by_role["admin"].iter().map(|u| u.name.as_str()).collect();
+    println!("{}", names.join(", "));
+}</pre>
+  <div class="ox-bridge-note"><p>Where it holds: both give you a list for each key. Where it breaks: the Rust loop consumes <code>users</code>, because each <code>User</code> moves into its group. The role is cloned because the key and the user both need their own String. Chapter 13 maps the rest of Laravel's Collection methods onto iterators.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="practice">Practice</h2>
+
+<p>Work through these before you run anything. The explanation after each one says why the answer is right.</p>
+
+<div class="ox-quiz" data-id="12:e0507-struct" data-label="Does this compile?">
+  <pre class="rs" data-check="E0507">
+struct Lesson {
+    title: String,
+}
+
+fn main() {
+    let lessons = vec![Lesson { title: String::from("Vec") }];
+    let first = lessons[0];
+    println!("{}", first.title);
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. Struct fields are copied one at a time.</li>
+    <li data-correct>No. <code>Lesson</code> is not Copy, so indexing cannot move it out of the Vec.</li>
+    <li>No, because a struct can never be stored in a Vec.</li>
+  </ol>
+  <div class="ox-why"><p>The same rule as the <code>String</code> example, with a struct. The element owns a String, so it is not Copy, and <code>lessons[0]</code> would move it out of the buffer. Use <code>&amp;lessons[0]</code> and read <code>first.title</code> from the reference.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="12:order-quiz" data-label="Check yourself">
+  <p class="ox-q">A program inserts <code>ana</code>, <code>bo</code> and <code>cy</code> into a <code>HashMap</code>, then prints each pair with a <code>for</code> loop. Will it always print them in that order?</p>
+  <ol class="ox-choices">
+    <li>Yes. Maps keep insertion order.</li>
+    <li data-correct>No. <code>HashMap</code> makes no promise about iteration order, and the order can change between runs.</li>
+    <li>Yes, because the keys are sorted before they are stored.</li>
+  </ol>
+  <div class="ox-why"><p>Insertion order is a property of a <code>Vec</code>, and sorted order is a property of a <code>BTreeMap</code>. A <code>HashMap</code> places keys by hash, and its hash is seeded randomly. A test that depends on the order of a <code>HashMap</code> can pass for weeks and then fail once.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="12:entry-line" data-label="Check yourself">
+  <p class="ox-q">Inside a loop over words, which line adds one to <code>counts[w]</code> and starts from 0 when the word is new? Here <code>counts</code> is a <code>HashMap&lt;&amp;str, u32&gt;</code>.</p>
+  <ol class="ox-choices">
+    <li data-feedback="That resets the count to 1 on every hit."><code>counts.insert(w, 1);</code></li>
+    <li data-correct><code>*counts.entry(w).or_insert(0) += 1;</code></li>
+    <li data-feedback="The result of get is not a place you can assign to. This line does not compile."><code>counts.get(w).unwrap_or(0) += 1;</code></li>
+    <li data-feedback="That creates the entry but never adds one."><code>counts.entry(w).or_insert(0);</code></li>
+  </ol>
+  <div class="ox-why"><p><code>entry(w)</code> finds the slot, <code>or_insert(0)</code> creates it when it is missing, and the <code>*</code> writes the new count through the returned reference. Every other option either resets the count or never adds to it.</p></div>
+</div>
+
+<div class="ox-match" data-id="12:match" data-left-label="PHP" data-right-label="Rust">
+  <ul>
+    <li data-left="array_push($list, $x)">Vec::push</li>
+    <li data-left="array_pop($list)">Vec::pop</li>
+    <li data-left="array_shift($queue)">VecDeque::pop_front</li>
+    <li data-left="isset($map[$key])">HashMap::contains_key</li>
+    <li data-left="array_unique($tags)">HashSet&lt;T&gt;</li>
+    <li data-left="ksort($prices)">BTreeMap&lt;K, V&gt;</li>
+  </ul>
+</div>
+
+<aside class="ox-callout" data-kind="trap">
+  <p>Two of these pairs are close but not identical. <code>isset</code> returns false for a key whose value is <code>null</code>, while <code>contains_key</code> returns true for any key that exists. <code>array_unique</code> keeps the first occurrence of each value in order, and a <code>HashSet</code> keeps no order at all.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="quests">Forge quests</h2>
+<p>Reading builds recognition. Writing the code builds the skill. These quests run locally against the real compiler.</p>
+<div class="ox-quests" data-chapter="12"></div>
+</section>
+
+<section>
+<h2 id="recap">Recap</h2>
+
+<div class="ox-recap">
+  <h3>Pick the job first</h3>
+  <ul>
+    <li>A PHP array does five jobs. Rust gives each job a type: <code>Vec</code>, <code>HashMap</code>, <code>HashSet</code>, <code>BTreeMap</code> and <code>VecDeque</code>.</li>
+    <li><code>v.get(i)</code> returns an <code>Option</code>. <code>v[i]</code> panics when the index is out of range.</li>
+    <li>Loop with <code>&amp;v</code> to read, <code>&amp;mut v</code> to change, and <code>v</code> to consume the Vec.</li>
+    <li>You cannot move a value out of an index. Borrow it, clone it, remove it, or take it with <code>std::mem::take</code>.</li>
+    <li><code>HashMap::insert</code> moves the key and the value in. Map iteration order is not promised, so sort before you print.</li>
+    <li>The entry API counts and groups in one line: <code>*m.entry(k).or_insert(0) += 1</code>.</li>
+  </ul>
+</div>
+
+<div class="ox-deck" data-chapter="12"></div>
+
+<details class="ox-think">
+  <summary>Explain it back: why doesn't Rust have one array type like PHP?</summary>
+  <div class="ox-think-body">
+    <p>One good answer: "Every collection makes a different promise about cost and order. PHP's array makes all of those promises at once, so the code doesn't say which one it relies on. Rust gives each job its own type. A <code>Vec</code> promises positions and cheap pushes, a <code>HashMap</code> promises fast lookups and no order, and a <code>BTreeMap</code> promises sorted keys. The type tells the next reader which promise the code depends on."</p>
+    <p>If your version mentioned <em>cost</em>, <em>order</em> and <em>the type says what the code relies on</em>, you have the idea.</p>
+  </div>
+</details>
+
+<div class="ox-complete-host"></div>
+</section>
+
+</main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var CARDS = [
+    {
+      id: "list", php: "$list[] = $x;", label: "A list you append to", key: "Vec", type: "Vec<T>",
+      code: `fn main() {
+    let mut list: Vec<i32> = Vec::new();
+    for x in [3, 1, 4] {
+        list.push(x);
+    }
+    println!("{list:?}");
+}`,
+      costs: ["O(1) amortized, at the end", "O(1) by index, O(n) to search", "Insertion order"],
+      why: "A Vec is the closest match to a PHP list. The elements sit side by side in one buffer, so pushing at the end and reading by index are both cheap. Searching for a value is a scan."
+    },
+    {
+      id: "byid", php: "$byId[$user->id] = $user;", label: "A lookup table by id", key: "HashMap", type: "HashMap<K, V>",
+      code: `use std::collections::HashMap;
+
+struct User {
+    id: u64,
+    name: String,
+}
+
+fn main() {
+    let mut by_id: HashMap<u64, User> = HashMap::new();
+    let user = User { id: 7, name: String::from("Ana") };
+    by_id.insert(user.id, user);
+    if let Some(found) = by_id.get(&7) {
+        println!("{}", found.name);
+    }
+}`,
+      costs: ["O(1) on average", "O(1) on average, by key", "No order promised"],
+      why: "A HashMap finds a value by its key without a scan. It makes no promise about order, so use it for lookups, not for output that has to stay in order."
+    },
+    {
+      id: "unique", php: "array_unique($tags)", label: "Keep each value once", key: "HashSet", type: "HashSet<T>",
+      code: `use std::collections::HashSet;
+
+fn main() {
+    let tags = vec!["php", "rust", "php", "sql"];
+    let unique: HashSet<&str> = tags.into_iter().collect();
+    println!("{}", unique.len());
+}`,
+      costs: ["O(1) on average, and says whether the value was new", "O(1) on average for contains", "No order promised"],
+      why: "A set stores each value once and answers 'is it in there?' quickly. array_unique keeps the first occurrence of each value in its original order. A HashSet does not, so if the first-seen order matters, keep a Vec next to the set, or use the indexmap crate."
+    },
+    {
+      id: "queue", php: "array_shift($queue)", label: "Take from the front", key: "VecDeque", type: "VecDeque<T>",
+      code: `use std::collections::VecDeque;
+
+fn main() {
+    let mut queue: VecDeque<&str> = VecDeque::new();
+    queue.push_back("first");
+    queue.push_back("second");
+    let next = queue.pop_front();
+    println!("{next:?} {}", queue.len());
+}`,
+      costs: ["O(1) amortized, at either end", "O(1) by index", "Front to back"],
+      why: "array_shift has to renumber the rest of the array, so each call touches every element. A VecDeque is a ring buffer, so removing from the front moves nothing else."
+    },
+    {
+      id: "sorted", php: "ksort($prices);", label: "Keys in sorted order", key: "BTreeMap", type: "BTreeMap<K, V>",
+      code: `use std::collections::BTreeMap;
+
+fn main() {
+    let mut prices: BTreeMap<&str, u32> = BTreeMap::new();
+    prices.insert("tea", 3);
+    prices.insert("bread", 2);
+    for (item, price) in &prices {
+        println!("{item} {price}");
+    }
+}`,
+      costs: ["O(log n)", "O(log n) by key", "Sorted by key, always"],
+      why: "A BTreeMap keeps its keys sorted as you insert them, so iterating is always in key order and you never call a separate sort. The price is a slower lookup than a HashMap."
+    },
+    {
+      id: "contains", php: "in_array($x, $bigList); // inside a loop", label: "Membership, checked many times", key: "HashSet", type: "HashSet<T>",
+      code: `use std::collections::HashSet;
+
+fn main() {
+    let big_list: Vec<u32> = (1..=1000).collect();
+    let wanted: HashSet<u32> = big_list.iter().copied().collect();
+    let mut hits = 0;
+    for probe in [5, 2000] {
+        if wanted.contains(&probe) {
+            hits += 1;
+        }
+    }
+    println!("{hits}");
+}`,
+      costs: ["O(1) on average, once", "O(1) on average, per check", "No order promised"],
+      why: "in_array scans the whole list on every call, which is O(n). Build the set once, and each check becomes a hash lookup. This is the change to ask for when you review a loop that calls in_array."
+    },
+    {
+      id: "stack", php: "$stack[] = $x; array_pop($stack);", label: "Last in, first out", key: "Vec", type: "Vec<T>",
+      code: `fn main() {
+    let mut stack: Vec<char> = Vec::new();
+    stack.push('(');
+    stack.push(')');
+    while let Some(top) = stack.pop() {
+        println!("{top}");
+    }
+}`,
+      costs: ["O(1) amortized, at the end", "O(1), at the end", "Last in, first out"],
+      why: "A Vec used from one end is a stack. push and pop both work on the last element, so neither one moves the others."
+    },
+    {
+      id: "config", php: "foreach ($config as $key => $value)", label: "A few settings, in the order I wrote them", key: "Vec", type: "Vec<(K, V)>",
+      code: `fn main() {
+    let config: Vec<(&str, &str)> = vec![("host", "localhost"), ("port", "8080")];
+    for (key, value) in &config {
+        println!("{key} = {value}");
+    }
+}`,
+      costs: ["O(1) amortized, at the end", "O(n) by key, a scan", "Insertion order"],
+      why: "A Vec of pairs keeps the order and needs no crate. A HashMap would scramble it, and a BTreeMap would sort it. If you need fast lookup by key and insertion order together, the indexmap crate's IndexMap does both. It is not in the standard library."
+    }
+  ];
+  var GUESSES = ["Vec", "HashMap", "HashSet", "BTreeMap", "VecDeque"];
+
+  var root = document.getElementById("trenchcoat");
+  if (!root) return;
+  var cardsEl = root.querySelector(".tc-cards");
+  var panel = root.querySelector(".tc-panel");
+  var sel = 0;
+  var state = {};
+  state[CARDS[0].id] = { revealed: true, auto: true };
+
+  function node(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+
+  function select(i) {
+    sel = i;
+    Array.prototype.forEach.call(cardsEl.children, function (b, j) {
+      b.setAttribute("aria-pressed", j === i ? "true" : "false");
+    });
+    drawPanel();
+  }
+
+  function guess(name) {
+    var c = CARDS[sel];
+    var st = Object.assign({}, state[c.id], { revealed: true, guess: name, auto: false });
+    state[c.id] = st;
+    if (name === c.key && window.Ox && Ox.award) Ox.award(4, "a correct guess", "trench:" + c.id);
+    drawPanel();
+  }
+
+  function reveal() {
+    var c = CARDS[sel];
+    state[c.id] = Object.assign({}, state[c.id], { revealed: true, auto: false });
+    drawPanel();
+  }
+
+  function drawPanel() {
+    var c = CARDS[sel];
+    var st = state[c.id] || {};
+    panel.textContent = "";
+
+    if (!st.revealed) {
+      panel.appendChild(node("p", "tc-q", "Which Rust collection does this job?"));
+      var row = node("div", "tc-guess");
+      GUESSES.forEach(function (name) {
+        var b = node("button", "ox-btn is-small", name);
+        b.type = "button";
+        b.addEventListener("click", function () { guess(name); });
+        row.appendChild(b);
+      });
+      panel.appendChild(row);
+      var skip = node("button", "ox-btn is-small", "Show answer");
+      skip.type = "button";
+      skip.addEventListener("click", reveal);
+      panel.appendChild(skip);
+      return;
+    }
+
+    var verdict;
+    if (st.guess === c.key) verdict = "You called it.";
+    else if (st.guess) verdict = "Not this one. The answer is " + c.key + ".";
+    else if (st.auto) verdict = "This one is open so the panel is never empty. Guess on the others.";
+    else verdict = "Opened without a guess. Try to guess first on the next card.";
+    panel.appendChild(node("p", "tc-verdict", verdict));
+
+    var t = node("p", "tc-type", "Rust collection: ");
+    t.appendChild(node("code", "", c.type));
+    panel.appendChild(t);
+
+    var pre = node("pre", "rs", c.code);
+    pre.dataset.run = "";
+    panel.appendChild(pre);
+    if (window.Ox && Ox.enhancePre) Ox.enhancePre(pre);
+
+    var tbody = node("tbody");
+    [["Insert", c.costs[0]], ["Lookup", c.costs[1]], ["Order", c.costs[2]]].forEach(function (r) {
+      var tr = node("tr");
+      tr.appendChild(node("th", "", r[0]));
+      tr.appendChild(node("td", "", r[1]));
+      tbody.appendChild(tr);
+    });
+    var table = node("table", "ox-table tc-costs");
+    table.appendChild(tbody);
+    var wrap = node("div", "ox-table-wrap");
+    wrap.appendChild(table);
+    panel.appendChild(wrap);
+
+    panel.appendChild(node("p", "tc-why", c.why));
+  }
+
+  function init() {
+    cardsEl.textContent = "";
+    CARDS.forEach(function (c, i) {
+      var b = node("button", "tc-card");
+      b.type = "button";
+      b.setAttribute("aria-pressed", i === sel ? "true" : "false");
+      b.appendChild(node("code", "", c.php));
+      b.appendChild(node("small", "", c.label));
+      b.addEventListener("click", function () { select(i); });
+      cardsEl.appendChild(b);
+    });
+    drawPanel();
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
+</script>
+</body>
+</html>

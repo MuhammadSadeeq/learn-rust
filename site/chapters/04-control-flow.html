@@ -37,8 +37,8 @@
 <style>
 /* Scoped workaround until oxidize.css lays out .ox-outcomes items as blocks.
    As flex items, they grow to their full text width on a phone and push the page sideways. */
-.ox-outcomes li { display: block; }
-.ox-outcomes li::before { display: inline-block; margin-right: 10px; vertical-align: -1px; }
+.ox-outcomes li { display: block; position: relative; padding-left: 22px; }
+.ox-outcomes li::before { position: absolute; left: 0; top: 0.32em; margin: 0; }
 </style>
 
 <section>

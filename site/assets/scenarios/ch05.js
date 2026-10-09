@@ -1,4 +1,4 @@
-/* Memory X-Ray scenarios for Chapter 05 — The Stack & The Heap */
+/* Memory X-Ray scenarios for Chapter 05: The Stack & The Heap */
 (window.OX_XRAY = window.OX_XRAY || []).push(
   {
     id: "calls-stack",

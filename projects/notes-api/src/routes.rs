@@ -9,6 +9,7 @@ use axum::routing::get;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
 
+use crate::error::AppError;
 use crate::handlers;
 use crate::state::AppState;
 
@@ -26,8 +27,14 @@ pub fn app(state: AppState) -> Router {
     Router::new()
         .route("/health", get(|| async { "ok" }))
         .nest("/api/notes", notes)
-        // Layers wrap everything added above them. The last one added is
-        // the outermost: a request meets TraceLayer first.
+        // Any URL that matched nothing above. Without this, axum answers
+        // with an empty 404 instead of the JSON body every other error uses.
+        .fallback(|| async { AppError::NoRoute })
+        // `Router::layer` wraps each route (and the fallback) AFTER the router
+        // has picked it, so these layers can see `MatchedPath`. Laravel's
+        // global middleware runs before routing; this is closer to route
+        // middleware. The last layer added is the outermost: a request meets
+        // TraceLayer first.
         .layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,
             Duration::from_secs(10),

@@ -219,7 +219,7 @@ fn main() {
     println!("{:?}", found.ok_or("no value"));
 }</pre>
 
-<p>Read the output in order. The closure in <code>unwrap_or_else</code> runs while that line is being evaluated, so its message prints before the <code>0</code>. Each combinator either passes an <code>Err</code> through untouched or handles it, and the <code>Ok</code> values keep flowing.</p>
+<p>Read the output in order. The closure in <code>unwrap_or_else</code> runs while that line is being evaluated, so its message prints before the <code>0</code>. Each combinator either handles an <code>Err</code> or passes it along, and an <code>Ok</code> keeps flowing through the chain.</p>
 
 <div class="ox-quiz" data-id="11:combinator-chain" data-label="Predict the output">
   <p class="ox-q">What does this print?</p>
@@ -625,7 +625,7 @@ Error: ParseIntError { kind: InvalidDigit }</pre>
       say(st.name + " returned Ok, so the value moves on.");
     }
 
-    markLines(STATIONS.length + 1, 0);
+    markLines(6, 0);
     await slide(x, END_X, TRACK_Y, 420);
     if (id !== runId) return;
     show(OK_VALUE, "is-ok");
@@ -654,7 +654,7 @@ Error: ParseIntError { kind: InvalidDigit }</pre>
 })();
 </script>
 
-<p>Each <code>?</code> on the code is one station on the top track. The stations and their <code>?</code> marks are the same thing drawn two ways. The next section gives <code>AppError</code> the full shape the railway needs.</p>
+<p>Each station in the diagram is one <code>?</code> line in the code. The railway uses <code>AppError</code>, which the next section defines in full.</p>
 </section>
 
 <section>
