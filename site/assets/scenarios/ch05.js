@@ -153,7 +153,7 @@ fn main() {
           answer: 1,
           explain: `A Box has exactly one owner. When that owner's scope ends, the heap value is dropped.`
         },
-        say: `<p>The compiler puts a drop for <code>b</code> at the closing brace. The four heap bytes are returned, and the pointer disappears with the frame. This is the ownership rule from Chapter 06, applied to one heap value.</p>`,
+        say: `<p>The compiler puts a drop for <code>b</code> at the closing brace. The four heap bytes are returned, and the pointer disappears with the frame. This is the ownership rule that Chapter 06, applied to one heap value.</p>`,
         ops: [["drop", "b"], ["pop"]]
       }
     ]

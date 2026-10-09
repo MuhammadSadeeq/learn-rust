@@ -1249,6 +1249,23 @@ fn main() {
     <li data-left="Many shared borrows of one value at the same time">Fine, it compiles</li>
   </ul>
 </div>
+<div class="ox-quiz" data-id="07:quiz-vec-push-borrow" data-label="Check yourself">
+  <p class="ox-q">Chapter 05 taught that a Vec can grow. Does this compile?</p>
+  <pre class="rs" data-check="E0502">
+fn main() {
+    let mut v = vec![1, 2, 3];
+    let first = &amp;v[0];
+    v.push(4);
+    println!("{first}");
+}
+</pre>
+  <ol class="ox-choices">
+    <li>Yes. <code>first</code> is a copy of the number, so the borrow ends at once.</li>
+    <li data-correct>No, E0502. <code>first</code> borrows <code>v</code>, and <code>push</code> needs a mutable borrow while <code>first</code> is still used.</li>
+    <li>No, E0499, because <code>v</code> is borrowed twice.</li>
+  </ol>
+  <div class="ox-why"><p>A reference like <code>&amp;v[0]</code> points into the Vec. <code>push</code> may move that buffer, so the compiler refuses the mutable borrow while the reference is still used.</p></div>
+</div>
 </section>
 
 <section>

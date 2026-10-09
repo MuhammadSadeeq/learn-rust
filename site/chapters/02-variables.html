@@ -855,6 +855,21 @@ fn main() {
 <aside class="ox-callout" data-kind="trap">
   <p>Two of these pairs break in places. A PHP <code>readonly</code> property is fixed once it is set, and PHP enforces that at runtime, when the write runs. A Rust <code>let</code> is fixed per binding, and rustc enforces that before the program runs. A new <code>let</code> can shadow a name, which a <code>readonly</code> property can't do. The cast <code>(int) "abc"</code> never fails, and it gives 0. <code>parse()</code> returns a <code>Result</code>, and <code>unwrap()</code> panics on an error. Chapter 11 covers errors properly.</p>
 </aside>
+<div class="ox-quiz" data-id="02:quiz-println-form" data-label="Check yourself">
+  <p class="ox-q">Chapter 01 taught <code>println!</code>. Does this compile?</p>
+  <pre class="rs" data-check="error">
+fn main() {
+    let name = "ana";
+    println!(name);
+}
+</pre>
+  <ol class="ox-choices">
+    <li>Yes. It prints the value of <code>name</code>.</li>
+    <li data-correct>No. The first argument of <code>println!</code> must be a format string literal, such as <code>"{name}"</code>.</li>
+    <li>No, E0425, because <code>name</code> is not defined.</li>
+  </ol>
+  <div class="ox-why"><p>The format string comes first, and it has to be a literal. Write <code>println!("{name}")</code>, and the compiler reports <code>format argument must be a string literal</code> for the other form.</p></div>
+</div>
 </section>
 
 <section>

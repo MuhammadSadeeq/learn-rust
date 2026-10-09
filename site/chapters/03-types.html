@@ -296,6 +296,7 @@ fn main() {
 </div>
 
 <p><code>checked_add</code> returns an <code>Option</code>, a value that is either <code>Some(x)</code> or <code>None</code>. Chapter 04 gives a first look at <code>Option</code>, and Chapter 10 covers it in full.</p>
+<p>The other operations have the same family: <code>checked_sub</code>, <code>checked_mul</code> and <code>checked_div</code>. <code>checked_div</code> returns <code>None</code> for a zero divisor, so dividing by zero is a failure you can handle instead of a panic.</p>
 
 <p>The Bit Box below runs these operations on a real integer and shows its bits. The arithmetic is exact for every width, so the results match what Rust gives. Predict before you press anything.</p>
 
@@ -747,6 +748,7 @@ fn main() {
 </pre>
 
 <p>Use <code>From</code> when the conversion can't lose anything, and <code>TryFrom</code> when it might. <code>From</code> returns the new type directly, so <code>i64::from(x)</code> works for any integer type that always fits in an <code>i64</code>, such as <code>i32</code> or <code>u32</code>. <code>TryFrom</code> returns a <code>Result</code>, which Chapter 11 covers in full, so the program has to handle a value that doesn't fit.</p>
+<p><code>u32::from(x)</code> is the lossless form for an integer that always fits, such as a <code>u8</code> into a <code>u32</code>. <code>u32::from(200u8)</code> gives <code>200</code> and cannot lose anything, unlike <code>as</code>, which can cut bits off.</p>
 
 <pre class="rs" data-run data-stdout="200\nOk(200)\nErr(TryFromIntError(PosOverflow))\nOk(42)">
 fn main() {

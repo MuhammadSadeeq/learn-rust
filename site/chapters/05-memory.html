@@ -551,6 +551,22 @@ fn tags(names: &amp;[String]) -&gt; Vec&lt;String&gt; {
 </div>
 
 <p>Next: <a href="../chapters/06-ownership.html">Chapter 06, One Owner</a>. It starts from the three ownership rules, and Chapter 07 builds directly on them.</p>
+<div class="ox-quiz" data-id="05:quiz-vec-mut" data-label="Check yourself">
+  <p class="ox-q">Chapter 02 taught <code>mut</code>. Does this compile?</p>
+  <pre class="rs" data-check="E0596">
+fn main() {
+    let v = vec![1, 2];
+    v.push(3);
+    println!("{v:?}");
+}
+</pre>
+  <ol class="ox-choices">
+    <li>Yes. A <code>Vec</code> can grow without <code>mut</code>.</li>
+    <li data-correct>No, E0596. <code>push</code> changes the Vec, so the binding needs <code>mut</code>.</li>
+    <li>No, E0382, because <code>v</code> was moved by <code>push</code>.</li>
+  </ol>
+  <div class="ox-why"><p>Growing a Vec changes its buffer, so the binding has to be <code>let mut v</code>. The compiler says it cannot borrow <code>v</code> as mutable.</p></div>
+</div>
 </section>
 
 <section>

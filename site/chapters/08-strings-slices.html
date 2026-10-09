@@ -644,6 +644,7 @@ fn main() {
     let report = format!("{n} items, {} total", n * 2);
     println!("{report}");
 }</pre>
+<p><code>to_uppercase</code> and <code>to_lowercase</code> follow the Unicode rules, so <code>É</code> becomes <code>é</code>. <code>to_ascii_uppercase</code> and <code>to_ascii_lowercase</code> change only the letters A to Z and leave every other character alone. So <code>"École".to_ascii_lowercase()</code> keeps its capital <code>É</code>, while <code>to_lowercase()</code> gives <code>école</code>. Use the ASCII versions for ASCII-only input such as keywords or codes.</p>
 
 <p>PHP has the same operations under other names, and the Unicode-aware versions carry an <code>mb_</code> prefix. This bridge runs the same checks on both sides. The <code>ucfirst</code> function below uses <code>chain</code> to join two iterators and <code>collect</code> to build the String. <code>Some</code> and <code>None</code> are the two cases of an <code>Option</code>, which Chapter 10 covers.</p>
 

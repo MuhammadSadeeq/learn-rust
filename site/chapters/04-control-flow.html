@@ -441,7 +441,7 @@ fn main() {
 
 <h3 id="option-preview">Option in one minute</h3>
 
-<p>Some functions might not have an answer: the first item of an empty list, the position of a letter that isn't there, a number that doesn't fit. Rust returns an <code>Option</code> for those. An <code>Option&lt;T&gt;</code> is either <code>Some(value)</code> or <code>None</code>, and the compiler makes you handle both before you can use the value. Two ways to do that, for now:</p>
+<p>Some functions might not have an answer: the first item of an empty list, the position of a letter that isn't there, a number that doesn't fit. Rust returns an <code>Option</code> for those. An <code>Option&lt;T&gt;</code> is either <code>Some(value)</code> or <code>None</code>, and the compiler makes you handle both before you can use the value. <code>chars().next()</code> asks for the first character of the text, if there is one. Two ways to do that, for now:</p>
 
 <pre class="rs" data-run data-stdout="starts with c\nc">
 fn main() {
@@ -698,6 +698,22 @@ fn main() {
     <li>Yes, but it prints 0, because the loop never changes <code>total</code>.</li>
   </ol>
   <div class="ox-why"><p>A <code>let</code> binding is immutable unless you write <code>mut</code>. <code>total += i</code> assigns to it on every pass, so it needs <code>let mut total = 0;</code>. The compiler suggests exactly that.</p></div>
+</div>
+<div class="ox-quiz" data-id="04:quiz-cast-total" data-label="Check yourself">
+  <p class="ox-q">Chapter 03 taught integer types and <code>as</code>. What does this print?</p>
+  <pre class="rs" data-stdout="256">
+fn main() {
+    let big: u8 = 255;
+    let total = big as u16 + 1;
+    println!("{total}");
+}
+</pre>
+  <ol class="ox-choices">
+    <li>255</li>
+    <li data-correct>256</li>
+    <li>0</li>
+  </ol>
+  <div class="ox-why"><p>The cast runs first, so <code>big</code> becomes a <code>u16</code> holding 255. Adding 1 in the wider type gives 256. If you added 1 to the <code>u8</code> before the cast, it would overflow.</p></div>
 </div>
 </section>
 
