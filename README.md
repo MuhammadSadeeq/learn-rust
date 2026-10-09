@@ -81,7 +81,7 @@ test you pass is a hit: the Forge draws its HP bar draining in your terminal.
 - **PHP → Rust Rosetta**: 119 PHP 8.5 and Laravel 13 habits next to the Rust that replaces them, searchable.
 - **Agent Code Review Dojo**: 18 programs an AI agent wrote. Flag the lines a senior reviewer would question, then compare with the reviewed version.
 - **Recall Deck**: spaced-repetition review of every chapter's cards.
-- **Glossary & keyword index**: 200 terms, keywords and error codes, each with a plain definition, a compiled example and the chapter that teaches it, plus a keyword drill.
+- **Glossary & keyword index**: 231 terms, keywords and error codes, each with a plain definition, a compiled example and the chapter that teaches it, plus a keyword drill.
 - **Field Guide**: every character of Rustopia, in color once you have met it, with the Rust idea it stands for, plus a WANTED wall of the five act bosses.
 
 ## The Forge

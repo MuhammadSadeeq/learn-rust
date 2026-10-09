@@ -309,7 +309,7 @@ chapter's cards from `site/assets/cards/ch07.js`:
   …
 );
 ```
-8–18 cards per chapter; every new term, keyword and error code gets one. The decks are larger on purpose. Questions must require recall (not recognition).
+Every new term, keyword and error code a chapter teaches gets a card, so a deck has as many cards as the chapter has new words (about 12 in early chapters, up to about 35 in the dense late ones). Each deck also has at least one card that asks for the real term behind a picture. The decks are large on purpose: they are how the vocabulary sticks. Questions must require recall (not recognition).
 
 **Forge quests.** `<div class="ox-quests" data-chapter="7"></div>` lists the
 chapter's quests from `quests/quests.toml` automatically.
