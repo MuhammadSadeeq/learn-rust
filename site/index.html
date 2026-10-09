@@ -525,14 +525,22 @@ Edit <span class="b">quests/06_ownership/move1.rs</span>
       card.innerHTML = "<b>Chapter " + String(n).padStart(2, "0") + " · " + esc(c.title) + "</b><span>" + esc(c.idea) + "</span><small>" +
         c.mins + " min · " + q + (q === 1 ? " quest" : " quests") + "</small>";
     }
+    // Right of the stone, else flipped left, else below or above it: the first
+    // spot that fits inside the map box AND the part of it currently on screen.
     function placeCard(n) {
       var s = S[n - 1], SW = stage.clientWidth, SH = stage.clientHeight;
       var r = frame.classList.contains("is-narrow") ? 22 : 25;
       var cx = s.x / W * SW, cy = s.y / H * SH, cw = card.offsetWidth, ch = card.offsetHeight;
-      var left = cx + r;
-      if (left + cw > SW - 8) left = cx - r - cw;
-      left = Math.max(8, Math.min(SW - cw - 8, left));
-      var top = Math.max(8, Math.min(SH - ch - 8, cy - ch / 2));
+      var xMin = Math.max(8, scroll.scrollLeft + 8), xMax = Math.min(SW - 8, scroll.scrollLeft + scroll.clientWidth - 8);
+      var spots = [
+        { x: cx + r, y: cy - ch / 2 },
+        { x: cx - r - cw, y: cy - ch / 2 },
+        { x: cx - cw / 2, y: cy + r },
+        { x: cx - cw / 2, y: cy - r - ch }
+      ];
+      var pick = spots.find(function (p) { return p.x >= xMin && p.x + cw <= xMax && p.y >= 8 && p.y + ch <= SH - 8; }) || spots[0];
+      var left = Math.max(xMin, Math.min(xMax - cw, pick.x));
+      var top = Math.max(8, Math.min(SH - ch - 8, pick.y));
       card.style.left = left.toFixed(1) + "px";
       card.style.top = top.toFixed(1) + "px";
     }

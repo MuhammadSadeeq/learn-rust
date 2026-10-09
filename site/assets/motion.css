@@ -1,1 +1,170 @@
-/* Oxidize motion explainers (being built) */
+/* Oxidize motion explainers (motion.js). The stage is a box in scene units
+   (w x h): actors are placed in percent of it, so the whole scene scales with
+   the column. Colors are oxidize.css tokens; poses and kinds are cast-art.css.
+   Text on the stage is sized in container units (cqw) so it scales too. */
+
+.ox-motion {
+  position: relative;
+  margin: 28px 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  container-type: inline-size;
+  outline: none;
+}
+.ox-motion:focus-visible { outline: 2px solid var(--oxide); outline-offset: 3px; box-shadow: 0 0 0 3px var(--oxide-soft), var(--shadow); }
+.mo-missing { margin: 0; padding: 14px; color: var(--muted); }
+
+.mo-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 12px 16px; border-bottom: 1px solid var(--line-2); }
+.mo-head .ox-label { color: var(--oxide-ink); }
+.mo-title { font: 800 var(--step-1)/1.1 var(--font-display); color: var(--ink); }
+
+.mo-main { display: grid; gap: 12px; padding: 14px; }
+@container (min-width: 900px) {
+  .mo-main.has-code { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); align-items: start; }
+}
+
+/* ------------------------------------------------------------ code panel */
+.mo-code { min-width: 0; overflow: hidden; border: 1px solid var(--code-line); border-radius: 10px; background: var(--code-bg); color: var(--code-ink); }
+.mo-code-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 12px; border-bottom: 1px solid var(--code-line); color: var(--code-dim); font: 600 0.7rem/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.mo-check { font-weight: 600; letter-spacing: 0; text-transform: none; }
+.mo-check.is-ok { color: #4fce82; }
+.mo-check.is-err { color: #ff6b6b; }
+.mo-code pre { margin: 0; padding: 10px 0; overflow-x: auto; background: transparent; color: inherit; font: 400 0.8rem/1.65 var(--font-mono); }
+.mo-ln { display: block; padding-right: 14px; border-left: 3px solid transparent; white-space: pre; }
+.mo-ln.is-now { background: var(--c-hl); border-left-color: var(--c-kw); }
+.mo-lno { display: inline-block; width: 2.2em; padding-right: 0.7em; text-align: right; color: var(--code-dim); user-select: none; }
+
+/* ------------------------------------------------------------ stage */
+.mo-stage {
+  --mo-w: 640;
+  --mo-h: 300;
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  container-type: inline-size;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background-color: var(--surface-2);
+  background-image:
+    linear-gradient(to right, var(--bg-grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--bg-grid) 1px, transparent 1px);
+  background-size: calc(40 / var(--mo-w) * 100%) calc(40 / var(--mo-h) * 100%);
+}
+.mo-actor { position: absolute; line-height: 0; }
+.mo-art { display: block; }
+.mo-actor .ca { display: block; width: 100%; }
+.mo-actor .ca-svg { display: block; width: 100%; height: auto; }
+
+.mo-tag {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 4px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font: 600 clamp(0.6rem, 2.1cqw, 0.8rem) var(--font-mono);
+  line-height: 1.2;
+  padding: 1px 6px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+.mo-tag:empty { display: none; }
+
+.mo-box { border: 1.5px dashed var(--line); border-radius: 14px; background: var(--surface-3); }
+.mo-box.is-stack { background: var(--stack-soft); border-color: color-mix(in srgb, var(--stack) 45%, transparent); }
+.mo-box.is-heap { background: var(--heap-soft); border-color: color-mix(in srgb, var(--heap) 45%, transparent); }
+.mo-box > .mo-tag {
+  top: 8px;
+  left: 10px;
+  transform: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: 700 clamp(0.56rem, 1.8cqw, 0.7rem)/1 var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.mo-box.is-stack > .mo-tag { color: var(--stack); }
+.mo-box.is-heap > .mo-tag { color: var(--heap); }
+
+.mo-text { white-space: nowrap; }
+.mo-text-body { font: 600 clamp(0.66rem, 2.2cqw, 0.9rem)/1.2 var(--font-mono); color: var(--muted); }
+
+/* links: drawn above boxes, below actors */
+.mo-links { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 2; }
+.mo-link path { fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.mo-link .mo-head { fill: var(--ink); stroke: none; }
+.mo-link .mo-twist { stroke: #fff; stroke-opacity: 0.6; stroke-width: 1.2; stroke-dasharray: 2 7; }
+.mo-link.is-own path.mo-line { stroke: var(--oxide); }
+.mo-link.is-ref path.mo-line { stroke: var(--borrow); stroke-width: 3.6; stroke-dasharray: 0.1 7; }
+.mo-link.is-mut path.mo-line { stroke: var(--mut); }
+.mo-link.is-bad path.mo-line { stroke: var(--bad); stroke-dasharray: 9 6; }
+.mo-link.is-arrow path.mo-line { stroke: var(--ink); }
+
+.mo-ring { position: absolute; box-sizing: border-box; aspect-ratio: 1; border: 2.5px solid var(--oxide); border-radius: 50%; pointer-events: none; z-index: 4; }
+.mo-piece { position: absolute; pointer-events: none; z-index: 5; }
+.mo-piece.is-puff { width: 9px; height: 9px; border-radius: 50%; background: var(--ghost); }
+.mo-piece.is-confetti { width: 7px; height: 4px; border-radius: 1px; }
+
+/* speech bubble: the outer box is counter-scaled, so the text keeps its size */
+.mo-bubble {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  width: max-content;
+  max-width: 220px;
+  z-index: 6;
+  line-height: 1.35;
+  transform: translateX(-50%) scale(calc(1 / max(var(--mo-s, 1), 0.05)));
+  transform-origin: 50% 100%;
+  pointer-events: none;
+}
+.mo-bubble-in {
+  padding: 6px 10px;
+  border: 1.5px solid var(--ink);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+  font: 500 0.8rem/1.35 var(--font-body);
+  text-align: left;
+}
+.mo-bubble-in p { margin: 0; }
+
+/* ------------------------------------------------------------ caption */
+.mo-foot { position: relative; display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 4px 14px; align-items: start; padding: 12px 16px 4px; border-top: 1px solid var(--line-2); }
+.mo-oxi { position: relative; width: 76px; }
+.mo-oxi .ca { display: block; width: 100%; }
+.mo-oxi .ca-svg { display: block; width: 100%; height: auto; }
+.mo-say { position: relative; min-height: 3.2rem; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); color: var(--ink); font: 400 0.95rem/1.55 var(--font-body); }
+.mo-say::before { content: ""; position: absolute; left: -9px; top: 18px; border: 8px solid transparent; border-left: 0; border-right-color: var(--line); }
+.mo-say p { margin: 0 0 6px; }
+.mo-say p:last-child { margin-bottom: 0; }
+.mo-say .mo-verdict strong { color: var(--ok); }
+.mo-say .mo-verdict.is-wrong strong { color: var(--bad); }
+.mo-choices { display: grid; gap: 8px; margin-top: 8px; }
+.mo-confetti { position: absolute; width: 7px; height: 4px; border-radius: 1px; pointer-events: none; }
+
+/* ------------------------------------------------------------ controls */
+.mo-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 16px 14px; }
+.mo-dots { display: inline-flex; flex-wrap: wrap; align-items: center; min-width: 0; }
+.mo-dot { position: relative; width: 24px; height: 28px; padding: 0; border: 0; background: none; cursor: pointer; }
+.mo-dot::before { content: ""; position: absolute; left: 50%; top: 50%; width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; border: 1.5px solid var(--ink-2); border-radius: 50%; background: var(--surface); transition: background-color 0.15s, transform 0.15s; }
+.mo-dot.is-done::before { background: var(--line); border-color: var(--line); }
+.mo-dot.is-current::before { background: var(--oxide); border-color: var(--oxide); transform: scale(1.25); }
+.mo-dot:focus-visible { outline: 2px solid var(--oxide); outline-offset: 0; border-radius: 4px; }
+.mo-count { margin-left: auto; font: 600 0.8rem/1 var(--font-mono); color: var(--muted); }
+.mo-play.is-pulse { animation: mo-pulse 1.2s ease-out 1; }
+@keyframes mo-pulse {
+  from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--oxide) 55%, transparent); }
+  to { box-shadow: 0 0 0 12px transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mo-play.is-pulse { animation: none; }
+  .mo-dot::before { transition: none; }
+}
