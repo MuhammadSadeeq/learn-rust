@@ -150,6 +150,8 @@
   .mp-stone:hover { transform: scale(1.1); color: #12171c; }
   .mp-stone.is-done { background: var(--oxide); border-color: var(--oxide); color: #fff; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3); }
   .mp-stone.is-done:hover { color: #fff; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .mp-stone.is-done, :root:not([data-theme="light"]) .mp-stone.is-done:hover { color: #1b0f08; text-shadow: none; } }
+  :root[data-theme="dark"] .mp-stone.is-done, :root[data-theme="dark"] .mp-stone.is-done:hover { color: #1b0f08; text-shadow: none; }
   .mp-stone.is-current { border: 3px solid var(--oxide); }
   .mp-stone.is-current::after { content: ""; position: absolute; inset: -7px; border-radius: 50%; border: 2px solid var(--oxide); opacity: 0; animation: mp-pulse 2.6s ease-out infinite; pointer-events: none; }
   .mp-tick { position: absolute; right: -6px; bottom: -6px; width: 15px; height: 15px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1.5px var(--oxide); }

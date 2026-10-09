@@ -32,7 +32,7 @@
 
   const REGIONS = [
     { act: 1, name: "Ore Hills", sub: "Foundations", x: 236, y: 618 },
-    { act: 2, name: "Smelter Coast", sub: "The Ownership Trilogy", x: 104, y: 214 },
+    { act: 2, name: "Smelter Coast", sub: "The Ownership Trilogy", x: 110, y: 168 },
     { act: 3, name: "Cast Village", sub: "Shape Your Data", x: 446, y: 92 },
     { act: 4, name: "Temper Peaks", sub: "Abstraction Without Cost", x: 560, y: 566 },
     { act: 5, name: "Alloy City", sub: "Fearless & Fast", x: 878, y: 72 },
