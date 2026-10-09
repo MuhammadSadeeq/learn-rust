@@ -964,7 +964,7 @@ window.OX_ROSETTA = [
       println!("{}", first_word("  hello world"));
       `,
     check: "ok",
-    note: `<code>let else</code> takes the failure branch when the pattern does not match, and that branch must leave: <code>return</code>, <code>break</code>, <code>continue</code> or a panic. It is the guard clause that replaces a nested <code>if</code>.`,
+    note: `<code>let else</code> takes the failure branch when the pattern does not match, and that branch must leave: <code>return</code>, <code>break</code>, <code>continue</code> or a panic. It is the guard clause that replaces a nested <code>if</code>. The PHP side splits on a single space after <code>mb_trim</code>, while <code>split_whitespace</code> splits on any whitespace, so a tab separates words in Rust only.`,
     chapter: 10
   },
   /* ---------------------------------------------------------------- functions */
@@ -1781,7 +1781,7 @@ window.OX_ROSETTA = [
       println!("key has {} chars", key.len());
       `,
     check: "ok",
-    note: `<code>unwrap</code> and <code>expect</code> panic when the value is missing. That is right for setup that must succeed, and for tests. In library code, an unwrap is a crash waiting for a caller who did not expect it. Return the error instead, and let the caller decide.`,
+    note: `<code>unwrap</code> and <code>expect</code> panic when the value is missing. That is right for setup that must succeed, and for tests. In library code, an unwrap is a crash waiting for a caller who did not expect it. Return the error instead, and let the caller decide. PHP's <code>?:</code> also throws for an empty value or <code>"0"</code>, but <code>env::var</code> accepts an empty value. Filter the empty case first if that matters.`,
     chapter: 11
   },
   {

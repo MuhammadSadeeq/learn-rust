@@ -60,7 +60,8 @@
      label    text, delay=0                               change the caption under the actor
      art      {cast|prop, opts}, delay=0                  replace the actor's art
      link     linkId, fromId, toId, kind="own", delay=0   own | ref | mut | bad | weak | arrow
-                                                         (weak: a thin grey thread that does not count, as Weak<T>)
+                                                         (weak: a thin grey thread that does not count, as Weak<T>;
+                                                         two links one each way between the same actors bend apart)
      unlink   linkId, delay=0                             fade the link out
      shake    delay=0
      pulse    delay=0                                     an attention ring
@@ -541,7 +542,11 @@
       if (L.kind === "arrow") {
         d = `M${f(x1)} ${f(y1)} L${f(x2)} ${f(y2)}`;
       } else {
-        const sag = Math.min(64, 16 + len * 0.16) * (L.kind === "own" ? 1 : 0.35);
+        // Two links between the same actors, one each way (a cycle), would share one
+        // curve. The one whose from-id sorts later bends to the other side.
+        const back = [...links].some(([oid, o]) => oid !== id && o.from === L.to && o.to === L.from);
+        const side = back && L.from > L.to ? -1 : 1;
+        const sag = Math.min(64, 16 + len * 0.16) * (L.kind === "own" ? 1 : 0.35) * side;
         d = `M${f(x1)} ${f(y1)} C${f(x1 + (x2 - x1) * 0.3)} ${f(y1 + sag)} ${f(x2 - (x2 - x1) * 0.3)} ${f(y2 + sag + (y2 - y1) * 0.1)} ${f(x2)} ${f(y2)}`;
       }
       const head = (() => {
