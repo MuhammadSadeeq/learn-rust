@@ -14,7 +14,7 @@ it says it; and you write real code against the real compiler in **the Forge**.
 ## Start here
 
 ```sh
-# 1. Install Rust (macOS / Linux). On Windows, run rustup-init.exe from https://rustup.rs
+# 1. Install Rust 1.88 or newer (macOS / Linux). On Windows, run rustup-init.exe from https://rustup.rs
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # 2. Get the course

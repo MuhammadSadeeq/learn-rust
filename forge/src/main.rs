@@ -574,7 +574,7 @@ fn finale(ctx: &Ctx) {
     println!();
 }
 
-/// Edition 2024 needs Rust 1.85 or newer.
+/// The course targets Rust 1.88 or newer (edition 2024, let chains).
 fn check_toolchain(s: Style) {
     let Ok(out) = Command::new("rustc").arg("--version").output() else {
         return;
@@ -585,10 +585,10 @@ fn check_toolchain(s: Style) {
         .nth(1)
         .and_then(|v| v.split('.').nth(1))
         .and_then(|m| m.parse::<u32>().ok());
-    if let Some(minor) = minor
-        && minor < 85
-    {
-        println!("{}", s.yellow(&format!("Your Rust is {}. The quests use edition 2024, which needs 1.85 or newer. Run `rustup update`.", text.trim())));
+    // No let chains here: this check has to compile on the old toolchains
+    // it is warning about.
+    if minor.is_some_and(|m| m < 88) {
+        println!("{}", s.yellow(&format!("Your Rust is {}. The course needs 1.88 or newer (edition 2024 and let chains). Run `rustup update`.", text.trim())));
         thread::sleep(Duration::from_secs(2));
     }
 }
