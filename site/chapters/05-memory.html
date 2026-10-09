@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Stack &amp; The Heap · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/quests-data.js" defer></script>
+<script src="../assets/cards/ch05.js" defer></script>
+<script src="../assets/scenarios/ch05.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+<script src="../assets/xray.js" defer></script>
+</head>
+<body data-chapter="5">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<div class="ox-page">
+<aside class="ox-rail" aria-label="Chapter contents"></aside>
+<main class="ox-main" id="main">
+
+<header class="ox-hero" data-auto>
+  <ul>
+    <li>Say what goes on the stack and what goes on the heap, with a picture of each.</li>
+    <li>Predict the size of common types, including <code>String</code> and <code>Vec</code>.</li>
+    <li>Describe what happens to a <code>String</code>'s buffer when it grows.</li>
+    <li>Explain why heap memory needs an owner.</li>
+  </ul>
+</header>
+
+<section>
+<h2 id="bytes">Memory is a long row of numbered bytes</h2>
+
+<p>Every value your program uses sits somewhere in memory. Picture memory as a long row of cells, one byte each. Every cell has a number, its <em>address</em>. An <code>i32</code> takes up four cells in a row. A <em>pointer</em> is a value that holds an address: a number that says where some other value starts.</p>
+
+<figure class="ox-figure">
+<svg viewBox="0 0 640 200" width="640" role="img" aria-label="A row of sixteen numbered byte cells. Cells 4 to 7 hold the four bytes of x, which are 5, 0, 0 and 0. Cells 8 to 15 hold the eight bytes of p, which are 4 followed by seven zeros. Because p holds the address 4, it points at x.">
+  <rect x="24" y="72" width="34" height="40" rx="4" class="f-plain" stroke-width="1"/>
+  <rect x="60" y="72" width="34" height="40" rx="4" class="f-plain" stroke-width="1"/>
+  <rect x="96" y="72" width="34" height="40" rx="4" class="f-plain" stroke-width="1"/>
+  <rect x="132" y="72" width="34" height="40" rx="4" class="f-plain" stroke-width="1"/>
+  <rect x="168" y="72" width="34" height="40" rx="4" class="f-stack" stroke-width="1.5"/>
+  <text x="185" y="97" text-anchor="middle" font-size="15" font-weight="700">5</text>
+  <rect x="204" y="72" width="34" height="40" rx="4" class="f-stack" stroke-width="1.5"/>
+  <text x="221" y="97" text-anchor="middle" font-size="15" font-weight="700">0</text>
+  <rect x="240" y="72" width="34" height="40" rx="4" class="f-stack" stroke-width="1.5"/>
+  <text x="257" y="97" text-anchor="middle" font-size="15" font-weight="700">0</text>
+  <rect x="276" y="72" width="34" height="40" rx="4" class="f-stack" stroke-width="1.5"/>
+  <text x="293" y="97" text-anchor="middle" font-size="15" font-weight="700">0</text>
+  <rect x="312" y="72" width="34" height="40" rx="4" class="f-ref" stroke-width="1.5"/>
+  <text x="329" y="97" text-anchor="middle" font-size="15" font-weight="700">4</text>
+  <rect x="348" y="72" width="34" height="40" rx="4" class="f-ref" stroke-width="1.5"/>
+  <text x="365" y="97" text-anchor="middle" font-size="15" font-weight="700">0</text>
+  <rect x="384" y="72" width="34" height="40" rx="4" class="f-ref" stroke-width="1.5"/>
+  <text x="401" y="97" text-anchor="middle" font-size="15" font-weight="700">0</text>
+  <rect x="420" y="72" width="34" height="40" rx="4" class="f-ref" stroke-width="1.5"/>
+  <text x="437" y="97" text-anchor="middle" font-size="15" font-weight="700">0</text>
+  <rect x="456" y="72" width="34" height="40" rx="4" class="f-ref" stroke-width="1.5"/>
+  <text x="473" y="97" text-anchor="middle" font-size="15" font-weight="700">0</text>
+  <rect x="492" y="72" width="34" height="40" rx="4" class="f-ref" stroke-width="1.5"/>
+  <text x="509" y="97" text-anchor="middle" font-size="15" font-weight="700">0</text>
+  <rect x="528" y="72" width="34" height="40" rx="4" class="f-ref" stroke-width="1.5"/>
+  <text x="545" y="97" text-anchor="middle" font-size="15" font-weight="700">0</text>
+  <rect x="564" y="72" width="34" height="40" rx="4" class="f-ref" stroke-width="1.5"/>
+  <text x="581" y="97" text-anchor="middle" font-size="15" font-weight="700">0</text>
+  <g font-size="11" class="t-muted" text-anchor="middle">
+    <text x="41" y="130">0</text><text x="77" y="130">1</text><text x="113" y="130">2</text><text x="149" y="130">3</text>
+    <text x="185" y="130">4</text><text x="221" y="130">5</text><text x="257" y="130">6</text><text x="293" y="130">7</text>
+    <text x="329" y="130">8</text><text x="365" y="130">9</text><text x="401" y="130">10</text><text x="437" y="130">11</text>
+    <text x="473" y="130">12</text><text x="509" y="130">13</text><text x="545" y="130">14</text><text x="581" y="130">15</text>
+  </g>
+  <path d="M329,68 C329,24 185,24 185,68" class="s-ref" stroke-width="2" fill="none"/>
+  <polygon points="185,71 181,62 189,62" style="fill:var(--borrow)"/>
+  <text x="257" y="22" text-anchor="middle" font-size="12" class="t-ref">p holds 4, the address of x</text>
+  <text x="239" y="156" text-anchor="middle" font-size="12">x is an i32 holding 5</text>
+  <text x="455" y="156" text-anchor="middle" font-size="12" class="t-ref">p is a pointer, 8 bytes</text>
+  <text x="24" y="190" font-size="11" class="t-muted">Each box is one byte. The small number under it is that byte's address.</text>
+</svg>
+<figcaption><code>x</code> is a 4-byte <code>i32</code> at addresses 4 to 7, holding 5. <code>p</code> is an 8-byte pointer at addresses 8 to 15, holding 4, so it points at <code>x</code>. The bytes are shown lowest first, which is how most machines store an <code>i32</code>.</figcaption>
+</figure>
+
+<p>Your PHP code never shows you any of this. The numbers exist, but the engine keeps them out of sight. Rust shows them to you through types, and the rest of this chapter depends on that visibility.</p>
+
+<details class="ox-think">
+  <summary>Think first: in PHP, how much memory does <code>$x = 5;</code> use?</summary>
+  <div class="ox-think-body">
+    <p>Guess before you read on, and be specific about what you counted.</p>
+    <p>The answer is more than four bytes. The value 5 is stored in a <strong>zval</strong>, PHP's internal container for any value. On 64-bit PHP 7 and later, a zval is 16 bytes, and it keeps the type tag next to the value. The variable also needs a slot in a table that PHP keeps for its scope, and that table has bookkeeping of its own. The exact total depends on the PHP version and on whether <code>$x</code> is global or local, so treat any figure as approximate. The 5 itself sits inside the zval, so PHP does not allocate anything extra on the heap for it.</p>
+    <p>The lesson is that every value carries overhead, and PHP hides that overhead from you. Rust shows you the overhead in the types, and the Size Lab later in this chapter lets you check it.</p>
+  </div>
+</details>
+</section>
+
+<section>
+<h2 id="stack">The stack: one frame per call</h2>
+
+<p>When a function runs, it needs room for its parameters and its local variables. That room comes from the <strong>stack</strong>. Picture a stack of trays. Each call puts a new tray, called a <em>frame</em>, on top. The frame holds that call's values. When the function returns, its tray comes off, and the room under it is free again.</p>
+
+<p>The stack is fast for a simple reason. The compiler knows the size of every local before the program runs, so the size of each frame is fixed. Making room is just moving the stack pointer by a known amount. Giving room back is moving it back.</p>
+
+<p>Step through a call. Watch the frames go on and come off, and notice what is copied where.</p>
+
+<div class="ox-xray ox-wide" data-scenario="calls-stack"></div>
+
+<p>Only the number <code>12</code> travelled back to <code>main</code>. The variables <code>a</code>, <code>w</code> and <code>h</code> lived in the frame of <code>area</code>, so they went away with it.</p>
+
+<aside class="ox-callout" data-kind="deep">
+  <p>This is a model, and the optimizer is allowed to do better than the model. A small value like <code>a</code> may live only in a CPU register, and the compiler may skip the copy altogether. The model is still the right way to reason about cost and about who owns a value, so keep it in mind when you read a profile or a compiler error.</p>
+</aside>
+
+<div class="ox-quiz" data-id="05:stack-cost" data-label="Check yourself">
+  <p class="ox-q">Which of these costs the least?</p>
+  <ol class="ox-choices">
+    <li data-correct>Calling a function whose locals are three <code>u32</code> values.</li>
+    <li>Asking the allocator for a new 100-byte buffer on the heap.</li>
+    <li>Calling <code>.clone()</code> on a <code>String</code>.</li>
+  </ol>
+  <div class="ox-why"><p>A call moves the stack pointer by an amount the compiler already knows. The other two ask the allocator for memory, and cloning a <code>String</code> also copies every byte of it.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="heap">The heap: ask for space at runtime</h2>
+
+<p>The stack needs every size fixed before the program runs. A lot of data has no fixed size. The text a user typed, or the rows a database query returns, are as large as the input happens to be. For those values the program asks for room at runtime, from the <strong>heap</strong>.</p>
+
+<p>Think of the heap as a warehouse with numbered shelves. You tell the warehouse how much space you need, and it hands you a shelf number. That number is a pointer. You keep the pointer in a variable, usually on the stack, and reach the shelf through it. When you are finished, you have to give the shelf back. If you don't, it stays occupied, and nobody else can use it.</p>
+
+<details class="ox-think">
+  <summary>Think first: why can't a <code>Vec&lt;User&gt;</code> loaded from the database be a fixed local on the stack?</summary>
+  <div class="ox-think-body">
+    <p>The database decides how many rows there are, and it does so at runtime, after the program was compiled. The stack needs each frame's size fixed at compile time, so a list whose length is known only at runtime cannot be a stack local. Its elements go on the heap, and the stack keeps a pointer to them.</p>
+  </div>
+</details>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th></th><th>Stack</th><th>Heap</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Speed</strong></td><td>Moving a pointer. Almost no work.</td><td>The allocator has to find a free block and keep its books. More work on every allocation.</td></tr>
+    <tr><td><strong>Size known</strong></td><td>At compile time, for every frame.</td><td>At runtime, for each allocation.</td></tr>
+    <tr><td><strong>Who gives it back</strong></td><td>The frame is popped when the function returns.</td><td>The owner, when it goes out of scope. In Rust the compiler inserts that free for you.</td></tr>
+    <tr><td><strong>Typical contents</strong></td><td><code>i32</code>, <code>bool</code>, <code>char</code>, references, and the 24-byte header of a <code>String</code>.</td><td>The text of a <code>String</code>, the elements of a <code>Vec</code>, and the value inside a <code>Box</code>.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="ox-pull">Stack space comes back in order, by itself. Heap space comes back only when someone gives it back.</p>
+
+<aside class="ox-callout" data-kind="insight">
+  <p>The stack is fast because it is strict: each slot's size is fixed before the program runs. The heap accepts any size, and the program pays for that flexibility with allocator work and with the duty to give the block back.</p>
+</aside>
+
+<div class="ox-quiz" data-id="05:where" data-label="Check yourself">
+  <p class="ox-q">Where does the text of <code>String::from("hello")</code> live?</p>
+  <pre class="rs" data-check="ok">let s = String::from("hello");</pre>
+  <ol class="ox-choices">
+    <li>On the stack, inside the variable <code>s</code>.</li>
+    <li data-correct>On the heap. The variable <code>s</code> on the stack holds a pointer to it.</li>
+    <li data-feedback="Close. The literal is stored in the program, but String::from copies it out.">In the compiled program, as a constant, so it never has to be freed.</li>
+  </ol>
+  <div class="ox-why"><p>The literal <code>"hello"</code> is stored in the compiled program, but <code>String::from</code> copies it into a new heap block that the <code>String</code> owns. The 24 bytes on the stack are three words: the pointer, the length 5 and the capacity 5. The five letters live on the heap.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="string-layout">What a String really is</h2>
+
+<p>A <code>String</code> is two things. The part on the stack is three words: a <strong>pointer</strong> to the text bytes, the <strong>length</strong> (how many bytes are in use) and the <strong>capacity</strong> (how many bytes the block can hold). On a 64-bit machine that is 24 bytes, and it stays 24 bytes however long the text is. The text itself lives on the heap. A <code>Vec&lt;T&gt;</code> has the same shape: three words on the stack, and the elements on the heap.</p>
+
+<div class="ox-quiz" data-id="05:size" data-label="Predict first">
+  <p class="ox-q">What does this print on a 64-bit machine?</p>
+  <pre class="rs" data-check="ok" data-stdout="24">use std::mem::size_of;
+
+fn main() {
+    println!("{}", size_of::&lt;String&gt;());
+}</pre>
+  <ol class="ox-choices">
+    <li>5, the length of the text it will hold.</li>
+    <li>8, one pointer.</li>
+    <li data-correct>24, three words.</li>
+    <li>It depends on the text, because the bytes are part of the value.</li>
+  </ol>
+  <div class="ox-why"><p>24. The <code>String</code> value is always three words, whatever the text. The bytes live on the heap, outside those 24.</p></div>
+</div>
+
+<p>Here is the whole table, straight from the compiler on a 64-bit machine. Run it, or read the output.</p>
+
+<pre class="rs" data-run data-stdout="i32: 4\nu8: 1\nchar: 4\n(i32, u8): 8\nString: 24\nVec&lt;u64&gt;: 24\n&amp;str: 16\nBox&lt;i32&gt;: 8">
+use std::mem::size_of;
+
+fn main() {
+    println!("i32: {}", size_of::&lt;i32&gt;());
+    println!("u8: {}", size_of::&lt;u8&gt;());
+    println!("char: {}", size_of::&lt;char&gt;());
+    println!("(i32, u8): {}", size_of::&lt;(i32, u8)&gt;());
+    println!("String: {}", size_of::&lt;String&gt;());
+    println!("Vec&lt;u64&gt;: {}", size_of::&lt;Vec&lt;u64&gt;&gt;());
+    println!("&amp;str: {}", size_of::&lt;&amp;str&gt;());
+    println!("Box&lt;i32&gt;: {}", size_of::&lt;Box&lt;i32&gt;&gt;());
+}</pre>
+
+<p>Two of these numbers look wrong at first. A <code>(i32, u8)</code> holds 5 bytes of data, yet it takes 8. A <code>&amp;str</code> is one pointer and one length, which is 16 bytes, not 8.</p>
+
+<p>The 8 comes from <strong>alignment</strong>. An <code>i32</code> must start at an address that is a multiple of 4. On this machine the compiler puts the <code>i32</code> at offset 0 and the <code>u8</code> at offset 4. Bytes 5, 6 and 7 are <strong>padding</strong>: space nobody uses. The compiler adds them so the total becomes 8, a multiple of the largest alignment in the tuple. Without that trailing padding, the second element of an array of these tuples would start at an address that is not a multiple of 4, and some processors would refuse that access or pay a speed penalty for it.</p>
+
+<div class="ox-quiz" data-id="05:padding" data-label="Check yourself">
+  <p class="ox-q">Why is <code>(i32, u8)</code> 8 bytes?</p>
+  <ol class="ox-choices">
+    <li>Tuples always round up to 8 bytes, whatever their fields are.</li>
+    <li data-feedback="That is the sum of the fields. The compiler adds padding on top of it.">Because the fields take 4 + 1 = 5 bytes, and the compiler stores the extra space as well.</li>
+    <li data-correct>An <code>i32</code> must start on a multiple of 4, so 3 bytes of padding follow the <code>u8</code>, and the total becomes a multiple of 4.</li>
+  </ol>
+  <div class="ox-why"><p>That is <strong>alignment</strong>. Each type needs its values to start at a multiple of its alignment. The padding is unused memory, and it is the price of that rule. It also keeps every element of an array aligned, because the size of the tuple is a multiple of its alignment.</p></div>
+</div>
+
+<p>Now the Size Lab. Pick a type, guess its size on a 64-bit machine, then reveal the layout. Each box is one byte, drawn to scale. Hatched boxes are padding. The heap part is listed on its own, because it is not counted in the size.</p>
+
+<style>
+#sizelab .sl-top { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+#sizelab .sl-guess { display: inline-flex; align-items: center; gap: 8px; font-size: 0.92rem; color: var(--ink-2); cursor: pointer; }
+#sizelab .sl-guess input { width: 18px; height: 18px; accent-color: var(--oxide); }
+#sizelab .sl-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+#sizelab .sl-chip { font: 600 0.82rem/1 var(--font-mono); padding: 7px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); cursor: pointer; }
+#sizelab .sl-chip:hover { border-color: var(--ink-2); }
+#sizelab .sl-chip[aria-pressed="true"] { background: var(--oxide); border-color: var(--oxide); color: #fff; }
+#sizelab .sl-chip:focus-visible, #sizelab .sl-input:focus-visible, #sizelab .ox-btn:focus-visible, #sizelab .sl-guess input:focus-visible { outline: 2px solid var(--oxide); outline-offset: 2px; }
+#sizelab .sl-ask { border: 1px dashed var(--line); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; background: var(--surface-2); }
+#sizelab .sl-ask p { margin: 0 0 10px; }
+#sizelab .sl-ask label { display: inline-flex; gap: 8px; align-items: center; margin-right: 10px; }
+#sizelab .sl-input { width: 7rem; font: 600 1rem var(--font-mono); padding: 6px 8px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+#sizelab .sl-msg { margin: 10px 0 0; font-size: 0.92rem; color: var(--muted); min-height: 1.2em; }
+#sizelab .sl-msg.is-ok { color: var(--ok); }
+#sizelab .sl-msg.is-bad { color: var(--bad); }
+#sizelab .sl-size { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+#sizelab .sl-num { font: 800 2.4rem/1 var(--font-display); color: var(--oxide-ink); }
+#sizelab .sl-cap { margin: 6px 0 8px; font-size: 0.85rem; color: var(--muted); }
+#sizelab .sl-grid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; margin: 6px 0 12px; }
+#sizelab .sl-c { min-height: 32px; display: flex; align-items: center; justify-content: center; border: 1px solid; border-radius: 3px; font: 600 0.7rem/1 var(--font-mono); overflow: hidden; white-space: nowrap; }
+#sizelab .sl-k-val { background: var(--stack-soft); border-color: var(--stack); color: var(--ink); }
+#sizelab .sl-k-own { background: var(--oxide-soft); border-color: var(--oxide); color: var(--oxide-ink); }
+#sizelab .sl-k-ref { background: var(--borrow-soft); border-color: var(--borrow); color: var(--borrow); }
+#sizelab .sl-k-len, #sizelab .sl-k-cap { background: var(--surface-3); border-color: var(--ink-2); color: var(--ink); }
+#sizelab .sl-k-tag { background: var(--surface); border-color: var(--ink-2); color: var(--ink-2); }
+#sizelab .sl-k-pad { background: repeating-linear-gradient(135deg, var(--surface-2) 0 5px, var(--line) 5px 7px); border-style: dashed; border-color: var(--ghost); color: var(--muted); }
+#sizelab .sl-k-none { background: var(--surface-2); border-color: var(--line); border-style: dashed; color: var(--muted); }
+#sizelab .sl-legend { list-style: none; padding: 0; margin: 0 0 4px; display: grid; gap: 6px; font-size: 0.92rem; }
+#sizelab .sl-legend li { display: flex; gap: 8px; align-items: baseline; }
+#sizelab .sl-sw { width: 12px; height: 12px; border-radius: 2px; border: 1px solid; flex: none; transform: translateY(1px); }
+#sizelab .sl-heap { margin: 12px 0 0; padding: 10px 12px; border-radius: var(--radius); border: 1px dashed var(--heap); background: var(--heap-soft); font: 600 0.9rem/1.4 var(--font-mono); color: var(--ink); }
+#sizelab .sl-why { margin: 12px 0 0; color: var(--ink-2); }
+</style>
+<div class="ox-figure ox-wide" id="sizelab">
+  <div class="sl-top">
+    <span class="ox-label">Size Lab · 64-bit</span>
+    <label class="sl-guess"><input type="checkbox" id="sl-guess" checked> Guess first</label>
+  </div>
+  <div class="sl-chips" role="group" aria-label="Choose a type"></div>
+  <div class="sl-stage" aria-live="polite">
+    <p class="sl-cap">The lab needs JavaScript. The sizes are listed in the program above.</p>
+  </div>
+  <p class="ox-caption">Sizes are the values <code>size_of</code> reports on 64-bit Linux with rustc 1.97. The order of fields inside a type is the compiler's choice. The lab draws one common order.</p>
+</div>
+
+<aside class="ox-callout" data-kind="deep" data-label="Under the hood">
+  <p>Why is <code>Option&lt;Box&lt;i32&gt;&gt;</code> the same size as <code>Box&lt;i32&gt;</code>? An <code>Option</code> normally needs a tag, one extra value that says "Some" or "None". A <code>Box</code> can never be null, so the compiler can use the null address to mean <code>None</code>, and the pointer carries the tag for free. This is the <strong>niche optimization</strong>: the compiler reuses a value the type can never hold.</p>
+  <p>A <code>u32</code> has no spare bit patterns, so <code>Option&lt;u32&gt;</code> needs a real tag. The tag takes a byte, and the <code>u32</code> then needs 4-byte alignment, so the total is 8. A <code>bool</code> has spare values, so <code>Option&lt;bool&gt;</code> is still 1 byte.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="growth">When a String grows</h2>
+
+<p>A <code>String</code> made with <code>String::new()</code> starts with no room at all. <code>String::with_capacity(n)</code> asks for room for <code>n</code> bytes up front. Two methods tell you where you stand. <code>len()</code> is how many bytes are in use. <code>capacity()</code> is how many the block can hold before it needs more. Capacity is never smaller than length.</p>
+
+<p>Push past the capacity and the String has to grow. Step through a small one.</p>
+
+<div class="ox-xray ox-wide" data-scenario="string-grow"></div>
+
+<p>The allocator can sometimes grow a block where it sits. When it can't, it finds a bigger block, copies the bytes across and frees the old one. The picture shows that second case. Your code never handles any of this. It calls <code>push_str</code>, and the standard library does the rest. But the address changed, and anything still holding the old address now points at memory that has been given back.</p>
+
+<p>A <code>Vec</code> grows the same way. Here the cells are the elements, not bytes.</p>
+
+<div class="ox-xray ox-wide" data-scenario="vec-grow"></div>
+
+<p>Five pushes caused two reallocations. If you know roughly how many elements you will need, ask for that capacity up front and the reallocations go away.</p>
+
+<aside class="ox-callout" data-kind="deep" data-label="with_capacity when you know the size">
+  <p>Each reallocation is a new allocation, a copy and a free. Reserving the capacity once replaces that series with one allocation. The Rust standard library does not promise particular growth amounts, so the numbers you see are an implementation detail. What you can count on is that <code>capacity()</code> is at least <code>len()</code>, and that <code>with_capacity</code> never makes a String shorter.</p>
+</aside>
+
+<p>Here is the same growth in code. Run it, and watch <code>len</code> climb while <code>capacity</code> jumps in steps. Don't write code that depends on the exact numbers.</p>
+
+<pre class="rs" data-run>
+fn main() {
+    let mut s = String::new();
+    for word in ["hi", "!!", "?"] {
+        s.push_str(word);
+        println!("len {} cap {}", s.len(), s.capacity());
+    }
+}</pre>
+
+<p>Why does this matter when you write code? Because the compiler is strict about references for exactly this reason. Here is a program that holds a pointer to an element and then pushes.</p>
+
+<pre class="rs" data-check="E0502">
+fn main() {
+    let mut v = vec![1, 2, 3, 4, 5];
+    let first = &amp;v[0];
+    v.push(6);
+    println!("{first}");
+}</pre>
+
+<pre class="rustc">
+error[E0502]: cannot borrow `v` as mutable because it is also borrowed as immutable
+ --> src/main.rs:4:5
+  |
+3 |     let first = &amp;v[0];
+  |                  - immutable borrow occurs here
+4 |     v.push(6);
+  |     ^^^^^^^^^ mutable borrow occurs here
+5 |     println!("{first}");
+  |                ----- immutable borrow later used here
+
+For more information about this error, try `rustc --explain E0502`.</pre>
+
+<p><code>first</code> points into the buffer. <code>push(6)</code> might have to move the buffer to make room, and then <code>first</code> would point at freed memory. So the compiler refuses the program. Chapter 07 explains the rule. For now, notice that it protects a pointer you cannot see.</p>
+
+<div class="ox-quiz" data-id="05:realloc" data-label="Check yourself">
+  <p class="ox-q">A <code>Vec</code> has its buffer at address A. A push forces a reallocation. Is address A still valid afterwards?</p>
+  <ol class="ox-choices">
+    <li data-feedback="Sometimes the allocator grows the block in place, and the address stays the same. That is luck, not a rule.">Yes. The allocator keeps the old block where it was.</li>
+    <li data-correct>No. The old block has been freed, so anything that points into it now dangles.</li>
+    <li>Only if the new capacity is at least twice the old one.</li>
+  </ol>
+  <div class="ox-why"><p>After a reallocation the old block is gone. Reading through a pointer to it reads memory the allocator may already have handed to something else. The borrow checker refuses programs that could do this, as you just saw.</p></div>
+</div>
+
+<div class="ox-fill" data-id="05:fill-cap">
+  <p class="ox-q">Fill in the blank so the program prints <code>true</code>.</p>
+  <pre class="rs" data-stdout="true">
+fn main() {
+    let s = String::[[with_capacity]](10);
+    println!("{}", s.capacity() &gt;= 10);
+}</pre>
+  <div class="ox-why"><p><code>with_capacity(10)</code> reserves room for at least ten bytes before the first push, and <code>capacity()</code> reports that room. The number is a promise of at least that much room. It is not an exact figure.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="box">Box: one value on the heap</h2>
+
+<p>A <code>Box&lt;T&gt;</code> is the simplest way to put one value on the heap. <code>Box::new(5)</code> asks for room for an <code>i32</code>, stores 5 in it and returns a pointer. The <code>Box</code> that lives in your variable is only that pointer. It takes 8 bytes on a 64-bit machine, whatever the type inside the box is.</p>
+
+<div class="ox-xray ox-wide" data-scenario="box-basic"></div>
+
+<p>The <code>Box</code> has exactly one owner, the variable <code>b</code>. When <code>b</code> goes out of scope, the heap bytes are freed. This is the ownership rule from Chapter 06, applied to a single heap value. Chapter 17 uses boxes for recursive data, where the size of a value would otherwise be unknown.</p>
+</section>
+
+<section>
+<h2 id="php">How PHP does it, and why Rust shows you</h2>
+
+<p>PHP manages all of this for you, and it does it well. Every value is a zval. Strings and arrays are allocated on the heap and <strong>reference counted</strong>, so each one is released when its last reference goes away. Arrays and strings are <strong>copy on write</strong>: <code>$b = $a;</code> shares the memory until one side changes. A cycle collector finds objects that point at each other. At the end of a request, PHP releases everything the request allocated. <code>memory_get_usage()</code> tells you how much PHP is holding, but not what it is holding it for.</p>
+
+<details class="ox-think">
+  <summary>Think first: a PHP function builds an array of 100,000 rows and returns it. When is that memory released?</summary>
+  <div class="ox-think-body">
+    <p>The array lives for as long as something refers to it. If the function returns it, the caller holds it, and the memory stays. If nothing holds it, the reference count drops to zero and PHP frees it at that moment. Anything still allocated is released when the request ends.</p>
+  </div>
+</details>
+
+<div class="ox-bridge">
+  <pre class="php">
+$a = [1, 2, 3];
+$b = $a;       // shares the array
+$b[] = 4;      // now PHP copies it, quietly</pre>
+  <pre class="rs" data-check="ok">
+let a = vec![1, 2, 3];
+let mut b = a.clone(); // a new heap buffer, copied now
+b.push(4);</pre>
+  <div class="ox-bridge-note"><p>PHP copies later, and you don't see the copy. Rust copies only where you write <code>clone()</code>, so the cost sits on a line you can point to. The comparison breaks when you look closely: in PHP a copy can happen inside any write, while in Rust the copy is always written out. Chapter 06 covers the ownership rules behind this.</p></div>
+</div>
+
+<aside class="ox-callout" data-kind="insight">
+  <p>Rust exposes this model on purpose. Once you can see where data lives, when it is copied and when it is freed, you can control what your program costs. PHP can hide the model because a request is short, and its memory is thrown away at the end. A Rust server or agent may run for days, and its costs add up.</p>
+</aside>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Agent-written Rust often allocates inside hot loops: <code>to_string()</code>, <code>format!</code> and <code>collect()</code> repeated for every item. The code below works, but it makes two heap allocations for every name. When you review it, ask whether each copy is needed.</p>
+  <pre class="rs" data-check="ok">
+fn tags(names: &amp;[String]) -&gt; Vec&lt;String&gt; {
+    let mut out = Vec::new();
+    for name in names {
+        let key = name.to_string();        // a new heap copy on every pass
+        out.push(format!("user:{key}"));   // and another new String here
+    }
+    out
+}</pre>
+  <p><code>format!</code> can read <code>name</code> directly. Reading through a reference costs nothing extra, so <code>out.push(format!("user:{name}"));</code> leaves one allocation per item instead of two. Knowing what lives on the heap is how you spot this kind of cost in review.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="owner">Somebody has to give the shelf back</h2>
+
+<p>Every heap block has to be given back exactly once, at the right moment. Get the timing wrong, and it can fail in one of three ways.</p>
+
+<div class="ox-rules">
+  <div class="ox-rule"><div><p><strong>Too early.</strong></p><p>The block is freed while a pointer still points at it. That pointer now dangles, and reading through it reads memory that may already belong to something else.</p></div></div>
+  <div class="ox-rule"><div><p><strong>Twice.</strong></p><p>The block is freed a second time. The allocator's bookkeeping is damaged, and the next allocation can fail somewhere that has nothing to do with the line that caused it.</p></div></div>
+  <div class="ox-rule"><div><p><strong>Never.</strong></p><p>Nothing frees the block. That is a leak. A long-running program slowly fills up with memory it can no longer reach.</p></div></div>
+</div>
+
+<aside class="ox-callout" data-kind="trap">
+  <p>Freeing a block does not erase its bytes. The old contents often still look like perfectly good text, so a read through a dangling pointer can seem to work for a while and then fail far away from the cause. That is why these bugs are so hard to find.</p>
+</aside>
+
+<p>C leaves all three jobs to you. PHP and Java hand the job to a runtime that works out what is still in use. Rust gives the job to the compiler, through ownership: each heap value has exactly one owner, and the compiler inserts the free when that owner's scope ends. The rules that keep it to one owner are the subject of the next chapter.</p>
+
+<p>Before you move on, sort six things by where they live.</p>
+
+<div class="ox-match" data-id="05:match" data-left-label="Item" data-right-label="Where it lives">
+  <ul>
+    <li data-left="an i32 local">four bytes inside the function's frame</li>
+    <li data-left="the bytes of a String">the text, in a block behind the pointer</li>
+    <li data-left="a String's pointer, length and capacity">the three words in the String variable</li>
+    <li data-left="Box's target">the block the Box's pointer leads to</li>
+    <li data-left="a function's frame">a tray pushed on each call and popped on return</li>
+    <li data-left="Vec elements">the buffer the Vec's pointer leads to</li>
+  </ul>
+</div>
+
+<p>Next: <a href="../chapters/06-ownership.html">Chapter 06, One Owner</a>. It starts from the three ownership rules, and Chapter 07 builds directly on them.</p>
+</section>
+
+<section>
+<h2 id="quests">Forge quests</h2>
+<p>Reading builds recognition. The quests make you measure things yourself, and measuring is what makes the sizes stick.</p>
+<div class="ox-quests" data-chapter="5"></div>
+</section>
+
+<section>
+<h2 id="recap">Recap</h2>
+
+<div class="ox-recap">
+  <h3>Stack and heap</h3>
+  <ul>
+    <li>The <strong>stack</strong> holds one frame per call. Sizes are fixed at compile time, and making room means moving a pointer.</li>
+    <li>The <strong>heap</strong> holds data whose size is decided at runtime. You get a pointer back, and you must give the block back.</li>
+    <li>A <code>String</code> or <code>Vec</code> is three words on the stack (pointer, length, capacity: 24 bytes) with its contents on the heap.</li>
+    <li>Growing past the capacity makes the allocator move the bytes to a bigger block and free the old one. Pointers into the old block are no longer valid.</li>
+    <li>A <code>Box&lt;T&gt;</code> is one value on the heap, with one owner. Some types are smaller than you'd expect, because of niches, and some are larger, because of padding.</li>
+    <li>Every heap block needs exactly one owner that frees it once. That is the problem the next chapter solves.</li>
+  </ul>
+</div>
+
+<div class="ox-deck" data-chapter="5"></div>
+
+<details class="ox-think">
+  <summary>Explain it back: draw, in words, what <code>let s = String::from("hi");</code> puts on the stack and on the heap.</summary>
+  <div class="ox-think-body">
+    <p>One good answer: "The stack holds <code>s</code>: a pointer to the bytes, a length of 2 and a capacity of 2, 24 bytes in all. The heap holds one block of 2 bytes, <code>h</code> and <code>i</code>. The pointer leads to that block. Nothing else is allocated, and the block must be freed exactly once, when <code>s</code> goes out of scope."</p>
+    <p>If your version mentions three words on the stack, the text bytes on the heap, and a pointer between them, you've got it.</p>
+  </div>
+</details>
+
+<div class="ox-complete-host"></div>
+</section>
+
+</main>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  var root = document.getElementById("sizelab");
+  if (!root) return;
+
+  // Every size here was measured with size_of on 64-bit Linux, rustc 1.97.
+  var TYPES = [
+    { id: "i32", size: 4, parts: [["val", 4, "i32", "the value"]], heap: "", why: "Four bytes hold the whole value. Nothing else is needed, so nothing goes on the heap." },
+    { id: "u8", size: 1, parts: [["val", 1, "u8", "the value, 0 to 255"]], heap: "", why: "One byte holds 0 to 255." },
+    { id: "bool", size: 1, parts: [["val", 1, "bool", "0 or 1"]], heap: "", why: "One byte is enough, because a bool only needs to hold 0 or 1." },
+    { id: "char", size: 4, parts: [["val", 4, "char", "a Unicode code point"]], heap: "", why: "Always four bytes, because one char can hold any Unicode code point, and four bytes are enough for all of them." },
+    { id: "(i32, u8)", size: 8, parts: [["val", 4, "i32", "the i32, at offset 0"], ["val", 1, "u8", "the u8, at offset 4"], ["pad", 3, "pad", "unused, so the total is a multiple of 4"]], heap: "", why: "The fields add up to 5 bytes, but the i32 must start on a multiple of 4. Three bytes of padding make the total 8." },
+    { id: "[u8; 100]", size: 100, parts: [["val", 100, "u8", "100 u8 values, one after another"]], heap: "", why: "An array's size is its element size times its length, and that length is part of its type. Nothing goes on the heap." },
+    { id: "String", size: 24, parts: [["own", 8, "ptr", "pointer to the text on the heap"], ["len", 8, "len", "bytes in use"], ["cap", 8, "cap", "bytes the block can hold"]], heap: "the text bytes, any size", why: "Three words on the stack. The text is on the heap, so the length of the text never changes the size of the String." },
+    { id: "Vec<u8>", size: 24, parts: [["own", 8, "ptr", "pointer to the elements on the heap"], ["len", 8, "len", "elements in use"], ["cap", 8, "cap", "elements the buffer can hold"]], heap: "the elements, any size", why: "The same three words as a String. The elements are on the heap." },
+    { id: "&str", size: 16, parts: [["ref", 8, "ptr", "address of text owned elsewhere"], ["len", 8, "len", "bytes of text"]], heap: "", why: "A pointer and a length: a view onto text that lives somewhere else. Making a &str allocates nothing." },
+    { id: "&String", size: 8, parts: [["ref", 8, "ptr", "address of a String owned elsewhere"]], heap: "", why: "One pointer to a String. The 24 bytes of that String stay with their owner." },
+    { id: "Box<i32>", size: 8, parts: [["own", 8, "ptr", "pointer to the i32 on the heap"]], heap: "the i32, 4 bytes", why: "The Box is just a pointer. The i32 it points to is on the heap." },
+    { id: "Option<Box<i32>>", size: 8, parts: [["own", 8, "ptr", "pointer to the i32, or 0 for None"]], heap: "the i32, only when Some", why: "A Box is never null, so the null pointer can mean None. No separate tag is needed." },
+    { id: "Option<u32>", size: 8, parts: [["tag", 1, "tag", "Some or None"], ["pad", 3, "pad", "padding, so the u32 is aligned"], ["val", 4, "u32", "the number, when Some"]], heap: "", why: "Every u32 bit pattern is a real number, so None needs a tag. The u32 must start on a multiple of 4, which leaves 3 bytes unused." },
+    { id: "Option<u8>", size: 2, parts: [["tag", 1, "tag", "Some or None"], ["val", 1, "u8", "the number, when Some"]], heap: "", why: "Every u8 is a real number, so None needs its own tag byte. Neither part needs padding." },
+    { id: "()", size: 0, parts: [], heap: "", why: "The unit type carries no data, so it takes no bytes at all." }
+  ];
+
+  var chips = root.querySelector(".sl-chips");
+  var stage = root.querySelector(".sl-stage");
+  var guessOn = root.querySelector("#sl-guess");
+  var current = "String";
+  var results = {};
+
+  function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function find(id) {
+    for (var i = 0; i < TYPES.length; i++) { if (TYPES[i].id === id) return TYPES[i]; }
+    return TYPES[0];
+  }
+  function bytesWord(n) { return n === 1 ? "byte" : "bytes"; }
+
+  TYPES.forEach(function (t) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "sl-chip";
+    b.setAttribute("data-id", t.id);
+    b.setAttribute("aria-pressed", "false");
+    b.textContent = t.id;
+    b.addEventListener("click", function () { current = t.id; render(); });
+    chips.appendChild(b);
+  });
+
+  stage.addEventListener("submit", function (e) {
+    var form = e.target;
+    if (!form.classList || !form.classList.contains("sl-ask")) return;
+    e.preventDefault();
+    var t = find(current);
+    var input = form.querySelector(".sl-input");
+    var msg = form.querySelector(".sl-msg");
+    var raw = input.value.trim();
+    if (raw === "") {
+      msg.className = "sl-msg is-bad";
+      msg.textContent = "Type a number first. Zero is a valid guess.";
+      return;
+    }
+    var g = Number(raw);
+    var ok = g === t.size;
+    results[t.id] = { guess: g, ok: ok };
+    if (ok && window.Ox && Ox.award) Ox.award(3, "size guess", "size:" + t.id);
+    render();
+  });
+
+  guessOn.addEventListener("change", function () { render(); });
+
+  function cellsOf(t) {
+    var out = [], n = 0;
+    t.parts.forEach(function (p) {
+      for (var k = 0; k < p[1]; k++) {
+        out.push({ k: p[0], label: k === 0 ? p[2] : "", title: p[2] + ", byte " + n });
+        n++;
+      }
+    });
+    return out;
+  }
+
+  function render() {
+    var t = find(current);
+    Array.prototype.forEach.call(chips.children, function (b) {
+      b.setAttribute("aria-pressed", b.getAttribute("data-id") === t.id ? "true" : "false");
+    });
+    var r = results[t.id];
+    var html = "";
+
+    if (guessOn.checked && !r) {
+      html += '<form class="sl-ask" novalidate>' +
+        '<p>Guess first. How many bytes does <code>' + esc(t.id) + '</code> take on the stack?</p>' +
+        '<label>Your guess <input class="sl-input" type="number" min="0" max="999" step="1" inputmode="numeric"></label>' +
+        '<button type="submit" class="ox-btn is-primary is-small">Reveal</button>' +
+        '<p class="sl-msg" aria-live="polite"></p>' +
+        '</form>';
+      html += '<p class="sl-cap">The layout appears after you reveal.</p>';
+      html += '<div class="sl-grid" aria-hidden="true">' +
+        Array(8).fill('<span class="sl-c sl-k-none">?</span>').join("") +
+        '</div>';
+    } else {
+      html += '<div class="sl-size"><span class="sl-num">' + t.size + '</span><span>' + bytesWord(t.size) + ' on the stack</span></div>';
+      if (r) {
+        html += '<p class="sl-msg ' + (r.ok ? "is-ok" : "is-bad") + '">' +
+          (r.ok ? "Correct." : "You guessed " + esc(r.guess) + ".") +
+          " It is " + t.size + " " + bytesWord(t.size) + ".</p>";
+      }
+      var cells = cellsOf(t);
+      if (cells.length) {
+        html += '<p class="sl-cap">Each box is one byte, drawn to scale, 8 per row. Hatched boxes are padding.</p>';
+        html += '<div class="sl-grid">' + cells.map(function (c) {
+          return '<span class="sl-c sl-k-' + c.k + '" title="' + esc(c.title) + '">' + esc(c.label) + '</span>';
+        }).join("") + '</div>';
+        var at = 0;
+        html += '<ul class="sl-legend">' + t.parts.map(function (p) {
+          var from = at, to = at + p[1] - 1;
+          at += p[1];
+          var span = p[1] === 1 ? "byte " + from : "bytes " + from + " to " + to;
+          return '<li><span class="sl-sw sl-k-' + p[0] + '"></span><span><strong>' + esc(p[2]) + '</strong>, ' + span + ': ' + esc(p[3]) + '</span></li>';
+        }).join("") + '</ul>';
+      } else {
+        html += '<p class="sl-cap">No bytes at all.</p>';
+      }
+      html += t.heap
+        ? '<p class="sl-heap">+ heap: ' + esc(t.heap) + '</p>'
+        : '<p class="sl-cap">No heap part.</p>';
+      html += '<p class="sl-why">' + esc(t.why) + '</p>';
+    }
+    stage.innerHTML = html;
+  }
+
+  render();
+});
+</script>
+</body>
+</html>

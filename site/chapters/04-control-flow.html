@@ -1,0 +1,755 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Everything Is an Expression · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/quests-data.js" defer></script>
+<script src="../assets/cards/ch04.js" defer></script>
+<script src="../assets/scenarios/ch04.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+<script src="../assets/xray.js" defer></script>
+</head>
+<body data-chapter="4">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<div class="ox-page">
+<aside class="ox-rail" aria-label="Chapter contents"></aside>
+<main class="ox-main" id="main">
+
+<header class="ox-hero" data-auto>
+  <ul>
+    <li>Write functions with typed parameters and return values.</li>
+    <li>Predict the type of any block, and fix the semicolon that swallows a return value.</li>
+    <li>Use <code>if</code>, <code>match</code> and <code>loop</code> as expressions, and know why <code>while</code> and <code>for</code> never produce a value.</li>
+    <li>Break out of nested loops with labels.</li>
+  </ul>
+</header>
+
+<section>
+<h2 id="functions">Functions</h2>
+
+<p>A function is a named block of code with a signature. The signature lists the parameters, their types and the return type. It is a contract. The compiler checks every call against it, and it never has to read the body to do that.</p>
+
+<pre class="rs" data-run data-stdout="5">
+fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+fn main() {
+    let total = add(2, 3);
+    println!("{total}");
+}</pre>
+
+<p>Read the signature in order. <code>fn add</code> names the function. <code>a: i32</code> is a parameter called <code>a</code> of type <code>i32</code>, the 32-bit integer from Chapter 03. <code>-&gt; i32</code> is the return type. The body is one expression, <code>a + b</code>, with no semicolon, so its value is what <code>add</code> returns.</p>
+
+<p>Parameter types are mandatory. Rust does not work out a parameter's type from the calls. The signature has to be complete on its own, so the compiler can check every call without reading the body.</p>
+
+<p>Names are <code>snake_case</code>. The compiler accepts <code>addTwo</code>, but it warns that the function <code>addTwo</code> should have a snake case name. Laravel methods are camelCase, so that habit comes with you. Rename the function when the warning appears.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+function add(int $a, int $b): int {
+    return $a + $b;
+}</pre>
+  <pre class="rs">
+fn add(a: i32, b: i32) -> i32 {
+    a + b
+}</pre>
+  <div class="ox-bridge-note"><p>The shape is the same. PHP checks <code>int</code> at runtime, and in its default mode it converts a numeric string such as <code>"2"</code> into an integer for you. Rust checks types before the program runs and never turns a string into a number. PHP also needs <code>return</code>. Rust returns the last expression.</p></div>
+</div>
+
+<p>Step through this program. Each call pushes a frame, and the argument is copied into the parameter.</p>
+
+<div class="ox-xray ox-wide" data-scenario="fn-frames"></div>
+
+<div class="ox-quiz" data-id="04:fn-types" data-xp="10">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="error">
+fn double(n) -> i32 {
+    n * 2
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. The compiler works out the type of <code>n</code> from how <code>double</code> is called.</li>
+    <li data-correct>No. Every parameter in a signature needs a type.</li>
+    <li>No. A function with a return type must use <code>return</code>.</li>
+  </ol>
+  <div class="ox-why"><p>Rust does not infer parameter types from call sites, so the signature has to stand on its own. Write <code>n: i32</code> and the function compiles. Returning <code>n * 2</code> without <code>return</code> is fine too, because the last expression is the value.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="expressions">Statements and expressions</h2>
+
+<p>Code is made of two kinds of things. A <strong>statement</strong> does something and produces no value. An <strong>expression</strong> produces a value.</p>
+
+<div class="ox-rules">
+  <div class="ox-rule"><div><p>A <strong>statement</strong> does its work and gives nothing back.</p><p><code>let y = 4;</code> creates a binding. Nothing is left over that you could use.</p></div></div>
+  <div class="ox-rule"><div><p>An <strong>expression</strong> gives a value back.</p><p><code>x + 1</code> is 4 when <code>x</code> is 3. A function call, a literal and an <code>if</code> are expressions too.</p></div></div>
+</div>
+
+<p>A block, the code between <code>{</code> and <code>}</code>, is an expression. Its value is its last line, as long as that line has no semicolon.</p>
+
+<pre class="rs" data-run data-stdout="4">
+fn main() {
+    let y = {
+        let x = 3;
+        x + 1
+    };
+    println!("{y}");
+}</pre>
+
+<p>The braces create their own scope, so <code>x</code> exists only inside them. The last line, <code>x + 1</code>, has no semicolon. The block evaluates to 4, and <code>y</code> is bound to that 4.</p>
+
+<p>A function body is a block too. Its last expression is the return value, which is why most Rust functions never write <code>return</code>. Use <code>return</code> to leave early:</p>
+
+<pre class="rs" data-run data-stdout="negative\nzero or positive">
+fn describe(n: i32) -> &amp;'static str {
+    if n &lt; 0 {
+        return "negative";
+    }
+    "zero or positive"
+}
+
+fn main() {
+    println!("{}", describe(-2));
+    println!("{}", describe(5));
+}</pre>
+
+<p>The <code>if</code> on its own line is a statement. It has no <code>else</code> and is used only for its effect. You will meet <code>if</code> as an expression in a moment.</p>
+
+<div class="ox-quiz" data-id="04:block-unit" data-xp="10">
+  <p class="ox-q">What does this print?</p>
+  <pre class="rs" data-stdout="()">
+fn main() {
+    let z = { 5; };
+    println!("{:?}", z);
+}</pre>
+  <ol class="ox-choices">
+    <li>5</li>
+    <li data-correct><code>()</code></li>
+    <li>Nothing. It doesn't compile, because a block must end with an expression.</li>
+  </ol>
+  <div class="ox-why"><p>The block's last line is <code>5;</code>, a statement. A block that ends in a statement has no value to give back, so its type is <code>()</code>, the unit type. The program compiles and prints <code>()</code>.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="semicolon">The semicolon decides</h2>
+
+<p>Now the rule that trips up nearly everyone at first. Put a semicolon after the last expression of a function, and the function stops returning that value. Here is what the compiler says about a small example:</p>
+
+<pre class="rs" data-check="E0308">
+fn plus_one(x: i32) -> i32 {
+    x + 1;
+}</pre>
+
+<pre class="rustc">
+error[E0308]: mismatched types
+ --&gt; src/main.rs:1:24
+  |
+1 | fn plus_one(x: i32) -&gt; i32 {
+  |    --------            ^^^ expected `i32`, found `()`
+  |    |
+  |    implicitly returns `()` as its body has no tail or `return` expression
+2 |     x + 1;
+  |          - help: remove this semicolon to return this value
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0308`.
+</pre>
+
+<p>Read it from the top. The error is <code>mismatched types</code>. The arrow under the return type says the function expects <code>i32</code>, but the body has type <code>()</code>, the unit type. The note on line 1 gives the reason: the body has no <strong>tail expression</strong>, which is Rust's name for a block's last expression, and it has no <code>return</code>. The help on line 2 is the fix.</p>
+
+<p>The Semicolon Switch below is the same function, with a toggle at the end of the line. Flip it, and watch the type of the block change. The second tab does the same job for an <code>if</code>.</p>
+
+<style>
+#semiswitch .semi-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin-bottom: 14px; }
+#semiswitch .semi-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+#semiswitch .semi-tabs button { min-height: 36px; padding: 6px 12px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 600 0.92rem/1.2 var(--font-body); cursor: pointer; }
+#semiswitch .semi-tabs button:hover { border-color: var(--ink-2); }
+#semiswitch .semi-tabs button[aria-selected="true"] { background: var(--oxide); border-color: var(--oxide); color: #fff; }
+#semiswitch .semi-tabs button:focus-visible { outline: 2px solid var(--oxide); outline-offset: 2px; }
+#semiswitch .semi-body { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+#semiswitch .semi-code { background: var(--code-bg); color: var(--code-ink); border-radius: var(--radius); padding: 12px 0; overflow-x: auto; font: 400 0.92rem/1.6 var(--font-mono); }
+#semiswitch .semi-line { display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 0 16px; white-space: pre; }
+#semiswitch .semi-no { flex: none; width: 1.4em; text-align: right; color: var(--code-dim); user-select: none; }
+#semiswitch .semi-src { flex: none; font: inherit; background: none; color: inherit; padding: 0; }
+#semiswitch .semi-toggle { flex: none; min-height: 36px; padding: 6px 12px; border-radius: 5px; border: 1px dashed var(--code-dim); background: transparent; color: var(--code-ink); font: 600 0.82rem/1 var(--font-mono); cursor: pointer; }
+#semiswitch .semi-toggle:hover { border-style: solid; border-color: var(--c-kw); color: var(--c-kw); }
+#semiswitch .semi-toggle.is-on { background: var(--oxide); border: 1px solid var(--oxide); color: #fff; }
+#semiswitch .semi-toggle:focus-visible { outline: 2px solid var(--c-ty); outline-offset: 2px; }
+#semiswitch .semi-panel { min-width: 0; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+#semiswitch .semi-head { margin: 0 0 8px; font: 700 1.05rem/1.35 var(--font-body); color: var(--ink); }
+#semiswitch .semi-head.is-ok { color: var(--ok); }
+#semiswitch .semi-head.is-bad { color: var(--bad); }
+#semiswitch .semi-head span { font-weight: 600; }
+#semiswitch .semi-say { margin: 0; color: var(--ink-2); font-size: 0.95rem; }
+#semiswitch .semi-out-wrap { margin-top: 12px; }
+#semiswitch .semi-out { margin: 6px 0 0; padding: 12px 14px; background: var(--code-bg); color: var(--code-ink); border-radius: var(--radius); font: 400 0.8rem/1.5 var(--font-mono); white-space: pre; overflow-x: auto; max-height: 360px; }
+#semiswitch .semi-hint { margin: 12px 0 0; font-size: 0.88rem; color: var(--muted); }
+@media (max-width: 720px) { #semiswitch .semi-body { grid-template-columns: minmax(0, 1fr); } }
+</style>
+
+<div class="ox-figure ox-wide" id="semiswitch">
+  <div class="semi-top">
+    <span class="ox-label">Semicolon Switch</span>
+    <div class="semi-tabs" role="tablist" aria-label="Choose an example">
+      <button type="button" role="tab" data-ex="fn" aria-selected="true" tabindex="0">Function return</button>
+      <button type="button" role="tab" data-ex="if" aria-selected="false" tabindex="-1">if / else value</button>
+    </div>
+  </div>
+  <div class="semi-body">
+    <div class="semi-code" role="group" aria-label="Program"></div>
+    <div class="semi-panel" aria-live="polite"></div>
+  </div>
+  <p class="semi-hint">Use the buttons at the end of the lines. Watch the type in the panel change, then read what the compiler says.</p>
+  <noscript><p>The Semicolon Switch needs JavaScript. The compiler output for both examples is shown in the text around it.</p></noscript>
+</div>
+
+<p>The rule underneath both examples is short. A line with a semicolon is a statement. A last line without one is the block's value. The rest of this chapter applies that rule to <code>if</code>, <code>match</code> and <code>loop</code>.</p>
+
+<div class="ox-quiz" data-id="04:semi" data-xp="10">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0308">
+fn double(x: i32) -> i32 {
+    x * 2;
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. The semicolon is only a style choice.</li>
+    <li data-correct>No. The body ends in a statement, so the function returns <code>()</code> where it promised <code>i32</code>. This is E0308.</li>
+    <li>No. Functions can't multiply without a <code>return</code>.</li>
+  </ol>
+  <div class="ox-why"><p><code>x * 2;</code> is a statement, so the body's value is <code>()</code>, which does not match <code>i32</code>. Delete the semicolon and <code>double</code> returns <code>x * 2</code>.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="if">if is an expression</h2>
+
+<p>Rust has no ternary operator. The <code>if</code> does that job, because it produces a value:</p>
+
+<pre class="rs" data-run data-stdout="7 is odd">
+fn main() {
+    let n = 7;
+    let label = if n % 2 == 0 { "even" } else { "odd" };
+    println!("{n} is {label}");
+}</pre>
+
+<div class="ox-bridge">
+  <pre class="php">
+function label(int $n): string {
+    return $n % 2 === 0 ? 'even' : 'odd';
+}</pre>
+  <pre class="rs">
+fn label(n: i32) -> &amp;'static str {
+    if n % 2 == 0 { "even" } else { "odd" }
+}</pre>
+  <div class="ox-bridge-note"><p>The ternary becomes an <code>if</code> with a block for each branch. The difference is in the condition. PHP treats most values as true or false, so <code>if ($items)</code> works on an array. Rust has no such rule, and the condition must be a <code>bool</code>.</p></div>
+</div>
+
+<p>Both branches have to produce the same type, because <code>label</code> can have only one. Here the compiler rejects an integer in one branch:</p>
+
+<pre class="rs" data-check="E0308">
+fn main() {
+    let n = 4;
+    let label = if n % 2 == 0 { "even" } else { 0 };
+    println!("{label}");
+}</pre>
+
+<pre class="rustc">
+error[E0308]: `if` and `else` have incompatible types
+ --&gt; src/main.rs:3:49
+  |
+3 |     let label = if n % 2 == 0 { "even" } else { 0 };
+  |                                 ------          ^ expected `&amp;str`, found integer
+  |                                 |
+  |                                 expected because of this
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0308`.
+</pre>
+
+<p>The condition follows the same strictness. It must be a <code>bool</code>. An integer is not a yes or a no, so there is no truthiness to fall back on. This is the Chapter 03 rule about types, applied to control flow.</p>
+
+<aside class="ox-callout" data-kind="php">
+  <p>In PHP, <code>if ('0')</code> is false and <code>if ('00')</code> is true. Those rules are worth knowing, but Rust doesn't have them. If a condition is not a <code>bool</code>, the program does not compile.</p>
+</aside>
+
+<div class="ox-quiz" data-id="04:if-bool" data-xp="10">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0308">
+fn main() {
+    let n = 4;
+    if n {
+        println!("truthy");
+    }
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. Like PHP, any non-zero number counts as true.</li>
+    <li data-correct>No. An <code>if</code> needs a <code>bool</code>, and <code>n</code> is an integer.</li>
+    <li>Yes. The compiler converts integers to <code>bool</code> inside an <code>if</code>.</li>
+  </ol>
+  <div class="ox-why"><p>Write <code>if n != 0</code> instead. That compiles and prints <code>truthy</code>, because the comparison produces a <code>bool</code>. The compiler will not make that conversion for you.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="match-preview">A first look at match</h2>
+
+<p><code>match</code> compares a value against a list of arms. Each arm is a pattern, <code>=&gt;</code>, and the value it produces. The arms are tried from top to bottom, the first one that fits wins, and <code>_</code> fits anything, so it goes last.</p>
+
+<pre class="rs" data-run data-stdout="0: zero\n2: small\n7: medium\n42: big">
+fn size(n: u32) -> &amp;'static str {
+    match n {
+        0 => "zero",
+        1 | 2 => "small",
+        3..=9 => "medium",
+        _ => "big",
+    }
+}
+
+fn main() {
+    for n in [0, 2, 7, 42] {
+        println!("{n}: {}", size(n));
+    }
+}</pre>
+
+<p>Patterns get a full chapter later. For now, notice two things. Every arm must produce the same type. And the arms must cover every value that <code>n</code> can hold. Delete the <code>_</code> line and the program stops compiling, because nothing covers 10 and up.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+$label = match (true) {
+    $n === 0 =&gt; 'zero',
+    $n &gt;= 1 &amp;&amp; $n &lt;= 9 =&gt; 'small',
+};
+// 42 matches no arm, so PHP throws
+// UnhandledMatchError at runtime.</pre>
+  <pre class="rs">
+fn label(n: i32) -> &amp;'static str {
+    match n {
+        0 => "zero",
+        1..=9 => "small",
+        _ => "big",
+    }
+}</pre>
+  <div class="ox-bridge-note"><p>PHP 8's <code>match</code> is an expression too, and it also tries arms from top to bottom. The difference is when you find a gap. PHP finds it while the program runs, on the first value nobody covered. Rust finds it at compile time, so a program with the gap never runs.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="04:match-exhaustive" data-xp="10">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0004">
+fn main() {
+    let ready = true;
+    let text = match ready {
+        true => "go",
+    };
+    println!("{text}");
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. A match with one arm is always fine.</li>
+    <li data-correct>No. <code>false</code> is not covered. A match must handle every value of its type.</li>
+    <li>Yes, because only <code>true</code> can reach that line at runtime.</li>
+  </ol>
+  <div class="ox-why"><p>The compiler knows a <code>bool</code> has exactly two values, and it checks both. Add <code>false =&gt; "stop",</code> and it compiles. With integers, you need the <code>_</code> arm, because there are too many values to list.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="loops">loop, while, for</h2>
+
+<p>Rust has three loops, and each answers a different question. <code>loop</code> runs until you <code>break</code>. <code>while</code> runs as long as a condition holds. <code>for</code> walks through the items that something produces, such as a range. Most of your loops will be <code>for</code>.</p>
+
+<h3>loop can return a value</h3>
+
+<p><code>loop</code> is the only loop that produces a value. A <code>break</code> can carry one, and the whole <code>loop</code> evaluates to it. This retry counter stops on the third attempt:</p>
+
+<pre class="rs" data-run data-stdout="worked on attempt 3">
+fn main() {
+    let mut attempt = 0;
+    let succeeded_on = loop {
+        attempt += 1;
+        // pretend the third call is the first one that works
+        if attempt == 3 {
+            break attempt;
+        }
+    };
+    println!("worked on attempt {succeeded_on}");
+}</pre>
+
+<div class="ox-quiz" data-id="04:loop-value" data-xp="10">
+  <p class="ox-q">What does this print?</p>
+  <pre class="rs" data-stdout="24">
+fn main() {
+    let mut counter = 0;
+    let doubled = loop {
+        counter += 3;
+        if counter &gt; 10 {
+            break counter * 2;
+        }
+    };
+    println!("{doubled}");
+}</pre>
+  <ol class="ox-choices">
+    <li data-feedback="Close. That is counter, but the break gives counter * 2.">12</li>
+    <li data-correct>24</li>
+    <li>It won't compile. A loop can't produce a value.</li>
+  </ol>
+  <div class="ox-why"><p><code>counter</code> goes 3, 6, 9, 12. The first time it is greater than 10 is at 12, so the loop breaks with 12 × 2, which is 24.</p></div>
+</div>
+
+<h3>while checks before every pass</h3>
+
+<p><code>while</code> tests its condition before each pass, and it stops when the condition is false. It has no value. Only <code>loop</code> accepts a <code>break</code> with a value. Inside <code>while</code> or <code>for</code>, the compiler reports E0571.</p>
+
+<pre class="rs" data-run data-stdout="fuel 3\nfuel 2\nfuel 1\nempty">
+fn main() {
+    let mut fuel = 3;
+    while fuel &gt; 0 {
+        println!("fuel {fuel}");
+        fuel -= 1;
+    }
+    println!("empty");
+}</pre>
+
+<h3>for walks a range</h3>
+
+<p>A range is written <code>start..end</code>. The end is excluded, so <code>0..5</code> yields 0 to 4. Write <code>..=</code> to include the end. A range can be reversed with <code>.rev()</code> or stepped with <code>.step_by(3)</code>, and a plain array can be looped directly. Read the code and predict the output before you run it. Chapter 13 explains the iterator machinery behind these calls.</p>
+
+<pre class="rs" data-run data-stdout="0..5   : 0 1 2 3 4\n0..=5  : 0 1 2 3 4 5\nrev    : 9 8 7 6 5 4 3 2 1 0\nstep 3 : 0 3 6 9\narray  : 10 20 30">
+fn main() {
+    print!("0..5   :");
+    for i in 0..5 { print!(" {i}"); }
+    println!();
+    print!("0..=5  :");
+    for i in 0..=5 { print!(" {i}"); }
+    println!();
+    print!("rev    :");
+    for i in (0..10).rev() { print!(" {i}"); }
+    println!();
+    print!("step 3 :");
+    for i in (0..10).step_by(3) { print!(" {i}"); }
+    println!();
+    print!("array  :");
+    for x in [10, 20, 30] { print!(" {x}"); }
+    println!();
+}</pre>
+
+<div class="ox-bridge">
+  <pre class="php">
+for ($i = 0; $i &lt; 5; $i++) { echo $i; }
+foreach ([10, 20, 30] as $x) { echo $x; }</pre>
+  <pre class="rs">
+for i in 0..5 { print!("{i}"); }
+for x in [10, 20, 30] { print!("{x}"); }</pre>
+  <div class="ox-bridge-note"><p>A PHP <code>for</code> is three pieces you write by hand: the start, the test and the step. A Rust range is one piece, and the end is excluded in the syntax itself. <code>foreach</code> and <code>for x in</code> do the same job.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="04:range" data-xp="10">
+  <p class="ox-q">How many times does <code>for i in 1..5</code> run?</p>
+  <pre class="rs" data-stdout="1\n2\n3\n4">
+fn main() {
+    for i in 1..5 {
+        println!("{i}");
+    }
+}</pre>
+  <ol class="ox-choices">
+    <li>5. It runs from 1 through 5.</li>
+    <li data-correct>4. The loop runs for 1, 2, 3 and 4.</li>
+    <li data-feedback="That would be 2..5, which starts at 2.">3</li>
+  </ol>
+  <div class="ox-why"><p>The end, 5, is excluded. Write <code>1..=5</code> to include it, and the loop runs five times.</p></div>
+</div>
+
+<h3>Labels break the right loop</h3>
+
+<p>A plain <code>break</code> leaves only the innermost loop. To leave an outer loop from inside an inner one, give the outer loop a label. Labels begin with an apostrophe and end with a colon. This search stops the whole grid at the first hit:</p>
+
+<pre class="rs" data-run data-stdout="found 9 at (1, 1) after 5 checks">
+fn main() {
+    let grid = [[1, 4, 7], [2, 9, 5], [3, 6, 8]];
+    let target = 9;
+    let mut checks = 0;
+
+    'rows: for row in 0..3 {
+        for col in 0..3 {
+            checks += 1;
+            if grid[row][col] == target {
+                println!("found {target} at ({row}, {col}) after {checks} checks");
+                break 'rows;
+            }
+        }
+    }
+}</pre>
+
+<p>Without the label, the <code>break</code> would end only the inner loop, and the search would carry on into the next row. The label says which loop you mean.</p>
+
+<aside class="ox-callout" data-kind="php">
+  <p>PHP's <code>break 2;</code> counts levels. It works until someone adds a loop between the two, and then the number quietly points at the wrong loop. A Rust label names its loop, so <code>break 'rows;</code> keeps meaning the same thing after a refactor.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="practice">Practice</h2>
+
+<p>Two exercises before the wrap-up. Fill in the blank first, then put the steps of a block in order.</p>
+
+<div class="ox-fill" data-id="04:fill-fn">
+  <p class="ox-q">Fill in the return type so that <code>max</code> returns the larger of its two arguments.</p>
+  <pre class="rs" data-stdout="7">
+fn max(a: i32, b: i32) [[-&gt; i32|-&gt;i32]] {
+    if a &gt; b { a } else { b }
+}
+
+fn main() {
+    println!("{}", max(3, 7));
+}</pre>
+  <div class="ox-why"><p>Without <code>-&gt; i32</code>, the function returns <code>()</code>. The <code>if</code> is the tail expression, and it produces an <code>i32</code>, so the compiler reports E0308 and suggests adding <code>-&gt; i32</code>. There is no <code>return</code> and no semicolon. The value of the last line is the answer.</p></div>
+</div>
+
+<p>Put the steps for <code>let y = { let x = 3; x + 1 };</code> in the order they happen.</p>
+
+<div class="ox-order" data-id="04:order" data-label="Put these steps in order">
+  <ol>
+    <li>Create <code>x</code> with the value 3.</li>
+    <li>Evaluate <code>x + 1</code>, which gives 4.</li>
+    <li>The block ends, and <code>x</code> goes out of scope.</li>
+    <li>The block's value, 4, is bound to <code>y</code>.</li>
+  </ol>
+  <div class="ox-why"><p>The last expression is evaluated before the block ends. The closing brace ends <code>x</code>'s scope, and only then does the block's value become <code>y</code>. Nothing inside the block outlives it, except the value it produced.</p></div>
+</div>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Agents that learned in other languages often write <code>return x;</code> at the end of every function, or add a stray semicolon after the last expression. The first one compiles, but clippy's <code>needless_return</code> lint flags it, and idiomatic Rust ends with the expression. The second one is a compile error, E0308, which the compiler catches for you.</p>
+  <p>When you review agent-written Rust, look at the last line of each function. It should be an expression with no semicolon.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="act1">Act I wrap-up</h2>
+
+<p>That closes Act I. Here is what the first four chapters gave you:</p>
+
+<ul>
+  <li><strong>Chapter 01.</strong> Cargo builds and runs your program. Rust compiles ahead of time, to machine code.</li>
+  <li><strong>Chapter 02.</strong> A binding is immutable unless you write <code>mut</code>. Shadowing makes a new binding with the same name.</li>
+  <li><strong>Chapter 03.</strong> Every value has exactly one type, fixed at compile time. <code>bool</code>, <code>char</code>, integers and tuples are the building blocks.</li>
+  <li><strong>Chapter 04.</strong> Blocks, <code>if</code>, <code>match</code> and <code>loop</code> produce values. The semicolon decides whether a value leaves a block.</li>
+  <li><strong>Chapter 04.</strong> <code>for</code> over a range is the default loop, and a label lets <code>break</code> leave the right loop.</li>
+</ul>
+
+<p>Your Act I boss is <strong>Print a receipt</strong>. It needs functions, expressions, <code>match</code> and loops together. You will find it in the Forge quests below.</p>
+
+<p>Act II is about memory. Chapter 05 shows where values live, on the stack or on the heap. Chapter 06 covers ownership, the rules that let Rust free memory without a garbage collector. Chapter 07 covers borrowing, and <a href="../labs/borrow-checker.html">Be the Borrow Checker</a> turns those rules into a game.</p>
+
+<p>Before you go on, one check from Chapter 02, now meeting a loop. Does this compile?</p>
+
+<div class="ox-quiz" data-id="04:interleave" data-xp="10">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0384">
+fn main() {
+    let total = 0;
+    for i in 1..4 {
+        total += i;
+    }
+    println!("{total}");
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. <code>+=</code> is allowed on an immutable binding.</li>
+    <li data-correct>No. <code>total</code> is not <code>mut</code>, so it can't be assigned again. This is E0384.</li>
+    <li>Yes, but it prints 0, because the loop never changes <code>total</code>.</li>
+  </ol>
+  <div class="ox-why"><p>A <code>let</code> binding is immutable unless you write <code>mut</code>. <code>total += i</code> assigns to it on every pass, so it needs <code>let mut total = 0;</code>. The compiler suggests exactly that.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="quests">Forge quests</h2>
+<p>Reading builds recognition. Writing code builds the skill. These quests run locally against the real compiler.</p>
+<div class="ox-quests" data-chapter="4"></div>
+</section>
+
+<section>
+<h2 id="recap">Recap</h2>
+
+<div class="ox-recap">
+  <h3>Blocks produce values</h3>
+  <ul>
+    <li>A block's value is its last expression. Without a semicolon, the last line is the value. With one, the block ends in a statement and its type is <code>()</code>.</li>
+    <li>A function returns its tail expression. Use <code>return</code> only to leave early.</li>
+    <li><code>if</code> is an expression when its branches have the same type. The condition is always a <code>bool</code>.</li>
+    <li><code>match</code> must cover every value. <code>_</code> covers the rest.</li>
+    <li><code>loop</code> can <code>break</code> with a value. <code>while</code> and <code>for</code> always have type <code>()</code>.</li>
+    <li><code>a..b</code> excludes <code>b</code>, and <code>a..=b</code> includes it. A label such as <code>'outer</code> lets <code>break</code> leave an outer loop.</li>
+  </ul>
+</div>
+
+<div class="ox-deck" data-chapter="4"></div>
+
+<details class="ox-think">
+  <summary>Explain it back: why can one extra semicolon break a function's return value?</summary>
+  <div class="ox-think-body">
+    <p>One good answer: "A function returns its body's last expression, the one with no semicolon. Add a semicolon and that line becomes a statement, so the body ends with nothing, and its type is <code>()</code>. The signature promised <code>i32</code>, so the compiler reports a type mismatch. Remove the semicolon, and the value comes back."</p>
+    <p>If your version mentioned the tail expression, the statement, and the unit type <code>()</code>, you've got it.</p>
+  </div>
+</details>
+
+<div class="ox-complete-host"></div>
+</section>
+
+</main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var root = document.getElementById("semiswitch");
+  if (!root) return;
+
+  /* Compiler output below is real: rustc 1.97.0, edition 2024, generated from
+     the exact code shown. Line numbers match the lines on screen. */
+  var EX = {
+    fn: {
+      lines: [
+        { text: "fn plus_one(x: i32) -> i32 {" },
+        { text: "    x + 1", toggle: 0 },
+        { text: "}" }
+      ],
+      states: {
+        "0": { ok: true, type: "i32", mark: "✓ compiles", say: "The last line has no semicolon, so it is the value of the block. The function returns that value.", out: null },
+        "1": { ok: false, type: "()", mark: "✗ E0308", say: "The <code>;</code> turns <code>x + 1</code> into a statement. The block now ends with nothing, so its type is <code>()</code>. The signature promises <code>i32</code>, so the compiler refuses.", out: "error[E0308]: mismatched types\n --> src/main.rs:1:24\n  |\n1 | fn plus_one(x: i32) -> i32 {\n  |    --------            ^^^ expected `i32`, found `()`\n  |    |\n  |    implicitly returns `()` as its body has no tail or `return` expression\n2 |     x + 1;\n  |          - help: remove this semicolon to return this value\n\nerror: aborting due to 1 previous error\n\nFor more information about this error, try `rustc --explain E0308`." }
+      }
+    },
+    "if": {
+      lines: [
+        { text: "fn main() {" },
+        { text: "    let score = 72;" },
+        { text: "    let label = if score > 50 {" },
+        { text: "        \"pass\"", toggle: 0 },
+        { text: "    } else {" },
+        { text: "        \"fail\"", toggle: 1 },
+        { text: "    };" },
+        { text: "    println!(\"{label}\");" },
+        { text: "}" }
+      ],
+      states: {
+        "00": { ok: true, type: "&amp;str", mark: "✓ compiles", say: "Both arms produce a <code>&amp;str</code>, so the <code>if</code> produces one too, and <code>label</code> gets it. The program prints the arm it picked.", out: "pass" },
+        "10": { ok: false, label: "Arms disagree", type: "() and &amp;str", mark: "✗ E0308", say: "The <code>;</code> after <code>\"pass\"</code> makes the first arm a statement, so that arm has type <code>()</code>. The second arm still gives a string, and both arms must match.", out: "error[E0308]: `if` and `else` have incompatible types\n --> src/main.rs:6:9\n  |\n3 |       let label = if score > 50 {\n  |  _________________-\n4 | |         \"pass\";\n  | |         -------\n  | |         |     |\n  | |         |     help: consider removing this semicolon\n  | |         expected because of this\n5 | |     } else {\n6 | |         \"fail\"\n  | |         ^^^^^^ expected `()`, found `&str`\n7 | |     };\n  | |_____- `if` and `else` have incompatible types\n\nerror: aborting due to 1 previous error\n\nFor more information about this error, try `rustc --explain E0308`." },
+        "01": { ok: false, label: "Arms disagree", type: "&amp;str and ()", mark: "✗ E0308", say: "Now the <code>else</code> arm is the statement. It is the same problem in the other direction.", out: "error[E0308]: `if` and `else` have incompatible types\n --> src/main.rs:6:9\n  |\n3 |       let label = if score > 50 {\n  |  _________________-\n4 | |         \"pass\"\n  | |         ------ expected because of this\n5 | |     } else {\n6 | |         \"fail\";\n  | |         ^^^^^^-\n  | |         |     |\n  | |         |     help: consider removing this semicolon\n  | |         expected `&str`, found `()`\n7 | |     };\n  | |_____- `if` and `else` have incompatible types\n\nerror: aborting due to 1 previous error\n\nFor more information about this error, try `rustc --explain E0308`." },
+        "11": { ok: false, type: "()", mark: "✗ E0277", say: "Both arms are statements, so the <code>if</code> compiles and <code>label</code> is <code>()</code>. The error moves to <code>println!</code>, which cannot print <code>()</code>.", out: "error[E0277]: `()` doesn't implement `std::fmt::Display`\n --> src/main.rs:8:15\n  |\n8 |     println!(\"{label}\");\n  |               ^^^^^^^ `()` cannot be formatted with the default formatter\n  |\n  = help: the trait `std::fmt::Display` is not implemented for `()`\n  = note: in format strings you may be able to use `{:?}` (or {:#?} for pretty-print) instead\n\nerror: aborting due to 1 previous error\n\nFor more information about this error, try `rustc --explain E0277`." }
+      }
+    }
+  };
+
+  var codeBox = root.querySelector(".semi-code");
+  var panel = root.querySelector(".semi-panel");
+  var tabs = Array.prototype.slice.call(root.querySelectorAll("[data-ex]"));
+  var cur = "fn";
+  var on = { fn: [false], "if": [false, false] };
+  var seen = {};
+
+  function hl(text, lang) {
+    if (window.Ox && typeof Ox.highlight === "function") return Ox.highlight(text, lang);
+    return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function keyOf(ex) {
+    return on[ex].map(function (b) { return b ? "1" : "0"; }).join("");
+  }
+
+  function renderCode() {
+    var ex = EX[cur], flags = on[cur], html = "";
+    ex.lines.forEach(function (ln, i) {
+      var n = i + 1, text = ln.text, btn = "";
+      if (ln.toggle !== undefined) {
+        var v = flags[ln.toggle];
+        if (v) text += ";";
+        btn = '<button type="button" class="semi-toggle' + (v ? " is-on" : "") + '" data-t="' + ln.toggle +
+          '" aria-label="' + (v ? "Remove" : "Add") + " the semicolon at the end of line " + n + '">' +
+          (v ? "remove ;" : "add ;") + "</button>";
+      }
+      html += '<div class="semi-line"><span class="semi-no" aria-hidden="true">' + n + '</span><code class="semi-src">' +
+        hl(text, "rust") + "</code>" + btn + "</div>";
+    });
+    codeBox.innerHTML = html;
+  }
+
+  function note(ex, ok) {
+    var r = seen[ex] || (seen[ex] = { ok: false, bad: false, done: false });
+    if (ok) r.ok = true; else r.bad = true;
+    if (r.ok && r.bad && !r.done) {
+      r.done = true;
+      if (window.Ox && typeof Ox.award === "function") Ox.award(10, "Semicolon Switch explored", "semiswitch:" + ex);
+    }
+  }
+
+  function renderPanel() {
+    var s = EX[cur].states[keyOf(cur)];
+    var head = (s.label || "Block type") + ": " + s.type + " <span>" + s.mark + "</span>";
+    panel.innerHTML = '<p class="semi-head ' + (s.ok ? "is-ok" : "is-bad") + '">' + head + "</p>" +
+      '<p class="semi-say">' + s.say + "</p>";
+    if (s.out !== null) {
+      var wrap = document.createElement("div");
+      wrap.className = "semi-out-wrap";
+      var lab = document.createElement("span");
+      lab.className = "ox-label";
+      lab.textContent = s.ok ? "prints" : "compiler says";
+      var pre = document.createElement("pre");
+      pre.className = "semi-out";
+      pre.innerHTML = hl(s.out, s.ok ? "text" : "rustc");
+      wrap.appendChild(lab);
+      wrap.appendChild(pre);
+      panel.appendChild(wrap);
+    }
+    note(cur, s.ok);
+  }
+
+  function renderAll() { renderCode(); renderPanel(); }
+
+  function select(ex) {
+    cur = ex;
+    tabs.forEach(function (t) {
+      var sel = t.getAttribute("data-ex") === ex;
+      t.setAttribute("aria-selected", sel ? "true" : "false");
+      t.tabIndex = sel ? 0 : -1;
+    });
+    renderAll();
+  }
+
+  codeBox.addEventListener("click", function (e) {
+    var b = e.target.closest ? e.target.closest(".semi-toggle") : null;
+    if (!b) return;
+    var t = +b.getAttribute("data-t");
+    on[cur][t] = !on[cur][t];
+    renderAll();
+    var again = codeBox.querySelector('.semi-toggle[data-t="' + t + '"]');
+    if (again) again.focus();
+  });
+
+  tabs.forEach(function (t, i) {
+    t.addEventListener("click", function () { select(t.getAttribute("data-ex")); });
+    t.addEventListener("keydown", function (e) {
+      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+      e.preventDefault();
+      var j = (i + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length;
+      tabs[j].focus();
+      select(tabs[j].getAttribute("data-ex"));
+    });
+  });
+
+  function init() { select("fn"); }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
+</script>
+</body>
+</html>

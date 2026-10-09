@@ -1,0 +1,13 @@
+/* Recall cards — Chapter 04: Everything Is an Expression */
+(window.OX_CARDS = window.OX_CARDS || []).push(
+  { id: "c04-stmt-expr", ch: 4, q: "What is the difference between a statement and an expression?", a: "A **statement** does something and produces no value, like `let y = 4;`.\n\nAn **expression** produces a value, like `x + 1`. Adding a `;` to an expression turns it into a statement." },
+  { id: "c04-block", ch: 4, q: "What value does a block `{ ... }` produce?", a: "The value of its **last line**, if that line is an expression with no semicolon.\n\nIf the last line is a statement, the block produces `()`." },
+  { id: "c04-implicit", ch: 4, q: "How does a function return a value without writing `return`?", a: "Its body is a block, so its **last expression** (the line with no semicolon) is the return value.\n\n`return` is for leaving early." },
+  { id: "c04-semi", ch: 4, q: "What does a `;` at the end of a function's last line do?", a: "It turns that expression into a statement. The body then produces `()`.\n\nIf the signature promised a type such as `i32`, the compiler reports **E0308**." },
+  { id: "c04-if", ch: 4, q: "When can `if` be used as a value, and what must be true of its branches?", a: "When its result is used, as in `let x = if c { a } else { b };`.\n\nBoth branches must produce the **same type**, and the condition must be a `bool`." },
+  { id: "c04-ternary", ch: 4, q: "Rust has no ternary operator. What do you write instead of PHP's `$n ? 'a' : 'b'`?", a: "An `if` expression: `if n { \"a\" } else { \"b\" }`.\n\nBoth branches need the same type, and `n` must be a `bool`." },
+  { id: "c04-loopval", ch: 4, q: "Which loops can `break` with a value, and what does the loop evaluate to?", a: "Only `loop`. `break value;` makes the whole `loop` evaluate to `value`.\n\n`while` and `for` always have type `()`." },
+  { id: "c04-range", ch: 4, q: "How many values does `1..5` yield, and which ones?", a: "Four: 1, 2, 3 and 4. The end is excluded.\n\n`1..=5` yields 1 to 5, because the end is included." },
+  { id: "c04-label", ch: 4, q: "How do you leave an outer loop from inside an inner loop?", a: "Give the outer loop a label, such as `'outer: for ...`, and write `break 'outer;`.\n\nA plain `break` leaves only the innermost loop." },
+  { id: "c04-match", ch: 4, q: "Must a `match` cover every possible value?", a: "Yes. A `match` must be **exhaustive**, or the compiler reports **E0004**.\n\nUse `_` as the last arm to catch everything else." }
+);

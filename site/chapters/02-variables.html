@@ -1,0 +1,659 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Variables Are Promises · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/quests-data.js" defer></script>
+<script src="../assets/cards/ch02.js" defer></script>
+<script src="../assets/scenarios/ch02.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+<script src="../assets/xray.js" defer></script>
+</head>
+<body data-chapter="2">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<div class="ox-page">
+<aside class="ox-rail" aria-label="Chapter contents"></aside>
+<main class="ox-main" id="main">
+
+<header class="ox-hero" data-auto>
+  <ul>
+    <li>Declare variables with <code>let</code>, and say why they are immutable by default.</li>
+    <li>Choose between <code>mut</code> and shadowing, and explain how they differ.</li>
+    <li>Use <code>const</code> for compile-time constants, and follow its rules.</li>
+    <li>Read E0384 and E0381 and fix both.</li>
+  </ul>
+</header>
+
+<section>
+<h2 id="let"><code>let</code> makes a promise</h2>
+
+<p>In PHP a variable is a name you can refill on any line. Assign it, reassign it, and nothing complains. Rust starts from the other end. A name made with <code>let</code> keeps the value it was given, and the compiler checks every later line against that promise.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+$x = 5;
+echo $x;      // 5
+$x = 6;
+echo $x;      // 6</pre>
+  <pre class="rs" data-check="E0384">
+fn main() {
+    let x = 5;
+    println!("{x}");
+    x = 6;
+    println!("{x}");
+}</pre>
+  <div class="ox-bridge-note"><p>The PHP version runs as written. The Rust version fails on the second assignment. Line 2 made a promise, and line 4 breaks it.</p></div>
+</div>
+
+<details class="ox-think">
+  <summary><span>Before you read the compiler's answer: which line does rustc reject, and what one word would make the program compile?</span></summary>
+  <div class="ox-think-body">
+    <p>Line 4, <code>x = 6;</code>. The word is <code>mut</code>, placed after <code>let</code>. The first <code>let</code> and the two <code>println!</code> calls are fine. Only the second assignment breaks the promise.</p>
+  </div>
+</details>
+
+<p>Here is the real output from rustc 1.97 for that program:</p>
+
+<pre class="rustc">
+error[E0384]: cannot assign twice to immutable variable `x`
+ --> src/main.rs:4:5
+  |
+2 |     let x = 5;
+  |         - first assignment to `x`
+3 |     println!("{x}");
+4 |     x = 6;
+  |     ^^^^^ cannot assign twice to immutable variable
+  |
+help: consider making this binding mutable
+  |
+2 |     let mut x = 5;
+  |         +++
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0384`.</pre>
+
+<p>Read it from the top. The first line gives the error code and the summary. The arrows then tell the story in order: the <code>let x = 5</code> line is the first assignment, and <code>x = 6</code> is the second, the one the compiler refuses.</p>
+
+<p>The <code>help</code> block is the compiler's suggested fix. It shows the corrected line, and the <code>+++</code> marks the three characters to insert. Treat it as a question from the compiler: should this value really change? You decide the answer.</p>
+
+<aside class="ox-callout" data-kind="insight">
+  <p>A <code>let</code> is a promise to every later line: this value won't change. Anyone reading the function can rely on that promise without tracking each line below it, and the compiler checks it everywhere.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="mut"><code>mut</code>: changing your mind, on purpose</h2>
+
+<p>When a value really must change, say so on the <code>let</code>. The <code>mut</code> keyword tells the reader and the compiler that this name will be assigned again.</p>
+
+<pre class="rs" data-run data-stdout="2">
+fn main() {
+    let mut count = 0;
+    count += 1;
+    count += 1;
+    println!("{count}");
+}</pre>
+
+<p>Each <code>+=</code> assigns to the same variable. It is still one box, and <code>mut</code> is what allows the refills.</p>
+
+<p class="ox-pull">In Rust a value stays the same unless you ask for a change.</p>
+
+<h3>Why the default is immutable</h3>
+
+<p>Rust could have made every variable mutable, the way PHP does. It doesn't, for three reasons.</p>
+
+<ul>
+  <li><strong>Reasoning is easier.</strong> Without <code>mut</code>, a <code>let</code> holds one value for the rest of its scope. You can read a function top to bottom and know what each name holds at each line.</li>
+  <li><strong>Intent is visible.</strong> A <code>mut</code> signals to the reader: this one will change. Reviewers, and agents reviewing code, can look for it first.</li>
+  <li><strong>Sharing is safer later.</strong> Many threads can read a value that nobody can change, without taking a lock. Chapter 18 relies on this.</li>
+</ul>
+
+<div class="ox-quiz" data-id="02:mut">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0384">
+fn main() {
+    let total = 0;
+    for n in 1..=3 {
+        total += n;
+    }
+    println!("{total}");
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. The loop runs three times, and each run changes <code>total</code>.</li>
+    <li data-correct>No. <code>total</code> is not <code>mut</code>, and <code>+=</code> assigns to it, which an immutable variable doesn't allow.</li>
+    <li>Yes. The compiler only checks assignments that happen outside a loop.</li>
+  </ol>
+  <div class="ox-why">
+    <p>This is error E0384. The loop doesn't change the rule. The rule is about the <code>let</code>, and the first pass through the loop already breaks it. Add <code>mut</code> after <code>let</code> and the program prints <code>6</code>.</p>
+  </div>
+</div>
+</section>
+
+<section>
+<h2 id="types">Inferred, but still typed</h2>
+
+<p>The programs above mostly leave types out, and they compile. The compiler works out the type from the value. An annotation is optional, and you write one when you want a particular type.</p>
+
+<pre class="rs" data-run data-stdout="5 5 9.99">
+fn main() {
+    let x = 5;               // no annotation: the compiler picks i32
+    let y: u8 = 5;           // annotated: you pick u8
+    let price: f64 = 9.99;   // f64 is the default for decimals; written out here
+    println!("{x} {y} {price}");
+}</pre>
+
+<p>An integer with no annotation becomes <code>i32</code>, and a decimal becomes <code>f64</code>. Chapter 03 covers the numeric types in full.</p>
+
+<h3>The type belongs to the variable</h3>
+
+<p>PHP and Rust disagree about where the type lives. In PHP the value carries the type, so one variable can hold a number and then a string. In Rust the variable carries the type, and every new value has to fit it.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+$x = 5;
+$x = "five";
+echo $x;      // five</pre>
+  <pre class="rs" data-check="E0308">
+fn main() {
+    let mut x = 5;
+    x = "five";
+    println!("{x}");
+}</pre>
+  <div class="ox-bridge-note"><p>Look at the <code>mut</code> in the Rust version. It lets the value change, but it doesn't let the type change. A <code>mut</code> variable keeps its type for its whole life.</p></div>
+</div>
+
+<pre class="rustc">
+error[E0308]: mismatched types
+ --> src/main.rs:3:9
+  |
+2 |     let mut x = 5;
+  |                 - expected due to this value
+3 |     x = "five";
+  |         ^^^^^^ expected integer, found `&amp;str`
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0308`.</pre>
+
+<p>The label <code>expected due to this value</code> points back at the <code>5</code>. That number made <code>x</code> an integer, and the compiler holds to that decision. <code>"five"</code> is a <code>&amp;str</code>, a piece of text, so the types don't match.</p>
+
+<div class="ox-quiz" data-id="02:types">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0308">
+fn main() {
+    let total = 10;
+    let ratio: f64 = total / 4;
+    println!("{ratio}");
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. Rust turns the integer result into an <code>f64</code> when it's assigned.</li>
+    <li data-feedback="Division by itself doesn't produce a decimal in Rust. Look at what total is.">Yes, and it prints <code>2.5</code>, because division always produces a decimal.</li>
+    <li data-correct>No. <code>total</code> is an integer, so <code>total / 4</code> is an integer too. It can't become an <code>f64</code> without a conversion.</li>
+  </ol>
+  <div class="ox-why">
+    <p>This is error E0308: expected <code>f64</code>, found integer. PHP's <code>10 / 4</code> gives <code>2.5</code>, because PHP switches to a float when a division isn't exact. Rust keeps the type of the operation, and integer divided by integer is an integer. To get a decimal, start with one: <code>let total = 10.0;</code>, then divide by <code>4.0</code>. That prints <code>2.5</code>.</p>
+  </div>
+</div>
+</section>
+
+<section>
+<h2 id="shadowing">Shadowing: same name, new variable</h2>
+
+<p>You can use <code>let</code> again with a name that already exists. The new <code>let</code> hides the old name from that line on:</p>
+
+<pre class="rs" data-run data-stdout="43">
+fn main() {
+    let input = "42";
+    let input: u32 = input.parse().unwrap();
+    println!("{}", input + 1);
+}</pre>
+
+<p>The second <code>let</code> doesn't change the first <code>input</code>. It creates a second variable with the same name. The first is a <code>&amp;str</code> and the second is a <code>u32</code>. <code>mut</code> could never do that, because a <code>mut</code> variable keeps its type.</p>
+
+<p><code>parse</code> returns a <code>Result</code>, which is an error if the text isn't a number. <code>unwrap</code> takes the number out, or panics on an error. Chapter 11 handles errors properly. For now, read <code>unwrap</code> as "the value, or crash".</p>
+
+<p>Two programs follow, and each one shows a different way to change a value. Step through both. The first keeps one box, and the second makes a new box each time.</p>
+
+<div class="ox-xray ox-wide" data-scenario="mut-same-box,shadow-new-box"></div>
+
+<h3><code>mut</code> or shadowing?</h3>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th></th><th><code>mut</code></th><th>Shadowing (<code>let</code> again)</th></tr></thead>
+  <tbody>
+    <tr><td><strong>What happens</strong></td><td>The same variable gets a new value</td><td>A new variable is created, and the name now refers to it</td></tr>
+    <tr><td><strong>Can the type change?</strong></td><td class="c-bad">No</td><td class="c-ok">Yes</td></tr>
+    <tr><td><strong>What you write</strong></td><td><code>mut</code> on the first <code>let</code></td><td>A new <code>let</code> for each change</td></tr>
+    <tr><td><strong>The old value</strong></td><td>Overwritten, and gone</td><td>Still exists until the end of its scope, but nothing can name it</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Before you read on, predict what this program prints. Shadowing and blocks both play a part.</p>
+
+<div class="ox-quiz" data-id="02:shadow-print">
+  <p class="ox-q">What does this program print?</p>
+  <pre class="rs" data-stdout="inner: 12\nouter: 6">
+fn main() {
+    let x = 5;
+    let x = x + 1;
+    {
+        let x = x * 2;
+        println!("inner: {x}");
+    }
+    println!("outer: {x}");
+}</pre>
+  <ol class="ox-choices">
+    <li data-feedback="Shadowing never changes the outer x. The inner let made a new variable, and the outer one is still 6.">
+      <code>inner: 12</code> then <code>outer: 12</code></li>
+    <li data-correct><code>inner: 12</code> then <code>outer: 6</code></li>
+    <li data-feedback="The inner let does read the x in scope, and that x is 6. Doubling 6 gives 12, so inner prints 12.">
+      <code>inner: 6</code> then <code>outer: 6</code></li>
+    <li data-feedback="The second let x = x + 1 does run. After it, x is 6, not 5.">
+      <code>inner: 12</code> then <code>outer: 5</code></li>
+  </ol>
+  <div class="ox-why">
+    <p>The first <code>let</code> makes an <code>x</code> holding 5. The second makes another <code>x</code>, holding 6. Inside the braces, a third <code>x</code> holds 12, and <code>inner</code> prints that one. The closing brace ends the third variable. The last line names the second <code>x</code>, which still holds 6.</p>
+    <p>Three variables were created, and no value was changed. Each name refers to the newest variable with that name that is still in scope.</p>
+  </div>
+</div>
+</section>
+
+<section>
+<h2 id="blocks">Scopes and blocks</h2>
+
+<p>A variable lives from its <code>let</code> to the <code>}</code> that closes its block. That block is its scope. You just saw the inner <code>x</code> end at its brace. The same rule catches a variable used after the block that declared it.</p>
+
+<div class="ox-quiz" data-id="02:blocks">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0425">
+fn main() {
+    let score = 72;
+    if score > 50 {
+        let grade = "pass";
+    }
+    println!("{grade}");
+}</pre>
+  <ol class="ox-choices">
+    <li data-feedback="Close. PHP would print pass here. Rust ends the scope at the closing brace.">Yes. It prints <code>pass</code>, the way PHP would.</li>
+    <li data-correct>No. <code>grade</code> lives only inside the <code>if</code> block, and that block closed before the <code>println!</code>.</li>
+    <li>No. An <code>if</code> block isn't allowed to declare a variable.</li>
+  </ol>
+  <div class="ox-why">
+    <p>The <code>}</code> on line 5 ends the scope of <code>grade</code>. On line 6 the name no longer exists, so rustc reports E0425, "cannot find value in this scope". The real output is below.</p>
+  </div>
+</div>
+
+<pre class="rustc">
+error[E0425]: cannot find value `grade` in this scope
+ --> src/main.rs:6:16
+  |
+6 |     println!("{grade}");
+  |                ^^^^^
+  |
+help: the binding `grade` is available in a different scope in the same function
+ --> src/main.rs:4:13
+  |
+4 |         let grade = "pass";
+  |             ^^^^^
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0425`.</pre>
+
+<p>The <code>help</code> line shows that rustc knows where <code>grade</code> does exist: inside the <code>if</code>. There are two ways to fix it. Move the <code>println!</code> inside the block, or declare <code>grade</code> before the <code>if</code> and give it a value on every path. The section "Declare now, assign later" shows the second one.</p>
+
+<aside class="ox-callout" data-kind="php">
+  <p>PHP creates a new scope only for a function or a closure. An <code>if</code>, a <code>for</code> or a bare <code>{ }</code> leaves its variables in the surrounding function. Rust treats every block as a scope, so code that works in PHP fails here.</p>
+</aside>
+
+<p>The same rule produces a common bug. Shadowing inside a loop looks like a running total, but the inner <code>let</code> is a new variable, and it disappears at the end of each pass:</p>
+
+<pre class="rs" data-run data-stdout="0">
+fn main() {
+    let total = 0;
+    for n in 1..=3 {
+        let total = total + n;
+    }
+    println!("{total}");
+}</pre>
+
+<p>The program compiles and prints <code>0</code>. rustc warns about the real problem, because the inner <code>total</code> is never read:</p>
+
+<pre class="rustc">
+warning: unused variable: `total`
+ --> src/main.rs:4:13
+  |
+4 |         let total = total + n;
+  |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_total`
+  |
+  = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: 1 warning emitted</pre>
+
+<p>A running total needs one variable that changes, so declare it with <code>mut</code> and assign to it with <code>+=</code>.</p>
+</section>
+
+<section>
+<h2 id="later">Declare now, assign later</h2>
+
+<p>Sometimes a name has to exist before its value is known. Rust lets you declare the name without a value, and then assign it once on each path:</p>
+
+<pre class="rs" data-run data-stdout="pass">
+fn main() {
+    let score = 72;
+    let status;
+    if score > 50 {
+        status = "pass";
+    } else {
+        status = "fail";
+    }
+    println!("{status}");
+}</pre>
+
+<p><code>status</code> is immutable, and this still compiles. The compiler checks every path through the code. Each branch assigns <code>status</code> exactly once, so the <code>println!</code> always sees a value.</p>
+
+<p>Now remove the <code>else</code> branch. The promise breaks:</p>
+
+<pre class="rs" data-check="E0381">
+fn main() {
+    let score = 72;
+    let status;
+    if score > 50 {
+        status = "pass";
+    }
+    println!("{status}");
+}</pre>
+
+<pre class="rustc">
+error[E0381]: used binding `status` is possibly-uninitialized
+ --> src/main.rs:7:16
+  |
+3 |     let status;
+  |         ------ binding declared here but left uninitialized
+4 |     if score > 50 {
+  |        ---------- if this `if` condition is `false`, `status` is not initialized
+5 |         status = "pass";
+6 |     }
+  |      - an `else` arm might be missing here, initializing `status`
+7 |     println!("{status}");
+  |                ^^^^^^ `status` used here but it is possibly-uninitialized
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0381`.</pre>
+
+<p>E0381 says the name might be uninitialized. The labels trace one path through the code. The <code>if</code> can be false, and on that path nothing sets <code>status</code>. The compiler isn't guessing. It follows the branches the way you would on paper.</p>
+
+<p>Most Rust code writes this differently. An <code>if</code> produces a value, so you can bind it directly:</p>
+
+<pre class="rs" data-run data-stdout="pass">
+fn main() {
+    let score = 72;
+    let status = if score > 50 { "pass" } else { "fail" };
+    println!("{status}");
+}</pre>
+
+<p>The declare-first form still appears in real code, but the one-line form is the usual choice. Chapter 04 explains why an <code>if</code> can produce a value.</p>
+
+<div class="ox-quiz" data-id="02:later">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0384">
+fn main() {
+    let total;
+    total = 10;
+    total = 20;
+    println!("{total}");
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. <code>total</code> was declared, so it can be set again.</li>
+    <li data-correct>No. Without <code>mut</code>, a deferred <code>let</code> can be assigned only once, and this one is assigned twice.</li>
+    <li>No. A <code>let</code> without a value isn't allowed at all.</li>
+  </ol>
+  <div class="ox-why">
+    <p>The first assignment is fine. The second is E0384, the same error as before. The compiler's help suggests <code>let mut total;</code>, which would allow both assignments.</p>
+  </div>
+</div>
+</section>
+
+<section>
+<h2 id="const">Constants</h2>
+
+<p>A <code>const</code> is a value the compiler knows before the program runs. It is the Rust counterpart of the constants you already write in PHP, with stricter rules.</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+define('TIMEOUT', 30);
+
+class Limits {
+    const MAX_USERS = 100000;
+}</pre>
+  <pre class="rs">
+const TIMEOUT: u32 = 30;
+const MAX_USERS: u32 = 100_000;</pre>
+  <div class="ox-bridge-note"><p><code>define()</code> can take a value computed while the program runs. A Rust <code>const</code> is computed by the compiler before the program runs, and it always names its type.</p></div>
+</div>
+
+<pre class="rs" data-run data-stdout="50 seats left">
+const MAX_USERS: u32 = 100_000;
+
+fn main() {
+    let signups: u32 = 99_950;
+    let seats_left = MAX_USERS - signups;
+    println!("{seats_left} seats left");
+}</pre>
+
+<p>A constant can be declared outside any function, and every function in the file can use it. By convention its name is SCREAMING_SNAKE_CASE. The underscores in <code>100_000</code> are digit separators, and Rust ignores them.</p>
+
+<div class="ox-rules">
+  <div class="ox-rule"><div><p>The type is required.</p><p><code>const MAX: u32 = 100;</code> is valid. <code>const MAX = 100;</code> is an error: missing type for <code>const</code> item.</p></div></div>
+  <div class="ox-rule"><div><p>The value must be known at compile time.</p><p>A function call inside the value has to be a <code>const fn</code>. The compiler evaluates the value while it builds the program.</p></div></div>
+  <div class="ox-rule"><div><p>The name is SCREAMING_SNAKE_CASE.</p><p>This is a convention, but rustc warns when you break it. A constant can sit at the top of a file or inside a function.</p></div></div>
+</div>
+
+<p>Here is the second rule in action. <code>compute</code> is an ordinary function, so the compiler can't run it while it builds the constant:</p>
+
+<pre class="rs" data-check="E0015">
+const MAX: u32 = compute();
+
+fn compute() -> u32 {
+    3
+}
+
+fn main() {
+    println!("{MAX}");
+}</pre>
+
+<pre class="rustc">
+error[E0015]: cannot call non-const function `compute` in constants
+ --> src/main.rs:1:18
+  |
+1 | const MAX: u32 = compute();
+  |                  ^^^^^^^^^
+  |
+note: function `compute` is not const
+ --> src/main.rs:3:1
+  |
+3 | fn compute() -> u32 {
+  | ^^^^^^^^^^^^^^^^^^^
+  = note: calls in constants are limited to constant functions, tuple structs and tuple variants
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0015`.</pre>
+
+<h3><code>static</code>, briefly</h3>
+
+<p>A <code>const</code> is a value the compiler places wherever you use it. A <code>static</code> is one location in memory that exists for the whole program. You will rarely need one.</p>
+
+<pre class="rs" data-run data-stdout="Oxidize">
+static APP_NAME: &amp;str = "Oxidize";
+
+fn main() {
+    println!("{APP_NAME}");
+}</pre>
+
+<p><code>static mut</code> also exists. Reading or writing it needs <code>unsafe</code>, which Chapter 21 covers. Until then, use <code>const</code>.</p>
+
+<div class="ox-fill" data-id="02:fill-const">
+  <p class="ox-q">Complete the constant so the program prints the number of seconds in a day. Pick a type that can hold the value.</p>
+  <pre class="rs" data-stdout="86400">
+const [[SECONDS_PER_DAY]]: [[u32|u64|i32|i64]] = 24 * 60 * 60;
+
+fn main() {
+    println!("{SECONDS_PER_DAY}");
+}</pre>
+  <div class="ox-why"><p>The name is SCREAMING_SNAKE_CASE, as the convention says. All four types can hold 86,400. <code>u32</code> is the natural choice for a count that is never negative. The compiler evaluates <code>24 * 60 * 60</code> while it builds the program, which is what a constant needs.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="unused">Warnings you'll see</h2>
+
+<p>Warnings don't stop the build. They are rustc noticing something that is probably a mistake. This program compiles, and rustc still has two things to say:</p>
+
+<pre class="rs">
+fn main() {
+    let retries = 3;
+    let mut timeout = 30;
+    println!("{timeout}");
+}</pre>
+
+<pre class="rustc">
+warning: variable does not need to be mutable
+ --> src/main.rs:3:9
+  |
+3 |     let mut timeout = 30;
+  |         ----^^^^^^^
+  |         |
+  |         help: remove this `mut`
+  |
+  = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `retries`
+ --> src/main.rs:2:9
+  |
+2 |     let retries = 3;
+  |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_retries`
+  |
+  = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: 2 warnings emitted</pre>
+
+<p>The first warning is about <code>timeout</code>. It is declared <code>mut</code>, but nothing changes it, so the fix is to remove the <code>mut</code>. The second is about <code>retries</code>, which is never used. A leading underscore says "I know, and it's on purpose". Here are both fixes applied, and the program compiles silently:</p>
+
+<pre class="rs" data-run data-stdout="30">
+fn main() {
+    let _retries = 3;
+    let timeout = 30;
+    println!("{timeout}");
+}</pre>
+
+<p>A lone <code>_</code> is different. <code>let _ = value;</code> doesn't create a variable at all, so it doesn't keep the value alive. Chapter 06 covers why that matters for drops.</p>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Agents often add <code>mut</code> to code that never reassigns, and they reuse a name through shadowing deep inside a long function until nobody can say which <code>total</code> is which. The first habit shows up as a warning. The second is legal and sometimes right, but when the meaning changes, a new name is clearer.</p>
+  <p>In review, ask for a <code>cargo build</code> with no warnings, and look at every <code>mut</code> the diff adds. Each one should be there because the value really changes.</p>
+</aside>
+
+<div class="ox-quiz" data-id="02:unused">
+  <p class="ox-q">Does this compile, and what does rustc say?</p>
+  <pre class="rs">
+fn main() {
+    let mut label = "ready";
+    println!("{label}");
+}</pre>
+  <ol class="ox-choices">
+    <li>It fails with E0384, because <code>label</code> is assigned twice.</li>
+    <li>It compiles with no output from rustc at all.</li>
+    <li data-correct>It compiles, with a warning that <code>label</code> doesn't need to be <code>mut</code>.</li>
+  </ol>
+  <div class="ox-why">
+    <p>It compiles. <code>label</code> is never assigned again, so the <code>mut</code> does nothing, and rustc says so. The warning doesn't stop the program, which prints <code>ready</code>. Clean code has no warnings, and each warning is a cheap catch before review.</p>
+  </div>
+</div>
+</section>
+
+<section>
+<h2 id="practice">Practice</h2>
+
+<p>Two checks to finish on. The first is about time. Put the events of the shadowing program in the order they happen. It's the program from the quiz earlier in this chapter.</p>
+
+<div class="ox-order" data-id="02:order-scope" data-label="Put the lifetimes in order">
+  <ol>
+    <li>The outer <code>x = 5</code> is created.</li>
+    <li><code>x</code> is shadowed by <code>x + 1</code>, a new variable holding 6.</li>
+    <li>The inner block shadows <code>x</code> with <code>x * 2</code>.</li>
+    <li>The inner block ends, and the inner <code>x</code> is gone.</li>
+    <li>The outer <code>println!</code> reads <code>x</code>, which is 6.</li>
+  </ol>
+  <div class="ox-why">
+    <p>Each <code>let</code> creates a new variable. The second <code>let</code> doesn't destroy the first <code>x</code>. It hides the name. A variable's life ends at the <code>}</code> of its block, so the inner <code>x</code> ends there, and the name refers to the middle <code>x</code> again, the one holding 6.</p>
+  </div>
+</div>
+
+<p>The second check goes the other way. Match each PHP line with the Rust line that does the same job. Pay attention to mutability.</p>
+
+<div class="ox-match" data-id="02:match" data-left-label="PHP" data-right-label="Rust">
+  <ul>
+    <li data-left="$x = 5; (a variable)"><code>let mut x = 5;</code></li>
+    <li data-left="class Limits { const RETRIES = 3; }"><code>const RETRIES: u32 = 3;</code></li>
+    <li data-left="public readonly string $name; (set once in the constructor)"><code>let name = "Ana";</code></li>
+    <li data-left="$x = (int) &quot;42&quot;;"><code>let x: i32 = "42".parse().unwrap();</code></li>
+  </ul>
+</div>
+
+<aside class="ox-callout" data-kind="trap">
+  <p>Two of these pairs break in places. A PHP <code>readonly</code> property is fixed per object. A Rust <code>let</code> is fixed per binding, and a new <code>let</code> can shadow it, which a <code>readonly</code> property can't do. The cast <code>(int) "abc"</code> never fails, and it gives 0. <code>parse()</code> returns a <code>Result</code>, and <code>unwrap()</code> panics on an error. Chapter 11 covers errors properly.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="quests">Forge quests</h2>
+<p>Reading builds recognition, and writing code builds the skill. These three quests cover this chapter: one for <code>mut</code>, one for shadowing, and one for constants.</p>
+<div class="ox-quests" data-chapter="2"></div>
+</section>
+
+<section>
+<h2 id="recap">Recap</h2>
+
+<div class="ox-recap">
+  <h3>Promises, boxes and names</h3>
+  <ul>
+    <li>A name made with <code>let</code> is immutable by default. Assigning to it again is error <strong>E0384</strong>. Add <code>mut</code> only when the value really must change.</li>
+    <li><code>mut</code> lets one variable take new values, and its type stays the same for its whole life.</li>
+    <li><strong>Shadowing</strong> is a new <code>let</code> with the same name. The new variable can have a different type. The old one lasts until its scope ends, but nothing can name it.</li>
+    <li>Integers default to <code>i32</code> and decimals to <code>f64</code>. Annotate with a type like <code>: u8</code> when you want another.</li>
+    <li><code>const</code> needs a type and a value the compiler can compute. A <code>let</code> may be declared now and assigned later, but it must be assigned on every path before it is used, or the compiler reports <strong>E0381</strong>.</li>
+  </ul>
+</div>
+
+<div class="ox-deck" data-chapter="2"></div>
+
+<details class="ox-think">
+  <summary><span>Explain it back: a PHP colleague asks what <code>mut</code> is for, and why anyone would shadow a name. Explain both with one example, in three sentences.</span></summary>
+  <div class="ox-think-body">
+    <p>One good answer: "<code>mut</code> lets one variable take new values, and its type never changes. Shadowing makes a new variable with the same name, so the type can change too. Take <code>let input = "42";</code> followed by <code>let input: u32 = input.parse().unwrap();</code>: the second <code>let</code> is a new <code>u32</code> that hides the old text, and no <code>mut</code> could turn the text into a number."</p>
+    <p>If your version said that <code>mut</code> reuses one variable and keeps its type, and that shadowing creates a new variable that can change type, you've got it.</p>
+  </div>
+</details>
+
+<div class="ox-complete-host"></div>
+</section>
+
+</main>
+</div>
+</body>
+</html>

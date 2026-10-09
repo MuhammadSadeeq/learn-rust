@@ -1,8 +1,41 @@
 /* Memory X-Ray scenarios and timelines for Chapter 08 — Strings & Slices */
 (window.OX_XRAY = window.OX_XRAY || []).push(
   {
-    id: "slice-string",
-    title: "Two &str views into one String",
+    id: "str-literal-vs-string",
+    title: "A literal, an owned String and a view",
+    code: `
+fn main() {
+    let lit = "hi";
+    let owned = String::from("hi");
+    let view: &str = &owned;
+    println!("{lit} {owned} {view}");
+}`,
+    steps: [
+      { line: 1, say: "<p>A frame for <code>main</code>. Three variables are about to hold text, and each holds it in a different way.</p>", ops: [["frame", "main"]] },
+      { line: 2, say: "<p><code>\"hi\"</code> is a literal. Its two bytes are compiled into the program, in read-only memory, so the heap is not involved. <code>lit</code> holds a pointer to them and a length. That is a <code>&amp;'static str</code>.</p>", ops: [["alloc", "bin", "hi", 2, { label: "in the binary, not the heap" }], ["let", "lit", "&'static str", { ref: "bin", meta: { len: 2 } }]] },
+      { line: 3, say: "<p><code>String::from(\"hi\")</code> asks the allocator for two heap bytes and copies the text in. <code>owned</code> is the <span class=\"c-own\">owner</span>: pointer, length 2, capacity 2.</p>", ops: [["alloc", "h2", "hi", 2, { label: "String bytes" }], ["let", "owned", "String", { ptr: "h2", meta: { len: 2, cap: 2 } }]] },
+      {
+        line: 4,
+        ask: {
+          q: "<code>view</code> is made from <code>&amp;owned</code>. What does it point at?",
+          choices: [
+            "A new copy of the bytes, made inside the binary.",
+            "The heap bytes that <code>owned</code> owns. Nothing is copied.",
+            "The variable <code>owned</code> on the stack."
+          ],
+          answer: 1,
+          explain: "A <code>&amp;str</code> is a view. It needs no copy, so it points at the bytes that already exist."
+        },
+        say: "<p><code>view</code> is a <span class=\"c-ref\">shared borrow</span> of the heap bytes. The conversion from <code>&amp;String</code> to <code>&amp;str</code> happens at compile time: no bytes are copied and no new owner appears.</p>",
+        ops: [["let", "view", "&str", { ref: "h2", meta: { len: 2 } }]]
+      },
+      { line: 5, say: "<p>Printing reads the bytes through each name. All three show <code>hi</code>. Only <code>owned</code> may free the heap buffer.</p>", ops: [["out", "hi hi hi"]] },
+      { line: 6, say: "<p>End of <code>main</code>, in reverse order: the view frees nothing, then <code>owned</code> frees its heap bytes. The literal's bytes were never on the heap, so they stay where the program put them.</p>", ops: [["drop", "view"], ["drop", "owned"], ["drop", "lit"], ["pop"]] }
+    ]
+  },
+  {
+    id: "slice-window",
+    title: "Two &str slices into one String",
     code: `
 fn main() {
     let s = String::from("hello world");
@@ -12,22 +45,25 @@ fn main() {
 }`,
     steps: [
       { line: 1, say: "<p>A frame for <code>main</code>.</p>", ops: [["frame", "main"]] },
-      { line: 2, say: "<p><code>s</code> owns 11 heap bytes: pointer, length 11, capacity 11. Every character here is ASCII, so one character is exactly one byte. (Section 4 shows what happens when it isn't.)</p>", ops: [["alloc", "h1", "hello world", 11, { label: "s's bytes" }], ["let", "s", "String", { ptr: "h1", meta: { len: 11, cap: 11 } }]] },
-      { line: 3, say: "<p><code>hello</code> is a <code>&amp;str</code>: a pointer to byte 0 of <code>s</code>'s buffer plus a length of 5. No bytes were copied. There is no capacity field, because a view can't grow.</p>", ops: [["let", "hello", "&str", { ref: "h1", at: 0, meta: { len: 5 } }]] },
+      { line: 2, say: "<p><code>s</code> owns 11 heap bytes: pointer, length 11, capacity 11. Every character here is ASCII, so one character is exactly one byte. (Section 4 shows what happens when that stops being true.)</p>", ops: [["alloc", "h1", "hello world", 11, { label: "s's bytes" }], ["let", "s", "String", { ptr: "h1", meta: { len: 11, cap: 11 } }]] },
+      { line: 3, say: "<p><code>hello</code> is a <code>&amp;str</code>: a pointer to byte 0 of <code>s</code>'s buffer and a length of 5. No bytes were copied. There is no capacity field, because a view can't grow.</p>", ops: [["let", "hello", "&str", { ref: "h1", at: 0, meta: { len: 5 } }]] },
       {
         line: 4,
         ask: {
-          q: "Where does <code>world</code>'s pointer point?",
-          choices: ["At the variable <code>s</code> on the stack.", "At byte 6 inside <code>s</code>'s heap buffer.", "At a new heap buffer holding a copy of <code>\"world\"</code>."],
+          q: "How many bytes does <code>world</code> copy?",
+          choices: [
+            "About 5 bytes. It makes a new copy of <code>\"world\"</code>.",
+            "None. It points at byte 6 of <code>s</code>'s buffer and stores only a length.",
+            "All 11 bytes of <code>s</code>, because a slice has to hold its whole owner."
+          ],
           answer: 1,
-          explain: "A slice points straight into the middle of bytes that someone else owns."
+          explain: "A slice is a pointer and a length. The bytes stay where they are."
         },
-        say: "<p><code>world</code> points at byte 6 (the <code>w</code>) with length 5. Two views into one buffer, and both are <span class=\"c-ref\">shared borrows</span> of <code>s</code>.</p>",
+        say: "<p><code>world</code> points at byte 6, the <code>w</code>, with a length of 5. Both slices are <span class=\"c-ref\">shared borrows</span> of <code>s</code>. Two views into one buffer, and neither one copies anything.</p>",
         ops: [["let", "world", "&str", { ref: "h1", at: 6, meta: { len: 5 } }]]
       },
-      { line: 5, say: "<p>Printing a <code>&amp;str</code> reads <code>len</code> bytes starting at its pointer. That is all a string slice is.</p>", ops: [["out", "hello|world"]] },
-      { line: 6, say: "<p>End of <code>main</code>. The slices go first, in reverse order. Dropping a reference frees nothing: neither slice ever owned the bytes.</p>", ops: [["drop", "world"], ["drop", "hello"]] },
-      { line: 6, say: "<p>Then the owner <code>s</code> frees the buffer. One allocation, one free, and two views that cost nothing.</p>", ops: [["drop", "s"], ["pop"]] }
+      { line: 5, say: "<p>Printing a <code>&amp;str</code> reads <code>len</code> bytes from its pointer. That is all a string slice is.</p>", ops: [["out", "hello|world"]] },
+      { line: 6, say: "<p>End of <code>main</code>. The slices go first and free nothing. Then the owner <code>s</code> frees the buffer: one allocation, one free, and two views that cost nothing.</p>", ops: [["drop", "world"], ["drop", "hello"], ["drop", "s"], ["pop"]] }
     ]
   },
   {
