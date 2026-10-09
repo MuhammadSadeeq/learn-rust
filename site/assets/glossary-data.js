@@ -1408,7 +1408,7 @@ fn main() {
 }`,
     stdout: "P { x: 1 }" },
   { id: "from", term: "From", kind: "trait", ch: 3,
-    def: "Converts a value into your type when the conversion cannot lose data. Implementing `From<T>` gives you `Into<T>` for free.",
+    def: "Converts a value into your type when the conversion cannot lose data. Writing `impl From<A> for B` gives `A` an `Into<B>` for free, so `let b: B = a.into();` works.",
     see: ["into", "tryfrom", "as", "newtype"],
     rust: `fn main() {
     let n = u32::from(7u8);
