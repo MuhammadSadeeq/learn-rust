@@ -354,8 +354,11 @@
       }
     }
     function route() {
-      var id = decodeURIComponent((location.hash || "").replace(/^#/, "")).toUpperCase();
-      if (byId[id]) showExhibit(byId[id]); else showMuseum();
+      // E-codes are matched case-insensitively (#e0382 works); other ids,
+      // such as async-send, are matched exactly.
+      var raw = decodeURIComponent((location.hash || "").replace(/^#/, ""));
+      var hit = byId[raw] || byId[raw.toUpperCase()];
+      if (hit) showExhibit(hit); else showMuseum();
     }
     function backToMuseum() {
       // Replace the exhibit entry with the museum, so Back never leaves the lab.

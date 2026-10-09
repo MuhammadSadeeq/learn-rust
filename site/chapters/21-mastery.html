@@ -1323,16 +1323,17 @@ fn main() {
 <section>
 <h2 id="forge-source">Read the Forge CLI</h2>
 
-<p>The course has its own trainer, the Forge CLI, which you run as <code>cargo forge</code>. It watches your quest files, compiles each one with <code>rustc</code>, runs its tests, and moves you on when they pass. It is about 1,200 lines of standard-library Rust with no dependencies, so every technique in it comes from this course.</p>
+<p>The course has its own trainer, the Forge CLI, which you run as <code>cargo forge</code>. It watches your quest files, compiles each one with <code>rustc</code> (or runs <code>cargo test</code> for the quests that are small cargo projects), runs its tests, and moves you on when they pass. It is about 2,200 lines of standard-library Rust with no dependencies, tests included, so every technique in it comes from this course.</p>
 
 <div class="ox-table-wrap">
 <table class="ox-table">
   <thead><tr><th>File</th><th>What it does</th><th>Lines</th></tr></thead>
   <tbody>
-    <tr><td><code>forge/src/main.rs</code></td><td>Commands, the watch loop, and the thread that reads stdin</td><td>598</td></tr>
-    <tr><td><code>forge/src/runner.rs</code></td><td>Compiles one quest, runs its tests, and enforces the timeout</td><td>205</td></tr>
-    <tr><td><code>forge/src/quests.rs</code></td><td>Reads <code>quests/quests.toml</code> and records your progress</td><td>268</td></tr>
-    <tr><td><code>forge/src/ui.rs</code></td><td>Terminal colors, the progress bar, and trimmed compiler output</td><td>149</td></tr>
+    <tr><td><code>forge/src/main.rs</code></td><td>Commands, the watch loop, and the thread that reads stdin</td><td>793</td></tr>
+    <tr><td><code>forge/src/runner.rs</code></td><td>Compiles one quest (with <code>rustc</code>, or <code>cargo test</code> for quests that are small cargo projects), runs its tests, and enforces the timeout</td><td>467</td></tr>
+    <tr><td><code>forge/src/quests.rs</code></td><td>Reads <code>quests/quests.toml</code> and records your progress</td><td>385</td></tr>
+    <tr><td><code>forge/src/art.rs</code></td><td>The ASCII art: the celebrating Oxi and the five bosses, with their HP bars</td><td>361</td></tr>
+    <tr><td><code>forge/src/ui.rs</code></td><td>Terminal colors, the progress bar, animation and trimmed compiler output</td><td>212</td></tr>
   </tbody>
 </table>
 </div>
@@ -1459,7 +1460,7 @@ error: aborting due to 2 previous errors</pre>
 
 <p>An agent is a loop. You send the messages so far, and the model streams back its answer. If the answer asks for a tool, you run the tool, send the result back, and ask again. The loop stops when the model says it is done, or when you run out of turns. Most of the work is in the rules around that loop. Those rules decide what a tool may touch, how long it may run, and what happens when a server misbehaves.</p>
 
-<p>The companion project is <code>projects/tool-runner</code>, in this repository. It is a small agent harness that talks to a mock model server, so it needs no network and no API key. Every test runs offline. Each part of the project maps to a chapter you have read, and each safety rule is enforced in code and checked by a test. Read the project's README next to this section. The quotes below come from that README.</p>
+<p>The companion project is <code>projects/tool-runner</code>, in this repository. It is a small agent harness that talks to a mock model server, so it needs no network and no API key. Every test runs offline. Each part of the project maps to a chapter you have read, and most safety rules are enforced in code and checked by a test. The README table marks the few that have no test yet. Read the project's README next to this section. The quotes below come from that README.</p>
 
 <h3>What the project is</h3>
 
@@ -1540,7 +1541,7 @@ error: aborting due to 2 previous errors</pre>
     <tr><td>17, Smart Pointers</td><td>The registry's <code>Box&lt;dyn Tool&gt;</code> owns each tool on the heap.</td><td><code>Box&lt;dyn Tool&gt;</code></td></tr>
     <tr><td>19, Async Rust</td><td>Each turn is an <code>async</code> call under a timeout. <code>tokio::select!</code> lets Ctrl+C cancel a wait. A <code>Semaphore</code> limits the tools that run at once. A <code>CancellationToken</code> carries the cancel signal.</td><td><code>select!</code> and <code>Semaphore</code> in <code>agent.rs</code></td></tr>
     <tr><td>19, Streams and Server-Sent Events</td><td><code>sse.rs</code> reads the bytes as they arrive and waits for the end of each event. <code>client.rs</code> reads the response as a stream.</td><td><code>SseParser::push</code>, <code>bytes_stream</code></td></tr>
-    <tr><td>20, Rust on the Web</td><td><code>client.rs</code> sends the request with reqwest, a timeout and a bearer token. It retries 429 and 5xx answers with backoff. Logs use <code>tracing</code>.</td><td><code>send_with_retry</code>, <code>tracing::info!</code></td></tr>
+    <tr><td>20, Rust on the Web</td><td><code>client.rs</code> sends the request with reqwest, a timeout and a bearer token. It retries 429 and 5xx answers with the backoff from Chapter 19. Logs use <code>tracing</code>.</td><td><code>send_with_retry</code>, <code>tracing::info!</code></td></tr>
     <tr><td>21, Running other programs</td><td><code>run_command</code> starts only programs on the allowlist. It clears the environment, sets a timeout, and kills the child on drop.</td><td><code>Command::new</code> in <code>run_command.rs</code></td></tr>
   </tbody>
 </table>
@@ -1792,7 +1793,7 @@ cargo test                          # 51 tests, all offline</pre>
 
 <p>Each rule is enforced in code, and a test checks it.</p>
 
-<p>Each row names the rule, the file that enforces it, and the test that checks it.</p>
+<p>Each row names the rule, the file that enforces it, and the test that checks it. Where the README says none, no test checks the rule yet.</p>
 
 <div class="ox-table-wrap">
 <table class="ox-table">
@@ -2211,7 +2212,7 @@ fn main() {
     <li>Idioms prevent specific bugs. Newtypes guard meaning, typestate puts state in the type, RAII guards clean up on every path, and <code>From</code> lets <code>?</code> convert errors.</li>
     <li>Review agent code for the smells that compile: needless clones, <code>unwrap</code> on input, stringly typed states, ignored results, and <code>unsafe</code> without a reason.</li>
     <li>A process starts with <code>Command</code>. Pass the arguments as a list, never as a shell string built from input. <code>output()</code> waits and captures, <code>status()</code> waits and inherits, and <code>spawn()</code> returns a child that you can poll and kill at a deadline.</li>
-    <li>The capstone, <code>projects/tool-runner</code>, is one loop: ask the model, stream the answer, run the tools under rules, send the results, and repeat. Each rule is enforced in code and has a test.</li>
+    <li>The capstone, <code>projects/tool-runner</code>, is one loop: ask the model, stream the answer, run the tools under rules, send the results, and repeat. Most rules are enforced in code and have a test. The README marks the ones that do not.</li>
     <li>Edition 2024 changed a few lifetimes and keywords. The table in <code>What edition 2024 changed</code> lists them, and each row was compiled under both editions.</li>
   </ul>
 </div>

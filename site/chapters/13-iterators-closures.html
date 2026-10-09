@@ -412,7 +412,7 @@ For more information about this error, try `rustc --explain E0373`.</pre>
       var truth = truthOf(closure);
       var head = right
         ? "<p><strong>Right.</strong> Clo packs <code>" + v + "</code> as " + LABEL[entry.mode] + ".</p>"
-        : "<p><strong>Not this time.</strong> Clo packs <code>" + v + "</code> as " + LABEL[truth.mode] + ". Here is a different version of this closure, one that uses <code>" + v + "</code> as " + LABEL[entry.mode] + ":</p>";
+        : "<p><strong>Not this time.</strong> Clo packs <code>" + v + "</code> as " + LABEL[truth.mode] + ". Here is the same closure, set up to pack <code>" + v + "</code> as " + LABEL[entry.mode] + ", and what the compiler does with it:</p>";
       var result = entry.check === "ok"
         ? '<p class="pk-result is-ok">rustc: compiles. It prints:</p><pre class="pk-prog">' + esc(entry.stdout) + "</pre>"
         : right
