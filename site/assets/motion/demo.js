@@ -42,21 +42,8 @@
       ],
     },
     {
-      say: "<p>Out comes machine code: an ingot. Every check happened before the program ran.</p>",
-      line: 3,
-      do: [
-        ["pop", "bin", 200],
-        ["pose", "forge", "happy", 1200, 200],
-      ],
-      ask: {
-        q: "When does the compiler check your code?",
-        choices: ["Before the program runs", "While it runs"],
-        answer: 0,
-        explain: "Every check happens at build time, so the Forge decides before anything runs.",
-      },
-    },
-    {
       say: "<p>A broken file makes the Forge spit back an error scroll instead. No ingot, so there is nothing to run.</p>",
+      line: 2,
       do: [
         ["pop", "bug", 0],
         ["arc", "bug", { x: 330, y: 188, scale: 0.4 }, 650, 250, 40],
@@ -67,6 +54,21 @@
         ["show", "err", 1500],
         ["arc", "err", { x: 170, y: 236, scale: 1 }, 800, 1500, 50],
       ],
+    },
+    {
+      say: "<p>Fix the file and build again: out comes machine code, an ingot. Every check happened before the program ran.</p>",
+      line: 3,
+      do: [
+        ["poof", "err", 0],
+        ["pop", "bin", 300],
+        ["pose", "forge", "happy", 1200, 300],
+      ],
+      ask: {
+        q: "When does the compiler check your code?",
+        choices: ["Before the program runs", "While it runs"],
+        answer: 0,
+        explain: "Every check happens at build time, so the Forge decides before anything runs.",
+      },
     },
   ],
 });

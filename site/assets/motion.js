@@ -628,6 +628,7 @@
       asking = j;
       playing = false;
       setOxi("think", 0);
+      renderCode();
       sayBody.innerHTML = `<p><strong>Predict:</strong> ${a.q}</p><div class="mo-choices"></div>`;
       const box = $(".mo-choices", sayBody);
       (a.choices || []).forEach((c, k) => {
