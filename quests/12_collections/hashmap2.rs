@@ -1,5 +1,5 @@
 // ============================================================================
-//  QUEST hashmap2 · Group by                         Chapter 12 · Collections
+//  QUEST hashmap2 · Group by                          Chapter 12 · Collections
 // ----------------------------------------------------------------------------
 //  Laravel: $users->groupBy('role') and $users->countBy('role'). Rust has no
 //  one-call version of these, so you build the groups yourself.

@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION errors3 · Your own error type         Chapter 11 · Errors Are Values
+//  SOLUTION errors3 · Your own error type     Chapter 11 · Errors Are Values
 // ----------------------------------------------------------------------------
 //  An error enum says exactly which failure happened, so the caller can match
 //  on it. Display turns each variant into the message people read.
@@ -80,7 +80,8 @@ mod tests {
     #[test]
     fn config_error_works_as_a_std_error() {
         // Edge case: the type can be used as a general error trait object.
-        let boxed: Box<dyn std::error::Error> = Box::new(ConfigError::Missing(String::from("port")));
+        let boxed: Box<dyn std::error::Error> =
+            Box::new(ConfigError::Missing(String::from("port")));
         assert_eq!(boxed.to_string(), "missing key: port");
     }
 }

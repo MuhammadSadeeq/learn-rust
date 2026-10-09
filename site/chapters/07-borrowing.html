@@ -422,7 +422,7 @@ fn main() {
   #borrowdesk .bd-line.is-err { background: color-mix(in srgb, var(--bad) 20%, transparent); border-left-color: var(--bad); }
   #borrowdesk .bd-line.is-because { background: var(--c-hl); border-left: 3px dotted var(--code-dim); }
   #borrowdesk .bd-no { color: var(--code-dim); text-align: right; }
-  #borrowdesk .bd-src { display: block; white-space: pre; overflow-x: auto; padding: 0; background: none; color: inherit; font: inherit; }
+  #borrowdesk .bd-src { display: block; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; padding: 0; background: none; color: inherit; font: inherit; }
   #borrowdesk .bd-tag { font: 700 0.7rem/1 var(--font-mono); padding: 5px 7px; border-radius: 4px; letter-spacing: 0.04em; }
   #borrowdesk .bd-tag.is-ok { background: var(--ok-soft); color: var(--ok); }
   #borrowdesk .bd-tag.is-bad { background: var(--bad-soft); color: var(--bad); }

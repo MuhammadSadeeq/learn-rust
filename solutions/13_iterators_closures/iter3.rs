@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION iter3 · Your own iterator          Chapter 13 · Iterators & Closures
+//  SOLUTION iter3 · Your own iterator        Chapter 13 · Iterators & Closures
 // ----------------------------------------------------------------------------
 //  The struct holds the last two terms. Each call to next() yields the current
 //  term and moves the pair one step: (a, b) becomes (b, a + b). An Iterator is
@@ -22,8 +22,8 @@ impl Iterator for Fibonacci {
 
     fn next(&mut self) -> Option<u64> {
         // The sequence never ends, so this never returns None. Bound it with
-        // take or take_while. The 93rd call overflows u64 while it works out the
-        // next pair. Debug builds panic there, and release builds wrap silently.
+        // take or take_while. The 93rd call overflows u64 while it works out
+        // the next pair: debug builds panic there, and release builds wrap.
         // A bounded take never gets that far.
         let current = self.a;
         let next = self.a + self.b;

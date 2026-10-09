@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION hashmap1 · Word counter                  Chapter 12 · Collections
+//  SOLUTION hashmap1 · Word counter                   Chapter 12 · Collections
 // ----------------------------------------------------------------------------
 //  entry(key) finds the slot for a key and creates it if it is missing.
 //  or_insert(0) hands back the count as &mut usize, so `+= 1` updates the map
@@ -12,8 +12,8 @@ use std::collections::HashMap;
 fn word_counts(text: &str) -> HashMap<String, usize> {
     let mut counts = HashMap::new();
     for word in text.split_whitespace() {
-        // Map keys are owned Strings, so to_lowercase() makes a new one. It also
-        // folds "The" and "the" into the same key.
+        // Map keys are owned Strings, so to_lowercase() makes a new one. That
+        // also folds "The" and "the" into the same key.
         *counts.entry(word.to_lowercase()).or_insert(0) += 1;
     }
     counts
@@ -22,8 +22,8 @@ fn word_counts(text: &str) -> HashMap<String, usize> {
 fn top_word(counts: &HashMap<String, usize>) -> Option<(String, usize)> {
     counts
         .iter()
-        // max_by returns the largest item. For equal counts we compare the words
-        // in reverse, so the alphabetically first word counts as the larger one.
+        // max_by returns the largest item. Equal counts compare the words in
+        // reverse, so the alphabetically first word counts as the larger one.
         .max_by(|(wa, na), (wb, nb)| na.cmp(nb).then_with(|| wb.cmp(wa)))
         // The map gives references. Copy the count, and clone the word so the
         // caller owns it.

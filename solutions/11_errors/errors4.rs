@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION errors4 · From conversions            Chapter 11 · Errors Are Values
+//  SOLUTION errors4 · From conversions        Chapter 11 · Errors Are Values
 // ----------------------------------------------------------------------------
 //  From tells ? how to convert one error type into another. Implement it once
 //  and every ? on a ParseIntError in this file produces an AppError for free.
@@ -60,7 +60,10 @@ mod tests {
 
     #[test]
     fn negative_numbers_are_rejected() {
-        assert!(matches!(parse_non_negative("-3"), Err(AppError::Negative(-3))));
+        assert!(matches!(
+            parse_non_negative("-3"),
+            Err(AppError::Negative(-3))
+        ));
     }
 
     #[test]
@@ -71,7 +74,10 @@ mod tests {
 
     #[test]
     fn messages_come_from_display() {
-        assert_eq!(parse_non_negative("-3").unwrap_err().to_string(), "must not be negative: -3");
+        assert_eq!(
+            parse_non_negative("-3").unwrap_err().to_string(),
+            "must not be negative: -3"
+        );
         assert_eq!(
             parse_non_negative("abc").unwrap_err().to_string(),
             "not a number: invalid digit found in string"

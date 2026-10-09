@@ -1,5 +1,5 @@
 // ============================================================================
-//  QUEST iter1 · Collection pipeline           Chapter 13 · Iterators & Closures
+//  QUEST iter1 · Collection pipeline         Chapter 13 · Iterators & Closures
 // ----------------------------------------------------------------------------
 //  Laravel collections, in PHP:
 //    collect($orders)->filter(fn ($o) => $o['paid'])

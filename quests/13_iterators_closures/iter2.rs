@@ -1,5 +1,5 @@
 // ============================================================================
-//  QUEST iter2 · fold, zip and sum             Chapter 13 · Iterators & Closures
+//  QUEST iter2 · fold, zip and sum           Chapter 13 · Iterators & Closures
 // ----------------------------------------------------------------------------
 //  Three functions over slices. Each one is a single iterator chain, so write
 //  no for loops.

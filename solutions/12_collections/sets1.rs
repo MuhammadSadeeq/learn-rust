@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION sets1 · Unique tags                      Chapter 12 · Collections
+//  SOLUTION sets1 · Unique tags                       Chapter 12 · Collections
 // ----------------------------------------------------------------------------
 //  Sets answer "have I seen this?" in one step. insert() returns false when
 //  the value was already there, which is all has_duplicates needs.

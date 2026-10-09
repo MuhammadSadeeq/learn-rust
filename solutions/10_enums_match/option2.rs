@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION option2 · if let and let else         Chapter 10 · Enums & Pattern Matching
+//  SOLUTION option2 · if let and let else  Chapter 10 · Enums & Pattern Matching
 // ----------------------------------------------------------------------------
 //  Each function handles None on purpose. if let runs a block only for Some,
 //  let else leaves the function early for None, and unwrap_or supplies a

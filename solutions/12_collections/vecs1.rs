@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION vecs1 · Vec basics                       Chapter 12 · Collections
+//  SOLUTION vecs1 · Vec basics                        Chapter 12 · Collections
 // ----------------------------------------------------------------------------
 //  retain keeps the items its closure approves of, in place, so nothing is
 //  copied. top_three borrows its slice, so it copies the numbers into a Vec it
@@ -10,7 +10,7 @@
 use std::cmp::Reverse;
 
 fn remove_negatives(v: &mut Vec<i32>) {
-    // retain keeps the items where the closure returns true, and works in place.
+    // retain keeps the items where the closure returns true, in place.
     v.retain(|&x| x >= 0);
 }
 

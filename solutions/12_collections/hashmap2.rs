@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION hashmap2 · Group by                      Chapter 12 · Collections
+//  SOLUTION hashmap2 · Group by                       Chapter 12 · Collections
 // ----------------------------------------------------------------------------
 //  entry(role).or_default() returns the Vec for that role, creating an empty
 //  one when the role is new. group_by_role owns the users, so each name and
@@ -29,8 +29,8 @@ fn group_by_role(users: Vec<User>) -> HashMap<String, Vec<String>> {
 fn count_by_role(users: &[User]) -> BTreeMap<String, usize> {
     let mut counts = BTreeMap::new();
     for user in users {
-        // entry() needs an owned key, so the role is cloned here. BTreeMap keeps
-        // its keys sorted, which gives a stable order for printing.
+        // entry() needs an owned key, so the role is cloned here. A BTreeMap
+        // keeps its keys sorted, which gives a stable order for printing.
         *counts.entry(user.role.clone()).or_insert(0) += 1;
     }
     counts

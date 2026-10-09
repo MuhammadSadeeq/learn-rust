@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION closures1 · Closures capture      Chapter 13 · Iterators & Closures
+//  SOLUTION closures1 · Closures capture     Chapter 13 · Iterators & Closures
 // ----------------------------------------------------------------------------
 //  A closure that outlives the function that made it must own what it uses, so
 //  each one here uses `move`. The return type says what a closure may do. Fn

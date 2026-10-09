@@ -53,9 +53,20 @@ mod tests {
 
     #[test]
     fn with_theme_changes_only_the_theme() {
-        let base = Settings { theme: String::from("light"), font_size: 18, autosave: false };
+        let base = Settings {
+            theme: String::from("light"),
+            font_size: 18,
+            autosave: false,
+        };
         let dark = with_theme(&base, "dark");
-        assert_eq!(dark, Settings { theme: String::from("dark"), font_size: 18, autosave: false });
+        assert_eq!(
+            dark,
+            Settings {
+                theme: String::from("dark"),
+                font_size: 18,
+                autosave: false
+            }
+        );
         assert_eq!(base.theme, "light"); // the original is untouched
     }
 

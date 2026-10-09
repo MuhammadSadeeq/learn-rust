@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION boss3_ledger · Bank ledger         Chapter 13 · Iterators & Closures
+//  SOLUTION boss3_ledger · Bank ledger       Chapter 13 · Iterators & Closures
 // ----------------------------------------------------------------------------
 //  Balances live in a HashMap, and each rule gets one small helper.
 //  balance_mut finds an account or reports it missing, ensure_open checks that
@@ -122,7 +122,8 @@ impl Ledger {
 
     fn apply_all(&mut self, txs: &[Transaction]) -> Vec<LedgerError> {
         // A failed transaction is recorded and skipped, and the rest still run.
-        // .err() turns each Result into an Option, and filter_map keeps the Somes.
+        // .err() turns each Result into an Option. filter_map keeps only the
+        // Some values, and those are the errors.
         txs.iter().filter_map(|tx| self.apply(tx).err()).collect()
     }
 

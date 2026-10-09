@@ -1,5 +1,5 @@
 // ============================================================================
-//  QUEST errors4 · From conversions                 Chapter 11 · Errors Are Values
+//  QUEST errors4 · From conversions           Chapter 11 · Errors Are Values
 // ----------------------------------------------------------------------------
 //  The file does not compile. parse_non_negative uses ? on a ParseIntError,
 //  but AppError has no conversion from ParseIntError. Add

@@ -1,17 +1,16 @@
 // ============================================================================
 //  SOLUTION boss4_template · Mini Blade        Chapter 17 · Smart Pointers
 // ----------------------------------------------------------------------------
-//  Four parts work together. Each filter is a type behind Box<dyn Filter>, so
-//  one HashMap can hold any mix of them. tokens() returns Token values that
-//  borrow slices of the template, so parsing copies nothing. render() walks
-//  the tokens and looks up variables and filters in maps. Errors are plain
-//  values, so `?` sends them straight out of render.
+//  Each filter is a type behind Box<dyn Filter>, so one HashMap can hold any
+//  mix of them. tokens() returns Token values that borrow slices of the
+//  template, so parsing copies nothing. render() walks the tokens, and `?`
+//  sends errors out of render.
 // ============================================================================
 
 use std::collections::HashMap;
 
 // A filter turns text into new text. Each filter is its own type, so the engine
-// can hold many different filters behind one trait object.
+// can hold different filters behind one trait object.
 trait Filter {
     fn apply(&self, input: &str) -> String;
 }
@@ -49,10 +48,7 @@ enum RenderError {
 #[derive(Debug, PartialEq)]
 enum Token<'a> {
     Text(&'a str),
-    Tag {
-        name: &'a str,
-        filters: Vec<&'a str>,
-    },
+    Tag(&'a str, Vec<&'a str>),
 }
 
 // Split the template into text and tags. Empty text runs are skipped.
@@ -72,7 +68,7 @@ fn tokens<'a>(template: &'a str) -> Result<Vec<Token<'a>>, RenderError> {
         let mut parts = after_open[..close].split('|').map(str::trim);
         let name = parts.next().unwrap_or_default();
         let filters: Vec<&str> = parts.collect();
-        out.push(Token::Tag { name, filters });
+        out.push(Token::Tag(name, filters));
 
         rest = &after_open[close + 2..];
     }
@@ -82,44 +78,41 @@ fn tokens<'a>(template: &'a str) -> Result<Vec<Token<'a>>, RenderError> {
     Ok(out)
 }
 
+#[derive(Default)]
 struct Engine {
     filters: HashMap<String, Box<dyn Filter>>,
 }
 
 impl Engine {
     fn new() -> Self {
-        let mut engine = Engine {
-            filters: HashMap::new(),
-        };
+        let mut engine = Engine::default();
         engine.register("upper", Box::new(Upper));
         engine.register("lower", Box::new(Lower));
         engine.register("trim", Box::new(Trim));
         engine
     }
 
-    // Adds a filter under `name`. An existing filter with that name is replaced.
+    // A filter registered under an existing name replaces the old one.
     fn register(&mut self, name: &str, filter: Box<dyn Filter>) {
         self.filters.insert(name.to_string(), filter);
     }
 
     fn render(&self, template: &str, ctx: &HashMap<&str, &str>) -> Result<String, RenderError> {
         let mut output = String::new();
-        // tokens() runs over the whole template first, so a broken tag fails
-        // before any output is produced.
+        // Parse the whole template first, so a broken tag fails before any output.
         for token in tokens(template)? {
             match token {
                 Token::Text(text) => output.push_str(text),
-                Token::Tag { name, filters } => {
-                    let raw = *ctx
-                        .get(name)
-                        .ok_or_else(|| RenderError::UnknownVar(name.to_string()))?;
+                Token::Tag(name, filters) => {
+                    let Some(&raw) = ctx.get(name) else {
+                        return Err(RenderError::UnknownVar(name.to_string()));
+                    };
                     // Each filter returns a new String, so the value is owned from here on.
                     let mut value = raw.to_string();
                     for filter_name in filters {
-                        let filter = self
-                            .filters
-                            .get(filter_name)
-                            .ok_or_else(|| RenderError::UnknownFilter(filter_name.to_string()))?;
+                        let Some(filter) = self.filters.get(filter_name) else {
+                            return Err(RenderError::UnknownFilter(filter_name.to_string()));
+                        };
                         value = filter.apply(&value);
                     }
                     output.push_str(&value);
@@ -132,12 +125,8 @@ impl Engine {
 
 fn main() {
     let engine = Engine::new();
-    let mut ctx = HashMap::new();
-    ctx.insert("name", "  ana  ");
-    ctx.insert("city", "Lisbon");
-
-    let page = "Hi {{ name | trim | upper }}, welcome to {{city}}!";
-    match engine.render(page, &ctx) {
+    let ctx = HashMap::from([("name", "  ana  "), ("city", "Lisbon")]);
+    match engine.render("Hi {{ name | trim | upper }}, welcome to {{city}}!", &ctx) {
         Ok(text) => println!("{text}"),
         Err(err) => println!("render failed: {err:?}"),
     }
@@ -147,40 +136,36 @@ fn main() {
 mod tests {
     use super::*;
 
-    fn vars<'a>(pairs: &[(&'a str, &'a str)]) -> HashMap<&'a str, &'a str> {
-        pairs.iter().copied().collect()
+    fn ok(text: &str) -> Result<String, RenderError> {
+        Ok(text.to_string())
     }
 
     #[test]
     fn renders_variables_with_or_without_spaces() {
+        let ctx = HashMap::from([("first", "Ana"), ("last", "Silva")]);
         let engine = Engine::new();
-        let ctx = vars(&[("first", "Ana"), ("last", "Silva")]);
         assert_eq!(
             engine.render("Hi {{ first }} {{last}}!", &ctx),
-            Ok("Hi Ana Silva!".to_string())
+            ok("Hi Ana Silva!")
         );
     }
 
     #[test]
     fn filters_run_left_to_right() {
+        let ctx = HashMap::from([("name", "  ana  ")]);
         let engine = Engine::new();
-        let ctx = vars(&[("name", "  ana  ")]);
-        assert_eq!(
-            engine.render("{{ name | trim | upper }}", &ctx),
-            Ok("ANA".to_string())
-        );
+        assert_eq!(engine.render("{{ name | trim | upper }}", &ctx), ok("ANA"));
         // upper then lower ends lowercase. The reverse order would end uppercase.
         assert_eq!(
             engine.render("{{ name | upper | lower }}", &ctx),
-            Ok("  ana  ".to_string())
+            ok("  ana  ")
         );
     }
 
     #[test]
     fn text_without_tags_passes_through() {
-        let engine = Engine::new();
         let text = "Single {braces} and a stray }} are plain text.";
-        assert_eq!(engine.render(text, &vars(&[])), Ok(text.to_string()));
+        assert_eq!(Engine::new().render(text, &HashMap::new()), ok(text));
     }
 
     #[test]
@@ -192,25 +177,20 @@ mod tests {
             }
         }
 
+        let ctx = HashMap::from([("name", "ana")]);
         let mut engine = Engine::new();
         engine.register("shout", Box::new(Shout));
-        let ctx = vars(&[("name", "ana")]);
-        assert_eq!(
-            engine.render("{{ name | shout }}", &ctx),
-            Ok("ANA!".to_string())
-        );
+        assert_eq!(engine.render("{{ name | shout }}", &ctx), ok("ANA!"));
 
+        // A new filter under an existing name replaces the built-in.
         engine.register("upper", Box::new(Shout));
-        assert_eq!(
-            engine.render("{{ name | upper }}", &ctx),
-            Ok("ANA!".to_string())
-        );
+        assert_eq!(engine.render("{{ name | upper }}", &ctx), ok("ANA!"));
     }
 
     #[test]
     fn unknown_variables_and_filters_are_errors() {
+        let ctx = HashMap::from([("name", "ana")]);
         let engine = Engine::new();
-        let ctx = vars(&[("name", "ana")]);
         assert_eq!(
             engine.render("Hi {{ nobody }}", &ctx),
             Err(RenderError::UnknownVar("nobody".to_string()))
@@ -223,8 +203,8 @@ mod tests {
 
     #[test]
     fn unclosed_tag_is_an_error() {
+        let ctx = HashMap::from([("name", "ana")]);
         let engine = Engine::new();
-        let ctx = vars(&[("name", "ana")]);
         assert_eq!(
             engine.render("Hi {{ name", &ctx),
             Err(RenderError::Unclosed)
@@ -237,20 +217,12 @@ mod tests {
 
     #[test]
     fn tokens_borrow_slices_of_the_template() {
-        assert_eq!(
-            tokens("a {{ b | upper }}{{c}}d"),
-            Ok(vec![
-                Token::Text("a "),
-                Token::Tag {
-                    name: "b",
-                    filters: vec!["upper"]
-                },
-                Token::Tag {
-                    name: "c",
-                    filters: vec![]
-                },
-                Token::Text("d"),
-            ])
-        );
+        let expected = vec![
+            Token::Text("a "),
+            Token::Tag("b", vec!["upper"]),
+            Token::Tag("c", vec![]),
+            Token::Text("d"),
+        ];
+        assert_eq!(tokens("a {{ b | upper }}{{c}}d"), Ok(expected));
     }
 }

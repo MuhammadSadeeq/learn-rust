@@ -1,5 +1,5 @@
 // ============================================================================
-//  QUEST sets1 · Unique tags                         Chapter 12 · Collections
+//  QUEST sets1 · Unique tags                          Chapter 12 · Collections
 // ----------------------------------------------------------------------------
 //  A set stores each value once. HashSet is fast and has no order. BTreeSet
 //  keeps its values sorted. Each function body is todo!().

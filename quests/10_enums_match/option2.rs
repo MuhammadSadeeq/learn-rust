@@ -1,5 +1,5 @@
 // ============================================================================
-//  QUEST option2 · if let and let else             Chapter 10 · Enums & Pattern Matching
+//  QUEST option2 · if let and let else  Chapter 10 · Enums & Pattern Matching
 // ----------------------------------------------------------------------------
 //  Every Option in this file is opened with unwrap(). That works until a None
 //  arrives, and then the program panics. Rewrite each function so that the

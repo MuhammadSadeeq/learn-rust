@@ -76,7 +76,13 @@ mod tests {
 
     #[test]
     fn cancel_is_refused_after_shipping() {
-        assert_eq!(cancel(OrderStatus::Shipped), Err(String::from("already shipped")));
-        assert_eq!(cancel(OrderStatus::Delivered), Err(String::from("already delivered")));
+        assert_eq!(
+            cancel(OrderStatus::Shipped),
+            Err(String::from("already shipped"))
+        );
+        assert_eq!(
+            cancel(OrderStatus::Delivered),
+            Err(String::from("already delivered"))
+        );
     }
 }

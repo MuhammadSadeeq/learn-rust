@@ -1,21 +1,21 @@
 // ============================================================================
-//  QUEST boss3_ledger · Bank ledger            Chapter 13 · Iterators & Closures
+//  QUEST boss3_ledger · Bank ledger          Chapter 13 · Iterators & Closures
 // ----------------------------------------------------------------------------
 //  BOSS, Act III. Build the core of a bank ledger. The Laravel version of this
 //  idea is DB::transaction(): money moves completely or not at all.
 //
 //  The rules. The tests check each one.
-//    open(name)        creates an account at 0. Opening it again changes nothing.
-//    apply(tx)         runs one transaction, all or nothing. Deposit and
-//                      Withdrawal need an existing account. Transfer checks
-//                      `from`, then `to`, then the funds. A failure returns its
-//                      error and changes no balance.
-//    apply_all(txs)    applies each transaction in order. After an error it keeps
-//                      going, and it returns the errors in order.
-//    top_accounts(n)   the n largest balances, biggest first. Ties sort by name.
-//    total()           the sum of all balances.
-//    Display           "unknown account: NAME" and
-//                      "insufficient funds in NAME: needed N, available M"
+//    open(name)       creates the account at 0. Reopening changes nothing.
+//    apply(tx)        runs one transaction, all or nothing. Deposit and
+//                     Withdrawal need an existing account. Transfer checks
+//                     `from`, then `to`, then the funds. A failure returns its
+//                     error and changes no balance.
+//    apply_all(txs)   applies each transaction in order. After an error it
+//                     keeps going and returns the errors, in order.
+//    top_accounts(n)  the n largest balances, biggest first. Ties sort by name.
+//    total()          the sum of all balances.
+//    Display          "unknown account: NAME" and
+//                     "insufficient funds in NAME: needed N, available M"
 //
 //  Helper methods are up to you. Don't edit the tests.
 //

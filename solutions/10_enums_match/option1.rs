@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION option1 · Option instead of null      Chapter 10 · Enums & Pattern Matching
+//  SOLUTION option1 · Option instead of null  Chapter 10 · Enums & Pattern Matching
 // ----------------------------------------------------------------------------
 //  A missing answer is None, not a panic. The caller has to open the Option
 //  before using the value, so a missing user cannot slip through unnoticed.

@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION errors1 · Return a Result              Chapter 11 · Errors Are Values
+//  SOLUTION errors1 · Return a Result         Chapter 11 · Errors Are Values
 // ----------------------------------------------------------------------------
 //  A bad input is an Err value, not a panic. The caller can show a message,
 //  retry or log, and the program keeps running.

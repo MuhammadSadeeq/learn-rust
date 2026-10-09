@@ -1,5 +1,5 @@
 // ============================================================================
-//  QUEST errors3 · Your own error type             Chapter 11 · Errors Are Values
+//  QUEST errors3 · Your own error type        Chapter 11 · Errors Are Values
 // ----------------------------------------------------------------------------
 //  ConfigError describes what went wrong with a config value. Finish the two
 //  pieces the file needs:

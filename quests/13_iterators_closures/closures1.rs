@@ -1,5 +1,5 @@
 // ============================================================================
-//  QUEST closures1 · Closures capture          Chapter 13 · Iterators & Closures
+//  QUEST closures1 · Closures capture        Chapter 13 · Iterators & Closures
 // ----------------------------------------------------------------------------
 //  Four functions that build or take closures. Each body is todo!().
 //

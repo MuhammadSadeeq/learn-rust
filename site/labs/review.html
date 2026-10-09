@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Recall Deck · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<style>
+  .rv-grid { display: grid; gap: 18px; min-width: 0; }
+  .rv-h { margin: 0 0 8px; font: 800 1.45rem/1.15 var(--font-display); color: var(--ink); letter-spacing: 0.005em; }
+  .rv-lead { margin: 0 0 14px; max-width: 62ch; color: var(--ink-2); font-size: 0.95rem; line-height: 1.5; }
+  .rv-presets { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 10px; }
+  .rv-presets .ox-label { margin-right: 4px; }
+  .rv-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .rv-chip {
+    display: inline-flex; align-items: baseline; gap: 8px; min-height: 36px;
+    padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--surface-2); color: var(--ink-2);
+    font: 500 0.92rem/1.25 var(--font-body); text-align: left; cursor: pointer;
+  }
+  .rv-chip:hover { border-color: var(--ink-2); color: var(--ink); }
+  .rv-chip[aria-pressed="true"] { background: var(--oxide-soft); border-color: var(--oxide); color: var(--ink); font-weight: 700; }
+  .rv-num { font: 600 0.78rem/1 var(--font-mono); color: var(--muted); }
+  .rv-chip[aria-pressed="true"] .rv-num { color: var(--oxide-ink); }
+  .rv-due { font: 600 0.74rem/1 var(--font-mono); color: var(--muted); white-space: nowrap; }
+  .rv-stats { display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: flex-end; margin-top: 18px; }
+  .rv-stats .ox-btn { margin-left: auto; }
+  .rv-msg { min-height: 1.4em; margin: 10px 0 0; color: var(--muted); font-size: 0.95rem; }
+
+  .rv-stage { min-width: 0; max-width: 46rem; outline: none; }
+  .rv-card { display: grid; gap: 14px; min-width: 0; animation: ox-rise 0.25s ease-out; }
+  .rv-top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 14px; }
+  .rv-progress { height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+  .rv-progress i { display: block; height: 100%; width: 0; background: var(--oxide); transition: width 0.3s ease; }
+  .rv-face {
+    display: grid; gap: 10px; min-width: 0; padding: 18px 20px;
+    border: 1px solid var(--line); border-radius: var(--radius-lg);
+    background: var(--surface); box-shadow: var(--shadow);
+    font-size: 1.08rem; line-height: 1.55; overflow-wrap: anywhere;
+  }
+  .rv-face.is-quiet { background: var(--surface-2); box-shadow: none; font-size: 0.98rem; color: var(--ink-2); }
+  .rv-face.is-answer { border-color: var(--oxide); }
+  .rv-body { display: grid; gap: 10px; min-width: 0; }
+  .rv-body p { margin: 0; }
+  .rv-body pre { margin: 0; padding: 10px 12px; border-radius: var(--radius); background: var(--code-bg); color: var(--code-ink); font: 0.84rem/1.5 var(--font-mono); overflow-x: auto; white-space: pre; }
+  .rv-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .rv-grades { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .rv-grade {
+    display: grid; gap: 6px; align-content: start; min-height: 66px; padding: 10px 12px;
+    border: 1px solid var(--line); border-top: 4px solid var(--grade, var(--line)); border-radius: var(--radius);
+    background: var(--surface); color: var(--ink);
+    font: 700 1rem/1.2 var(--font-body); text-align: left; cursor: pointer;
+  }
+  .rv-grade:hover { background: var(--surface-2); border-color: var(--ink-2); }
+  .rv-grade.is-again { --grade: var(--bad); }
+  .rv-grade.is-hard { --grade: var(--warn); }
+  .rv-grade.is-good { --grade: var(--ok); }
+  .rv-grade.is-easy { --grade: var(--borrow); }
+  .rv-grade kbd { font-size: 0.78em; }
+  .rv-gnext { font: 500 0.86rem/1.3 var(--font-body); color: var(--muted); }
+  .rv-hint, .rv-sub { margin: 0; color: var(--muted); font-size: 0.95rem; }
+  .rv-keys { margin: 14px 0 0; color: var(--muted); font-size: 0.9rem; line-height: 1.9; }
+  .rv-empty { margin: 0; padding: 22px; border: 1px dashed var(--line); border-radius: var(--radius-lg); color: var(--ink-2); line-height: 1.5; }
+  .rv-sum-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr)); gap: 14px; padding: 4px 0 2px; }
+  .rv-summary p { margin: 0; color: var(--ink-2); }
+  .rv-missed { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: var(--ink-2); font-size: 0.95rem; }
+  .rv-missed .ox-label { margin-right: 6px; }
+
+  .rv-mastery { --rv-b1: color-mix(in srgb, var(--ok) 50%, var(--surface)); --rv-b2: color-mix(in srgb, var(--ok) 62%, var(--surface)); --rv-b3: color-mix(in srgb, var(--ok) 75%, var(--surface)); --rv-b4: color-mix(in srgb, var(--ok) 88%, var(--surface)); --rv-b5: var(--ok); }
+  .rv-b1 { background: var(--rv-b1); }
+  .rv-b2 { background: var(--rv-b2); }
+  .rv-b3 { background: var(--rv-b3); }
+  .rv-b4 { background: var(--rv-b4); }
+  .rv-b5 { background: var(--rv-b5); }
+  .rv-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 6px; padding: 0; list-style: none; font-size: 0.9rem; color: var(--ink-2); }
+  .rv-legend i { display: inline-block; width: 12px; height: 12px; margin-right: 6px; border-radius: 3px; vertical-align: -1px; }
+  .rv-mrow { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr) minmax(0, 11rem); gap: 6px 16px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line-2); }
+  .rv-mlabel { min-width: 0; color: var(--ink); font-size: 0.95rem; line-height: 1.3; }
+  .rv-mlabel .ox-label { display: block; margin-bottom: 2px; }
+  .rv-track { display: flex; gap: 2px; height: 16px; min-width: 0; border-radius: 4px; overflow: hidden; background: var(--surface); }
+  .rv-seg { flex: 1 1 0; min-width: 2px; height: 100%; }
+  .rv-mcount { color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+  .rv-numbers { margin-top: 14px; }
+  .rv-numbers summary { cursor: pointer; font: 600 0.92rem/1.3 var(--font-body); color: var(--ink-2); }
+  .rv-numbers .ox-table-wrap { margin-top: 10px; }
+  .rv-tip {
+    position: fixed; z-index: 60; transform: translate(-50%, calc(-100% - 14px)); pointer-events: none;
+    padding: 6px 10px; border-radius: var(--radius); background: var(--ink); color: var(--surface);
+    font: 600 0.88rem/1.3 var(--font-body); white-space: nowrap; box-shadow: var(--shadow-lift);
+  }
+  .rv-tip[hidden] { display: none; }
+
+  @media (max-width: 720px) { .rv-mrow { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 560px) {
+    .rv-grades { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .rv-stats .ox-btn { margin-left: 0; width: 100%; }
+    .rv-face { padding: 16px; }
+  }
+</style>
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/cards/ch01.js" defer></script>
+<script src="../assets/cards/ch02.js" defer></script>
+<script src="../assets/cards/ch03.js" defer></script>
+<script src="../assets/cards/ch04.js" defer></script>
+<script src="../assets/cards/ch05.js" defer></script>
+<script src="../assets/cards/ch06.js" defer></script>
+<script src="../assets/cards/ch07.js" defer></script>
+<script src="../assets/cards/ch08.js" defer></script>
+<script src="../assets/cards/ch09.js" defer></script>
+<script src="../assets/cards/ch10.js" defer></script>
+<script src="../assets/cards/ch11.js" defer></script>
+<script src="../assets/cards/ch12.js" defer></script>
+<script src="../assets/cards/ch13.js" defer></script>
+<script src="../assets/cards/ch14.js" defer></script>
+<script src="../assets/cards/ch15.js" defer></script>
+<script src="../assets/cards/ch16.js" defer></script>
+<script src="../assets/cards/ch17.js" defer></script>
+<script src="../assets/cards/ch18.js" defer></script>
+<script src="../assets/cards/ch19.js" defer></script>
+<script src="../assets/cards/ch20.js" defer></script>
+<script src="../assets/cards/ch21.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+</head>
+<body data-crumb="Lab · Recall Deck">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<main class="ox-lab" id="main">
+  <header class="ox-lab-hero">
+    <span class="ox-label">Lab</span>
+    <h1 class="ox-title">Recall Deck</h1>
+    <p>Review the recall cards from the chapters you have read, on a Leitner schedule that brings back what you miss and spaces out what you know.</p>
+  </header>
+
+  <div class="rv-grid">
+    <section class="ox-panel" aria-labelledby="rv-pick-h">
+      <h2 class="rv-h" id="rv-pick-h">Choose chapters</h2>
+      <p class="rv-lead">Every card starts in box 1 and is due at once. Again sends a card back to box 1. Hard keeps it in its box. Good moves it up one box, and Easy moves it up two. Boxes wait 0, 1, 3, 7 and 16 days before the next review.</p>
+      <div class="rv-presets">
+        <span class="ox-label">Preset</span>
+        <button type="button" class="ox-btn is-small" id="rv-all">All chapters</button>
+        <button type="button" class="ox-btn is-small" id="rv-done">Completed chapters</button>
+      </div>
+      <div class="rv-chips" id="rv-chips" role="group" aria-label="Chapters to review"></div>
+      <div class="rv-stats">
+        <div class="ox-stat"><b id="rv-due">0</b><span>Due now</span></div>
+        <div class="ox-stat"><b id="rv-total">0</b><span>Cards in these chapters</span></div>
+        <button type="button" class="ox-btn is-primary" id="rv-start">Start review</button>
+      </div>
+      <p class="rv-msg" id="rv-msg"></p>
+    </section>
+
+    <section class="ox-panel" aria-labelledby="rv-review-h">
+      <h2 class="rv-h" id="rv-review-h">Review</h2>
+      <div class="rv-stage" id="rv-stage" tabindex="-1"></div>
+      <p class="rv-keys"><kbd>Space</kbd> show answer · <kbd>1</kbd> again · <kbd>2</kbd> hard · <kbd>3</kbd> good · <kbd>4</kbd> easy</p>
+    </section>
+
+    <section class="ox-panel" aria-labelledby="rv-mast-h">
+      <h2 class="rv-h" id="rv-mast-h">Mastery by chapter</h2>
+      <p class="rv-lead">Each bar shows how many cards sit in each box, from box 1 on the left to box 5 on the right. Cards you have not seen yet count as box 1.</p>
+      <ul class="rv-legend rv-mastery" id="rv-legend" aria-label="Boxes"></ul>
+      <div class="rv-mastery" id="rv-bars"></div>
+      <details class="rv-numbers">
+        <summary>Show the numbers</summary>
+        <div class="ox-table-wrap">
+          <table class="ox-table">
+            <thead><tr><th scope="col">Chapter</th><th scope="col">Box 1</th><th scope="col">Box 2</th><th scope="col">Box 3</th><th scope="col">Box 4</th><th scope="col">Box 5</th><th scope="col">Total</th></tr></thead>
+            <tbody id="rv-numbers"></tbody>
+          </table>
+        </div>
+      </details>
+    </section>
+  </div>
+</main>
+<div class="rv-tip" id="rv-tip" aria-hidden="true" hidden></div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* @leitner:start  pure scheduling, no DOM. tests/leitner-test.mjs runs this block. */
+  var DAY_MS = 86400000;
+  var INTERVAL_DAYS = [0, 1, 3, 7, 16];
+  var MAX_BOX = INTERVAL_DAYS.length;
+  var GRADES = ["again", "hard", "good", "easy"];
+
+  function nextBox(box, grade) {
+    if (grade === "again") return 1;
+    if (grade === "hard") return box;
+    if (grade === "good") return Math.min(MAX_BOX, box + 1);
+    if (grade === "easy") return Math.min(MAX_BOX, box + 2);
+    throw new Error("unknown grade: " + grade);
+  }
+  function schedule(rec, grade, now) {
+    var box = nextBox(rec.box, grade);
+    return { box: box, due: now + INTERVAL_DAYS[box - 1] * DAY_MS };
+  }
+  // A card with no saved record is new: box 1, due at once.
+  function recordOf(cards, id) {
+    return cards[id] || { box: 1, due: 0 };
+  }
+  function isDue(rec, now) {
+    return rec.due <= now;
+  }
+  // Weakest box first, then most overdue, then deck order.
+  function queueOrder(a, b) {
+    return (a.rec.box - b.rec.box) || (a.rec.due - b.rec.due) || (a.i - b.i);
+  }
+  // Local calendar day, used to award each card once per day.
+  function dayKey(ts) {
+    var d = new Date(ts);
+    var m = String(d.getMonth() + 1).padStart(2, "0");
+    var day = String(d.getDate()).padStart(2, "0");
+    return d.getFullYear() + "-" + m + "-" + day;
+  }
+  function waitLabel(ms) {
+    if (ms <= 0) return "now";
+    var min = Math.ceil(ms / 60000);
+    if (min < 60) return "in " + min + " min";
+    var hours = Math.ceil(ms / 3600000);
+    if (hours < 24) return "in " + hours + " h";
+    var days = Math.ceil(ms / DAY_MS);
+    return "in " + days + (days === 1 ? " day" : " days");
+  }
+  /* @leitner:end */
+
+  var GLABEL = { again: "Again", hard: "Hard", good: "Good", easy: "Easy" };
+  var Ox = null;
+  var DECK = [];
+  var chapterNums = [];
+  var picks = new Set();
+  var session = null; // { queue, i, phase: "question" | "answer" | "done", counts, missed, ended }
+  var el = {};
+
+  function $(id) { return document.getElementById(id); }
+  function pad(n) { return String(n).padStart(2, "0"); }
+  function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
+  function esc(s) { return Ox.esc(s); }
+  function chapterTitle(n) { var c = Ox.chapterByNum(n); return c ? c.title : "Chapter " + n; }
+  function chapterLine(n) { return "Chapter " + pad(n) + " · " + chapterTitle(n); }
+  function store() {
+    var st = Ox.state();
+    if (!st.cards) st.cards = {};
+    if (!st.game) st.game = {};
+    return st;
+  }
+  function snippet(text, max) {
+    var t = text.replace(/```[\s\S]*?```/g, " (code) ").replace(/`([^`]+)`/g, "$1").replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\s+/g, " ").trim();
+    return t.length > max ? t.slice(0, max - 1).trimEnd() + "…" : t;
+  }
+  function face(label, text, cls) {
+    return '<div class="rv-face ' + cls + '"><span class="ox-label">' + label + '</span><div class="rv-body">' + Ox.cardFaceHtml(text) + '</div></div>';
+  }
+  function stat(value, label) {
+    return '<div class="ox-stat"><b>' + value + '</b><span>' + label + '</span></div>';
+  }
+
+  /* ---------- chapter picks ---------- */
+  function completedChapters() {
+    var st = store();
+    return chapterNums.filter(function (n) { return !!(st.chapters && st.chapters[n]); });
+  }
+  function loadPicks() {
+    var st = store();
+    var saved = st.game.review && st.game.review.chapters;
+    if (Array.isArray(saved)) {
+      picks = new Set(saved.filter(function (n) { return chapterNums.indexOf(n) >= 0; }));
+    } else {
+      var done = completedChapters();
+      picks = new Set(done.length ? done : chapterNums);
+    }
+  }
+  function savePicks() {
+    var st = store();
+    st.game.review = Object.assign({}, st.game.review, {
+      chapters: chapterNums.filter(function (n) { return picks.has(n); })
+    });
+    Ox.save();
+  }
+
+  /* ---------- queries ---------- */
+  function pickedCards() {
+    return DECK.filter(function (c) { return picks.has(c.ch); });
+  }
+  function dueCards(now) {
+    var cards = store().cards;
+    return pickedCards()
+      .map(function (card, i) { return { card: card, i: i, rec: recordOf(cards, card.id) }; })
+      .filter(function (x) { return isDue(x.rec, now); })
+      .sort(queueOrder)
+      .map(function (x) { return x.card; });
+  }
+  function nextDueAt(now) {
+    var cards = store().cards;
+    var best = null;
+    pickedCards().forEach(function (c) {
+      var due = recordOf(cards, c.id).due;
+      if (due > now && (best === null || due < best)) best = due;
+    });
+    return best;
+  }
+
+  /* ---------- session ---------- */
+  function startSession() {
+    var queue = dueCards(Date.now());
+    if (!queue.length) return;
+    session = { queue: queue, i: 0, phase: "question", counts: { reviewed: 0, again: 0, hard: 0, good: 0, easy: 0 }, missed: [], ended: false };
+    render();
+    focusStage();
+  }
+  function reveal() {
+    if (!session || session.phase !== "question") return;
+    session.phase = "answer";
+    render();
+    focusStage();
+  }
+  function gradeCurrent(grade) {
+    if (!session || session.phase !== "answer") return;
+    var card = session.queue[session.i];
+    var now = Date.now();
+    var st = store();
+    st.cards[card.id] = schedule(recordOf(st.cards, card.id), grade, now);
+    Ox.save();
+    Ox.award(1, "review", "rev:" + card.id + ":" + dayKey(now));
+    session.counts.reviewed++;
+    session.counts[grade]++;
+    if (grade === "again") session.missed.push(card);
+    session.i++;
+    session.phase = session.i < session.queue.length ? "question" : "done";
+    render();
+    focusStage();
+  }
+  function endSession() {
+    if (!session || session.phase === "done") return;
+    session.phase = "done";
+    session.ended = true;
+    render();
+    focusStage();
+  }
+  function focusStage() {
+    el.stage.focus({ preventScroll: true });
+  }
+
+  /* ---------- rendering ---------- */
+  function render() {
+    renderPicker();
+    renderStage();
+    renderMastery();
+  }
+
+  function renderPicker() {
+    var now = Date.now();
+    var due = dueCards(now);
+    var dueBy = {};
+    due.forEach(function (c) { dueBy[c.ch] = (dueBy[c.ch] || 0) + 1; });
+    el.chips.forEach(function (b) {
+      var n = +b.dataset.ch;
+      b.setAttribute("aria-pressed", String(picks.has(n)));
+      b.querySelector(".rv-due").textContent = (dueBy[n] || 0) + " due";
+    });
+    el.done.disabled = completedChapters().length === 0;
+    el.due.textContent = due.length;
+    el.total.textContent = pickedCards().length;
+    var active = !!session && session.phase !== "done";
+    el.start.disabled = active || due.length === 0;
+    el.msg.textContent = picks.size ? "" : "Pick at least one chapter to review.";
+  }
+
+  function renderStage() {
+    var now = Date.now();
+    var html;
+    if (!DECK.length) html = '<p class="rv-empty">No recall cards are loaded.</p>';
+    else if (!session) html = renderIdle(now);
+    else if (session.phase === "done") html = renderSummary(now);
+    else html = renderCard();
+    el.stage.innerHTML = html;
+  }
+
+  function renderIdle(now) {
+    if (!picks.size) return '<p class="rv-empty">Choose at least one chapter to see its cards.</p>';
+    var due = dueCards(now);
+    if (!due.length) {
+      var next = nextDueAt(now);
+      return '<p class="rv-empty">Nothing due in these chapters.' + (next ? " Next review " + waitLabel(next - now) + "." : "") + '</p>';
+    }
+    var first = due[0];
+    return '<div class="rv-card">' +
+      '<div class="rv-top"><span class="ox-label">Up next · ' + esc(chapterLine(first.ch)) + '</span><span class="ox-label">' + plural(due.length, "card", "cards") + ' due</span></div>' +
+      face("Question", first.q, "") +
+      '<p class="rv-hint">Start review to go through all ' + due.length + ' due cards, weakest box first.</p>' +
+      '</div>';
+  }
+
+  function renderCard() {
+    var card = session.queue[session.i];
+    var n = session.queue.length;
+    var top = '<div class="rv-top"><span class="ox-label">' + esc(chapterLine(card.ch)) + '</span><span class="ox-label">Card ' + (session.i + 1) + ' of ' + n + '</span></div>';
+    var progress = '<div class="rv-progress" role="progressbar" aria-label="Session progress" aria-valuemin="0" aria-valuemax="' + n + '" aria-valuenow="' + session.i + '"><i style="width:' + (session.i / n * 100).toFixed(1) + '%"></i></div>';
+    if (session.phase === "question") {
+      return '<div class="rv-card">' + top + progress + face("Question", card.q, "") +
+        '<div class="rv-actions"><button type="button" class="ox-btn is-primary" data-act="show">Show answer <kbd>Space</kbd></button>' +
+        '<button type="button" class="ox-btn is-small" data-act="end">End session</button></div></div>';
+    }
+    var rec = recordOf(store().cards, card.id);
+    var grades = GRADES.map(function (g, k) {
+      var box = nextBox(rec.box, g);
+      var ms = INTERVAL_DAYS[box - 1] * DAY_MS;
+      var when = "box " + box + " · " + (ms ? waitLabel(ms) : "due now");
+      return '<button type="button" class="rv-grade is-' + g + '" data-grade="' + g + '">' +
+        '<span>' + GLABEL[g] + ' <kbd>' + (k + 1) + '</kbd></span><span class="rv-gnext">' + when + '</span></button>';
+    }).join("");
+    return '<div class="rv-card">' + top + progress + face("Question", card.q, "is-quiet") + face("Answer", card.a, "is-answer") +
+      '<div class="rv-grades" role="group" aria-label="How well did you know it?">' + grades + '</div>' +
+      '<div class="rv-actions"><button type="button" class="ox-btn is-small" data-act="end">End session</button></div></div>';
+  }
+
+  function renderSummary(now) {
+    var c = session.counts;
+    var due = dueCards(now).length;
+    var next = nextDueAt(now);
+    var missed = session.missed.length
+      ? '<p class="rv-sub">Missed. These cards are back in box 1.</p><ul class="rv-missed">' +
+        session.missed.map(function (card) {
+          return '<li><span class="ox-label">' + pad(card.ch) + '</span>' + esc(snippet(card.q, 120)) + '</li>';
+        }).join("") + '</ul>'
+      : '<p class="rv-sub">No cards missed.</p>';
+    var status = due
+      ? '<p>' + plural(due, "card is", "cards are") + ' due now.</p>'
+      : '<p>Nothing due now.' + (next ? " Next review " + waitLabel(next - now) + "." : "") + '</p>';
+    return '<div class="rv-card rv-summary">' +
+      '<div class="rv-top"><span class="ox-label">' + (session.ended ? "Session ended early" : "Session complete") + '</span></div>' +
+      '<h3 class="rv-h">' + plural(c.reviewed, "card reviewed", "cards reviewed") + '</h3>' +
+      '<div class="rv-sum-grid">' + stat(c.reviewed, "Reviewed") + stat(c.again, "Again") + stat(c.hard, "Hard") + stat(c.good, "Good") + stat(c.easy, "Easy") + '</div>' +
+      status + missed +
+      '<div class="rv-actions">' +
+        '<button type="button" class="ox-btn is-primary" data-act="start"' + (due ? "" : " disabled") + '>Review due cards</button>' +
+        '<button type="button" class="ox-btn" data-act="idle">Done</button>' +
+      '</div></div>';
+  }
+
+  function renderMastery() {
+    if (!chapterNums.length) { el.bars.innerHTML = '<p class="rv-empty">No chapters have recall cards yet.</p>'; el.numbers.innerHTML = ""; return; }
+    var cards = store().cards;
+    var rows = [], table = [];
+    chapterNums.forEach(function (n) {
+      var counts = [0, 0, 0, 0, 0], total = 0;
+      DECK.forEach(function (c) {
+        if (c.ch !== n) return;
+        counts[recordOf(cards, c.id).box - 1]++;
+        total++;
+      });
+      var mature = counts[3] + counts[4];
+      var segs = counts.map(function (k, i) {
+        if (!k) return "";
+        var b = i + 1;
+        return '<i class="rv-seg rv-b' + b + '" style="flex-grow:' + k + '" data-tip="' + esc("Ch " + pad(n) + " · Box " + b + " · " + plural(k, "card", "cards")) + '"></i>';
+      }).join("");
+      var label = "Chapter " + pad(n) + ", " + chapterTitle(n) + ": " + counts.map(function (k, i) { return "box " + (i + 1) + " " + k; }).join(", ");
+      rows.push('<div class="rv-mrow"><div class="rv-mlabel"><span class="ox-label">' + pad(n) + '</span>' + esc(chapterTitle(n)) + '</div>' +
+        '<div class="rv-track" role="img" aria-label="' + esc(label) + '">' + segs + '</div>' +
+        '<div class="rv-mcount">' + plural(total, "card", "cards") + ' · ' + mature + ' in boxes 4–5</div></div>');
+      table.push('<tr><th scope="row">' + pad(n) + ' · ' + esc(chapterTitle(n)) + '</th>' +
+        counts.map(function (k) { return "<td>" + k + "</td>"; }).join("") + '<td>' + total + '</td></tr>');
+    });
+    el.bars.innerHTML = rows.join("");
+    el.numbers.innerHTML = table.join("");
+  }
+
+  /* ---------- build once ---------- */
+  function buildChips() {
+    el.chipBox.innerHTML = chapterNums.map(function (n) {
+      return '<button type="button" class="rv-chip" data-ch="' + n + '" aria-pressed="false">' +
+        '<span class="rv-num">' + pad(n) + '</span><span>' + esc(chapterTitle(n)) + '</span><span class="rv-due"></span></button>';
+    }).join("");
+    el.chips = Array.prototype.slice.call(el.chipBox.querySelectorAll(".rv-chip"));
+  }
+  function buildLegend() {
+    el.legend.innerHTML = INTERVAL_DAYS.map(function (days, i) {
+      var b = i + 1;
+      return '<li><i class="rv-b' + b + '"></i>Box ' + b + ' · ' + (days ? "wait " + plural(days, "day", "days") : "due now") + '</li>';
+    }).join("");
+  }
+
+  function onKey(e) {
+    if (e.repeat || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+    var t = e.target;
+    if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+    // Buttons already turn Space into a click; leave those to the browser.
+    if (t && t.tagName === "BUTTON" && (e.key === " " || e.key === "Enter")) return;
+    if (!session) return;
+    if (session.phase === "question" && e.key === " ") {
+      e.preventDefault();
+      reveal();
+    } else if (session.phase === "answer" && /^[1-4]$/.test(e.key)) {
+      e.preventDefault();
+      gradeCurrent(GRADES[+e.key - 1]);
+    }
+  }
+
+  function bind() {
+    el.chipBox.addEventListener("click", function (e) {
+      var b = e.target.closest(".rv-chip");
+      if (!b) return;
+      var n = +b.dataset.ch;
+      if (picks.has(n)) picks.delete(n); else picks.add(n);
+      savePicks();
+      render();
+    });
+    $("rv-all").addEventListener("click", function () { picks = new Set(chapterNums); savePicks(); render(); });
+    el.done.addEventListener("click", function () { picks = new Set(completedChapters()); savePicks(); render(); });
+    el.start.addEventListener("click", startSession);
+    el.stage.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-grade],[data-act]");
+      if (!b) return;
+      if (b.dataset.grade) gradeCurrent(b.dataset.grade);
+      else if (b.dataset.act === "show") reveal();
+      else if (b.dataset.act === "end") endSession();
+      else if (b.dataset.act === "start") startSession();
+      else if (b.dataset.act === "idle") { session = null; render(); focusStage(); }
+    });
+    document.addEventListener("keydown", onKey);
+
+    el.bars.addEventListener("pointerover", function (e) {
+      var s = e.target.closest ? e.target.closest(".rv-seg") : null;
+      if (!s) { el.tip.hidden = true; return; }
+      el.tip.textContent = s.dataset.tip;
+      el.tip.hidden = false;
+    });
+    el.bars.addEventListener("pointermove", function (e) {
+      if (el.tip.hidden) return;
+      el.tip.style.left = e.clientX + "px";
+      el.tip.style.top = e.clientY + "px";
+    });
+    el.bars.addEventListener("pointerleave", function () { el.tip.hidden = true; });
+  }
+
+  function init() {
+    Ox = window.Ox;
+    if (!Ox) return;
+    DECK = window.OX_CARDS || [];
+    chapterNums = Array.from(new Set(DECK.map(function (c) { return c.ch; }))).sort(function (a, b) { return a - b; });
+    el.chipBox = $("rv-chips");
+    el.chips = [];
+    el.done = $("rv-done");
+    el.start = $("rv-start");
+    el.due = $("rv-due");
+    el.total = $("rv-total");
+    el.msg = $("rv-msg");
+    el.stage = $("rv-stage");
+    el.legend = $("rv-legend");
+    el.bars = $("rv-bars");
+    el.numbers = $("rv-numbers");
+    el.tip = $("rv-tip");
+    store();
+    loadPicks();
+    buildChips();
+    buildLegend();
+    bind();
+    render();
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
+</script>
+</body>
+</html>

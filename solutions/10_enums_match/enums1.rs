@@ -57,8 +57,14 @@ mod tests {
 
     #[test]
     fn channel_names_each_variant() {
-        let email = Notification::Email { to: String::from("a@b.test"), subject: String::from("Hi") };
-        let sms = Notification::Sms { number: String::from("+1"), text: String::from("x") };
+        let email = Notification::Email {
+            to: String::from("a@b.test"),
+            subject: String::from("Hi"),
+        };
+        let sms = Notification::Sms {
+            number: String::from("+1"),
+            text: String::from("x"),
+        };
         assert_eq!(channel(&email), "email");
         assert_eq!(channel(&sms), "sms");
         assert_eq!(channel(&Notification::Push(String::from("x"))), "push");
@@ -81,7 +87,10 @@ mod tests {
             text: String::from("Your code is 4821"),
         };
         assert_eq!(preview(&sms), "SMS to +15550100: Your code is 4821");
-        assert_eq!(preview(&Notification::Push(String::from("New follower"))), "Push: New follower");
+        assert_eq!(
+            preview(&Notification::Push(String::from("New follower"))),
+            "Push: New follower"
+        );
     }
 
     #[test]

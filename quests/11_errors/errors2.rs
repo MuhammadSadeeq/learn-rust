@@ -1,5 +1,5 @@
 // ============================================================================
-//  QUEST errors2 · The ? operator                   Chapter 11 · Errors Are Values
+//  QUEST errors2 · The ? operator             Chapter 11 · Errors Are Values
 // ----------------------------------------------------------------------------
 //  Both functions already return a Result, but they call unwrap() on each
 //  parse. Bad input panics instead of being reported to the caller. Use ?

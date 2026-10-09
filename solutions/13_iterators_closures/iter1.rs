@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION iter1 · Collection pipeline        Chapter 13 · Iterators & Closures
+//  SOLUTION iter1 · Collection pipeline      Chapter 13 · Iterators & Closures
 // ----------------------------------------------------------------------------
 //  A chain is lazy: nothing runs until sum() or collect() pulls the items.
 //  paid_total keeps the paid orders and adds up their totals.
@@ -38,7 +38,7 @@ fn customers(orders: &[Order]) -> Vec<String> {
         // The set removes repeats and keeps the names sorted.
         .collect::<BTreeSet<_>>()
         .into_iter()
-        // The set borrowed names from orders. Make owned Strings for the caller.
+        // The set borrows from orders, so make owned Strings for the caller.
         .map(String::from)
         .collect()
 }

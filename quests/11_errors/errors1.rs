@@ -1,5 +1,5 @@
 // ============================================================================
-//  QUEST errors1 · Return a Result                  Chapter 11 · Errors Are Values
+//  QUEST errors1 · Return a Result            Chapter 11 · Errors Are Values
 // ----------------------------------------------------------------------------
 //  parse_age panics on bad input, and a panic stops the whole program. Return
 //  an Err instead, so the caller decides what to do. Use these messages:

@@ -1,5 +1,5 @@
 // ============================================================================
-//  QUEST vecs1 · Vec basics                          Chapter 12 · Collections
+//  QUEST vecs1 · Vec basics                           Chapter 12 · Collections
 // ----------------------------------------------------------------------------
 //  Three small functions over a Vec<i32>. Each body is todo!(), so the tests
 //  fail until you write them.

@@ -1,5 +1,5 @@
 // ============================================================================
-//  QUEST option1 · Option instead of null          Chapter 10 · Enums & Pattern Matching
+//  QUEST option1 · Option instead of null  Chapter 10 · Enums & Pattern Matching
 // ----------------------------------------------------------------------------
 //  Option<T> is either Some(value) or None. Use it when a value may be missing.
 //  Write three functions:

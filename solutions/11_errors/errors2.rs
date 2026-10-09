@@ -1,5 +1,5 @@
 // ============================================================================
-//  SOLUTION errors2 · The ? operator               Chapter 11 · Errors Are Values
+//  SOLUTION errors2 · The ? operator          Chapter 11 · Errors Are Values
 // ----------------------------------------------------------------------------
 //  ? on a Result returns the Err to the caller at once, and gives the Ok value
 //  otherwise. The function's own return type says what can go wrong.

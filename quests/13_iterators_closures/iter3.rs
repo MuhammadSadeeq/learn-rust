@@ -1,5 +1,5 @@
 // ============================================================================
-//  QUEST iter3 · Your own iterator             Chapter 13 · Iterators & Closures
+//  QUEST iter3 · Your own iterator           Chapter 13 · Iterators & Closures
 // ----------------------------------------------------------------------------
 //  The Fibonacci sequence as an iterator: 0, 1, 1, 2, 3, 5, 8, 13, ...
 //  A PHP generator does the same job. It hands out one value per request, and

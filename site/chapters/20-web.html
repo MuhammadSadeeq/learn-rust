@@ -673,6 +673,57 @@ pub async fn destroy(
 
 <p>Each handler is an ordinary async function. Its parameters are extractors, and axum runs them in order before the body starts. Put the extractor that reads the request body last, because it consumes the body. The return type is what the client receives. <code>store</code> returns a status code and JSON, so the client gets a 201. <code>show</code> returns a <code>Result</code>. When <code>ok_or(...)</code> finds no note, the <code>?</code> sends the error down the error track, and <code>AppError</code> turns it into a 404.</p>
 
+<p>The order rule is easy to break, so here is what the compiler says when you break it. In this version the body extractor comes first:</p>
+
+<pre class="rs" data-check="skip" data-title="src/main.rs">use axum::Json;
+use axum::Router;
+use axum::extract::State;
+use axum::routing::post;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct NewNote {
+    title: String,
+}
+
+async fn store(Json(input): Json&lt;NewNote&gt;, State(prefix): State&lt;String&gt;) -&gt; String {
+    format!("{prefix}{}", input.title)
+}
+
+fn main() {
+    let _app: Router = Router::new()
+        .route("/notes", post(store))
+        .with_state(String::from("note: "));
+}</pre>
+
+<p>Compiling the route gives this error:</p>
+
+<pre class="rustc">error[E0277]: the trait bound `fn(Json&lt;NewNote&gt;, State&lt;String&gt;) -&gt; impl Future&lt;Output = String&gt; {store}: Handler&lt;_, _&gt;` is not satisfied
+   --&gt; src/main.rs:18:31
+    |
+ 18 |         .route("/notes", post(store))
+    |                          ---- ^^^^^ the trait `Handler&lt;_, _&gt;` is not implemented for fn item `fn(Json&lt;NewNote&gt;, State&lt;String&gt;) -&gt; impl Future&lt;Output = String&gt; {store}`
+    |                          |
+    |                          required by a bound introduced by this call
+    |
+    = note: Consider using `#[axum::debug_handler]` to improve the error message
+note: required by a bound in `post`
+   --&gt; ~/.cargo/registry/…/axum-0.8.9/src/routing/method_routing.rs:167:16
+    |
+167 |             H: Handler&lt;T, S&gt;,
+    |                ^^^^^^^^^^^^^ required by this bound in `post`
+...
+445 | top_level_handler_fn!(post, POST);
+    | ---------------------------------
+    | |                     |
+    | |                     required by a bound in this function
+    | in this macro invocation
+    = note: this error originates in the macro `top_level_handler_fn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+For more information about this error, try `rustc --explain E0277`.</pre>
+
+<p>The message is vague. It says that <code>store</code> does not implement <code>Handler</code>, which is axum's trait for any function that can answer a route. It does not mention the order. The note suggests <code>#[axum::debug_handler]</code>, but that attribute needs axum's <code>macros</code> feature, which this project does not enable. The fix is to put <code>State</code> first: <code>async fn store(State(prefix): State&lt;String&gt;, Json(input): Json&lt;NewNote&gt;)</code>. Now the body extractor is last, as it is in <code>handlers.rs</code>.</p>
+
 <h3>Errors</h3>
 
 <pre class="rs" data-check="skip" data-title="src/error.rs">//! One error type for the whole API. Laravel counterpart: the exception

@@ -1,5 +1,5 @@
 // ============================================================================
-//  QUEST hashmap1 · Word counter                     Chapter 12 · Collections
+//  QUEST hashmap1 · Word counter                      Chapter 12 · Collections
 // ----------------------------------------------------------------------------
 //  Count words with a HashMap<String, usize>. Both functions are todo!().
 //
