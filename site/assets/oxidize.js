@@ -84,6 +84,15 @@
   }
   Ox.toast = toast;
 
+  /* ---------------------------------------------------------------- favicon */
+  if (!document.querySelector('link[rel~="icon"]')) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#c2410c"/><ellipse cx="32" cy="38" rx="16" ry="11" fill="#fff"/><circle cx="26" cy="35" r="3" fill="#c2410c"/><circle cx="38" cy="35" r="3" fill="#c2410c"/><path d="M14 28c-5-2-7-7-5-11 3 1 4 3 4 6 1-3 3-5 6-5-1 4-2 7-5 10zM50 28c5-2 7-7 5-11-3 1-4 3-4 6-1-3-3-5-6-5 1 4 2 7 5 10z" fill="#fff"/></svg>`;
+    const link = document.createElement("link");
+    link.rel = "icon";
+    link.href = "data:image/svg+xml," + encodeURIComponent(svg);
+    document.head.appendChild(link);
+  }
+
   /* ---------------------------------------------------------------- theme */
   function applyTheme() {
     const t = state.theme;
@@ -496,10 +505,13 @@
     if (!pre) return;
     const raw = dedent(pre.textContent);
     const answers = [];
-    const marked = raw.replace(/\[\[([^\]]+)\]\]/g, (_, a) => { answers.push(a.split("|")); return `\u0000${answers.length - 1}\u0000`; });
+    // Blanks become identifier-shaped markers (__OXB0__): the highlighter
+    // keeps an identifier in one piece, inside or outside string literals.
+    const marked = raw.replace(/\[\[([^\]]+)\]\]/g, (_, a) => { answers.push(a.split("|")); return `__OXB${answers.length - 1}__`; });
     const fig = enhancePre(Object.assign(pre, { textContent: marked }));
     const codeEl = $("code", fig);
-    codeEl.innerHTML = codeEl.innerHTML.replace(/\u0000(\d+)\u0000/g, (_, n) => {
+    codeEl.innerHTML = codeEl.innerHTML.replace(/<span class="t-\w+">__OXB(\d+)__<\/span>|__OXB(\d+)__/g, (_, n1, n2) => {
+      const n = n1 !== undefined ? n1 : n2;
       const w = Math.max(3, ...answers[n].map((a) => a.length)) + 1;
       return `<input class="ox-blank" data-n="${n}" style="width:${w}ch" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="blank ${+n + 1}">`;
     });
