@@ -153,7 +153,7 @@
         const [oldId, newId, content, cap] = a;
         const old = findBlock(st, oldId);
         const cells = Array.isArray(content) ? content.map(String) : Array.from(String(content));
-        st.heap.push({ id: newId, cells, cap: cap || cells.length, label: old ? old.label : "", status: "" });
+        st.heap.push({ id: newId, cells, cap: cap || cells.length, label: old ? old.label : "", status: "", flash: true });
         st.heap = st.heap.filter((x) => x.id !== oldId);
         for (const f of st.frames) for (const v of f.vars) {
           if (v.val.ptr === oldId) v.val.ptr = newId;
@@ -186,7 +186,7 @@
   function valHtml(v) {
     const val = v.val;
     const parts = [];
-    if (v.status === "moved") return `<span>moved — unusable</span>`;
+    if ((v.status || "").includes("moved")) return `<span>moved: unusable</span>`;
     if (val.v !== undefined && val.v !== "") parts.push(`<span>${esc(val.v)}</span>`);
     const target = val.ptr !== undefined ? val.ptr : val.mut !== undefined ? val.mut : val.ref;
     if (target !== undefined) parts.push(`<span class="xr-cell is-ptr" data-ptr="1"><small>ptr</small>●</span>`);

@@ -31,7 +31,7 @@ fn main() {
           q: "<code>area</code> takes <code>&amp;self</code>. After <code>r.area()</code> returns, can <code>main</code> still use <code>r</code>?",
           choices: ["No. The call moves <code>r</code> into <code>area</code>.", "Yes. <code>&amp;self</code> only borrows <code>r</code>, so <code>main</code> still owns it.", "Only if <code>r</code> is declared <code>mut</code>."],
           answer: 1,
-          explain: "A <code>&amp;self</code> method takes a shared borrow, the same kind of reference as <code>&amp;T</code> from the last chapter. The owner never changes."
+          explain: "A <code>&amp;self</code> method takes a shared borrow, the same kind of reference as the <code>&amp;T</code> you met in Chapter 7. The owner never changes."
         },
         say: "<p><code>r.area()</code> is the same call as <code>Rect::area(&amp;r)</code>. The compiler takes the borrow for you, which is why you never write the <code>&amp;</code> yourself.</p>",
         ops: []

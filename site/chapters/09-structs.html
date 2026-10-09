@@ -414,7 +414,7 @@ fn main() {
     let u = User::from_row("Ana", "ana@x.io");
     println!("{} {}", u.name, u.email);
 }</pre>
-  <div class="ox-bridge-note"><p>A PHP <code>static</code> method and a Rust associated function both hang off the class name, so <code>User::fromRow()</code> and <code>User::from_row()</code> read the same way. Rust has no <code>static</code> keyword on methods. Any function in an <code>impl</code> block without <code>self</code> belongs to the type, and it returns <code>Self</code> to name the type it builds.</p></div>
+  <div class="ox-bridge-note"><p>A PHP <code>static</code> method and a Rust associated function both hang off the class name, so <code>User::fromRow()</code> and <code>User::from_row()</code> read the same way. Rust has no <code>static</code> keyword on methods. Any function in an <code>impl</code> block without <code>self</code> belongs to the type, and its return type can be <code>Self</code>, which names that type.</p></div>
 </div>
 
 <p>Now fill in the blanks. The constructor takes two numbers and builds a <code>Rect</code>. The two blanks are the return type and the struct literal inside the body.</p>
@@ -482,7 +482,7 @@ fn main() {
 <p>Read the output. <code>{:?}</code> prints on one line, and <code>{:#?}</code> spreads the value over several lines with indentation. <code>..Default::default()</code> fills every field you did not write. The comparison <code>copy == api</code> works because the struct derives <code>PartialEq</code>.</p>
 
 <aside class="ox-callout" data-kind="php">
-  <p>PHP's <code>==</code> on two objects of the same class compares their properties, and <code>print_r</code> and <code>var_dump</code> print them. Rust asks you to opt in to each of those. Without <code>PartialEq</code>, <code>a == b</code> on your struct is a compile error (E0369). Without <code>Debug</code>, there is no way to print the struct at all.</p>
+  <p>PHP's <code>==</code> on two objects of the same class compares their properties, and <code>print_r</code> and <code>var_dump</code> print them. Rust asks you to opt in to each of those. Without <code>PartialEq</code>, <code>a == b</code> on your struct is a compile error (E0369). Without <code>Debug</code>, <code>{:?}</code> won't compile for that struct.</p>
 </aside>
 
 <p><code>dbg!</code> is for quick debugging. It prints the file, the line, the expression and its value to <strong>stderr</strong>, then returns the value. You can wrap any expression in it without changing what the program does. The line it printed went to stderr, so it doesn't appear in the stdout above.</p>
@@ -728,44 +728,33 @@ fn main() {
 
 <div class="ox-bridge">
   <pre class="php">
-class User {
-    public string $name;
-    public string $email;
-}
+class Post extends Model
+{
+    protected $fillable = ['title'];
 
-class Admin extends User {
-    public int $level = 3;
-
-    public function label(): string
+    public function publish(): void
     {
-        return $this->name;
+        $this->published_at = now();
     }
 }</pre>
   <pre class="rs">
-struct User {
-    name: String,
-    email: String,
+struct Post {
+    title: String,
+    published: bool,
 }
 
-struct Admin {
-    user: User,
-    level: u8,
-}
-
-impl Admin {
-    fn label(&amp;self) -&gt; &amp;str {
-        &amp;self.user.name
+impl Post {
+    fn publish(&amp;mut self) {
+        self.published = true;
     }
 }
 
 fn main() {
-    let a = Admin {
-        user: User { name: String::from("Ana"), email: String::from("ana@x.io") },
-        level: 3,
-    };
-    println!("{} {}", a.label(), a.level);
+    let mut post = Post { title: String::from("Hello"), published: false };
+    post.publish();
+    println!("{} {}", post.title, post.published);
 }</pre>
-  <div class="ox-bridge-note"><p>PHP's <code>extends</code> gives <code>Admin</code> every property and method of <code>User</code>, and lets it override them. In Rust, <code>Admin</code> holds a <code>user</code> field, and you write <code>self.user.name</code> to reach the data. There is no override. Shared behavior comes from traits, which you will write in Chapter 14.</p></div>
+  <div class="ox-bridge-note"><p>A Laravel model gets <code>save()</code>, <code>find()</code> and the rest from <code>Model</code>, a base class it inherits from. Rust has no base class to inherit from. <code>Post</code> carries only the fields it declares and the methods in its <code>impl</code> block, so the timestamp the PHP code sets has to become a field you declare. Behavior that many types share goes into a trait, which you will write in Chapter 14.</p></div>
 </div>
 
 <aside class="ox-callout" data-kind="ai">
@@ -782,7 +771,7 @@ fn main() {
     <li data-left="static function make()">A function in the impl block with no <code>self</code></li>
     <li data-left="public string $name"><code>pub name: String</code>, visible outside its module</li>
     <li data-left="__toString()"><code>impl Display</code> (Chapter 14)</li>
-    <li data-left="class Admin extends User">Composition plus traits: a field of type <code>User</code>, and shared behavior in traits</li>
+    <li data-left="extends Model">Composition plus traits: the data is a field of a plain struct, and shared behavior comes from traits</li>
   </ul>
 </div>
 

@@ -426,15 +426,16 @@ kbd {
   margin: 0;
   font-size: 0.95rem;
 }
-.ox-outcomes li { display: flex; gap: 10px; align-items: baseline; margin: 0; color: var(--ink-2); }
+.ox-outcomes li { position: relative; margin: 0; padding-left: 22px; color: var(--ink-2); }
 .ox-outcomes li::before {
   content: "";
-  flex: none;
+  position: absolute;
+  left: 0;
+  top: 0.42em;
   width: 10px;
   height: 10px;
   border: 2px solid var(--oxide);
   border-radius: 2px;
-  transform: translateY(1px);
 }
 
 /* ---------- buttons & chips ---------- */
@@ -1110,12 +1111,12 @@ details.ox-think > .ox-think-body > :last-child { margin-bottom: 0; }
 .xr-legend { margin-left: auto; display: flex; flex-wrap: wrap; gap: 6px; }
 .xr-body { display: grid; grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 860px) {
-  .xr-body { grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.25fr); }
+  .xr-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1.12fr); }
 }
 .xr-code { background: var(--code-bg); min-width: 0; overflow-x: auto; }
-.xr-code pre { margin: 0; padding: 14px 0; font: 400 0.84rem/1.75 var(--font-mono); color: var(--code-ink); }
+.xr-code pre { margin: 0; padding: 14px 0; font: 400 0.8rem/1.75 var(--font-mono); color: var(--code-ink); }
 .xr-code .ln { display: block; padding: 0 16px 0 12px; border-left: 3px solid transparent; transition: background 0.25s, border-color 0.25s, opacity 0.25s; white-space: pre; }
-.xr-code .ln .lnno { display: inline-block; width: 2.2ch; margin-right: 12px; color: var(--code-dim); text-align: right; user-select: none; }
+.xr-code .ln .lnno { display: inline-block; width: 2.2ch; margin-right: 10px; color: var(--code-dim); text-align: right; user-select: none; }
 .xr-code .ln.is-now { background: var(--c-hl); border-left-color: var(--c-kw); }
 .xr-code .ln.is-past { opacity: 0.55; }
 .xr-code .ln.is-err { background: #ff6b6b22; border-left-color: #ff6b6b; }

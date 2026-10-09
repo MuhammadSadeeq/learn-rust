@@ -83,8 +83,9 @@ for (const file of htmlFiles) {
     const attrs = pm[1];
     if (!/class="[^"]*\b(rs|rust)\b/.test(attrs)) continue;
     const check = (/data-check="([^"]*)"/.exec(attrs) || [])[1] || "ok";
+    const so = /data-stdout="([^"]*)"/.exec(attrs);
     const code = dedent(decode(pm[2])).replace(/\[\[([^\]|]+)(\|[^\]]*)?\]\]/g, "$1");
-    snippets.push({ where: `${path.relative(ROOT, file)}:${lineOf(text, m.index)} (fill)`, code, check, stdout: null });
+    snippets.push({ where: `${path.relative(ROOT, file)}:${lineOf(text, m.index)} (fill)`, code, check, stdout: so ? decode(so[1]).replace(/\\n/g, "\n") : null });
   }
   const preRe = /<pre([^>]*)>([\s\S]*?)<\/pre>/g;
   while ((m = preRe.exec(text))) {
@@ -161,7 +162,9 @@ async function checkOne(s) {
   fs.writeFileSync(src, wrap(s.code));
   const needRun = check === "panic" || s.stdout !== null;
   const argv = ["--edition", "2024", "--crate-name", "snippet", "--color", "never", "-o", bin, src];
-  if (!needRun) argv.splice(0, 0, "--emit=metadata");
+  // --emit=mir (not metadata) so deny-by-default MIR lints such as
+  // arithmetic_overflow and unconditional_panic are reported too.
+  if (!needRun) argv.splice(0, 0, "--emit=mir");
   const c = await run("rustc", argv, { cwd: TMP });
   const errs = [...c.stderr.matchAll(/error\[(E\d{4})\]/g)].map((x) => x[1]);
   const failed = c.code !== 0;

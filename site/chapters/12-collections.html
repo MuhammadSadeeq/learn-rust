@@ -143,7 +143,7 @@ thread 'main' (process id) panicked at src/main.rs:3:21:
 index out of bounds: the len is 3 but the index is 10
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace</pre>
 
-<p>A panic stops the program with a message. It is not an error value that you handle in the normal flow. Use indexing when a missing index is a bug in your code, and use <code>get</code> when the index comes from outside, such as a query string or a form.</p>
+<p>A panic stops the program with a message. Unlike an error value, it is not something the caller is expected to handle. Use indexing when a missing index is a bug in your code, and use <code>get</code> when the index comes from outside, such as a query string or a form.</p>
 
 <div class="ox-quiz" data-id="12:get-index" data-label="Check yourself">
   <p class="ox-q">Which line can't panic when <code>i</code> is 10 and <code>v</code> holds three elements?</p>
@@ -197,7 +197,7 @@ fn main() {
 
 <h3>Sorting, de-duplicating and searching</h3>
 
-<p>These are methods on the <code>Vec</code> itself, and they change it in place. Two rules keep them honest. <code>dedup</code> only removes neighbors that are equal, so sort first. <code>binary_search</code> needs a sorted list, or its answer means nothing.</p>
+<p>These are methods on the <code>Vec</code> itself, and they change it in place. Two rules keep them honest. <code>dedup</code> only removes neighbors that are equal, so sort first. <code>binary_search</code> needs a sorted list, or the answer can't be trusted.</p>
 
 <pre class="rs" data-run data-stdout="[1, 3, 5, 8]
 [1, 3, 8] has 8: true
@@ -227,7 +227,7 @@ fn main() {
 
 <div class="ox-xray ox-wide" data-scenario="vec-grow"></div>
 
-<p>Exact growth is an implementation detail, not a promise. In Rust 1.97, a vector of <code>i32</code> gets room for four elements on its first push, and then it doubles: 8, 16, 32. If you know the count in advance, <code>with_capacity</code> means the copy never happens at all.</p>
+<p>Exact growth is an implementation detail, and nothing in the language promises it. In Rust 1.97, a vector of <code>i32</code> gets room for four elements on its first push, and then it doubles: 8, 16, 32. If you know the count in advance, <code>with_capacity</code> means the copy never happens at all.</p>
 </section>
 
 <section>
@@ -262,7 +262,7 @@ error: aborting due to 1 previous error
 
 For more information about this error, try `rustc --explain E0507`.</pre>
 
-<p>The error is <code>E0507</code>, and the caret points at <code>names[0]</code>, not at the <code>let</code>. Rust refuses for a reason. The buffer is a row of slots, and each slot holds a String that the Vec owns. Moving <code>names[0]</code> out would leave a hole in that row. When the Vec is dropped, it would try to drop every slot, including the one you took. That is a double free.</p>
+<p>The error is <code>E0507</code>, and the caret points at <code>names[0]</code> itself. Rust refuses for a reason. The buffer is a row of slots, and each slot holds a String that the Vec owns. Moving <code>names[0]</code> out would leave a hole in that row. When the Vec is dropped, it would try to drop every slot, including the one you took. That is a double free.</p>
 
 <aside class="ox-callout" data-kind="trap">
   <p>The same line compiles for a <code>Vec&lt;i32&gt;</code>. An <code>i32</code> is Copy, so <code>let x = v[0];</code> copies the number and leaves the Vec alone. The rule only bites for elements that own heap memory.</p>
@@ -550,7 +550,7 @@ fn main() {
 <section>
 <h2 id="choose">Which collection?</h2>
 
-<p>Start from the operation that happens most often, not from the data. The table below is the check to run your choice against.</p>
+<p>Start from the operation that happens most often. The table below is the check to run your choice against.</p>
 
 <div class="ox-table-wrap">
 <table class="ox-table">
@@ -643,7 +643,7 @@ fn main() {
     <li data-correct>No. <code>HashMap</code> makes no promise about iteration order, and the order can change between runs.</li>
     <li>Yes, because the keys are sorted before they are stored.</li>
   </ol>
-  <div class="ox-why"><p>Insertion order is a property of a <code>Vec</code>, and sorted order is a property of a <code>BTreeMap</code>. A <code>HashMap</code> places keys by hash, and its hash is seeded randomly. A test that depends on the order of a <code>HashMap</code> can pass for weeks and then fail once.</p></div>
+  <div class="ox-why"><p>Insertion order is a property of a <code>Vec</code>, and sorted order is a property of a <code>BTreeMap</code>. A <code>HashMap</code> places keys by hash, and its hash is seeded randomly. A test that depends on the order of a <code>HashMap</code> can pass many times and then fail on an unlucky run.</p></div>
 </div>
 
 <div class="ox-quiz" data-id="12:entry-line" data-label="Check yourself">
@@ -655,6 +655,24 @@ fn main() {
     <li data-feedback="That creates the entry but never adds one."><code>counts.entry(w).or_insert(0);</code></li>
   </ol>
   <div class="ox-why"><p><code>entry(w)</code> finds the slot, <code>or_insert(0)</code> creates it when it is missing, and the <code>*</code> writes the new count through the returned reference. Every other option either resets the count or never adds to it.</p></div>
+</div>
+
+<div class="ox-fill" data-id="12:fill-entry">
+  <p class="ox-q">Now write it yourself: complete the word counter so each word's count goes up by one, starting from 0.</p>
+  <pre class="rs" data-stdout="[(&quot;crab&quot;, 2), (&quot;ferris&quot;, 1), (&quot;rust&quot;, 3)]">
+use std::collections::HashMap;
+
+fn main() {
+    let text = "rust crab rust ferris crab rust";
+    let mut counts: HashMap&lt;&amp;str, u32&gt; = HashMap::new();
+    for w in text.split_whitespace() {
+        *counts.[[entry]](w).[[or_insert]](0) += 1;
+    }
+    let mut pairs: Vec&lt;_&gt; = counts.into_iter().collect();
+    pairs.sort();
+    println!("{pairs:?}");
+}</pre>
+  <div class="ox-why"><p><code>entry(w)</code> looks up the slot for <code>w</code>, <code>or_insert(0)</code> creates it with 0 when it's missing and returns a <code>&amp;mut u32</code> either way, and <code>*… += 1</code> writes through that reference. Sorting the pairs before printing makes the output deterministic, because a <code>HashMap</code> has no stable order.</p></div>
 </div>
 
 <div class="ox-match" data-id="12:match" data-left-label="PHP" data-right-label="Rust">
@@ -803,7 +821,7 @@ fn main() {
     }
     println!("{hits}");
 }`,
-      costs: ["O(1) on average, once", "O(1) on average, per check", "No order promised"],
+      costs: ["O(1) on average per value, paid once up front", "O(1) on average, per check", "No order promised"],
       why: "in_array scans the whole list on every call, which is O(n). Build the set once, and each check becomes a hash lookup. This is the change to ask for when you review a loop that calls in_array."
     },
     {

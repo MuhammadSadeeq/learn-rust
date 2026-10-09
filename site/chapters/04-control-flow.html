@@ -25,7 +25,7 @@
 <aside class="ox-rail" aria-label="Chapter contents"></aside>
 <main class="ox-main" id="main">
 
-<header class="ox-hero" data-auto>
+<header class="ox-hero" data-auto data-idea="Blocks, if, match and loop produce values. The semicolon decides.">
   <ul>
     <li>Write functions with typed parameters and return values.</li>
     <li>Predict the type of any block, and fix the semicolon that swallows a return value.</li>
@@ -34,12 +34,6 @@
   </ul>
 </header>
 
-<style>
-/* Scoped workaround until oxidize.css lays out .ox-outcomes items as blocks.
-   As flex items, they grow to their full text width on a phone and push the page sideways. */
-.ox-outcomes li { display: block; position: relative; padding-left: 22px; }
-.ox-outcomes li::before { position: absolute; left: 0; top: 0.32em; margin: 0; }
-</style>
 
 <section>
 <h2 id="functions">Functions</h2>
@@ -290,7 +284,7 @@ For more information about this error, try `rustc --explain E0308`.
 <p>The condition follows the same strictness. It must be a <code>bool</code>. An integer is not a yes or a no, so there is no truthiness to fall back on. This is the Chapter 03 rule about types, applied to control flow.</p>
 
 <aside class="ox-callout" data-kind="php">
-  <p>In PHP, <code>if ('0')</code> is false and <code>if ('00')</code> is true. Those rules are worth knowing, but Rust doesn't have them. If a condition is not a <code>bool</code>, the program does not compile.</p>
+  <p>In PHP, <code>if ('0')</code> is false and <code>if ('00')</code> is true. Rust has no table like that to memorize. If a condition is not a <code>bool</code>, the program does not compile.</p>
 </aside>
 
 <div class="ox-quiz" data-id="04:if-bool" data-xp="10">
@@ -555,7 +549,7 @@ fn main() {
   <li><strong>Chapter 04.</strong> <code>for</code> over a range is the default loop, and a label lets <code>break</code> leave the right loop.</li>
 </ul>
 
-<p>Your Act I boss is <strong>Print a receipt</strong>. It needs functions, expressions, <code>match</code> and loops together. You will find it in the Forge quests below.</p>
+<p>Your Act I boss is <strong>Print a receipt</strong>. Its summary promises totals, tax and aligned columns, which pulls together the functions, expressions and loops from this act. You will find it in the Forge quests below.</p>
 
 <p>Act II is about memory. Chapter 05 shows where values live, on the stack or on the heap. Chapter 06 covers ownership, the rules that let Rust free memory without a garbage collector. Chapter 07 covers borrowing, and <a href="../labs/borrow-checker.html">Be the Borrow Checker</a> turns those rules into a game.</p>
 

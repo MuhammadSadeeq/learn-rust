@@ -70,7 +70,7 @@ fn main() {
 <details class="ox-think">
   <summary>Predict first: if you delete the <code>impl Summary for Tweet</code> block, does <code>t.summarize()</code> still compile?</summary>
   <div class="ox-think-body">
-    <p>No. The method exists only because the impl promises it. Without the block, the compiler reports <code>error[E0599]: no method named summarize found for struct Tweet</code>, and it points at the <code>Summary</code> trait as the place that defines the method.</p>
+    <p>No. The method exists only because the impl promises it. Without the block, the compiler reports <code>error[E0599]: no method named `summarize` found for struct `Tweet` in the current scope</code>, and it points at the <code>Summary</code> trait as the place that defines the method.</p>
   </div>
 </details>
 
@@ -172,7 +172,7 @@ impl Summary for Tweet {
 <section>
 <h2 id="foreign">Traits for types you didn't write</h2>
 
-<p>This is the part PHP cannot do. You can implement your trait for a type from the standard library, such as <code>String</code>, <code>Vec&lt;i32&gt;</code> or <code>str</code>. After that, the method works on those values like any other method.</p>
+<p>PHP has no direct equivalent of this. You can implement your trait for a type from the standard library, such as <code>String</code>, <code>Vec&lt;i32&gt;</code> or <code>str</code>. After that, the method works on those values like any other method.</p>
 
 <pre class="rs" data-run data-stdout="HELLO!\ntext of 5 bytes\n3 numbers, sum 6">
 trait Shout {
@@ -351,7 +351,7 @@ fn main() {
 </table>
 </div>
 
-<p>A return type can be <code>-&gt; impl Summary</code>. The caller can call the trait's methods, but it cannot name the concrete type. There is one limit. The function must return the same concrete type on every path. If one branch returns a <code>Tweet</code> and the other an <code>Article</code>, the compiler reports <code>error[E0308]: if and else have incompatible types</code>. For that you need a trait object, which is section 6.</p>
+<p>A return type can be <code>-&gt; impl Summary</code>. The caller can call the trait's methods, but it cannot name the concrete type. There is one limit. The function must return the same concrete type on every path. If one branch returns a <code>Tweet</code> and the other an <code>Article</code>, the compiler reports <code>error[E0308]: `if` and `else` have incompatible types</code>. For that you need a trait object, which is section 6.</p>
 
 <h3>A missing bound</h3>
 
@@ -494,7 +494,7 @@ fn main() {
     <li>Yes. <code>PartialOrd</code> is all the comparison needs.</li>
     <li data-correct>No. Without <code>Copy</code> the body cannot move values out of a borrowed slice, so rustc reports E0508 and E0507.</li>
   </ol>
-  <div class="ox-why"><p>Comparing values doesn't move them, so <code>PartialOrd</code> is enough for <code>&gt;</code>. Copying the first item out of the slice, and each <code>item</code> in the loop, does move. You cannot move a value out of a borrowed slice, and a generic <code>T</code> might not be <code>Copy</code>. Chapter 06 covered moves. This is the same rule, applied to a type parameter.</p></div>
+  <div class="ox-why"><p>Comparing values doesn't move them, so <code>PartialOrd</code> is enough for <code>&gt;</code>. Taking the first item out of the slice, and each <code>item</code> in the loop, is a move unless <code>T</code> is <code>Copy</code>. You cannot move a value out of a borrowed slice, and a generic <code>T</code> might not be <code>Copy</code>. Chapter 06 covered moves. This is the same rule, applied to a type parameter.</p></div>
 </div>
 
 <h3>Generic structs and specific impls</h3>
@@ -537,7 +537,7 @@ fn main() {
 
 <p>How does a generic function run at full speed? The compiler does not pass around a value that could be any type. At build time it finds every concrete type that each generic function is used with, and it generates a specialized copy for each one. That step is called <strong>monomorphization</strong>. Picture a stamp: one template, one stamped copy per type.</p>
 
-<p>In a debug build you can see the copies. The program below calls <code>describe</code> six times with five different types. Two calls pass an <code>i32</code>, so the binary holds five copies, not six. This is the list <code>nm -C</code> prints for it:</p>
+<p>In a debug build you can see the copies. Take a program that calls <code>describe</code> six times with five different types. Two of the calls pass an <code>i32</code>, so the binary holds five copies, not six. This is the list <code>nm -C</code> prints for that program:</p>
 
 <pre class="text">
 main::describe::&lt;&amp;str&gt;
@@ -634,7 +634,7 @@ fn describe&lt;T: Display&gt;(x: T) -&gt; String {
     <small>Illustrative. The bar is scaled to the five types on the buttons. Each copy adds machine code, and the real size depends on the function.</small>
   </div>
   <p class="press-log" aria-live="polite" data-out="log">Press a call to see what the compiler does with it.</p>
-  <figcaption>Generic mode stamps one copy per type. dyn mode keeps a single copy and follows two pointers at every call.</figcaption>
+  <figcaption>Generics: faster calls, more code. Each type gets its own copy. dyn: one copy, and every call follows two pointers, an indirect call.</figcaption>
 </figure>
 
 <details class="ox-think">
@@ -693,7 +693,7 @@ fn main() {
 <p>A <code>&amp;dyn Shape</code> is not one pointer. It is two: a <strong>data pointer</strong> to the value, and a <strong>vtable pointer</strong> to a table built for that type's implementation of <code>Shape</code>. The table holds the size, the alignment, a drop entry and one pointer per method. A call to <code>area</code> reads the method pointer from the table, then jumps to it.</p>
 
 <figure class="ox-figure">
-<svg viewBox="0 0 640 262" width="640" role="img" aria-label="A Box of dyn Shape is two pointers. The data pointer leads to the Circle value. The vtable pointer leads to a vtable for Circle that holds size, align, drop and the area method.">
+<svg viewBox="0 0 640 246" width="640" role="img" aria-label="A Box of dyn Shape is two pointers. The data pointer leads to the Circle value. The vtable pointer leads to a vtable for Circle that holds size, align, drop and the area method.">
   <text x="20" y="22" class="t-muted" font-size="12">THE POINTER</text>
   <text x="380" y="22" class="t-muted" font-size="12">WHAT THEY POINT TO</text>
   <rect x="20" y="36" width="230" height="130" rx="8" class="f-own" stroke-width="1.5"/>
@@ -705,15 +705,14 @@ fn main() {
   <rect x="380" y="44" width="240" height="56" rx="6" class="f-heap" stroke-width="1.5"/>
   <text x="396" y="68" font-size="14" font-weight="700">Circle { r: 1.0 }</text>
   <text x="396" y="88" font-size="11" class="t-muted">the value, 8 bytes</text>
-  <rect x="380" y="128" width="240" height="122" rx="6" class="f-ref" stroke-width="1.5"/>
+  <rect x="380" y="128" width="240" height="108" rx="6" class="f-ref" stroke-width="1.5"/>
   <text x="396" y="150" font-size="13" font-weight="700" class="t-ref">vtable for Circle</text>
-  <text x="396" y="172" font-size="12">size 8</text>
-  <text x="396" y="190" font-size="12">align 8</text>
-  <text x="396" y="208" font-size="12">drop</text>
-  <text x="396" y="226" font-size="12">area → Circle::area</text>
+  <text x="396" y="168" font-size="12">size 8</text>
+  <text x="396" y="186" font-size="12">align 8</text>
+  <text x="396" y="204" font-size="12">drop</text>
+  <text x="396" y="222" font-size="12">area → Circle::area</text>
   <path d="M256 93 C 310 93, 330 72, 378 72" class="s-own" stroke-width="2.5" fill="none"/>
   <path d="M256 135 C 310 135, 330 170, 378 170" class="s-ref" stroke-width="2.5" fill="none"/>
-  <text x="20" y="250" class="t-muted" font-size="12">One copy of the code serves every type. The vtable is built once per type and trait.</text>
 </svg>
 <figcaption>A trait object is two pointers. The data pointer finds the value. The vtable pointer finds the method table for that type.</figcaption>
 </figure>
@@ -1061,10 +1060,10 @@ fn main() {
   <h3>Capabilities and generics</h3>
   <ul>
     <li>A <strong>trait</strong> is a set of methods a type promises to provide. <code>impl Trait for Type</code> is the promise. Default methods are shared bodies, and they can call the required methods.</li>
-    <li>You may implement a trait for a type only when one of them is yours. That is the <strong>orphan rule</strong>. A newtype is the usual way around it.</li>
+    <li>You may implement a trait for a type only when the trait or the type is defined in your crate. That is the <strong>orphan rule</strong>. A newtype is the usual way around it.</li>
     <li><code>impl Trait</code>, <code>&lt;T: Trait&gt;</code> and <code>where</code> all accept any type with the trait. A missing bound fails inside the generic body, with E0599 for a method or E0369 for an operator.</li>
     <li>Generics are <strong>monomorphized</strong>: the compiler makes one specialized copy per concrete type. Calls are direct, and the binary holds more code.</li>
-    <li><code>dyn Trait</code> behind a pointer is one copy of the code plus a <strong>fat pointer</strong>, the data pointer and the vtable pointer. Calls go through the vtable. The trait must be dyn compatible, so no method may return <code>Self</code> or take its own type parameters.</li>
+    <li><code>dyn Trait</code> behind a pointer is one copy of the code plus a <strong>fat pointer</strong>, the data pointer and the vtable pointer. Calls go through the vtable. The trait must be dyn compatible, so no method may return <code>Self</code> or take its own type parameters, unless that method is excluded with <code>where Self: Sized</code>.</li>
     <li>Implement <code>Display</code> for <code>{}</code> and <code>From</code> for conversions. <code>Into</code> comes free from <code>From</code>.</li>
   </ul>
 </div>
@@ -1156,7 +1155,7 @@ fn main() {
         void old.offsetWidth;
         old.classList.add("is-hit");
         later(900, function () { old.classList.remove("is-hit"); });
-        log.textContent = "describe(" + t.arg + ") printed " + shown + ". " + t.fn + " already exists, so the compiler reuses it and stamps nothing new.";
+        log.textContent = "describe(" + t.arg + ") printed " + shown + ". " + t.fn + " is already generated, so the compiler reuses it and stamps nothing new.";
       }
       empty.hidden = true;
       setCount();

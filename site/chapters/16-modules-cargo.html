@@ -1,0 +1,1163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Modules, Crates &amp; Tests · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/quests-data.js" defer></script>
+<script src="../assets/cards/ch16.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+<script src="../assets/xray.js" defer></script>
+</head>
+<body data-chapter="16">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<div class="ox-page">
+<aside class="ox-rail" aria-label="Chapter contents"></aside>
+<main class="ox-main" id="main">
+
+<header class="ox-hero" data-auto>
+  <ul>
+    <li>Organize code into modules, and say which items are public and why.</li>
+    <li>Map a file tree to a module tree, and write the <code>use</code> path for any item.</li>
+    <li>Read and edit <code>Cargo.toml</code> with confidence, including version requirements and <code>Cargo.lock</code>.</li>
+    <li>Write unit tests, integration tests and doc tests, and run all of them with <code>cargo test</code>.</li>
+  </ul>
+</header>
+
+<section>
+<h2 id="crates">Packages, crates and modules</h2>
+
+<p>You already know the layers of a PHP project: a package described by <code>composer.json</code>, a namespace, and the file that declares a class. Rust has the same layers under three different names. The compiler uses each name exactly, so it is worth learning them now.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Word</th><th>What it is</th><th>Closest PHP idea</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Package</strong></td><td>A folder with a <code>Cargo.toml</code>. Cargo versions and publishes it as one unit.</td><td>A Composer package</td></tr>
+    <tr><td><strong>Crate</strong></td><td>One unit of compilation: a library, or a program.</td><td>No exact equivalent</td></tr>
+    <tr><td><strong>Module</strong></td><td>A named section of a crate, declared with <code>mod</code>.</td><td>A namespace, plus the file that defines it</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>A package can hold at most one library crate and any number of binary crates. The usual layout has both. <code>src/lib.rs</code> is the library, and <code>src/main.rs</code> is the program that uses it.</p>
+
+<pre class="text" data-title="layout">
+shop/
+├── Cargo.toml       the package
+└── src/
+    ├── lib.rs       library crate, named shop
+    └── main.rs      binary crate, also named shop
+</pre>
+
+<div class="ox-quiz" data-id="16:crates-count" data-label="Check yourself">
+  <p class="ox-q">How many crates does this package contain?</p>
+  <ol class="ox-choices">
+    <li>One. The package is the crate.</li>
+    <li data-correct>Two: one library crate and one binary crate.</li>
+    <li>Three, one for each file.</li>
+  </ol>
+  <div class="ox-why"><p>Two. Both are named <code>shop</code>, after the package. The binary reaches the library through that name, as <code>use shop::...</code>.</p></div>
+</div>
+
+<div class="ox-bridge">
+  <pre class="php" data-title="composer.json">
+{
+    "name": "acme/shop",
+    "autoload": {
+        "psr-4": {"App\\": "app/"}
+    }
+}</pre>
+  <pre class="toml" data-title="Cargo.toml">
+[package]
+name = "shop"
+version = "0.1.0"
+edition = "2024"</pre>
+  <div class="ox-bridge-note"><p>Both files name the package and describe how to build it. Composer maps namespaces to folders with <code>psr-4</code>. Cargo has no such mapping, because the module tree is written in your source (you will see that in the files section below). The name in <code>Cargo.toml</code> does different work: it names the library crate, so other crates write <code>shop::</code> at the start of every path they use to reach it.</p></div>
+</div>
+
+<p>Every crate starts at one root file, <code>src/lib.rs</code> or <code>src/main.rs</code>. Everything else hangs off that root through <code>mod</code> lines, and those lines form a tree. Most of this chapter is about that tree: how it is built, and who is allowed to see into it.</p>
+</section>
+
+<section>
+<h2 id="modules">Modules and privacy</h2>
+
+<p>A module is a box with a name. Inside a crate you open one with <code>mod</code>. Everything in the box is <strong>private by default</strong>. Code outside the box cannot use it, even when that code sits in the same file. Here is a program that calls a private function from outside its module.</p>
+
+<pre class="rs" data-check="E0603" data-badge="error" data-title="src/main.rs">
+mod billing {
+    pub fn total(cents: u32) -> u32 {
+        cents + fee()
+    }
+
+    fn fee() -> u32 {
+        50
+    }
+}
+
+fn main() {
+    println!("{}", billing::total(100));
+    println!("{}", billing::fee());
+}</pre>
+
+<pre class="rustc">
+error[E0603]: function `fee` is private
+  --&gt; src/main.rs:13:29
+   |
+13 |     println!("{}", billing::fee());
+   |                             ^^^ private function
+   |
+note: the function `fee` is defined here
+  --&gt; src/main.rs:6:5
+   |
+ 6 |     fn fee() -> u32 {
+   |     ^^^^^^^^^^^^^^^
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0603`.</pre>
+
+<p>The error is on the call from <code>main</code>. The name <code>fee</code> exists inside <code>billing</code>, but <code>main</code> has no permission to use it. Calling <code>total</code> works, because <code>total</code> is declared <code>pub</code>. Read <code>E0603</code> as "this item is private to where it is declared".</p>
+
+<p>Four levels control who can see an item. Read each row as "visible to".</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Written</th><th>Visible to</th></tr></thead>
+  <tbody>
+    <tr><td>(nothing)</td><td>This module, and the modules nested inside it.</td></tr>
+    <tr><td><code>pub(super)</code></td><td>The parent module, and everything inside the parent.</td></tr>
+    <tr><td><code>pub(crate)</code></td><td>Every module of this crate. No other crate.</td></tr>
+    <tr><td><code>pub</code></td><td>Anyone who can reach the path, including other crates.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<aside class="ox-callout" data-kind="php">
+  <p>PHP's <code>private</code> and <code>protected</code> belong to classes and their subclasses. Rust's privacy belongs to modules. A private item is visible to the module that contains it and to that module's children, and that is the whole rule. Rust has no inheritance, so there is no <code>protected</code> level.</p>
+</aside>
+
+<h3>Struct fields have their own visibility</h3>
+
+<p>Making a struct <code>pub</code> does not make its fields <code>pub</code>. Each field has its own visibility, and the default is private. That is how a type protects its own rules. Predict the compiler's verdict before you open the answer.</p>
+
+<div class="ox-quiz" data-id="16:struct-fields" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0451">
+mod account {
+    pub struct Account {
+        pub owner: String,
+        balance: i64,
+    }
+
+    impl Account {
+        pub fn balance(&amp;self) -&gt; i64 {
+            self.balance
+        }
+    }
+}
+
+fn main() {
+    let b = account::Account { owner: "Bo".to_string(), balance: 5 };
+    println!("{} {}", b.owner, b.balance());
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. It prints <code>Bo 5</code>.</li>
+    <li data-correct>No. <code>E0451</code>: the field <code>balance</code> is private, so a struct literal from <code>main</code> can't set it.</li>
+    <li>No. <code>E0603</code>: the struct <code>Account</code> is private.</li>
+  </ol>
+  <div class="ox-why"><p><code>Account</code> and <code>owner</code> are <code>pub</code>, so <code>main</code> can name them. <code>balance</code> is private, and a struct literal has to set every field, so the literal fails. Reading the field with <code>b.balance</code> would fail with <code>E0616</code> instead. The method <code>balance()</code> is <code>pub</code>, so it works, and that is how outside code reads the value.</p></div>
+</div>
+
+<p>Enum variants follow their enum. They are exactly as visible as the enum, so a <code>pub enum</code> has public variants, and you never write <code>pub</code> on a variant.</p>
+
+<p>Private fields are also how you enforce a rule. This pattern is worth recognizing, because you will see it throughout real crates. Keep the field private, and give the type one constructor that checks its input.</p>
+
+<pre class="rs" data-run data-stdout="valid: ana@example.com\nnot an email: nope">
+mod account {
+    pub struct Email(String);
+
+    impl Email {
+        pub fn new(raw: &amp;str) -&gt; Result&lt;Email, String&gt; {
+            if raw.contains('@') {
+                Ok(Email(raw.to_string()))
+            } else {
+                Err(format!("not an email: {raw}"))
+            }
+        }
+
+        pub fn as_str(&amp;self) -&gt; &amp;str {
+            &amp;self.0
+        }
+    }
+}
+
+fn main() {
+    match account::Email::new("ana@example.com") {
+        Ok(e) =&gt; println!("valid: {}", e.as_str()),
+        Err(msg) =&gt; println!("{msg}"),
+    }
+    match account::Email::new("nope") {
+        Ok(e) =&gt; println!("valid: {}", e.as_str()),
+        Err(msg) =&gt; println!("{msg}"),
+    }
+}</pre>
+
+<p>Outside code cannot skip the check. Writing <code>account::Email(String::from("nope"))</code> from <code>main</code> fails with <code>E0603</code>, and the message says the tuple struct constructor <code>Email</code> is private. A tuple struct's constructor is only as visible as its fields, and this field is private. A wrapper like this is called a newtype. Chapter 21 uses it for values that carry meaning, such as an email address or an order ID.</p>
+</section>
+
+<section>
+<h2 id="paths">Paths and use</h2>
+
+<p>A path is a list of names joined by <code>::</code>. Three words start a path from a fixed place. <code>crate::</code> starts at the root of the current crate. <code>self::</code> starts at the current module. <code>super::</code> starts at the parent module. Predict the output of this program before you open the answer.</p>
+
+<div class="ox-quiz" data-id="16:paths-output" data-label="Predict the output">
+  <p class="ox-q">What does <code>main</code> print?</p>
+  <pre class="rs" data-stdout="150\n150\n300">
+mod billing {
+    pub fn total(cents: u32) -&gt; u32 {
+        cents + self::fee()
+    }
+
+    fn fee() -&gt; u32 {
+        50
+    }
+
+    pub mod invoice {
+        pub fn line(cents: u32) -&gt; u32 {
+            super::fee() + cents
+        }
+
+        pub fn sum(cents: u32) -&gt; u32 {
+            crate::billing::total(cents) * 2
+        }
+    }
+}
+
+fn main() {
+    println!("{}", billing::total(100));
+    println!("{}", billing::invoice::line(100));
+    println!("{}", billing::invoice::sum(100));
+}</pre>
+  <ol class="ox-choices">
+    <li data-correct>150, 150 and 300, one per line.</li>
+    <li>150, 150 and 150, one per line.</li>
+    <li>Nothing. <code>invoice</code> can't call <code>fee</code>, because <code>fee</code> is private.</li>
+  </ol>
+  <div class="ox-why"><p>All three lines compile. <code>invoice</code> is a child of <code>billing</code>, and a child can see its parent's private items, so <code>super::fee()</code> works. The reverse is not true. <code>main</code> is the parent of <code>billing</code>, so it cannot call <code>billing::fee()</code>. That is the error you saw in the previous section.</p></div>
+</div>
+
+<p>Writing the full path every time gets long. <code>use</code> brings a name into scope, so you can write it short. It does not load anything, and it does not change what the code means.</p>
+
+<pre class="rs" data-run data-stdout="{&quot;ana&quot;: 2} #7">
+use std::collections::{BTreeMap, HashMap as Map};
+use std::fmt::{self, Display};
+
+struct Badge(u32);
+
+impl Display for Badge {
+    fn fmt(&amp;self, f: &amp;mut fmt::Formatter&lt;'_&gt;) -&gt; fmt::Result {
+        write!(f, "#{}", self.0)
+    }
+}
+
+fn main() {
+    let mut counts: Map&lt;&amp;str, u32&gt; = Map::new();
+    counts.insert("ana", 2);
+    let sorted: BTreeMap&lt;_, _&gt; = counts.into_iter().collect();
+    println!("{:?} {}", sorted, Badge(7));
+}</pre>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Form</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>use a::b;</code></td><td>Bring <code>b</code> into scope.</td></tr>
+    <tr><td><code>use a::b as c;</code></td><td>Bring <code>b</code> into scope under the name <code>c</code>.</td></tr>
+    <tr><td><code>use a::{b, c::d};</code></td><td>Several imports on one line.</td></tr>
+    <tr><td><code>use a::{self, B};</code></td><td>The module <code>a</code> itself, plus <code>B</code>.</td></tr>
+    <tr><td><code>use a::*;</code></td><td>Everything public in <code>a</code>. Avoid this outside tests and preludes.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>A glob import hides where names come from, and that makes code harder to read. The one place where it is routine is a test module, which starts with <code>use super::*;</code> so that the tests can see the code they test.</p>
+
+<h3>Re-exports build a clean front door</h3>
+
+<p>Sometimes the layout that makes sense inside a crate is not the one you want callers to see. <code>pub use</code> re-exports a name, so a private module can keep its structure while the public path stays short.</p>
+
+<pre class="rs" data-run data-stdout="8">
+mod engine {
+    mod internal {
+        pub struct Piston {
+            pub strokes: u32,
+        }
+    }
+
+    pub use self::internal::Piston;
+
+    pub fn fire(p: &amp;Piston) -&gt; u32 {
+        p.strokes * 2
+    }
+}
+
+fn main() {
+    let p = engine::Piston { strokes: 4 };
+    println!("{}", engine::fire(&amp;p));
+}</pre>
+
+<p>Callers use <code>engine::Piston</code>. The path through <code>internal</code> is still closed, and the compiler says so, and it even suggests the public path.</p>
+
+<pre class="rs" data-check="E0603" data-badge="error" data-title="src/main.rs">
+mod engine {
+    mod internal {
+        pub struct Piston {
+            pub strokes: u32,
+        }
+    }
+
+    pub use self::internal::Piston;
+}
+
+fn main() {
+    let _a = engine::Piston { strokes: 4 };
+    let _b = engine::internal::Piston { strokes: 4 };
+}</pre>
+
+<pre class="rustc">
+error[E0603]: module `internal` is private
+  --&gt; src/main.rs:13:22
+   |
+13 |     let _b = engine::internal::Piston { strokes: 4 };
+   |                      ^^^^^^^^ private module
+   |
+note: the module `internal` is defined here
+  --&gt; src/main.rs:2:5
+   |
+ 2 |     mod internal {
+   |     ^^^^^^^^^^^^
+help: consider importing this struct through its public re-export instead
+   |
+13 -     let _b = engine::internal::Piston { strokes: 4 };
+13 +     let _b = engine::Piston { strokes: 4 };
+   |
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0603`.</pre>
+
+<aside class="ox-callout" data-kind="php">
+  <p>PHP's <code>use App\Models\User;</code> is also an alias, but PHP finds the class later, at runtime, through the autoloader. Rust checks every <code>use</code> while it compiles. A <code>use</code> that names nothing stops the build, so you find out before the program runs.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="files">From files to modules</h2>
+
+<p>Here is the surprise that catches most PHP developers. Creating <code>src/models/user.rs</code> does not add a module to your program. Nothing reads that file until a <code>mod</code> line names it. Composer finds <code>App\Models\User</code> in <code>app/Models/User.php</code> by path, the first time the class is needed. Rust works the other way round: the module tree is written in source, and the files follow from it.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Declaration</th><th>rustc looks for</th></tr></thead>
+  <tbody>
+    <tr><td><code>mod models;</code> in <code>src/lib.rs</code></td><td><code>src/models.rs</code>, or <code>src/models/mod.rs</code></td></tr>
+    <tr><td><code>mod user;</code> in <code>src/models/mod.rs</code></td><td><code>src/models/user.rs</code>, or <code>src/models/user/mod.rs</code></td></tr>
+    <tr><td><code>mod handlers;</code> in <code>src/http/mod.rs</code></td><td><code>src/http/handlers.rs</code>, or <code>src/http/handlers/mod.rs</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="ox-bridge">
+  <pre class="php">
+// app/Models/User.php declares App\Models\User
+namespace App\Models;
+
+class User {}
+
+// Elsewhere. No require needed: the autoloader
+// maps the name to the file on first use.
+use App\Models\User;
+$user = new User();</pre>
+  <pre class="rs" data-check="skip" data-title="src/lib.rs and src/models/mod.rs">
+// src/lib.rs
+pub mod models;      // reads src/models/mod.rs and makes it part of the crate
+
+// src/models/mod.rs
+pub mod user;        // reads src/models/user.rs, which is now part of the crate</pre>
+  <div class="ox-bridge-note"><p>Composer maps a name to a file and loads it when it is used. Rust has no autoloader and no runtime lookup. A file is compiled only if a <code>mod</code> line reaches it, and a file with no such line is ignored, even when it sits in <code>src/</code>.</p></div>
+</div>
+
+<p>Explore the crate in the map below. The left column is the disk. The right column is the module tree that rustc builds from the <code>mod</code> lines. Click a file or a module to see its full path, the <code>use</code> line that <code>main.rs</code> would need, and whether <code>main.rs</code> can reach it. A path is reachable only when every segment on it is visible to <code>main.rs</code>.</p>
+
+<style>
+#modmap .mm-head { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; margin-bottom: 14px; }
+#modmap .mm-note { color: var(--muted); font-size: 0.9rem; }
+#modmap .mm-grid { display: grid; gap: 14px; }
+@media (min-width: 720px) { #modmap .mm-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); } }
+#modmap .mm-col { min-width: 0; padding: 10px 8px; border: 1px solid var(--line-2); border-radius: var(--radius); background: var(--surface-2); }
+#modmap .mm-col > .ox-label { display: block; padding: 0 8px 8px; }
+#modmap ul { list-style: none; margin: 0; padding: 0; }
+#modmap .mm-folder { display: block; padding: 4px 8px 4px calc(8px + var(--d, 0) * 18px); color: var(--muted); font: 600 0.86rem/1.7 var(--font-mono); }
+#modmap .mm-item { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 34px; padding: 4px 8px 4px calc(8px + var(--d, 0) * 18px); border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--ink); font: 600 0.88rem/1.3 var(--font-mono); text-align: left; cursor: pointer; }
+#modmap .mm-item:hover { border-color: var(--line); background: var(--surface); }
+#modmap .mm-item[aria-pressed="true"], #modmap .mm-item.is-current { border-color: var(--oxide); background: var(--oxide-soft); }
+#modmap .mm-item:focus-visible { outline: 2px solid var(--borrow); outline-offset: 2px; }
+#modmap .mm-item.is-ghost { color: var(--ghost); border: 1px dashed var(--line); }
+#modmap .mm-kind { color: var(--muted); font: 500 0.76rem/1 var(--font-mono); white-space: nowrap; }
+#modmap .mm-badge { margin-left: auto; padding: 4px 6px; border-radius: 4px; font: 700 0.68rem/1 var(--font-mono); white-space: nowrap; }
+#modmap .mm-badge.is-pub { background: var(--ok-soft); color: var(--ok); }
+#modmap .mm-badge.is-private { background: var(--bad-soft); color: var(--bad); }
+#modmap .mm-badge.is-crate { background: var(--warn-soft); color: var(--warn); }
+#modmap .mm-tag { margin-left: auto; color: var(--muted); font: 600 0.68rem/1.2 var(--font-mono); text-align: right; }
+#modmap .mm-ghost-note { display: block; padding: 2px 8px 6px calc(8px + 1 * 18px); color: var(--muted); font-size: 0.82rem; }
+#modmap .mm-ghost-note code { font-size: 0.82rem; }
+#modmap .mm-outside { margin: 12px 8px 0; font-size: 0.86rem; color: var(--muted); }
+#modmap .mm-detail { display: grid; gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line-2); }
+#modmap .mm-kv { display: grid; gap: 4px; min-width: 0; }
+#modmap .mm-kv code { overflow-wrap: anywhere; }
+#modmap .mm-why { margin: 0; }
+#modmap .mm-code { margin-top: 14px; }
+#modmap .mm-code .ox-code { margin: 0; }
+#modmap .mm-questions { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line-2); }
+#modmap .mm-q { padding: 10px 0; border-top: 1px dashed var(--line-2); }
+#modmap .mm-q:first-of-type { border-top: 0; }
+#modmap .mm-q p { margin: 0 0 8px; }
+#modmap .mm-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+#modmap .mm-feedback { margin: 8px 0 0; font-size: 0.92rem; }
+#modmap .mm-feedback.is-right { color: var(--ok); }
+#modmap .mm-feedback.is-wrong { color: var(--bad); }
+</style>
+
+<div class="ox-figure ox-wide" id="modmap">
+  <div class="mm-head">
+    <span class="ox-label">Module map · myapp</span>
+    <span class="mm-note">A library called <code>myapp</code>, and a program in <code>main.rs</code> that uses it.</span>
+  </div>
+
+  <div class="mm-grid">
+    <div class="mm-col">
+      <span class="ox-label">Files on disk</span>
+      <ul>
+        <li><span class="mm-folder" style="--d:0">myapp/src/</span></li>
+        <li><button type="button" class="mm-item" style="--d:1" data-node="bin" data-file="src/main.rs" aria-pressed="false">main.rs<span class="mm-tag">binary root</span></button></li>
+        <li><button type="button" class="mm-item" style="--d:1" data-node="lib" data-file="src/lib.rs" aria-pressed="false">lib.rs<span class="mm-tag">library root</span></button></li>
+        <li><span class="mm-folder" style="--d:1">models/</span></li>
+        <li><button type="button" class="mm-item" style="--d:2" data-node="models" data-file="src/models/mod.rs" aria-pressed="false">mod.rs</button></li>
+        <li><button type="button" class="mm-item is-current" style="--d:2" data-node="user" data-file="src/models/user.rs" aria-pressed="true">user.rs</button></li>
+        <li><button type="button" class="mm-item" style="--d:2" data-node="order" data-file="src/models/order.rs" aria-pressed="false">order.rs</button></li>
+        <li><span class="mm-folder" style="--d:1">http/</span></li>
+        <li><button type="button" class="mm-item" style="--d:2" data-node="http" data-file="src/http/mod.rs" aria-pressed="false">mod.rs</button></li>
+        <li><button type="button" class="mm-item" style="--d:2" data-node="handlers" data-file="src/http/handlers.rs" aria-pressed="false">handlers.rs</button></li>
+        <li><button type="button" class="mm-item is-ghost" style="--d:1" data-node="util" data-file="src/util.rs" aria-pressed="false">util.rs<span class="mm-tag">not in the crate</span></button>
+          <span class="mm-ghost-note">not part of the crate: nobody wrote <code>mod util;</code></span></li>
+      </ul>
+    </div>
+
+    <div class="mm-col">
+      <span class="ox-label">Module tree of the library</span>
+      <ul>
+        <li><button type="button" class="mm-item" style="--d:0" data-node="lib">myapp<span class="mm-kind">crate root</span></button></li>
+        <li><button type="button" class="mm-item" style="--d:1" data-node="models">models<span class="mm-kind">mod</span><span class="mm-badge is-pub">pub</span></button></li>
+        <li><button type="button" class="mm-item" style="--d:2" data-node="user">user<span class="mm-kind">mod</span><span class="mm-badge is-pub">pub</span></button></li>
+        <li><button type="button" class="mm-item" style="--d:3" data-node="User">User<span class="mm-kind">struct</span><span class="mm-badge is-pub">pub</span></button></li>
+        <li><button type="button" class="mm-item" style="--d:3" data-node="normalize_email">normalize_email<span class="mm-kind">fn</span><span class="mm-badge is-crate">pub(crate)</span></button></li>
+        <li><button type="button" class="mm-item" style="--d:2" data-node="order">order<span class="mm-kind">mod</span><span class="mm-badge is-pub">pub</span></button></li>
+        <li><button type="button" class="mm-item" style="--d:3" data-node="Order">Order<span class="mm-kind">struct</span><span class="mm-badge is-pub">pub</span></button></li>
+        <li><button type="button" class="mm-item" style="--d:3" data-node="tax_for">tax_for<span class="mm-kind">fn</span><span class="mm-badge is-private">private</span></button></li>
+        <li><button type="button" class="mm-item" style="--d:1" data-node="http">http<span class="mm-kind">mod</span><span class="mm-badge is-pub">pub</span></button></li>
+        <li><button type="button" class="mm-item" style="--d:2" data-node="handlers">handlers<span class="mm-kind">mod</span><span class="mm-badge is-private">private</span></button></li>
+        <li><button type="button" class="mm-item" style="--d:3" data-node="show_user">show_user<span class="mm-kind">fn</span><span class="mm-badge is-pub">pub</span></button></li>
+        <li><button type="button" class="mm-item" style="--d:0" data-node="bin">main.rs<span class="mm-kind">binary crate</span></button></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="mm-detail" aria-live="polite">
+    <div class="mm-kv"><span class="ox-label">Full path</span><code id="mm-path">myapp::models::user</code></div>
+    <div class="mm-kv"><span class="ox-label">Write this in main.rs</span><code id="mm-use">use myapp::models::user;</code></div>
+    <div class="mm-kv"><span class="ox-label">Can main.rs reach it?</span><span><span id="mm-verdict" class="ox-chip is-ok">yes</span></span></div>
+    <p class="mm-why" id="mm-why">pub mod user in models/mod.rs, and models is pub. Every segment on the path is visible.</p>
+  </div>
+
+  <div class="mm-code" id="mm-code" data-file="src/models/user.rs">
+    <pre class="rs" data-check="skip" data-title="src/models/user.rs">
+pub struct User {
+    pub name: String,
+    email: String,
+}
+
+impl User {
+    pub fn new(name: &amp;str, email: &amp;str) -&gt; User {
+        User {
+            name: name.to_string(),
+            email: normalize_email(email),
+        }
+    }
+
+    pub fn email(&amp;self) -&gt; &amp;str {
+        &amp;self.email
+    }
+}
+
+pub(crate) fn normalize_email(raw: &amp;str) -&gt; String {
+    raw.trim().to_lowercase()
+}</pre>
+  </div>
+
+  <div class="mm-questions">
+    <span class="ox-label">Check yourself: can main.rs reach it?</span>
+    <div class="mm-q" id="mm-q1">
+      <p>Can <code>main.rs</code> call <code>myapp::models::user::normalize_email</code>?</p>
+      <div class="mm-btns">
+        <button type="button" class="ox-btn is-small" data-q="1" data-pick="yes">Yes</button>
+        <button type="button" class="ox-btn is-small" data-q="1" data-pick="no">No</button>
+      </div>
+      <p class="mm-feedback" aria-live="polite"></p>
+    </div>
+    <div class="mm-q" id="mm-q2">
+      <p>Can <code>main.rs</code> call <code>myapp::http::handlers::show_user</code>?</p>
+      <div class="mm-btns">
+        <button type="button" class="ox-btn is-small" data-q="2" data-pick="yes">Yes</button>
+        <button type="button" class="ox-btn is-small" data-q="2" data-pick="no">No</button>
+      </div>
+      <p class="mm-feedback" aria-live="polite"></p>
+    </div>
+    <div class="mm-q" id="mm-q3">
+      <p>Can <code>main.rs</code> build a <code>myapp::models::order::Order</code> with a struct literal, setting <code>id</code> and <code>total_cents</code>?</p>
+      <div class="mm-btns">
+        <button type="button" class="ox-btn is-small" data-q="3" data-pick="yes">Yes</button>
+        <button type="button" class="ox-btn is-small" data-q="3" data-pick="no">No</button>
+      </div>
+      <p class="mm-feedback" aria-live="polite"></p>
+    </div>
+  </div>
+</div>
+
+<p>The map shows the rule in action. <code>src/util.rs</code> is a complete, valid file, and it does nothing, because no <code>mod util;</code> names it. Adding that one line to <code>lib.rs</code> is enough to make it part of the crate. Until then, no tool in the build will read it.</p>
+
+<aside class="ox-callout" data-kind="insight">
+  <p>Picture the module tree as a building. Each <code>mod</code> line is a door that opens into a room, and the room is a file. A path into an item is a walk through several doors, and each door has to be open to you. A <code>pub</code> keyword opens a door for the callers you choose. A file with no <code>mod</code> line is a room with no door, so nobody walks in.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="cargo-toml">Cargo.toml in depth</h2>
+
+<p>Cargo.toml is the manifest for a package. Dependencies are where most decisions live, and most surprises come from version requirements. Here is an annotated example. Each comment explains the line it sits on.</p>
+
+<pre class="toml" data-title="Cargo.toml">
+[package]
+name = "shop"          # the crate name. Other code writes `use shop::...`
+version = "0.1.0"      # bumped for each release you publish
+edition = "2024"       # which edition's syntax and rules apply
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }   # crates.io, with the derive macros
+money = { path = "../money" }                       # a folder on disk, common in monorepos
+
+[dev-dependencies]
+pretty_assertions = "1"   # compiled only for tests and examples
+
+[features]
+default = []
+metrics = []              # a compile-time switch: #[cfg(feature = "metrics")]
+
+[profile.release]
+opt-level = 3             # how hard the optimizer works
+lto = true                # link-time optimization: slower builds, often faster binaries</pre>
+
+<p>The <code>[dependencies]</code> table has three sources. A version comes from crates.io. A <code>path</code> points at a folder on disk, which is how a monorepo shares code between packages. A <code>git</code> source points at a repository. <code>[dev-dependencies]</code> are compiled only for tests and examples, so they never ship in your binary.</p>
+
+<h3>Version requirements mean ranges</h3>
+
+<p>A version written in <code>Cargo.toml</code> is a range, not a pin. The default meaning is caret, the same as Composer's <code>^</code>. Here is what each form allows.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Written</th><th>Allows</th></tr></thead>
+  <tbody>
+    <tr><td><code>"1.2"</code>, same as <code>"^1.2"</code></td><td>1.2.0 up to, but not including, 2.0.0</td></tr>
+    <tr><td><code>"~1.2"</code></td><td>1.2.0 up to, but not including, 1.3.0</td></tr>
+    <tr><td><code>"=1.2.0"</code></td><td>Exactly 1.2.0</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>The range has a floor, and that causes a real error. Serde has no 1.2 release, so asking for <code>"1.2"</code> fails. Here is the real output when you make that request.</p>
+
+<pre class="rustc">
+error: failed to select a version for the requirement `serde = "^1.2"`
+candidate versions found which didn't match: 1.0.229, 1.0.228, 1.0.227, ...
+location searched: crates.io index</pre>
+
+<p>When you add a dependency, <code>cargo add</code> writes the newest version it found, and it writes that version as a caret requirement:</p>
+
+<pre class="toml">
+serde = { version = "1.0.229", features = ["derive"] }</pre>
+
+<p>That line means <code>^1.0.229</code>. Any 1.x release at least as new as 1.0.229 satisfies it, and Cargo picks the newest matching release when it resolves dependencies.</p>
+
+<details class="ox-think">
+  <summary>Think first: should Cargo.lock go in git for an application?</summary>
+  <div class="ox-think-body">
+    <p>Yes. The lock file records the exact version of every dependency that was resolved, so every machine and every CI run builds the same code. Libraries are less clear-cut. Consumers always resolve their own lock file, so the one in your library is only a record of what you tested. Many teams commit it anyway, so that CI tests the versions they actually run.</p>
+  </div>
+</details>
+
+<p>Cargo keeps the resolved versions in <code>Cargo.lock</code>. <code>cargo update</code> moves those versions forward, but only inside the ranges that <code>Cargo.toml</code> allows. Composer's <code>composer.lock</code> plays the same role, and the same rule applies to both: commit the lock file for applications.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Cargo</th><th>What it does</th><th>Composer</th></tr></thead>
+  <tbody>
+    <tr><td><code>cargo add serde --features derive</code></td><td>Adds the dependency and updates <code>Cargo.lock</code>.</td><td><code>composer require</code></td></tr>
+    <tr><td><code>cargo remove serde</code></td><td>Removes it.</td><td><code>composer remove</code></td></tr>
+    <tr><td><code>cargo update</code></td><td>Moves locked versions forward, within the ranges in <code>Cargo.toml</code>.</td><td><code>composer update</code></td></tr>
+    <tr><td><code>cargo tree</code></td><td>Prints the whole dependency tree.</td><td><code>composer show --tree</code></td></tr>
+    <tr><td><code>cargo tree -i serde</code></td><td>Shows what depends on <code>serde</code>, working upward.</td><td><code>composer why serde</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>crates.io is the registry where published crates live, and it plays the role Packagist plays for PHP. docs.rs builds the API documentation for each published crate automatically, so a crate you find on crates.io usually has its docs one click away.</p>
+
+<h3>Workspaces hold several packages together</h3>
+
+<p>A workspace is one root <code>Cargo.toml</code> that lists several packages. They share one <code>Cargo.lock</code> and one <code>target/</code> directory. This course's repository is one. Its root manifest names the members, the default member that a bare <code>cargo</code> command acts on, and the folders that are excluded:</p>
+
+<pre class="toml" data-title="Cargo.toml (repository root)">
+[workspace]
+members = ["forge", "quests"]
+default-members = ["forge"]
+exclude = ["projects", "solutions"]
+resolver = "3"</pre>
+</section>
+
+<section>
+<h2 id="testing">Testing is built in</h2>
+
+<p>Cargo runs three kinds of tests with one command, <code>cargo test</code>. Unit tests live in the same file as the code they test, inside a <code>#[cfg(test)]</code> module. Integration tests live in a <code>tests/</code> folder. Doc tests live in the <code>///</code> comments. Start with unit tests.</p>
+
+<pre class="rs" data-run data-stdout="Ok(3) 6" data-title="src/lib.rs">
+pub fn divide(a: i32, b: i32) -&gt; Result&lt;i32, String&gt; {
+    if b == 0 {
+        return Err(String::from("division by zero"));
+    }
+    Ok(a / b)
+}
+
+pub fn nth(items: &amp;[i32], index: usize) -&gt; i32 {
+    items[index]
+}
+
+fn main() {
+    println!("{:?} {}", divide(7, 2), nth(&amp;[5, 6], 1));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn divides_evenly() {
+        assert_eq!(divide(10, 2), Ok(5), "10 / 2 should be 5");
+    }
+
+    #[test]
+    fn refuses_zero() {
+        assert!(divide(1, 0).is_err());
+    }
+
+    #[test]
+    #[should_panic(expected = "index out of bounds")]
+    fn panics_past_the_end() {
+        nth(&amp;[1, 2, 3], 9);
+    }
+
+    #[test]
+    fn works_with_question_mark() -&gt; Result&lt;(), String&gt; {
+        let half = divide(10, 2)?;
+        assert_eq!(half, 5);
+        Ok(())
+    }
+
+    #[test]
+    #[ignore = "slow: run with cargo test -- --ignored"]
+    fn slow_case() {
+        assert_eq!(nth(&amp;[4], 0), 4);
+    }
+}</pre>
+
+<p>Running <code>cargo test</code> on that file prints one line per test. The order can change from run to run, because tests run in parallel. This is real output from the file above.</p>
+
+<pre class="text" data-title="cargo test">
+running 5 tests
+test tests::slow_case ... ignored, slow: run with cargo test -- --ignored
+test tests::divides_evenly ... ok
+test tests::works_with_question_mark ... ok
+test tests::refuses_zero ... ok
+test tests::panics_past_the_end - should panic ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out</pre>
+
+<p>The assertion macros are <code>assert!</code> for a condition, <code>assert_eq!</code> for two values that must be equal, and <code>assert_ne!</code> for two that must differ. Each takes an optional message after its arguments. When <code>assert_eq!</code> fails, it prints both sides, and that is most of the reason to prefer it. The table lines up the two sets of tools.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>PHPUnit or Pest</th><th>Rust</th></tr></thead>
+  <tbody>
+    <tr><td><code>assertEquals($a, $b)</code></td><td><code>assert_eq!(a, b)</code></td></tr>
+    <tr><td><code>assertTrue($x)</code></td><td><code>assert!(x)</code></td></tr>
+    <tr><td><code>assertNotEquals($a, $b)</code></td><td><code>assert_ne!(a, b)</code></td></tr>
+    <tr><td><code>expectException(X::class)</code></td><td><code>#[should_panic]</code>, or return an <code>Err</code> and assert on it</td></tr>
+    <tr><td>Data providers, or Pest's <code>with()</code></td><td>A loop over a slice of cases, or the <code>rstest</code> crate</td></tr>
+    <tr><td><code>setUp()</code></td><td>A helper function that builds the test fixture</td></tr>
+    <tr><td>Mock objects</td><td>A trait, plus a test double: a small struct that implements it</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>A few details matter. <code>#[should_panic]</code> with no <code>expected</code> passes on any panic, including one caused by a bug, so always give it text. A test can return <code>Result&lt;(), E&gt;</code> and use <code>?</code>, which makes an <code>Err</code> fail the test. <code>cargo test divide</code> runs every test whose name contains <code>divide</code>, and <code>cargo test -- --ignored</code> runs the ignored ones.</p>
+
+<div class="ox-quiz" data-id="16:unit-private" data-label="Check yourself">
+  <p class="ox-q">Does this compile, and can the test call the private function?</p>
+  <pre class="rs" data-check="ok">
+fn double(x: i32) -&gt; i32 {
+    x * 2
+}
+
+fn main() {
+    println!("{}", double(21));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn doubles_four() {
+        assert_eq!(double(4), 8);
+    }
+}</pre>
+  <ol class="ox-choices">
+    <li>No. Private means private to the file, and a test is in another module.</li>
+    <li data-correct>Yes. A child module can see the private items of its parent, and <code>tests</code> is a child of the module that defines <code>double</code>.</li>
+    <li>Only if <code>double</code> is changed to <code>pub(crate)</code> first.</li>
+  </ol>
+  <div class="ox-why"><p>Yes. The test module is nested inside the module that defines <code>double</code>, so <code>use super::*;</code> brings it in, even though it is private. The same rule as before, read from the other side. The <code>cfg(test)</code> module is compiled only by <code>cargo test</code>, so <code>cargo run</code> never looks at it. Run <code>cargo test</code> to see the test pass.</p></div>
+</div>
+
+<p>Integration tests sit in <code>tests/</code>. Each file there is its own crate, and it can reach only the <code>pub</code> API of your library. That is a good test of your public design, because a test that needs private code is a test of the internals.</p>
+
+<pre class="rs" data-check="skip" data-title="tests/integration.rs">
+// A separate crate. It sees only what `calc` makes pub.
+use calc::{add, divide};
+
+#[test]
+fn public_api_adds() {
+    assert_eq!(add(10, 20), 30);
+}
+
+#[test]
+fn public_api_divides() {
+    assert_eq!(divide(9, 3), Ok(3));
+}</pre>
+
+<p>Doc tests are code blocks in <code>///</code> comments. <code>cargo test</code> compiles each one and runs it, so the example in your documentation can't drift from the code. This one lives in a library crate named <code>calc</code>. The <code>fn main</code> at the bottom exists only so this block runs on its own here. A real library wouldn't have one.</p>
+
+<pre class="rs" data-run data-stdout="5" data-title="src/lib.rs">
+/// Adds two numbers.
+///
+/// ```
+/// assert_eq!(calc::add(2, 3), 5);
+/// ```
+pub fn add(a: i32, b: i32) -&gt; i32 {
+    a + b
+}
+
+fn main() {
+    println!("{}", add(2, 3));
+}</pre>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>An agent asked to make a failing test pass has an easy shortcut. It can weaken the assertion, add <code>#[ignore]</code>, or delete the test. The test then passes, and the bug is still there. When an agent reports green tests, check the diff of the test files as well as the code. Treat a change to an assertion as a change to the requirement.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="tooling">The rest of the toolbox</h2>
+
+<p>The standard toolchain includes a formatter and a linter. A PHP team would run them the way it runs Pint and PHPStan. Here are the tools you will meet most often.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Tool</th><th>Command</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><strong>rustfmt</strong></td><td><code>cargo fmt</code></td><td>Formats the code to one style. Like Pint or php-cs-fixer. <code>cargo fmt --check</code> reports differences without changing files.</td></tr>
+    <tr><td><strong>clippy</strong></td><td><code>cargo clippy</code></td><td>Lints for mistakes, slow patterns and unclear code. Closest to PHPStan or Larastan, though it is a linter, not a type checker.</td></tr>
+    <tr><td><strong>cargo doc</strong></td><td><code>cargo doc --open</code></td><td>Builds browsable HTML from your <code>///</code> comments, for your crate and its dependencies.</td></tr>
+    <tr><td><strong>nextest</strong></td><td><code>cargo nextest run</code></td><td>A faster test runner, installed separately, with clearer per-test output.</td></tr>
+    <tr><td><strong>bacon</strong>, or <strong>cargo-watch</strong></td><td><code>bacon</code>, or <code>cargo watch -x test</code></td><td>Reruns checks, tests or clippy every time you save a file.</td></tr>
+    <tr><td><strong>cargo-audit</strong>, <strong>cargo-deny</strong></td><td><code>cargo audit</code></td><td>Check dependencies against known security advisories, and cargo-deny also checks licenses and banned crates.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Clippy warnings don't stop a build on their own. Here is a common one, from a small crate. A length check against zero reads better as <code>is_empty()</code>, and clippy says so.</p>
+
+<pre class="rustc">
+warning: length comparison to zero
+ --&gt; src/main.rs:2:5
+  |
+2 |     names.len() == 0
+  |     ^^^^^^^^^^^^^^^^ help: using `is_empty` is clearer and more explicit: `names.is_empty()`
+  |
+  = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#len_zero
+  = note: `#[warn(clippy::len_zero)]` on by default</pre>
+
+<div class="ox-quiz" data-id="16:clippy-exit" data-label="Check yourself">
+  <p class="ox-q">Clippy printed two warnings and no errors. What exit code does <code>cargo clippy</code> return?</p>
+  <ol class="ox-choices">
+    <li data-correct>0. Warnings are reported, but they don't fail the command.</li>
+    <li>101, the same code as a failed build.</li>
+    <li>1, because the code has warnings.</li>
+  </ol>
+  <div class="ox-why"><p>Zero. A script that only runs <code>cargo clippy</code> will pass on warnings. To make them fail the build, pass the flag after the double dash: <code>cargo clippy --all-targets -- -D warnings</code>. <code>-D</code> means deny, and it turns each warning into an error.</p></div>
+</div>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>This is how you keep AI agents honest. Put the checks in the project's agent instructions, in <code>CLAUDE.md</code> or <code>AGENTS.md</code>, so the agent runs them before it says it is done:</p>
+  <pre class="text">Before you say a change is done, run, in this order:
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
+cargo test</pre>
+  <p>A rule like this turns "it compiles on my side" into a result you can check. Read the tool output, not the agent's summary of it.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="practice">Practice</h2>
+
+<p>Six checks, one for each idea in this chapter. Answer each one before you open it.</p>
+
+<div class="ox-quiz" data-id="16:e0603-shapes" data-label="Does it compile?">
+  <p class="ox-q">Does this compile, and if not, which error appears?</p>
+  <pre class="rs" data-check="E0603">
+mod shapes {
+    pub mod area {
+        pub fn square(side: u32) -&gt; u32 {
+            side * side
+        }
+    }
+
+    mod scale {
+        pub fn triple(n: u32) -&gt; u32 {
+            n * 3
+        }
+    }
+}
+
+fn main() {
+    println!("{}", shapes::area::square(4));
+    println!("{}", shapes::scale::triple(2));
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. It prints 16 and 6.</li>
+    <li data-correct>No. <code>E0603</code>: module <code>scale</code> is private, even though <code>triple</code> is <code>pub</code>.</li>
+    <li>No. <code>E0433</code>: cannot find <code>scale</code>.</li>
+  </ol>
+  <div class="ox-why"><p>The function is <code>pub</code>, but the path to it runs through <code>shapes::scale</code>, and <code>scale</code> has no <code>pub</code>. Each segment on a path must be visible. The same rule explains the <code>handlers</code> question in the module map.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="16:util-file" data-label="Yes or no">
+  <p class="ox-q">A project has <code>src/util.rs</code> containing a <code>pub fn</code>. No line anywhere says <code>mod util;</code>. Is <code>util.rs</code> part of the crate?</p>
+  <ol class="ox-choices">
+    <li>Yes. Everything under <code>src/</code> is compiled.</li>
+    <li data-correct>No. rustc never opens a file that no <code>mod</code> line names.</li>
+  </ol>
+  <div class="ox-why"><p>No. The file is valid Rust, and it does nothing. Add <code>mod util;</code> to <code>lib.rs</code>, and it becomes part of the crate, with its <code>pub</code> items reachable as <code>crate::util::...</code>.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="16:semver-floor" data-label="Check yourself">
+  <p class="ox-q">What does <code>serde = "1.2"</code> in <code>Cargo.toml</code> allow?</p>
+  <ol class="ox-choices">
+    <li>Exactly version 1.2.0.</li>
+    <li data-correct>Any version from 1.2.0 up to, but not including, 2.0.0.</li>
+    <li>Any version from 1.2.0 onward, including 2.0.0 and later.</li>
+  </ol>
+  <div class="ox-why"><p>The second one. A requirement without an operator is a caret range, so <code>"1.2"</code> means <code>^1.2</code>. Versions 1.0 and 1.1 fall below the floor, and 2.0.0 falls above the ceiling. That floor is why the serde example earlier fails: no serde release is at 1.2 or later within the major version 1.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="16:which-assert" data-label="Check yourself">
+  <p class="ox-q">You are testing that <code>parse_price("12,50")</code> returns <code>1250</code>. Which assertion gives the most useful failure message?</p>
+  <ol class="ox-choices">
+    <li><code>assert!(parse_price("12,50") == 1250);</code></li>
+    <li data-correct><code>assert_eq!(parse_price("12,50"), 1250, "a comma decimal should be cents");</code></li>
+    <li><code>assert_ne!(parse_price("12,50"), 0);</code></li>
+  </ol>
+  <div class="ox-why"><p>The <code>assert_eq!</code> version. When it fails, it prints the left value, the right value and your message. <code>assert!</code> reports only that the condition was false, and <code>assert_ne!</code> checks the opposite of what you want to know.</p></div>
+</div>
+
+<div class="ox-fill" data-id="16:fill-use">
+  <p class="ox-q">Inside <code>report</code>, bring <code>area</code> into scope. Fill in the path that leads to <code>geometry</code>. Two answers are right: one goes up a level, and one starts at the crate root.</p>
+  <pre class="rs">
+mod geometry {
+    pub fn area(w: u32, h: u32) -&gt; u32 {
+        w * h
+    }
+
+    pub mod report {
+        use [[super|crate::geometry]]::area;
+
+        pub fn line(w: u32, h: u32) -&gt; String {
+            format!("area = {}", area(w, h))
+        }
+    }
+}
+
+fn main() {
+    println!("{}", geometry::report::line(3, 4));
+}</pre>
+  <div class="ox-why"><p><code>super</code> steps from <code>report</code> up to <code>geometry</code>. <code>crate::geometry</code> walks down from the root. Both reach the same function, so both are accepted. Writing <code>use geometry::area;</code> without either fails with <code>E0432</code>, because <code>geometry</code> is not in scope inside <code>report</code>.</p></div>
+</div>
+
+<div class="ox-match" data-id="16:match" data-left-label="Composer and PHPUnit" data-right-label="Cargo and Rust">
+  <ul>
+    <li data-left="composer.json">Cargo.toml</li>
+    <li data-left="vendor/">~/.cargo/registry, where downloaded crates live</li>
+    <li data-left="namespace App\Models">a module, declared with <code>mod models;</code></li>
+    <li data-left="use App\Models\User;">use crate::models::User;</li>
+    <li data-left="phpunit">cargo test</li>
+    <li data-left="phpstan">cargo clippy</li>
+  </ul>
+</div>
+</section>
+
+<section>
+<h2 id="quests">Forge quests</h2>
+<p>Reading builds recognition. Writing code builds the skill. These quests run locally against the real compiler.</p>
+<div class="ox-quests" data-chapter="16"></div>
+</section>
+
+<section>
+<h2 id="recap">Recap</h2>
+
+<div class="ox-recap">
+  <h3>Modules, crates and tests</h3>
+  <ul>
+    <li>A <strong>package</strong> holds <strong>crates</strong>. A crate is one tree of <strong>modules</strong>, rooted at <code>src/lib.rs</code> or <code>src/main.rs</code>.</li>
+    <li>Items are <strong>private by default</strong>. <code>pub</code>, <code>pub(crate)</code> and <code>pub(super)</code> widen the view. A path works only when every segment is visible.</li>
+    <li><code>crate::</code>, <code>self::</code> and <code>super::</code> start a path. <code>use</code> brings a name into scope. <code>pub use</code> re-exports one.</li>
+    <li>A file is part of the crate only when a <code>mod</code> line names it. Nothing is autoloaded.</li>
+    <li>In <code>Cargo.toml</code>, <code>"1.2"</code> means <code>^1.2</code>: a range with a floor. <code>Cargo.lock</code> pins exact versions, and you commit it for applications.</li>
+    <li>Unit tests sit in <code>#[cfg(test)]</code> modules, integration tests in <code>tests/</code>, and doc tests in <code>///</code> comments. <code>cargo test</code> runs all three.</li>
+    <li>Run <code>cargo fmt --check</code>, <code>cargo clippy --all-targets -- -D warnings</code> and <code>cargo test</code> before you accept any change, human or agent.</li>
+  </ul>
+</div>
+
+<div class="ox-deck" data-chapter="16"></div>
+
+<details class="ox-think">
+  <summary>Explain it back: why doesn't adding <code>src/util.rs</code> make it part of your program?</summary>
+  <div class="ox-think-body">
+    <p>One good answer: "Rust compiles only the files that the module tree reaches. The crate root declares its modules with <code>mod</code> lines, and each line tells the compiler which file to read. Nothing in this project says <code>mod util;</code>, so the compiler never opens <code>util.rs</code>. The file sits on disk, but it is not part of the module tree. Add a <code>mod util;</code> line and it becomes part of the crate."</p>
+    <p>If your version mentioned <em>the module tree</em>, <em>a mod line names the file</em>, and <em>no autoloading</em>, you have the idea.</p>
+  </div>
+</details>
+
+<div class="ox-complete-host"></div>
+</section>
+
+</main>
+</div>
+
+<script>
+(function () {
+  var FILES = {
+    "src/lib.rs": `// The library crate root. Only files named by a mod line here,
+// or by a mod line in a file that is itself part of the crate,
+// become part of this crate.
+pub mod models;
+pub mod http;`,
+    "src/main.rs": `// The binary crate. It is a separate crate that depends on myapp,
+// so it can reach only what the library makes pub along each path.
+use myapp::models::user::User;
+
+fn main() {
+    let u = User::new("Ana", " Ana@Example.com ");
+    println!("{} <{}>", u.name, u.email());
+}`,
+    "src/models/mod.rs": `pub mod order;
+pub mod user;`,
+    "src/models/user.rs": `pub struct User {
+    pub name: String,
+    email: String,
+}
+
+impl User {
+    pub fn new(name: &str, email: &str) -> User {
+        User {
+            name: name.to_string(),
+            email: normalize_email(email),
+        }
+    }
+
+    pub fn email(&self) -> &str {
+        &self.email
+    }
+}
+
+pub(crate) fn normalize_email(raw: &str) -> String {
+    raw.trim().to_lowercase()
+}`,
+    "src/models/order.rs": `pub struct Order {
+    pub id: u32,
+    pub total_cents: u64,
+}
+
+impl Order {
+    pub fn tax(&self) -> u64 {
+        tax_for(self.total_cents)
+    }
+}
+
+fn tax_for(total_cents: u64) -> u64 {
+    total_cents / 5
+}`,
+    "src/http/mod.rs": `mod handlers;`,
+    "src/http/handlers.rs": `pub fn show_user(id: u32) -> String {
+    format!("user {id}")
+}`,
+    "src/util.rs": `pub fn slugify(title: &str) -> String {
+    title.to_lowercase().replace(' ', "-")
+}`
+  };
+
+  var NODES = {
+    lib: { file: "src/lib.rs", path: "myapp", use: "n/a: the crate name starts every path", reach: "root",
+      why: "The crate name, myapp, is the first segment of every path that main.rs writes." },
+    bin: { file: "src/main.rs", path: "main.rs, a crate of its own", use: "n/a: this file is the caller", reach: "caller",
+      why: "main.rs is a separate binary crate that depends on myapp. It can reach only what myapp makes pub along each path." },
+    models: { file: "src/models/mod.rs", path: "myapp::models", use: "use myapp::models;", reach: "yes",
+      why: "pub mod models; in lib.rs makes this module nameable from main.rs." },
+    user: { file: "src/models/user.rs", path: "myapp::models::user", use: "use myapp::models::user;", reach: "yes",
+      why: "pub mod user in models/mod.rs, and models is pub. Every segment on the path is visible." },
+    User: { file: "src/models/user.rs", path: "myapp::models::user::User", use: "use myapp::models::user::User;", reach: "yes",
+      why: "A pub struct on a pub path. Its name field is pub, and its email field is private, so main.rs reads the email through email()." },
+    normalize_email: { file: "src/models/user.rs", path: "myapp::models::user::normalize_email", use: "none: rustc refuses this path", reach: "no",
+      why: "pub(crate) means visible inside myapp. main.rs is another crate, so rustc reports E0603: function is private." },
+    order: { file: "src/models/order.rs", path: "myapp::models::order", use: "use myapp::models::order;", reach: "yes",
+      why: "pub mod order in models/mod.rs. Every segment on the path is pub." },
+    Order: { file: "src/models/order.rs", path: "myapp::models::order::Order", use: "use myapp::models::order::Order;", reach: "yes",
+      why: "A pub struct with pub fields, on a pub path. main.rs can build one with a struct literal." },
+    tax_for: { file: "src/models/order.rs", path: "myapp::models::order::tax_for", use: "none: rustc refuses this path", reach: "no",
+      why: "No visibility keyword means private, so only the order module can call it. rustc reports E0603." },
+    http: { file: "src/http/mod.rs", path: "myapp::http", use: "use myapp::http;", reach: "yes",
+      why: "pub mod http in lib.rs. The module itself is reachable, but its child handlers is private." },
+    handlers: { file: "src/http/handlers.rs", path: "myapp::http::handlers", use: "none: rustc refuses this path", reach: "no",
+      why: "mod handlers; in http/mod.rs has no pub, so only http and its children can name it. rustc reports E0603: module is private." },
+    show_user: { file: "src/http/handlers.rs", path: "myapp::http::handlers::show_user", use: "none: rustc refuses this path", reach: "no",
+      why: "The function is pub, but the path runs through handlers, which is private. Every segment has to be visible, so the error is on handlers." },
+    util: { file: "src/util.rs", path: "no path: the file is not in the crate", use: "none: nothing can name this file", reach: "no",
+      why: "Nothing declares mod util;, so the compiler never reads this file. Adding mod util; to lib.rs would make it part of the crate." }
+  };
+
+  var VERDICT = {
+    yes: ["yes", "is-ok"],
+    no: ["no", "is-bad"],
+    root: ["crate root", ""],
+    caller: ["not applicable", ""]
+  };
+
+  var QUESTIONS = {
+    "1": { answer: "no",
+      right: "Correct. normalize_email is pub(crate). That means visible inside myapp, and main.rs is a separate crate, so rustc reports E0603.",
+      wrong: "Not quite. pub(crate) stops at the crate boundary. main.rs is a different crate, so rustc reports E0603." },
+    "2": { answer: "no",
+      right: "Correct. show_user is pub, but its path runs through handlers, which is a private module. Every segment has to be visible.",
+      wrong: "Not quite. The function is pub, but handlers is private inside http, so rustc reports E0603 on the module." },
+    "3": { answer: "yes",
+      right: "Correct. Order is pub, both fields are pub, and each module on the path is pub. The struct literal compiles.",
+      wrong: "Not quite. Every segment on the path is pub, and both fields are pub, so this compiles." }
+  };
+
+  function init() {
+    var root = document.getElementById("modmap");
+    if (!root || root.getAttribute("data-ready")) return;
+    root.setAttribute("data-ready", "1");
+    var host = document.getElementById("mm-code");
+
+    function showFile(file) {
+      if (host.getAttribute("data-file") === file) return;
+      var pre = document.createElement("pre");
+      pre.className = "rs";
+      pre.setAttribute("data-check", "skip");
+      pre.setAttribute("data-title", file);
+      pre.textContent = FILES[file];
+      host.setAttribute("data-file", file);
+      var fig = (window.Ox && window.Ox.enhancePre) ? window.Ox.enhancePre(pre) : pre;
+      host.replaceChildren(fig);
+    }
+
+    function select(id) {
+      var n = NODES[id];
+      if (!n) return;
+      document.getElementById("mm-path").textContent = n.path;
+      document.getElementById("mm-use").textContent = n.use;
+      var v = VERDICT[n.reach];
+      var chip = document.getElementById("mm-verdict");
+      chip.textContent = v[0];
+      chip.className = "ox-chip" + (v[1] ? " " + v[1] : "");
+      document.getElementById("mm-why").textContent = n.why;
+      root.querySelectorAll("[data-node]").forEach(function (b) {
+        b.setAttribute("aria-pressed", b.getAttribute("data-node") === id ? "true" : "false");
+      });
+      root.querySelectorAll("[data-file]").forEach(function (b) {
+        b.classList.toggle("is-current", b.getAttribute("data-file") === n.file);
+      });
+      showFile(n.file);
+    }
+
+    function answer(btn) {
+      var q = btn.getAttribute("data-q");
+      var box = document.getElementById("mm-q" + q);
+      if (!box || box.getAttribute("data-done")) return;
+      box.setAttribute("data-done", "1");
+      var Q = QUESTIONS[q];
+      var ok = btn.getAttribute("data-pick") === Q.answer;
+      box.querySelectorAll("[data-pick]").forEach(function (b) {
+        b.disabled = true;
+        if (b.getAttribute("data-pick") === Q.answer) b.classList.add("is-primary");
+      });
+      var fb = box.querySelector(".mm-feedback");
+      fb.textContent = ok ? Q.right : Q.wrong;
+      fb.className = "mm-feedback " + (ok ? "is-right" : "is-wrong");
+      if (ok && window.Ox && window.Ox.award) window.Ox.award(10, "module map check", "mm:" + q);
+    }
+
+    root.addEventListener("click", function (e) {
+      var node = e.target.closest("[data-node]");
+      if (node && root.contains(node)) { select(node.getAttribute("data-node")); return; }
+      var pick = e.target.closest("[data-pick]");
+      if (pick && root.contains(pick)) answer(pick);
+    });
+
+    select("user");
+  }
+
+  if (window.Ox && window.Ox.ready) init();
+  else document.addEventListener("ox:ready", init);
+})();
+</script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-/* Recall cards — Chapter 12: Collections */
+/* Recall cards for Chapter 12: Collections */
 (window.OX_CARDS = window.OX_CARDS || []).push(
   { id: "c12-get", ch: 12, q: "What is the difference between `v[10]` and `v.get(10)` on a `Vec` with three elements?", a: "`v[10]` **panics**: the index is out of bounds and the program stops.\n\n`v.get(10)` returns `None`, which the caller must handle. Use `get` when the index comes from outside your code." },
   { id: "c12-iter", ch: 12, q: "What does each of these loops give you: `for x in &v`, `for x in &mut v`, `for x in v`?", a: "`&v` gives shared references, and `v` stays usable.\n\n`&mut v` gives mutable references, so `*x += 1` changes each element.\n\n`v` takes ownership. Each `x` is an owned value, and `v` is gone after the loop." },

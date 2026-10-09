@@ -103,7 +103,7 @@ fn main() {
 <p class="ox-pull">Types are shapes. A value only fits the hole it was cut for.</p>
 
 <aside class="ox-callout" data-kind="insight">
-  <p>Every value has one exact type, and the compiler knows it before the program runs. When you read a Rust line, the type is one of the things the source tells you. In PHP you usually have to infer it from context, or find out at runtime.</p>
+  <p>Every value has one exact type, and the compiler settles it before the program runs. The type is either written in the source or inferred from how the value is used. In PHP you usually have to work it out from context, or find out at runtime.</p>
 </aside>
 </section>
 
@@ -217,8 +217,7 @@ fn main() {
 
 <p>Sometimes the compiler sees the overflow coming, and then it refuses to build the program at all:</p>
 
-<!-- data-check="skip": the checker compiles with --emit=metadata, which skips MIR lints such as arithmetic_overflow. Verified with a full rustc build (error: this arithmetic operation will overflow). -->
-<pre class="rs" data-check="skip">
+<pre class="rs" data-check="error">
 fn main() {
     let x: u8 = 255 + 1;
     println!("{x}");
@@ -398,7 +397,7 @@ fn main() {
     <li>Yes. Any non-zero number counts as true.</li>
     <li data-correct>No. <code>if</code> needs a <code>bool</code>, and <code>count</code> is an <code>i32</code>.</li>
   </ol>
-  <div class="ox-why"><p>In PHP, <code>if ($count)</code> accepts any non-zero number, an empty string or an empty array as false. Rust asks you to write the comparison: <code>if count != 0</code>. The reader never has to remember which values count as false.</p></div>
+  <div class="ox-why"><p>In PHP, <code>if ($count)</code> takes any non-zero number as true, and an empty string or an empty array as false. Rust asks you to write the comparison: <code>if count != 0</code>. The reader never has to remember which values count as false.</p></div>
 </div>
 
 <p><code>char</code> is 4 bytes. It holds one Unicode scalar value, which is a code point: the number Unicode assigns to a character. <code>'a'</code> is 97, <code>'é'</code> is 233, and the crab is 129,408. Every <code>char</code> takes 4 bytes, however small the character is. The number of bytes it needs in a string is a separate question, and <code>len_utf8</code> answers it.</p>
@@ -468,7 +467,7 @@ fn main() {
   <p>Chapter 06 said a tuple is <code>Copy</code> only when every field is <code>Copy</code>. <code>(i32, f64, char)</code> qualifies, so <code>let q = p;</code> copies it, and <code>p</code> stays usable. A tuple that holds a <code>String</code> would move instead.</p>
 </aside>
 
-<p>The empty tuple, <code>()</code>, is called the <em>unit</em> type. It holds nothing. A function with no return type returns <code>()</code>:</p>
+<p>The empty tuple, <code>()</code>, is called the <em>unit</em> type. It holds nothing. A function with no return type returns <code>()</code>, and Chapter 04 shows where else it turns up:</p>
 
 <pre class="rs" data-run data-stdout="hello crab\n()">
 fn say(name: &amp;str) {
@@ -547,8 +546,7 @@ fn main() {
 
 <p>Indexing with <code>[]</code> checks the position against the length. A constant index that is out of range is a compile error:</p>
 
-<!-- data-check="skip": same checker limitation as above (unconditional_panic is a MIR lint). Verified with a full rustc build (error: this operation will panic at runtime). -->
-<pre class="rs" data-check="skip">
+<pre class="rs" data-check="error">
 fn main() {
     let arr = [1, 2, 3];
     println!("{}", arr[5]);
@@ -625,7 +623,7 @@ fn main() {
 <section>
 <h2 id="casting">Converting between types</h2>
 
-<p>Rust never converts a value to another type on its own, not even a small integer to a bigger one. This program is a compile error, and rustc suggests the conversion it wants:</p>
+<p>Rust never converts between number types on its own, not even a small integer to a bigger one. This program is a compile error, and rustc suggests the conversion it wants:</p>
 
 <pre class="rs" data-check="E0308">
 fn main() {
@@ -654,7 +652,7 @@ error: aborting due to 1 previous error
 For more information about this error, try `rustc --explain E0308`.
 </pre>
 
-<p><code>as</code> is the explicit conversion. It always compiles, and it doesn't report when information is lost:</p>
+<p><code>as</code> is the explicit conversion between number types. It compiles for any pair of them, and it doesn't report when information is lost:</p>
 
 <pre class="rs" data-run data-stdout="44\n255\n3\n2147483647">
 fn main() {
@@ -665,7 +663,7 @@ fn main() {
 }
 </pre>
 
-<p>Use <code>From</code> when the conversion can't lose anything, and <code>TryFrom</code> when it might. <code>From</code> returns the new type directly. <code>TryFrom</code> returns a <code>Result</code>, which Chapter 11 covers in full, so the program has to handle a value that doesn't fit.</p>
+<p>Use <code>From</code> when the conversion can't lose anything, and <code>TryFrom</code> when it might. <code>From</code> returns the new type directly, so <code>i64::from(x)</code> works for any integer that fits in an <code>i64</code>. <code>TryFrom</code> returns a <code>Result</code>, which Chapter 11 covers in full, so the program has to handle a value that doesn't fit.</p>
 
 <pre class="rs" data-run data-stdout="200\nOk(200)\nErr(TryFromIntError(PosOverflow))\nOk(42)">
 fn main() {
@@ -689,7 +687,7 @@ fn main() {
 </div>
 
 <aside class="ox-callout" data-kind="ai">
-  <p>Agents write <code>as</code> constantly, because it always compiles. That is the problem. When you review agent-written Rust, ask one question of every cast: can this value be outside the target range? If it came from a request, a file, a database or a parser, it can. Then ask for <code>try_from</code> and a real error path. If the code around the cast proves the range, <code>as</code> is fine, and a short comment that says why helps the next reader.</p>
+  <p>Agents write <code>as</code> constantly, because it compiles for any pair of numbers. That is the problem. When you review agent-written Rust, ask one question of every cast: can this value be outside the target range? If it came from a request, a file, a database or a parser, it can. Then ask for <code>try_from</code> and a real error path. If the code around the cast proves the range, <code>as</code> is fine, and a short comment that says why helps the next reader.</p>
 </aside>
 </section>
 
@@ -757,7 +755,7 @@ fn main() {
 <div class="ox-recap">
   <h3>Types are shapes</h3>
   <ul>
-    <li>Rust never converts a value to another type for you. <code>"5" + 5</code> is a compile error (E0369), not 10.</li>
+    <li>Rust never converts between number types for you. <code>"5" + 5</code> is a compile error (E0369), not 10.</li>
     <li>Integers are signed (<code>i</code>) or unsigned (<code>u</code>), 8 to 128 bits wide, plus the pointer-sized <code>isize</code> and <code>usize</code>. A bare literal is an <code>i32</code>. Lengths and indexes are <code>usize</code>.</li>
     <li>Overflow panics in debug builds and wraps in release builds. The <code>wrapping_</code>, <code>checked_</code>, <code>saturating_</code> and <code>overflowing_</code> methods make the choice in your code.</li>
     <li><code>char</code> is one 4-byte Unicode scalar value. <code>bool</code> has no truthiness, so an <code>if</code> needs a comparison.</li>

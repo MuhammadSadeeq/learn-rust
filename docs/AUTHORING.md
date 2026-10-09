@@ -301,6 +301,10 @@ Ops (applied cumulatively, step by step):
 | `["label", "h1", "text"]` | relabel a block |
 | `["out", "text"]` | append a stdout line |
 
+Ops refer to variables by **id** (which defaults to the name). Reusing an
+existing id with `let` overwrites that variable, so give repeated names
+explicit ids (`{ id: "area.w" }`) when two frames both have a `w`.
+
 Narration rules: 1–3 sentences per step, present tense, name the variable and
 what changed. Use `ask` on the 1–3 most surprising steps per scenario.
 

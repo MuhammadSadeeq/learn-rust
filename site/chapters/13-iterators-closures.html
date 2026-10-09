@@ -1,0 +1,1194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Iterators &amp; Closures · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/quests-data.js" defer></script>
+<script src="../assets/cards/ch13.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+<script src="../assets/xray.js" defer></script>
+</head>
+<body data-chapter="13">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<div class="ox-page">
+<aside class="ox-rail" aria-label="Chapter contents"></aside>
+<main class="ox-main" id="main">
+
+<header class="ox-hero" data-auto>
+  <ul>
+    <li>Write closures and predict whether they borrow, mutate or move what they capture.</li>
+    <li>Translate a Laravel Collection chain into a Rust iterator chain.</li>
+    <li>Explain laziness, and why <code>take(2)</code> can stop the work early.</li>
+    <li>Collect into a Vec, a HashMap, a String and a Result.</li>
+  </ul>
+</header>
+
+<section>
+<h2 id="closures">Closures</h2>
+
+<p>A closure is a function with no name, written where you need it. In PHP you have seen it as <code>function ($x) { … }</code> or <code>fn ($x) =&gt; …</code>. Rust has the same idea with a shorter syntax: parameters between vertical bars, then the body.</p>
+
+<pre class="rs" data-run data-stdout="5\n4 doubled is 8">
+fn main() {
+    let add = |a, b| a + b;
+    println!("{}", add(2, 3));
+
+    let describe = |n: i32| -> String {
+        let doubled = n * 2;
+        format!("{n} doubled is {doubled}")
+    };
+    println!("{}", describe(4));
+}</pre>
+
+<p>You don't write the types of <code>a</code> and <code>b</code>. Rust infers them from how the closure is used, and then they are fixed. Annotate a closure when its body is long or its types are not obvious, as in <code>|n: i32| -&gt; String { … }</code>. A closure with more than one statement needs braces, just like a function body.</p>
+
+<div class="ox-quiz" data-id="13:infer-closure" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0308">
+fn main() {
+    let add = |a, b| a + b;
+    println!("{}", add(1, 2));
+    println!("{}", add(1.5, 2.0));
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. Closures accept any numeric type.</li>
+    <li data-correct>No. The first call fixed <code>a</code> and <code>b</code> to integers, so the second call doesn't match.</li>
+    <li>No. A closure can't take two parameters.</li>
+  </ol>
+  <div class="ox-why"><p>A closure's parameter types are inferred from its first use, and then they stay put. If you want both kinds of numbers, annotate the parameters with one type, as in <code>|a: f64, b: f64|</code>, and pass floats to every call.</p></div>
+</div>
+
+<p>PHP has the same two forms, and they capture differently. This is the comparison that matters here:</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+$factor = 2;
+$byValue = function ($x) use ($factor) {
+    return $x * $factor;
+};
+$byRef = function ($x) use (&amp;$factor) {
+    return $x * $factor;
+};
+$arrow = fn ($x) => $x * $factor;</pre>
+  <pre class="rs" data-stdout="6">
+fn main() {
+    let factor = 2;
+    let times = |x: i32| x * factor;
+    println!("{}", times(3));
+}</pre>
+  <div class="ox-bridge-note"><p>PHP writes the capture list into the closure's header, and that list decides what is copied. A plain <code>use ($factor)</code> copies the value when the closure is created, and <code>use (&amp;$factor)</code> shares the variable. The arrow form <code>fn</code> copies, like the plain <code>use</code>. Rust reads the body and picks the least it needs. This closure only reads <code>factor</code>, so it borrows it, the way <code>use (&amp;$factor)</code> does, and no list is required. Where the comparison breaks: the compiler enforces the borrow. While the closure is alive, it won't let you change <code>factor</code> (E0506). PHP never stops you from changing a shared variable.</p></div>
+</div>
+
+<details class="ox-callout" data-kind="deep">
+  <summary>What a closure is at runtime</summary>
+  <p>The compiler turns each closure into a small struct, with one field for each thing it captured. The body becomes a method that reads those fields. Every closure gets its own unnamed type, so even two closures with identical code are different types. The struct lives on the stack unless you put it in a <code>Box</code>. Passing a closure to a generic function gives you a separate, specialized copy of that function, the same way generics work in Chapter 14.</p>
+</details>
+</section>
+
+<section>
+<h2 id="capture" data-toc="Captures">What a closure captures decides what it is</h2>
+
+<p>A closure can use variables from the scope where it was written. It captures them. How its body uses them decides which of three traits the closure implements, and the trait tells you how the closure may be called. Read the trait off the body, and you know what the closure can do.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Trait</th><th>The body…</th><th>How you may call it</th></tr></thead>
+  <tbody>
+    <tr><td><code>Fn</code></td><td>only reads captured values</td><td>as many times as you like</td></tr>
+    <tr><td><code>FnMut</code></td><td>changes a captured value</td><td>many times, and the binding must be <code>mut</code></td></tr>
+    <tr><td><code>FnOnce</code></td><td>moves a captured value out</td><td>exactly once</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Three short programs, one for each trait. Each one compiles.</p>
+
+<p><strong>Fn.</strong> <code>greet</code> reads <code>name</code>, so it borrows it. You can call it again and again, and <code>name</code> is still yours outside the closure.</p>
+
+<pre class="rs" data-run data-stdout="hello Ana\nhello Ana\nstill have Ana">
+fn main() {
+    let name = String::from("Ana");
+    let greet = || println!("hello {name}");
+    greet();
+    greet();
+    println!("still have {name}");
+}</pre>
+
+<p><strong>FnMut.</strong> <code>bump</code> changes <code>count</code>, so it holds a mutable borrow of it. Calling it changes the closure's captured state, which is why the binding itself has to be <code>mut</code>.</p>
+
+<pre class="rs" data-run data-stdout="count = 2">
+fn main() {
+    let mut count = 0;
+    let mut bump = || count += 1;
+    bump();
+    bump();
+    println!("count = {count}");
+}</pre>
+
+<p><strong>FnOnce.</strong> <code>take</code> returns <code>name</code>, which moves it out of the closure. There is only one <code>name</code> to give away, so the closure can run once.</p>
+
+<pre class="rs" data-run data-stdout="got Ana">
+fn main() {
+    let name = String::from("Ana");
+    let take = || name;
+    let got = take();
+    println!("got {got}");
+}</pre>
+
+<p>Now break the rule. Call that same closure twice:</p>
+
+<pre class="rs" data-badge="error" data-check="E0382">
+fn main() {
+    let name = String::from("Ana");
+    let take = || name;
+    let first = take();
+    let second = take();
+    println!("{first} {second}");
+}</pre>
+
+<pre class="rustc">
+error[E0382]: use of moved value: `take`
+ --> src/main.rs:5:18
+  |
+4 |     let first = take();
+  |                 ------ `take` moved due to this call
+5 |     let second = take();
+  |                  ^^^^ value used here after move
+  |
+note: closure cannot be invoked more than once because it moves the variable `name` out of its environment
+ --> src/main.rs:3:19
+  |
+3 |     let take = || name;
+  |                   ^^^^
+note: this value implements `FnOnce`, which causes it to be moved when called
+ --> src/main.rs:4:17
+  |
+4 |     let first = take();
+  |                 ^^^^
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0382`.</pre>
+
+<p>Read it from the top. The error is about <code>take</code>, not about <code>name</code>. The first note says why: the closure moved <code>name</code> out of its environment. The second note says that a closure which moves like this implements <code>FnOnce</code>, and calling it moves the closure itself.</p>
+
+<div class="ox-quiz" data-id="13:fnmut" data-label="Check yourself">
+  <p class="ox-q">Which trait does the closure <code>|| count += 1</code> implement?</p>
+  <pre class="rs" data-stdout="1">
+fn main() {
+    let mut count = 0;
+    let mut inc = || count += 1;
+    inc();
+    println!("{count}");
+}</pre>
+  <ol class="ox-choices">
+    <li><code>Fn</code>, because it only reads <code>count</code>.</li>
+    <li data-correct><code>FnMut</code>, because it changes <code>count</code> through a mutable borrow.</li>
+    <li><code>FnOnce</code>, because it moves <code>count</code> out.</li>
+  </ol>
+  <div class="ox-why"><p><code>count += 1</code> changes a captured variable, so the closure is <code>FnMut</code>. It is not <code>Fn</code>, because <code>Fn</code> can't change its captures. It is not <code>FnOnce</code>, because nothing is moved out, so you can call it again. Every <code>Fn</code> closure is also an <code>FnMut</code>, and every <code>FnMut</code> is also an <code>FnOnce</code>.</p></div>
+</div>
+
+<aside class="ox-callout" data-kind="trap">
+  <p>Calling an <code>FnMut</code> closure takes a mutable borrow of the closure itself. Write <code>let inc = || count += 1;</code> without <code>mut</code>, and rustc stops with E0596: <em>cannot borrow <code>inc</code> as mutable, as it is not declared as mutable</em>. The quiz above has the <code>mut</code> it needs.</p>
+</aside>
+
+<h3>Move closures take the value with them</h3>
+
+<p>The <code>move</code> keyword before the bars makes the closure take ownership of everything it captures, instead of borrowing it. It matters when the closure has to outlive the variables it used. Returning a closure from a function is the common case.</p>
+
+<pre class="rs" data-run data-stdout="15">
+fn make_adder(n: i32) -> impl Fn(i32) -> i32 {
+    move |x| x + n
+}
+
+fn main() {
+    let add5 = make_adder(5);
+    println!("{}", add5(10));
+}</pre>
+
+<p>The return type <code>impl Fn(i32) -&gt; i32</code> says: some closure that takes an <code>i32</code> and returns an <code>i32</code>. You don't name its type. Now leave out <code>move</code>:</p>
+
+<pre class="rs" data-badge="error" data-check="E0373">
+fn make_adder(n: i32) -> impl Fn(i32) -> i32 {
+    |x| x + n
+}
+
+fn main() {
+    let add5 = make_adder(5);
+    println!("{}", add5(10));
+}</pre>
+
+<pre class="rustc">
+error[E0373]: closure may outlive the current function, but it borrows `n`, which is owned by the current function
+ --> src/main.rs:2:5
+  |
+2 |     |x| x + n
+  |     ^^^     - `n` is borrowed here
+  |     |
+  |     may outlive borrowed value `n`
+  |
+note: closure is returned here
+ --> src/main.rs:2:5
+  |
+2 |     |x| x + n
+  |     ^^^^^^^^^
+help: to force the closure to take ownership of `n` (and any other referenced variables), use the `move` keyword
+  |
+2 |     move |x| x + n
+  |     ++++
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0373`.</pre>
+
+<p>The closure would keep a reference to <code>n</code>, but <code>n</code> dies when <code>make_adder</code> returns. The help line gives the fix. You will need <code>move</code> again for threads in Chapter 18, for the same reason.</p>
+
+<aside class="ox-callout" data-kind="insight">
+  <p><code>move</code> changes how values are captured, not which trait the closure implements. A <code>move</code> closure that only reads is still <code>Fn</code>, and you can call it as often as you like. The body decides the trait; the keyword only decides who owns what.</p>
+</aside>
+
+<h3>Passing closures to functions</h3>
+
+<p>A function that takes a closure names the trait it needs. Ask for the weakest one you can. <code>FnOnce</code> accepts every closure, <code>FnMut</code> accepts the ones that change state, and <code>Fn</code> accepts only the ones that just read. Two common forms:</p>
+
+<pre class="rs" data-run data-stdout="42\nhits = 3">
+fn apply(f: impl Fn(i32) -> i32, x: i32) -> i32 {
+    f(x)
+}
+
+fn repeat&lt;F: FnMut()&gt;(times: usize, mut f: F) {
+    for _ in 0..times {
+        f();
+    }
+}
+
+fn main() {
+    let double = |n| n * 2;
+    println!("{}", apply(double, 21));
+
+    let mut hits = 0;
+    repeat(3, || hits += 1);
+    println!("hits = {hits}");
+}</pre>
+
+<p><code>apply</code> takes <code>impl Fn(i32) -&gt; i32</code>, so a caller may pass any closure that only reads what it captured. <code>repeat</code> takes <code>F: FnMut()</code>, because it calls the closure over and over and the closure may change state on every call. Its parameter is written <code>mut f</code>, because calling an <code>FnMut</code> needs a mutable borrow of it.</p>
+</section>
+
+<section>
+<h2 id="iterator">The Iterator trait in one method</h2>
+
+<p>An iterator is any type that implements the <code>Iterator</code> trait. The trait is small. It has one associated type, <code>Item</code>, and one method you must write:</p>
+
+<pre class="rs">
+trait Iterator {
+    type Item;
+    fn next(&amp;mut self) -&gt; Option&lt;Self::Item&gt;;
+    // dozens of other methods, all built on next()
+}</pre>
+
+<aside class="ox-callout" data-kind="php">
+  <p>PHP's <code>Iterator</code> interface asks you to implement five methods: <code>current</code>, <code>key</code>, <code>next</code>, <code>rewind</code> and <code>valid</code>. Rust asks for one, <code>next</code>. Everything else, <code>map</code>, <code>filter</code>, <code>sum</code> and the rest, is a default method that calls <code>next</code> for you.</p>
+</aside>
+
+<p>Here is <code>next</code> called by hand on <code>v.iter()</code>. Each call returns the next item, wrapped in <code>Some</code>, and the call after the last item returns <code>None</code>. The iterator has to be <code>mut</code>, because <code>next</code> moves its position forward.</p>
+
+<pre class="rs" data-run data-stdout="Some(10)\nSome(20)\nSome(30)\nNone">
+fn main() {
+    let v = vec![10, 20, 30];
+    let mut it = v.iter();
+    println!("{:?}", it.next());
+    println!("{:?}", it.next());
+    println!("{:?}", it.next());
+    println!("{:?}", it.next());
+}</pre>
+
+<p>Implementing the trait for your own type gives you every adapter and consumer from the next sections, for free. This countdown yields 3, 2, 1:</p>
+
+<pre class="rs" data-run data-stdout="[3, 2, 1]\n6">
+struct Countdown {
+    n: u32,
+}
+
+impl Iterator for Countdown {
+    type Item = u32;
+
+    fn next(&amp;mut self) -&gt; Option&lt;u32&gt; {
+        if self.n == 0 {
+            None
+        } else {
+            self.n -= 1;
+            Some(self.n + 1)
+        }
+    }
+}
+
+fn main() {
+    let rockets: Vec&lt;u32&gt; = Countdown { n: 3 }.collect();
+    println!("{rockets:?}");
+    let total: u32 = Countdown { n: 4 }.filter(|x| x % 2 == 0).sum();
+    println!("{total}");
+}</pre>
+
+<p><code>collect</code>, <code>filter</code> and <code>sum</code> all work on <code>Countdown</code> because they are built on <code>next</code>. The second line counts down from 4 through 1, keeps the even numbers, 4 and 2, and sums them to 6.</p>
+
+<h3>Three ways to walk a vector</h3>
+
+<p>Most of the time you walk a vector with one of three methods. They differ in what each item is, and in whether the vector is still yours afterward.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Method</th><th>Each item is</th><th>The vector afterward</th><th>Use it when</th></tr></thead>
+  <tbody>
+    <tr><td><code>v.iter()</code></td><td><code>&amp;T</code>, a shared borrow</td><td>still yours, unchanged</td><td>you only read</td></tr>
+    <tr><td><code>v.iter_mut()</code></td><td><code>&amp;mut T</code>, a mutable borrow</td><td>still yours, items can change</td><td>you change items in place</td></tr>
+    <tr><td><code>v.into_iter()</code></td><td><code>T</code>, the value itself</td><td>moved, and you can't use <code>v</code> again</td><td>you want the values and are done with the vector</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>A <code>for</code> loop calls one of these for you, depending on what comes after <code>in</code>. <code>for x in &amp;v</code> is <code>v.iter()</code>. <code>for x in &amp;mut v</code> is <code>v.iter_mut()</code>. <code>for x in v</code> is <code>v.into_iter()</code>.</p>
+
+<pre class="rs" data-run data-stdout="read 1\nread 2\nread 3\n[10, 20, 30]\ntook 10\ntook 20\ntook 30">
+fn main() {
+    let mut v = vec![1, 2, 3];
+
+    for x in &amp;v {
+        println!("read {x}");
+    }
+
+    for x in &amp;mut v {
+        *x *= 10;
+    }
+    println!("{v:?}");
+
+    for x in v {
+        println!("took {x}");
+    }
+}</pre>
+
+<div class="ox-quiz" data-id="13:iter-ref-write" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0594">
+fn main() {
+    let v = vec![1, 2, 3];
+    for x in &amp;v {
+        *x += 1;
+    }
+    println!("{v:?}");
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. <code>x</code> is a copy of each item, so changing it is fine.</li>
+    <li data-correct>No. <code>&amp;v</code> gives shared references, and you can't assign through one. Write <code>&amp;mut v</code> instead.</li>
+  </ol>
+  <div class="ox-why"><p><code>for x in &amp;v</code> gives <code>x</code> the type <code>&amp;i32</code>. A shared reference lets you read the value, not write it. Change the loop to <code>for x in &amp;mut v</code>, and <code>x</code> becomes <code>&amp;mut i32</code>, which you can assign through.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="lazy">Lazy: nothing happens until you pull</h2>
+
+<p>Building an iterator chain does no work. <code>v.iter().map(|x| x * 2)</code> creates a value that describes the work: the vector, and the closure to run on each item. Nothing is multiplied until a consumer asks for an item. Consumers are <code>collect</code>, <code>sum</code>, <code>count</code>, a <code>for</code> loop and the others you will meet in the next section.</p>
+
+<p>rustc warns when you build a chain and never consume it:</p>
+
+<pre class="rs">
+fn main() {
+    let v = vec![1, 2, 3];
+    v.iter().map(|x| x * 2);
+}</pre>
+
+<pre class="rustc">
+warning: unused `Map` that must be used
+ --> src/main.rs:3:5
+  |
+3 |     v.iter().map(|x| x * 2);
+  |     ^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: iterators are lazy and do nothing unless consumed
+  = note: `#[warn(unused_must_use)]` (part of `#[warn(unused)]`) on by default
+help: use `let _ = ...` to ignore the resulting value
+  |
+3 |     let _ = v.iter().map(|x| x * 2);
+  |     +++++++
+
+warning: 1 warning emitted</pre>
+
+<p>The warning's own text is the lesson: iterators are lazy and do nothing unless consumed. Here is a check on the same idea.</p>
+
+<div class="ox-quiz" data-id="13:lazy-quiz" data-label="Check yourself">
+  <p class="ox-q">What does this program print?</p>
+  <pre class="rs" data-stdout="built the chain">
+fn main() {
+    let v = vec![1, 2, 3];
+    let _ = v.iter().map(|x| { println!("seeing {x}"); x * 2 });
+    println!("built the chain");
+}</pre>
+  <ol class="ox-choices">
+    <li><code>seeing 1</code>, <code>seeing 2</code>, <code>seeing 3</code>, then <code>built the chain</code></li>
+    <li data-correct><code>built the chain</code>, and nothing else</li>
+    <li>Nothing, because <code>let _ =</code> is an error here</li>
+  </ol>
+  <div class="ox-why"><p>The closure is stored inside the <code>Map</code> and runs only when something pulls on it. Nothing pulls here. <code>let _ =</code> throws the chain away at the end of the statement, so the closure never runs. Replace the <code>let _</code> with <code>let doubled: Vec&lt;i32&gt; = …collect();</code> and all three <code>seeing</code> lines appear.</p></div>
+</div>
+
+<details class="ox-think">
+  <summary>Predict first: how many times does the Rust closure given to <code>map</code> run in the belt below?</summary>
+  <div class="ox-think-body">
+    <p>Count before you press Step. The pipeline is <code>(1..=8)</code>, then <code>map</code>, then a <code>filter</code> that keeps multiples of 20, then <code>take(2)</code>.</p>
+    <p>The answer is four. The first two items that pass the filter are 20 and 40, and <code>take(2)</code> is full as soon as 40 comes out. It never asks for item 5, so <code>map</code> runs for items 1 through 4.</p>
+  </div>
+</details>
+
+<p>The belt below runs two pipelines on the same numbers. The left one works the way Laravel's Collection works: each stage finishes the whole array before the next stage starts. The right one is Rust: one item at a time goes through every stage, and the pipeline stops as soon as <code>take</code> is full. Press Step to move both belts by one call.</p>
+
+<style>
+#conveyor .cv-grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 760px) { #conveyor .cv-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+#conveyor .cv-side { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 14px; min-width: 0; }
+#conveyor h4 { margin: 0 0 6px; font-family: var(--font-display); font-size: var(--step-1); font-weight: 800; letter-spacing: 0.02em; color: var(--ink); }
+#conveyor .cv-code { display: block; font-family: var(--font-mono); font-size: 0.76rem; line-height: 1.5; color: var(--muted); white-space: normal; overflow-wrap: anywhere; margin-bottom: 8px; }
+#conveyor .cv-lane { display: grid; grid-template-columns: 8.5rem minmax(0, 1fr); gap: 8px; align-items: center; padding: 7px 0; border-top: 1px dashed var(--line); }
+#conveyor .cv-name { font-family: var(--font-mono); font-size: 0.76rem; color: var(--muted); }
+#conveyor .cv-nb { white-space: nowrap; }
+#conveyor .cv-belt { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: 2.2rem; }
+#conveyor .cv-empty { font-size: 0.8rem; color: var(--muted); font-style: italic; }
+#conveyor .cv-chip { display: inline-flex; align-items: center; justify-content: center; min-width: 2.3rem; height: 2rem; padding: 0 0.45rem; border: 1.5px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); font-family: var(--font-mono); font-weight: 600; font-size: 0.92rem; transition: background 0.2s, border-color 0.2s, opacity 0.2s; }
+#conveyor .cv-chip.is-cur { background: var(--oxide-soft); border-color: var(--oxide); }
+#conveyor .cv-chip.is-ok { background: var(--ok-soft); border-color: var(--ok); }
+#conveyor .cv-chip.is-no { background: var(--surface-2); border-color: var(--ghost); border-style: dashed; color: var(--muted); text-decoration: line-through; }
+#conveyor .cv-chip.is-waste { background: var(--bad-soft); border-color: var(--bad); border-style: dashed; color: var(--muted); }
+#conveyor .cv-chip.is-used { opacity: 0.42; }
+#conveyor .cv-counts { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 12px 0 4px; font-size: 0.9rem; color: var(--muted); }
+#conveyor .cv-counts b { font-family: var(--font-mono); font-size: 1.1rem; color: var(--ink); margin-left: 4px; }
+#conveyor .cv-say { margin: 6px 0 0; min-height: 3.2em; font-size: 0.92rem; color: var(--ink-2); }
+#conveyor .cv-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
+#conveyor .cv-status { margin-left: auto; font-family: var(--font-mono); font-size: 0.84rem; color: var(--muted); }
+@media (max-width: 480px) { #conveyor .cv-lane { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+@media (prefers-reduced-motion: reduce) { #conveyor .cv-chip { transition: none; } }
+</style>
+
+<div class="ox-figure ox-wide cv" id="conveyor" role="region" aria-label="Conveyor belt: Laravel eager pipeline beside the Rust lazy pipeline">
+  <div class="cv-grid">
+    <div class="cv-side" data-side="L" role="group" aria-labelledby="cv-l-title">
+      <h4 id="cv-l-title">Laravel (eager)</h4>
+      <code class="cv-code">collect(range(1, 8))<span class="cv-nb">-&gt;</span>map(fn ($x) =&gt; $x * 10)<span class="cv-nb">-&gt;</span>filter(fn ($x) =&gt; $x % 20 == 0)<span class="cv-nb">-&gt;</span>take(2)</code>
+      <div class="cv-lane"><span class="cv-name">source</span><div class="cv-belt" data-belt="src"></div></div>
+      <div class="cv-lane"><span class="cv-name">map ×10</span><div class="cv-belt" data-belt="map"></div></div>
+      <div class="cv-lane"><span class="cv-name">filter % 20 = 0</span><div class="cv-belt" data-belt="filter"></div></div>
+      <div class="cv-lane"><span class="cv-name">take 2</span><div class="cv-belt" data-belt="take"></div></div>
+      <p class="cv-counts"><span>map calls <b data-count="map">0</b></span><span>filter calls <b data-count="filter">0</b></span></p>
+      <p class="cv-say" data-say aria-live="polite"></p>
+    </div>
+    <div class="cv-side" data-side="R" role="group" aria-labelledby="cv-r-title">
+      <h4 id="cv-r-title">Rust (lazy)</h4>
+      <code class="cv-code">(1..=8).map(|x| x * 10).filter(|x| x % 20 == 0).take(2).collect::&lt;Vec&lt;_&gt;&gt;()</code>
+      <div class="cv-lane"><span class="cv-name">source</span><div class="cv-belt" data-belt="src"></div></div>
+      <div class="cv-lane"><span class="cv-name">map ×10</span><div class="cv-belt" data-belt="map"></div></div>
+      <div class="cv-lane"><span class="cv-name">filter % 20 = 0</span><div class="cv-belt" data-belt="filter"></div></div>
+      <div class="cv-lane"><span class="cv-name">take 2</span><div class="cv-belt" data-belt="take"></div></div>
+      <p class="cv-counts"><span>map calls <b data-count="map">0</b></span><span>filter calls <b data-count="filter">0</b></span></p>
+      <p class="cv-say" data-say aria-live="polite"></p>
+    </div>
+  </div>
+  <div class="cv-bar">
+    <button type="button" class="ox-btn is-primary" data-act="step">Step</button>
+    <button type="button" class="ox-btn" data-act="play">Play</button>
+    <button type="button" class="ox-btn" data-act="reset">Reset</button>
+    <span class="cv-status" data-status aria-live="polite">Ready. Press Step.</span>
+  </div>
+</div>
+<p class="ox-caption">Both belts share one step counter, so the same step is the same moment for both. The Laravel belt needs 17 steps: eight map calls, eight filter calls and then take. The Rust belt is finished after eight. On that belt, items 5 to 8 never reach <code>map</code>.</p>
+
+<p>Here is the Rust pipeline with its two call counters. Each counter is a closure that changes a captured variable, the <code>FnMut</code> pattern from above.</p>
+
+<pre class="rs" data-run data-stdout="[20, 40]\nmap called 4 times\nfilter called 4 times">
+fn main() {
+    let mut map_calls = 0;
+    let mut filter_calls = 0;
+    let out: Vec&lt;i32&gt; = (1..=8)
+        .map(|x| {
+            map_calls += 1;
+            x * 10
+        })
+        .filter(|x| {
+            filter_calls += 1;
+            x % 20 == 0
+        })
+        .take(2)
+        .collect();
+    println!("{out:?}");
+    println!("map called {map_calls} times");
+    println!("filter called {filter_calls} times");
+}</pre>
+
+<p>The laziness pays off at the end of the line. <code>take(2)</code> stops asking after the second item it keeps, and the stages before it stop with it. The eager version has no such stop. Each stage must finish its whole array first, so <code>take</code> throws away the last items after they were already computed.</p>
+
+<aside class="ox-callout" data-kind="php">
+  <p>Laravel's <code>Collection</code> is eager, and Laravel 11's source shows it for the methods this chapter uses. <code>Collection::map</code> calls <code>Arr::map</code>, which is an <code>array_map</code> over every item. <code>filter</code> calls <code>Arr::where</code>, which is an <code>array_filter</code>. Each returns a complete new array. If you want the lazy behavior in Laravel, <code>-&gt;lazy()</code> returns a <code>LazyCollection</code>, whose <code>map</code> uses a generator.</p>
+</aside>
+
+<p>Read the chain top to bottom and it looks like a pipeline that pushes items forward. At runtime it runs the other way. The last stage asks the stage before it, and that asks the one before, until the range is reached. A stage does work only when the stage after it asks. The order game in the practice section walks through one of these pulls.</p>
+</section>
+
+<section>
+<h2 id="adapters">Adapters and consumers</h2>
+
+<p>Iterator methods come in two kinds. <strong>Adapters</strong> take an iterator and return another iterator, so they stay lazy. <strong>Consumers</strong> pull the items and produce a value. A chain is a line of adapters that ends in a consumer.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Adapter</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>map(f)</code></td><td>transforms each item</td></tr>
+    <tr><td><code>filter(p)</code></td><td>keeps items where <code>p</code> is true. The closure gets a reference, so you write <code>*n</code> to read the value.</td></tr>
+    <tr><td><code>filter_map(f)</code></td><td><code>f</code> returns an <code>Option</code>. <code>Some</code> keeps the value it holds, and <code>None</code> drops the item.</td></tr>
+    <tr><td><code>enumerate()</code></td><td>pairs each item with its index, as <code>(usize, T)</code></td></tr>
+    <tr><td><code>zip(other)</code></td><td>pairs items from two iterators, and stops at the shorter one</td></tr>
+    <tr><td><code>take(n)</code>, <code>skip(n)</code></td><td>the first <code>n</code> items, or everything after the first <code>n</code></td></tr>
+    <tr><td><code>take_while(p)</code></td><td>items while <code>p</code> is true, then it stops for good</td></tr>
+    <tr><td><code>chain(other)</code></td><td>this iterator's items, then the other's</td></tr>
+    <tr><td><code>flat_map(f)</code></td><td><code>f</code> returns an iterator for each item, and the results are joined into one stream</td></tr>
+    <tr><td><code>rev()</code></td><td>walks backward. It needs an iterator that can walk both ways, such as a vector or a range.</td></tr>
+    <tr><td><code>peekable()</code></td><td>lets you <code>peek()</code> at the next item without taking it</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Slices have two more: <code>windows(n)</code> yields every run of <code>n</code> items, overlapping, and <code>chunks(n)</code> yields non-overlapping pieces, where the last one may be shorter. Here are the adapters you will use most, with their output:</p>
+
+<pre class="rs" data-run data-stdout="[2, 4, 6]\n[7, 9]\n4:5\n5:6">
+fn main() {
+    let nums = vec![1, 2, 3, 4, 5, 6];
+
+    let evens: Vec&lt;i32&gt; = nums.iter().filter(|n| *n % 2 == 0).copied().collect();
+    println!("{evens:?}");
+
+    let words = ["7", "x", "9"];
+    let parsed: Vec&lt;i32&gt; = words.iter().filter_map(|s| s.parse().ok()).collect();
+    println!("{parsed:?}");
+
+    for (i, n) in nums.iter().enumerate().skip(4) {
+        println!("{i}:{n}");
+    }
+}</pre>
+
+<p><code>filter</code> on <code>iter()</code> gives the closure a <code>&amp;&amp;i32</code>, so <code>*n</code> is the <code>&amp;i32</code> that <code>%</code> accepts. <code>copied()</code> turns each <code>&amp;i32</code> into an <code>i32</code>, which is what <code>collect</code> needs for a <code>Vec&lt;i32&gt;</code>. <code>filter_map</code> does the filtering and the conversion in one step, and the <code>"x"</code> that fails to parse just disappears.</p>
+
+<h3>Consumers produce a value</h3>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Consumer</th><th>Returns</th></tr></thead>
+  <tbody>
+    <tr><td><code>collect()</code></td><td>a collection, chosen by the type you ask for</td></tr>
+    <tr><td><code>sum()</code>, <code>product()</code></td><td>the total, or the product, of the items</td></tr>
+    <tr><td><code>count()</code></td><td>how many items there are</td></tr>
+    <tr><td><code>fold(init, f)</code></td><td>the accumulator, after <code>f</code> has seen every item</td></tr>
+    <tr><td><code>any(p)</code>, <code>all(p)</code></td><td><code>true</code> if one item (or every item) satisfies <code>p</code>. Both stop early.</td></tr>
+    <tr><td><code>find(p)</code>, <code>position(p)</code></td><td>an <code>Option</code> of the first matching item, or of its index</td></tr>
+    <tr><td><code>min()</code>, <code>max()</code>, <code>min_by_key(f)</code>, <code>max_by(f)</code></td><td>an <code>Option</code> of the smallest or largest item</td></tr>
+    <tr><td><code>partition(p)</code></td><td>two collections: the items where <code>p</code> is true, and the rest</td></tr>
+    <tr><td><code>for_each(f)</code></td><td>runs <code>f</code> on each item, and returns nothing</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>collect needs to know what to build</h3>
+
+<p><code>collect</code> can build a Vec, a HashMap, a String and more. It has to be told which one. Put the type on the variable, or use the turbofish form on the method. If you give neither, rustc refuses to guess:</p>
+
+<pre class="rs" data-badge="error" data-check="E0283">
+fn main() {
+    let doubled = (1..4).map(|x| x * 2).collect();
+    println!("{doubled:?}");
+}</pre>
+
+<pre class="rustc">
+error[E0283]: type annotations needed
+    --> src/main.rs:2:9
+     |
+   2 |     let doubled = (1..4).map(|x| x * 2).collect();
+     |         ^^^^^^^                         ------- type must be known at this point
+     |
+     = note: the type must implement `FromIterator<i32>`
+note: required by a bound in `collect`
+    --> …/library/core/src/iter/traits/iterator.rs:2077:19
+     |
+2077 |     fn collect<B: FromIterator<Self::Item>>(self) -> B
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Iterator::collect`
+help: consider giving `doubled` an explicit type
+     |
+   2 |     let doubled: Vec&lt;_&gt; = (1..4).map(|x| x * 2).collect();
+     |                ++++++++
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0283`.</pre>
+
+<p>The <code>^</code> marks point at <code>doubled</code>, which has no type, and at <code>collect</code>, which needs one. The <code>help</code> line gives the fix, <code>Vec&lt;_&gt;</code>, where rustc fills in the element type itself. The path to the standard library varies with your install, so it is shortened here.</p>
+
+<h3>Collect into four targets</h3>
+
+<pre class="rs" data-run data-stdout="Ana -&gt; 3\nrust\nOk([1, 2, 3])\nErr(ParseIntError { kind: InvalidDigit })">
+use std::collections::HashMap;
+
+fn main() {
+    let names = vec!["Ana", "Bartholomew", "Cy"];
+
+    let lengths: HashMap&lt;&amp;str, usize&gt; = names.iter().map(|s| (*s, s.len())).collect();
+    println!("Ana -&gt; {}", lengths["Ana"]);
+
+    let letters = vec!['r', 'u', 's', 't'];
+    let word: String = letters.iter().collect();
+    println!("{word}");
+
+    let ok: Result&lt;Vec&lt;i32&gt;, _&gt; = ["1", "2", "3"].iter().map(|s| s.parse::&lt;i32&gt;()).collect();
+    println!("{ok:?}");
+
+    let bad: Result&lt;Vec&lt;i32&gt;, _&gt; = ["1", "x", "y"].iter().map(|s| s.parse::&lt;i32&gt;()).collect();
+    println!("{bad:?}");
+}</pre>
+
+<ul>
+  <li><strong>Vec</strong> is the default. It keeps the order of the items.</li>
+  <li><strong>HashMap</strong> collects <code>(key, value)</code> pairs. If two pairs share a key, the later one wins.</li>
+  <li><strong>String</strong> collects from characters, or from string pieces, and joins them.</li>
+  <li><strong>Result&lt;Vec&lt;T&gt;, E&gt;</strong> is the all-or-nothing collect. You get <code>Ok</code> with every value, or the first <code>Err</code>. Once an error appears, <code>collect</code> stops pulling, and the items after it are never looked at.</li>
+</ul>
+
+<div class="ox-quiz" data-id="13:result-collect" data-label="Check yourself">
+  <p class="ox-q">What does this program print?</p>
+  <pre class="rs" data-stdout="Err(ParseIntError { kind: InvalidDigit })">
+fn main() {
+    let raw = ["1", "x", "3"];
+    let parsed: Result&lt;Vec&lt;i32&gt;, _&gt; = raw.iter().map(|s| s.parse::&lt;i32&gt;()).collect();
+    println!("{parsed:?}");
+}</pre>
+  <ol class="ox-choices">
+    <li><code>Ok([1, 3])</code>, because <code>collect</code> skips the item that fails</li>
+    <li data-correct><code>Err(ParseIntError { kind: InvalidDigit })</code>, the first failure. The <code>3</code> is never read.</li>
+    <li><code>Err(ParseIntError { kind: InvalidDigit })</code>, but only after reading all three items</li>
+  </ol>
+  <div class="ox-why"><p><code>collect</code> into a <code>Result</code> stops at the first <code>Err</code> and returns it. The <code>"x"</code> fails, and <code>"3"</code> is never parsed. This is the first-error-wins behavior you want when a batch of input must be valid.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="laravel">Laravel Collections, translated</h2>
+
+<p>Most of your Collection habits carry over. The names change, and a few things that PHP left implicit become explicit in Rust. This table covers the methods you use most.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Laravel</th><th>Rust</th><th>What changes</th></tr></thead>
+  <tbody>
+    <tr><td><code>map(fn)</code></td><td><code>.map(|x| …)</code></td><td>Lazy in Rust. Laravel builds a whole new array.</td></tr>
+    <tr><td><code>filter(fn)</code></td><td><code>.filter(|x| …)</code></td><td>The closure gets a reference, so you read the value with <code>*x</code>, or match it with <code>|&amp;x|</code>.</td></tr>
+    <tr><td><code>reject(fn)</code></td><td><code>.filter(|x| !…)</code></td><td><code>reject</code> is a filter with the answer flipped.</td></tr>
+    <tr><td><code>pluck('name')</code></td><td><code>.map(|u| u.name.as_str())</code></td><td>Borrows each name, so nothing is copied.</td></tr>
+    <tr><td><code>sum()</code></td><td><code>.sum::&lt;T&gt;()</code></td><td>You name the number type.</td></tr>
+    <tr><td><code>avg()</code></td><td>sum, divided by count, by hand</td><td>There is no built-in average. Convert to <code>f64</code> before you divide.</td></tr>
+    <tr><td><code>groupBy('dept')</code></td><td>a loop: <code>entry(key).or_default().push(item)</code></td><td>The result is a <code>HashMap&lt;K, Vec&lt;V&gt;&gt;</code>.</td></tr>
+    <tr><td><code>sortBy('age')</code></td><td><code>.collect()</code> into a Vec, then <code>.sort_by_key(|u| u.age)</code></td><td>Sorting needs a Vec you can change, so the chain ends first.</td></tr>
+    <tr><td><code>first()</code></td><td><code>.next()</code></td><td>Both return an <code>Option</code>, so an empty result is a value you must handle.</td></tr>
+    <tr><td><code>firstWhere(…)</code></td><td><code>.find(|x| …)</code></td><td>Returns an <code>Option</code>, not <code>null</code>.</td></tr>
+    <tr><td><code>contains(fn)</code></td><td><code>.any(|x| …)</code></td><td>For a plain value in a Vec, use <code>v.contains(&amp;x)</code>.</td></tr>
+    <tr><td><code>each(fn)</code></td><td><code>for x in … { }</code>, or <code>.for_each(|x| …)</code></td><td>Laravel's <code>each</code> stops when the callback returns <code>false</code>. In Rust, use <code>break</code> in a <code>for</code> loop.</td></tr>
+    <tr><td><code>keyBy('id')</code></td><td><code>.map(|u| (u.id, u)).collect::&lt;HashMap&lt;_, _&gt;&gt;()</code></td><td>If two items share a key, the later one wins.</td></tr>
+    <tr><td><code>unique()</code></td><td>a <code>HashSet</code>, or sort and then <code>dedup()</code></td><td>A HashSet has no order. Laravel keeps the first occurrence in place.</td></tr>
+    <tr><td><code>chunk(n)</code></td><td><code>.chunks(n)</code></td><td>Works on slices. Each chunk is a borrowed <code>&amp;[T]</code>.</td></tr>
+    <tr><td><code>flatMap(fn)</code></td><td><code>.flat_map(|x| …)</code></td><td>The same idea.</td></tr>
+    <tr><td><code>zip($other)</code></td><td><code>.zip(other)</code></td><td>Yields tuples, <code>(a, b)</code>, instead of two-item arrays.</td></tr>
+    <tr><td><code>take(n)</code></td><td><code>.take(n)</code></td><td>Lazy. It stops pulling after <code>n</code> items.</td></tr>
+    <tr><td><code>count()</code></td><td><code>.len()</code> on a Vec, or <code>.count()</code> on an iterator</td><td><code>.count()</code> uses up the iterator.</td></tr>
+    <tr><td><code>isEmpty()</code></td><td><code>.is_empty()</code> on a Vec, or <code>.next().is_none()</code></td><td>The second form checks an iterator without a Vec.</td></tr>
+    <tr><td><code>implode(', ')</code></td><td><code>.join(", ")</code></td><td>Works on a slice of strings.</td></tr>
+    <tr><td><code>reduce(fn, $init)</code></td><td><code>.fold(init, |acc, x| …)</code></td><td>Laravel's <code>reduce</code> takes an initial value. Rust's <code>reduce</code> doesn't, and returns an <code>Option</code>.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Here is a whole chain. This is a PHP pipeline over users, which keeps the active ones, sorts them by age, and returns their names:</p>
+
+<div class="ox-bridge">
+  <pre class="php">
+$names = collect($users)
+    ->filter(fn ($u) => $u->active)
+    ->sortBy('age')
+    ->pluck('name')
+    ->values()
+    ->all();</pre>
+  <pre class="rs" data-run data-stdout="[&quot;Cy&quot;, &quot;Ana&quot;, &quot;Di&quot;]">
+struct User {
+    name: String,
+    age: u32,
+    active: bool,
+}
+
+fn main() {
+    let users = vec![
+        User { name: "Ana".to_string(), age: 34, active: true },
+        User { name: "Bo".to_string(), age: 27, active: false },
+        User { name: "Cy".to_string(), age: 19, active: true },
+        User { name: "Di".to_string(), age: 52, active: true },
+    ];
+
+    let mut active: Vec&lt;&amp;User&gt; = users.iter().filter(|u| u.active).collect();
+    active.sort_by_key(|u| u.age);
+    let names: Vec&lt;&amp;str&gt; = active.iter().map(|u| u.name.as_str()).collect();
+    println!("{names:?}");
+}</pre>
+  <div class="ox-bridge-note"><p>The shape matches up to <code>sortBy</code>, and there the Rust chain has to pause. Sorting needs a Vec you can change, so the iterator is collected first, and <code>sort_by_key</code> runs on that Vec. The PHP chain also calls <code>values()</code> to renumber the keys that <code>filter</code> and <code>sortBy</code> left behind. A Rust Vec has positions rather than keys, so there is nothing to renumber.</p></div>
+</div>
+
+<aside class="ox-callout" data-kind="trap">
+  <p><code>first()</code> in Laravel returns <code>null</code> when the collection is empty, and <code>null</code> can slip through a chain unnoticed. Rust's <code>.next()</code> and <code>.find()</code> return an <code>Option</code>. You can't use the value inside it until you open the box with <code>match</code>, <code>if let</code>, or a method such as <code>unwrap_or</code>.</p>
+</aside>
+
+<div class="ox-match" data-id="13:match-laravel" data-left-label="Laravel" data-right-label="Rust">
+  <ul>
+    <li data-left="-&gt;pluck('name')"><code>.map(|u| u.name.as_str())</code></li>
+    <li data-left="-&gt;reject(fn ($u) =&gt; $u-&gt;active)"><code>.filter(|u| !u.active)</code></li>
+    <li data-left="-&gt;implode(', ')"><code>.join(", ")</code> on a slice of strings</li>
+    <li data-left="-&gt;reduce(fn ($sum, $u) =&gt; $sum + $u-&gt;age, 0)"><code>.fold(0, |sum, u| sum + u.age)</code></li>
+    <li data-left="-&gt;firstWhere('active', true)"><code>.find(|u| u.active)</code></li>
+    <li data-left="-&gt;groupBy('dept')">a loop that calls <code>entry(dept).or_default().push(user)</code></li>
+  </ul>
+</div>
+</section>
+
+<section>
+<h2 id="zero-cost" data-toc="Zero-cost">Zero-cost: as fast as the loop you'd write</h2>
+
+<p>Rust's promise is that an abstraction does not add a runtime cost you couldn't have avoided by hand. Iterators are the everyday test of that promise. Here are two ways to sum a slice:</p>
+
+<pre class="rs" data-run data-stdout="55 55">
+fn sum_index(v: &amp;[u64]) -&gt; u64 {
+    let mut total = 0;
+    for i in 0..v.len() {
+        total += v[i];
+    }
+    total
+}
+
+fn sum_iter(v: &amp;[u64]) -&gt; u64 {
+    let mut total = 0;
+    for x in v {
+        total += x;
+    }
+    total
+}
+
+fn main() {
+    let v: Vec&lt;u64&gt; = (1..=10).collect();
+    println!("{} {}", sum_index(&amp;v), sum_iter(&amp;v));
+}</pre>
+
+<details class="ox-think">
+  <summary>Predict first: in an optimized build, does <code>v[i]</code> in <code>sum_index</code> still check the index on every pass?</summary>
+  <div class="ox-think-body">
+    <p>No. An optimized build removes the check here. The loop runs from <code>0</code> up to <code>v.len()</code>, so every index is in range, and the optimizer can prove it. A debug build keeps the check, because debug builds don't optimize.</p>
+    <p>The iterator version has no index at all, so there is nothing to check.</p>
+  </div>
+</details>
+
+<p>The check comes back as soon as the bound is no longer tied to the vector. Change the loop to <code>0..n</code>, where <code>n</code> is an unrelated number, and the optimizer can't prove the index is safe. Then it stays:</p>
+
+<pre class="rs" data-check="panic">
+fn sum_first_n(v: &amp;[u64], n: usize) -&gt; u64 {
+    let mut total = 0;
+    for i in 0..n {
+        total += v[i];
+    }
+    total
+}
+
+fn main() {
+    let v: Vec&lt;u64&gt; = (1..=10).collect();
+    println!("{}", sum_first_n(&amp;v, 20));
+}</pre>
+
+<p>That program compiles, then panics with <code>index out of bounds: the len is 10 but the index is 10</code> and exits with code 101. The failure is loud and happens at the bad index. C would not check the index at all, and would read whatever memory sits past the end of the buffer.</p>
+
+<p>You can check the first claim yourself. Compile the two-function version with optimizations and search the assembly for the bounds-check function:</p>
+
+<pre class="sh">
+rustc -C opt-level=3 --emit=asm zero_cost.rs
+grep panic_bounds_check zero_cost.s</pre>
+
+<p>For the file above, grep prints nothing: neither loop has a bounds check left in optimized code. That is a fact about this code, not a speed number. Measure your own program before you tune anything.</p>
+
+<details class="ox-callout" data-kind="deep">
+  <summary>What the optimizer does with the iterator loop</summary>
+  <p>The iterator loop reads the slice from start to end. The compiler knows the length and the stride, so it doesn't need an index that could be out of range. In one optimized build, LLVM turned <code>sum_iter</code> into SIMD instructions, which add several numbers at once. You don't write that. You write a plain loop, and the optimizer does the rest.</p>
+</details>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Agents often write <code>for i in 0..v.len()</code> with a <code>v[i].clone()</code> inside, or they <code>collect()</code> into a Vec and then call <code>.iter()</code> on it straight away. The first clones every item. The second builds a Vec only to walk it again.</p>
+  <p>In review, ask for the chain with borrows: <code>v.iter().map(|x| …)</code>, collected once at the end, and only when the caller needs an owned result. Each <code>.clone()</code> inside a loop is an allocation for every item, and each middle <code>collect()</code> is an allocation for the whole stage.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="practice">Practice</h2>
+
+<p>Seven short checks. Answer each one before you open its explanation. Each is a mistake that reviewers see in real code.</p>
+
+<div class="ox-quiz" data-id="13:practice-fn" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0594">
+fn call_twice&lt;F: Fn()&gt;(f: F) {
+    f();
+    f();
+}
+
+fn main() {
+    let mut count = 0;
+    call_twice(|| count += 1);
+    println!("{count}");
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. The closure makes one change per call, so it's fine.</li>
+    <li data-correct>No. <code>call_twice</code> asks for <code>Fn</code>, which can't change what it captured. Ask for <code>FnMut</code>, and make the parameter <code>mut f</code>.</li>
+  </ol>
+  <div class="ox-why"><p><code>F: Fn()</code> promises the caller that the closure only reads its captures. <code>count += 1</code> breaks that promise, so rustc reports E0594. Change the bound to <code>FnMut()</code> and the parameter to <code>mut f: F</code>, and the program compiles.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="13:chain-prints" data-label="Check yourself">
+  <p class="ox-q">What does this program print?</p>
+  <pre class="rs" data-stdout="total 10 after 3 calls">
+fn main() {
+    let mut calls = 0;
+    let total: i32 = (1..=5)
+        .map(|x| {
+            calls += 1;
+            x * x
+        })
+        .filter(|sq| sq % 2 == 1)
+        .take(2)
+        .sum();
+    println!("total {total} after {calls} calls");
+}</pre>
+  <ol class="ox-choices">
+    <li><code>total 35 after 5 calls</code></li>
+    <li><code>total 10 after 5 calls</code></li>
+    <li data-correct><code>total 10 after 3 calls</code></li>
+  </ol>
+  <div class="ox-why"><p>The pipeline is lazy. <code>sum</code> pulls <code>1</code>, which passes the filter. It pulls <code>4</code>, which doesn't, and then <code>9</code>, which does. <code>take(2)</code> is full, so <code>25</code> is never mapped. The sum is <code>1 + 9 = 10</code>, after three calls to <code>map</code>. The second option is what an eager, Laravel-style pipeline would count.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="13:fnonce-drop" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0382">
+fn main() {
+    let token = String::from("abc");
+    let revoke = move || drop(token);
+    revoke();
+    revoke();
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. The <code>move</code> keyword lets a closure run any number of times.</li>
+    <li data-correct>No. <code>drop(token)</code> moves <code>token</code> out of the closure, so the closure can run only once.</li>
+  </ol>
+  <div class="ox-why"><p><code>move</code> decides how values are captured: by value. The body here moves <code>token</code> out, which makes the closure <code>FnOnce</code>. The second call is E0382, <em>use of moved value: <code>revoke</code></em>. Look at the body, not at the keyword.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="13:move-still-fn" data-label="Check yourself">
+  <p class="ox-q">Does this compile, and what does it print?</p>
+  <pre class="rs" data-stdout="shipping A-17\nshipping A-17">
+fn main() {
+    let order = String::from("A-17");
+    let ship = move || println!("shipping {order}");
+    ship();
+    ship();
+}</pre>
+  <ol class="ox-choices">
+    <li>No. A <code>move</code> closure can only be called once.</li>
+    <li data-correct>Yes. It only reads <code>order</code>, so it is <code>Fn</code>, even with <code>move</code>. It prints the line twice.</li>
+  </ol>
+  <div class="ox-why"><p>The <code>move</code> keyword doesn't make this closure one-shot, and it doesn't make it reusable on its own either. The body decides. Here the closure only reads <code>order</code>, so it is <code>Fn</code>, and it can be called as many times as you like.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="13:iter-mut-ref" data-label="Check yourself">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0369">
+fn main() {
+    let nums = vec![1, 2, 3, 4];
+    let evens: Vec&lt;&amp;i32&gt; = nums.iter().filter(|n| n % 2 == 0).collect();
+    println!("{evens:?}");
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. <code>%</code> works on references.</li>
+    <li data-correct>No. In <code>filter</code>, <code>n</code> is a <code>&amp;&amp;i32</code>, and <code>%</code> isn't defined for that. Write <code>*n % 2</code>.</li>
+  </ol>
+  <div class="ox-why"><p>In <code>iter().filter</code>, the item is a reference, and the closure gets a reference to that, so it's <code>&amp;&amp;i32</code>. Dereference once with <code>*n</code>, and the arithmetic compiles. This error shows up in agent-written code all the time.</p></div>
+</div>
+
+<div class="ox-fill" data-id="13:fill-chain" data-label="Fill in the chain">
+  <p class="ox-q">Keep the even numbers. Fill in the two method names. The chain must compile and print <code>[2, 4, 6]</code>.</p>
+  <pre class="rs" data-stdout="[2, 4, 6]">
+fn main() {
+    let nums = vec![1, 2, 3, 4, 5, 6];
+    let evens: Vec&lt;i32&gt; = nums.iter().[[filter]](|n| *n % 2 == 0).[[copied|cloned]]().collect();
+    println!("{evens:?}");
+}</pre>
+  <div class="ox-why"><p><code>filter</code> is the adapter that keeps items. <code>copied</code> turns the <code>&amp;i32</code> items into <code>i32</code> values. <code>cloned</code> also works here, because <code>i32</code> is <code>Copy</code>, so the two produce the same result. Use <code>cloned</code> when the items aren't <code>Copy</code>, such as <code>String</code>.</p></div>
+</div>
+
+<div class="ox-order" data-id="13:order-lazy" data-label="Put the pull in order">
+  <p class="ox-q">Put these steps in the order they happen, for one pull on <code>(1..=8).map(...).filter(...).take(2)</code>, which produces the first item.</p>
+  <ol>
+    <li><code>collect</code> asks <code>take</code> for the first item.</li>
+    <li><code>take</code> asks <code>filter</code> for an item.</li>
+    <li><code>filter</code> asks <code>map</code> for an item.</li>
+    <li><code>map</code> pulls <code>1</code> from the range and returns <code>10</code>.</li>
+    <li><code>filter</code> rejects <code>10</code> and asks <code>map</code> again.</li>
+    <li><code>map</code> pulls <code>2</code> and returns <code>20</code>.</li>
+    <li><code>filter</code> keeps <code>20</code> and returns it to <code>take</code>.</li>
+    <li><code>take</code> returns <code>20</code> to <code>collect</code>.</li>
+  </ol>
+  <div class="ox-why"><p>Each step asks for the one before it. That is the whole mechanism: a stage works only when the stage after it asks, and the asking starts at the end of the chain.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="act3">Act III wrap-up</h2>
+
+<p>Act III was about shaping data. You have now seen all five tools that work together for it:</p>
+
+<ul>
+  <li><strong>Structs</strong> group related fields, and methods attach behavior to them (Chapter 09).</li>
+  <li><strong>Enums</strong> model a value that is exactly one of several shapes, and <code>match</code> must handle every one (Chapter 10).</li>
+  <li><strong>Result and <code>?</code></strong> make failure a value you must look at (Chapter 11).</li>
+  <li><strong>Collections</strong> give each PHP array job its own type: Vec, HashMap, HashSet and the rest (Chapter 12).</li>
+  <li><strong>Iterators and closures</strong> turn a Laravel chain into a plain loop that runs one item at a time (this chapter).</li>
+</ul>
+
+<details class="ox-think">
+  <summary>Think first: you have a Vec of orders and need the total spent per customer. Which Act III tools combine, and what does each one do?</summary>
+  <div class="ox-think-body">
+    <p>Use a <code>HashMap&lt;String, u64&gt;</code> from Chapter 12 as the total for each customer. Walk the orders once with a <code>for</code> loop, and call <code>entry(customer).or_default()</code> to add each order's amount. The map gives one total per key, and the loop gives one pass over the orders.</p>
+    <p>A <code>fold</code> with the map as the accumulator does the same job in a single expression. Either way, look for an error path: a malformed order is a Result, and <code>?</code> can stop the loop early.</p>
+  </div>
+</details>
+
+<p>The Act III boss, <code>boss3_ledger</code>, combines all five. It is a bank ledger with enums for transaction kinds, Results for bad entries, a HashMap of balances and an iterator chain for the totals. The Rosetta lab has these translations as a searchable phrasebook when you want the Rust name for a PHP habit: <a href="../labs/rosetta.html">PHP → Rust Rosetta</a>.</p>
+</section>
+
+<section>
+<h2 id="quests">Forge quests</h2>
+<p>Reading builds recognition. Writing code builds the skill. Start with <code>closures1</code>, then <code>iter1</code> to <code>iter3</code>. The boss combines this act's concepts.</p>
+<div class="ox-quests" data-chapter="13"></div>
+</section>
+
+<section>
+<h2 id="recap">Recap</h2>
+
+<div class="ox-recap">
+  <h3>Closures and iterators</h3>
+  <ul>
+    <li>A closure is <strong>Fn</strong> if its body only reads, <strong>FnMut</strong> if it changes a capture, and <strong>FnOnce</strong> if it moves a capture out. The body decides, not the <code>move</code> keyword.</li>
+    <li><code>move</code> makes a closure take ownership of its captures. You need it when the closure outlives them, for example when you return it.</li>
+    <li>An iterator implements one method, <code>next</code>. Adapters such as <code>map</code> and <code>filter</code> are built on it, and they are lazy.</li>
+    <li>Nothing runs until a consumer pulls. <code>take(n)</code> stops the pulling early, so the stages before it do less work.</li>
+    <li><code>collect</code> needs a target type. It can build a Vec, a HashMap, a String, or a <code>Result&lt;Vec&lt;T&gt;, E&gt;</code> that stops at the first error.</li>
+    <li>Laravel's Collection methods are eager, and each returns a new array. A Rust chain pulls one item at a time through every stage.</li>
+  </ul>
+</div>
+
+<div class="ox-deck" data-chapter="13"></div>
+
+<details class="ox-think">
+  <summary>Explain it back: why does <code>take(2)</code> make a Rust chain do less work than the same Laravel chain?</summary>
+  <div class="ox-think-body">
+    <p>One good answer: "Rust iterators are lazy. Each item travels through <code>map</code> and <code>filter</code> only when <code>take</code> asks for it. Once <code>take(2)</code> has two items, it stops asking, so the earlier stages never run again. In the example, <code>map</code> and <code>filter</code> each run four times. Laravel's Collection methods are eager: <code>map</code> and <code>filter</code> each build a full array before <code>take</code> runs, so all eight items go through both stages, and <code>take</code> cuts the result down afterward."</p>
+    <p>If your version mentions <em>lazy pulling</em>, <em>take stops asking</em>, and <em>eager arrays</em>, you have the core of it.</p>
+  </div>
+</details>
+
+<div class="ox-complete-host"></div>
+</section>
+
+</main>
+</div>
+<script>
+(function () {
+  "use strict";
+  var root = document.getElementById("conveyor");
+  if (!root) return;
+
+  // Laravel (eager): every stage finishes the whole array before the next one starts.
+  var eager = [];
+  var i, m;
+  for (i = 1; i <= 8; i++) {
+    m = i * 10;
+    eager.push({
+      stage: "map", item: i, out: m,
+      say: i < 8
+        ? "map: " + i + " becomes " + m + ". Laravel maps every item before filter starts."
+        : "map: 8 becomes 80. The mapped array is complete, so filter can start."
+    });
+  }
+  var kept = [];
+  for (m = 10; m <= 80; m += 10) {
+    var pass = m % 20 === 0;
+    if (pass) kept.push(m);
+    eager.push({
+      stage: "filter", item: m, pass: pass,
+      say: m === 80
+        ? "filter: 80 is kept. All eight items were checked, though take needs only two."
+        : "filter: " + m + (pass ? " is kept." : " is dropped.")
+    });
+  }
+  eager.push({
+    stage: "take", keep: kept.slice(0, 2),
+    say: "take(2) keeps the first two: 20 and 40. 60 and 80 were computed for nothing."
+  });
+
+  // Rust (lazy): each event is one call, made because take asked for the next item.
+  // This is the same sequence the snippet below prints, with the same counts.
+  var lazy = [
+    { stage: "map", item: 1, out: 10, say: "map: 1 becomes 10 and passes it to filter. Nothing ran until take asked for an item." },
+    { stage: "filter", item: 10, pass: false, say: "filter: 10 is dropped, so filter asks map for another item." },
+    { stage: "map", item: 2, out: 20, say: "map: 2 becomes 20. Only one item is on the belt at a time." },
+    { stage: "filter", item: 20, pass: true, took: 1, say: "filter: 20 is kept and passed to take, which has 1 of 2." },
+    { stage: "map", item: 3, out: 30, say: "take still needs one more, so filter asks map again. map: 3 becomes 30." },
+    { stage: "filter", item: 30, pass: false, say: "filter: 30 is dropped, so it asks map again." },
+    { stage: "map", item: 4, out: 40, say: "map: 4 becomes 40." },
+    { stage: "filter", item: 40, pass: true, took: 2, say: "filter: 40 is kept. take has 2 of 2 and stops asking. Items 5 to 8 are never pulled." }
+  ];
+
+  var N = Math.max(eager.length, lazy.length);
+  var INITIAL = {
+    L: "Press Step. Laravel maps all eight items before filter sees the first one.",
+    R: "Press Step. Rust sends one item at a time through the whole belt."
+  };
+
+  function reduceEager(k) {
+    var s = { src: 0, map: [], filter: [], take: [], mapN: 0, filterN: 0, say: "" };
+    eager.slice(0, k).forEach(function (e) {
+      if (e.stage === "map") { s.src = e.item; s.map.push({ v: e.out }); s.mapN++; }
+      if (e.stage === "filter") { s.filter.push({ v: e.item, cls: e.pass ? "is-ok" : "is-no" }); s.filterN++; }
+      if (e.stage === "take") {
+        s.take = e.keep.map(function (v) { return { v: v, cls: "is-ok" }; });
+        s.filter = s.filter.map(function (c) {
+          return (c.cls === "is-ok" && e.keep.indexOf(c.v) < 0) ? { v: c.v, cls: "is-waste" } : c;
+        });
+      }
+      s.say = e.say;
+    });
+    return s;
+  }
+
+  function reduceLazy(k) {
+    var s = { src: 0, map: [], filter: [], take: [], mapN: 0, filterN: 0, say: "" };
+    lazy.slice(0, k).forEach(function (e) {
+      if (e.stage === "map") { s.src = e.item; s.map = [{ v: e.out, cls: "is-cur" }]; s.mapN++; }
+      if (e.stage === "filter") {
+        s.map = [];
+        s.filter = [{ v: e.item, cls: e.pass ? "is-ok" : "is-no" }];
+        s.filterN++;
+        if (e.pass) s.take.push({ v: e.item, cls: "is-ok" });
+      }
+      s.say = e.say;
+    });
+    return s;
+  }
+
+  function chip(v, cls) {
+    var el = document.createElement("span");
+    el.className = "cv-chip" + (cls ? " " + cls : "");
+    el.textContent = String(v);
+    return el;
+  }
+
+  function fill(belt, chips) {
+    belt.textContent = "";
+    if (!chips.length) {
+      var empty = document.createElement("span");
+      empty.className = "cv-empty";
+      empty.textContent = "empty";
+      belt.appendChild(empty);
+      return;
+    }
+    chips.forEach(function (c) { belt.appendChild(chip(c.v, c.cls)); });
+  }
+
+  function paint(side, s, initial) {
+    var source = [];
+    for (var n = 1; n <= 8; n++) source.push({ v: n, cls: n <= s.src ? "is-used" : "" });
+    fill(side.querySelector('[data-belt="src"]'), source);
+    fill(side.querySelector('[data-belt="map"]'), s.map);
+    fill(side.querySelector('[data-belt="filter"]'), s.filter);
+    fill(side.querySelector('[data-belt="take"]'), s.take);
+    side.querySelector('[data-count="map"]').textContent = s.mapN;
+    side.querySelector('[data-count="filter"]').textContent = s.filterN;
+    side.querySelector("[data-say]").textContent = s.say || initial;
+  }
+
+  var left = root.querySelector('[data-side="L"]');
+  var right = root.querySelector('[data-side="R"]');
+  var stepBtn = root.querySelector('[data-act="step"]');
+  var playBtn = root.querySelector('[data-act="play"]');
+  var resetBtn = root.querySelector('[data-act="reset"]');
+  var status = root.querySelector("[data-status]");
+  var k = 0;
+  var timer = null;
+  var awarded = false;
+
+  function stopPlay() {
+    if (timer) { clearInterval(timer); timer = null; }
+    playBtn.textContent = "Play";
+  }
+
+  function update() {
+    paint(left, reduceEager(k), INITIAL.L);
+    paint(right, reduceLazy(k), INITIAL.R);
+    var rDone = k >= lazy.length;
+    var lDone = k >= eager.length;
+    if (k === 0) status.textContent = "Ready. Press Step.";
+    else if (lDone) status.textContent = "Both belts are done.";
+    else status.textContent = "Step " + k + " of " + N + (rDone ? ". The Rust belt is done." : ".");
+    stepBtn.disabled = k >= N;
+    playBtn.disabled = k >= N;
+    if (rDone && !awarded && k > 0) {
+      awarded = true;
+      if (window.Ox && typeof window.Ox.award === "function") window.Ox.award(5, "traced a lazy pipeline", "conveyor:13");
+    }
+    if (k >= N) stopPlay();
+  }
+
+  function step() {
+    if (k < N) { k++; update(); }
+  }
+
+  stepBtn.addEventListener("click", step);
+  resetBtn.addEventListener("click", function () { stopPlay(); k = 0; update(); });
+  playBtn.addEventListener("click", function () {
+    if (timer) { stopPlay(); return; }
+    playBtn.textContent = "Pause";
+    timer = setInterval(function () { step(); }, 900);
+  });
+
+  var reduceMotion = false;
+  try { reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
+  if (reduceMotion) playBtn.hidden = true;
+
+  function init() { update(); }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
+</script>
+</body>
+</html>

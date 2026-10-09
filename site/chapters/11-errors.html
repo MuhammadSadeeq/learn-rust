@@ -158,6 +158,10 @@ help: use `let _ = ...` to ignore the resulting value
 
 warning: 1 warning emitted</pre>
 
+<aside class="ox-callout" data-kind="php">
+  <p>In PHP, an uncaught exception stops the request, and the framework renders the error page. Nothing in the code has to acknowledge it. In Rust, an unused <code>Result</code> doesn't stop anything. The program keeps running, and the only sign is a warning. That warning is the one thing asking you to look.</p>
+</aside>
+
 <p>Use <code>let _ =</code> only when ignoring the error is the right behavior, and say why in a comment. The warning exists because an ignored error is usually a bug that hasn't shown up yet.</p>
 
 <h3>unwrap and expect</h3>
@@ -367,7 +371,7 @@ fn main() -&gt; Result&lt;(), ParseIntError&gt; {
     Ok(())
 }</pre>
 
-<p>A program usually has more than one kind of error, and <code>main</code> can't name them all. <code>Box&lt;dyn Error&gt;</code> accepts any error type that implements the <code>Error</code> trait. A <code>Box</code> is a pointer to a value on the heap, and <code>dyn Error</code> means the exact type is chosen at run time. You'll meet both properly in Chapters 14 and 17. Here two different error types go through one <code>main</code>:</p>
+<p>A program usually has more than one kind of error, and <code>main</code> can't name them all. <code>Box&lt;dyn Error&gt;</code> accepts any error type that implements the <code>Error</code> trait. A <code>Box</code> is a pointer to a value on the heap, and <code>dyn Error</code> hides the exact error type from the compiler, so calls go through a table of functions at run time. You'll meet both properly in Chapters 14 and 17. Here two different error types go through one <code>main</code>:</p>
 
 <pre class="rs" data-run data-stdout="42 9.5" data-title="src/main.rs">
 use std::error::Error;
@@ -386,12 +390,14 @@ Error: ParseIntError { kind: InvalidDigit }</pre>
 
 <h3>Watch a Result travel</h3>
 
-<p>Here is <code>?</code> as a railway. Four stations run in order. The top track carries the value while every step succeeds. A failing station sends the value down its exit ramp to the bottom track, and the stations after it are skipped. The code beside the diagram is the function it draws. Press Run, then break a station and run again.</p>
+<p>Here is <code>?</code> as a railway. Four stations run in order. The top track carries the value while every step succeeds. A failing station sends the value down its exit ramp to the bottom track, and the stations after it are skipped. The Rust function that the diagram follows is printed with it. Press Run, then break a station and run again.</p>
 
 <style>
 #railway { margin-top: 1.6rem; }
-#railway .rw-grid { display: grid; gap: 18px; align-items: center; }
-@media (min-width: 900px) { #railway .rw-grid { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); } }
+#railway { container-type: inline-size; }
+#railway .rw-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-items: center; }
+@container (min-width: 960px) { #railway .rw-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); } }
+#railway .rw-grid > * { min-width: 0; }
 #railway .rw-stage svg { display: block; width: 100%; max-width: 560px; height: auto; margin: 0 auto; }
 #railway .rw-track-ok { fill: none; stroke: var(--ok); stroke-width: 4; stroke-linecap: round; }
 #railway .rw-track-err { fill: none; stroke: var(--bad); stroke-width: 4; stroke-linecap: round; opacity: .35; transition: opacity .3s; }
@@ -515,13 +521,14 @@ Error: ParseIntError { kind: InvalidDigit }</pre>
     return new Promise(function (resolve) {
       if (reduce) { place(x1, y); resolve(); return; }
       var t0 = null;
-      (function frame(now) {
+      function frame(now) {
         if (t0 === null) t0 = now;
         var p = Math.min(1, (now - t0) / ms);
         var e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
         place(x0 + (x1 - x0) * e, y);
         if (p < 1) requestAnimationFrame(frame); else resolve();
-      })();
+      }
+      requestAnimationFrame(frame);
     });
   }
   function drop(path, ms) {
@@ -534,13 +541,14 @@ Error: ParseIntError { kind: InvalidDigit }</pre>
         return;
       }
       var t0 = null;
-      (function frame(now) {
+      function frame(now) {
         if (t0 === null) t0 = now;
         var p = Math.min(1, (now - t0) / ms);
         var pt = path.getPointAtLength(total * p);
         place(pt.x, pt.y);
         if (p < 1) requestAnimationFrame(frame); else resolve();
-      })();
+      }
+      requestAnimationFrame(frame);
     });
   }
   function markLines(current, failed) {
@@ -726,7 +734,7 @@ fn main() {
   <li><div><p><strong>From&lt;ParseIntError&gt;</strong> lets <code>?</code> convert a parse error into <code>AppError::Parse</code>.</p></div></li>
 </ol>
 
-<p>The third one is the step the desugared <code>match</code> left out. On an <code>Err</code>, <code>?</code> calls <code>From::from</code> to turn the error into the function's error type. In <code>lookup</code>, <code>parse()</code> produces a <code>ParseIntError</code> and the function returns an <code>AppError</code>, so the conversion is required. Without the impl, the compiler rejects the <code>?</code>. This is Chapter 6's move in another form: the error is moved out to the caller, and the caller becomes its owner.</p>
+<p>The third one is the conversion. On an <code>Err</code>, <code>?</code> calls <code>From::from</code> to turn the error into the function's error type. In the <code>doubled</code> example that call did nothing, because the types already matched. In <code>lookup</code>, <code>parse()</code> produces a <code>ParseIntError</code> and the function returns an <code>AppError</code>, so the conversion does real work and needs the impl. Without the impl, the compiler rejects the <code>?</code>. Notice what happens to the error itself: it's moved out to the caller, which becomes its owner. That's Chapter 6's move again.</p>
 
 <p>Fill in the one line that makes the conversion work:</p>
 

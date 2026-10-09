@@ -1,4 +1,4 @@
-/* Memory X-Ray scenarios for Chapter 12 — Collections */
+/* Memory X-Ray scenarios for Chapter 12: Collections */
 (window.OX_XRAY = window.OX_XRAY || []).push(
   {
     id: "vec-grow",
@@ -37,7 +37,7 @@ fn main() {
         say: "<p>A new buffer with room for eight is allocated. The four values are copied in, the fifth is written after them, and the old buffer is freed. The pointer in <code>v</code> now points at the new buffer. Here the capacity doubles from 4 to 8, which is typical, but the exact rule is not a promise.</p>",
         ops: [["realloc", "h1", "h2", ["10", "20", "30", "40", "50"], 8], ["set", "v", { ptr: "h2", meta: { len: 5, cap: 8 } }]]
       },
-      { line: 8, say: "<p><code>len()</code> counts the elements in use: 5. The capacity, 8, is the room that is left over, and the program does not print it.</p>", ops: [["out", "5"]] },
+      { line: 8, say: "<p><code>len()</code> counts the elements in use: 5. The capacity, 8, is the total room in the buffer, and the program does not print it.</p>", ops: [["out", "5"]] },
       { line: 9, say: "<p>The closing brace drops <code>v</code>. Its one buffer is freed, by its one owner. Every element here is an <code>i32</code>, so nothing else needs freeing. With <code>String</code> elements, dropping the Vec would drop each of them too.</p>", ops: [["drop", "v"], ["pop"]] }
     ]
   }

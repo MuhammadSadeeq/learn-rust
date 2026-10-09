@@ -12,7 +12,7 @@ window.OX_COURSE = {
     { n: 1,  act: 1, slug: "01-hello-crab",       title: "Hello, Crab",               idea: "Rust compiles to machine code ahead of time. Cargo is your Composer and Artisan in one.", mins: 25 },
     { n: 2,  act: 1, slug: "02-variables",        title: "Variables Are Promises",    idea: "A binding is immutable unless you say mut. Shadowing lets a name take a new shape.", mins: 25 },
     { n: 3,  act: 1, slug: "03-types",            title: "Types Are Shapes",          idea: "Every value has one exact type, known before the program runs.", mins: 35 },
-    { n: 4,  act: 1, slug: "04-control-flow",     title: "Everything Is an Expression", idea: "Blocks, ifs and loops produce values. The semicolon decides.", mins: 35 },
+    { n: 4,  act: 1, slug: "04-control-flow",     title: "Everything Is an Expression", idea: "Blocks, if, match and loop produce values. The semicolon decides.", mins: 35 },
     { n: 5,  act: 2, slug: "05-memory",           title: "The Stack & The Heap",      idea: "Fixed-size values live on the stack; growable data lives on the heap behind a pointer.", mins: 35 },
     { n: 6,  act: 2, slug: "06-ownership",        title: "One Owner",                 idea: "Every heap value has exactly one owner. When the owner goes away, the value is freed.", mins: 45 },
     { n: 7,  act: 2, slug: "07-borrowing",        title: "Borrowing",                 idea: "Many readers or one writer, never both at the same time.", mins: 45 },
