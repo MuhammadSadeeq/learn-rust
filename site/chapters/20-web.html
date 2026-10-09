@@ -139,14 +139,12 @@ pub async fn show(
 #lc-widget .lc-result:empty { display: none; }
 #lc-widget .lc-result.is-ok { color: var(--ok); background: var(--ok-soft); }
 #lc-widget .lc-result.is-bad { color: var(--bad); background: var(--bad-soft); }
-#lc-widget .lc-carrier { position: relative; height: 66px; }
-#lc-widget .lc-postie { position: absolute; top: 0; left: 0; width: 58px; z-index: 2; transition: left 0.6s cubic-bezier(.45, .05, .25, 1); }
-#lc-widget .lc-postie.is-snap { transition: none; }
+#lc-widget .lc-track { position: relative; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 44px 8px; margin: 40px 0 0; padding: 0; list-style: none; }
+#lc-widget .lc-postie { position: absolute; top: -40px; right: 10px; width: 46px; z-index: 2; }
 #lc-widget .lc-postie .ca-postie { display: block; width: 100%; }
 #lc-widget .lc-postie .ca-postie svg { height: auto; }
-#lc-widget .lc-postie .ca-prop-parcel { position: absolute; left: 42px; top: 20px; width: 40px; }
+#lc-widget .lc-postie .ca-prop-parcel { position: absolute; left: 30px; top: 14px; width: 26px; }
 #lc-widget .lc-postie .ca-prop-parcel svg { height: auto; }
-#lc-widget .lc-track { position: relative; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px 8px; margin: 0; padding: 0; list-style: none; }
 #lc-widget .lc-stage { position: relative; min-height: 88px; padding: 8px 10px; border: 1.5px solid var(--line); border-radius: var(--radius); background: var(--surface-2); font-size: 0.84rem; line-height: 1.35; transition: border-color 0.2s, background 0.2s, opacity 0.2s; }
 #lc-widget .lc-stage b { display: block; font: 700 0.8rem/1.3 var(--font-mono); margin: 2px 0; }
 #lc-widget .lc-n { font: 700 0.72rem/1 var(--font-mono); color: var(--muted); }
@@ -157,7 +155,6 @@ pub async fn show(
 #lc-widget .lc-stage.is-skip { opacity: 0.45; border-style: dashed; }
 #lc-widget .lc-say { min-height: 3.4em; margin: 12px 0 0; font-size: 0.92rem; color: var(--ink-2); }
 #lc-widget .lc-status { margin: 0; font-weight: 600; }
-@media (prefers-reduced-motion: reduce) { #lc-widget .lc-postie { transition: none; } }
 </style>
 
 <div class="ox-figure ox-wide" id="lc-widget">
@@ -180,7 +177,6 @@ pub async fn show(
 
   <div class="lc-lane" data-lane="laravel">
     <div class="lc-lane-head"><span class="ox-label">Laravel · every request</span><span class="lc-result"></span></div>
-    <div class="lc-carrier" aria-hidden="true"><span class="lc-postie is-snap"></span></div>
     <ol class="lc-track">
       <li class="lc-stage" data-stage="index"><span class="lc-n">1</span><b>public/index.php</b>Loads the framework.</li>
       <li class="lc-stage" data-stage="boot"><span class="lc-n">2</span><b>Bootstrap</b>Builds the app and its providers.</li>
@@ -197,7 +193,6 @@ pub async fn show(
 
   <div class="lc-lane" data-lane="axum">
     <div class="lc-lane-head"><span class="ox-label">Axum · every request, after startup</span><span class="lc-result"></span></div>
-    <div class="lc-carrier" aria-hidden="true"><span class="lc-postie is-snap"></span></div>
     <ol class="lc-track">
       <li class="lc-stage" data-stage="accept"><span class="lc-n">1</span><b>Accept</b>Read the HTTP request.</li>
       <li class="lc-stage" data-stage="router"><span class="lc-n">2</span><b>Router</b>Pick the route, or the fallback.</li>
@@ -267,7 +262,7 @@ pub async fn show(
             ["extract", "State gives show a clone of AppState. Path<u64> parses 1. Both succeed."],
             ["handler", "show finds note 1 and returns Ok(Json(note))."],
             ["into", "IntoResponse turns the value into a Response. Json sets the content type, and Ok means status 200."],
-            ["out", "TraceLayer logs status 200, and the response is sent."]
+            ["out", "TraceLogs status 200, and the response is sent."]
           ],
           back: { before: "out", stages: [
             ["layers", "The response passes back out through TraceLayer and TimeoutLayer."]
@@ -362,17 +357,30 @@ pub async fn show(
       timers = [];
     }
 
+    // One Postie per lane. It lives on the stage it is visiting, so it is
+    // always beside the step that is running, at phone width too.
+    function postieOf(lane) {
+      var postie = lane.querySelector(".lc-postie");
+      if (!postie) {
+        postie = document.createElement("span");
+        postie.className = "lc-postie";
+        postie.setAttribute("aria-hidden", "true");
+        lane.querySelector(".lc-track").firstElementChild.appendChild(postie);
+      }
+      return postie;
+    }
+
     // Postie, with the parcel in hand, is redrawn for each lane and request.
     function setPostie(lane, verb) {
-      var postie = lane.querySelector(".lc-postie");
+      var postie = postieOf(lane);
       postie.innerHTML = OxCast.el("postie") + OxCast.prop("parcel", { label: verb });
       OxCast.pose(postie.querySelector(".ca-postie"), "sleep");
     }
 
-    // Postie glides to the centre of a stage, above it.
+    // Postie hops onto a stage, above its top-right corner.
     function park(lane, li, pose) {
-      var postie = lane.querySelector(".lc-postie");
-      postie.style.left = (li.offsetLeft + li.offsetWidth / 2 - postie.offsetWidth / 2) + "px";
+      var postie = postieOf(lane);
+      li.appendChild(postie);
       OxCast.pose(postie.querySelector(".ca-postie"), pose);
     }
 
@@ -381,16 +389,12 @@ pub async fn show(
         li.classList.remove("is-on", "is-done", "is-stop", "is-skip");
       });
       root.querySelectorAll(".lc-lane").forEach(function (lane) {
-        var postie = lane.querySelector(".lc-postie");
         lane.querySelector(".lc-say").textContent = "Nothing sent yet.";
         var res = lane.querySelector(".lc-result");
         res.textContent = "";
         res.className = "lc-result";
-        postie.classList.add("is-snap");
-        postie.style.left = "0px";
+        lane.querySelector(".lc-track").firstElementChild.appendChild(postieOf(lane));
         setPostie(lane, " ");
-        void postie.offsetWidth;
-        postie.classList.remove("is-snap");
       });
     }
 
