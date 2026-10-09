@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Encodes the rendered frames (promo/out/frames/f%06d.jpg, from render.mjs) and
 # promo/out/music.wav into:
-#   promo/out/oxidize.mp4          the full 64 s film (H.264 CRF 17, slow, yuv420p; AAC 256k)
+#   promo/out/oxidize.mp4          the full 64 s film (H.264 CRF 19 capped at 10 Mb/s, slow, yuv420p; AAC 256k)
 #   promo/out/oxidize-teaser.mp4   the 14.0-30.0 s cut, with a 0.5 s audio fade in and out
 # Usage: promo/encode.sh [frames_dir] [out_dir]
 set -euo pipefail
@@ -41,7 +41,10 @@ check_range() {
 # Color: frames are full-range JPEG; convert to BT.709 limited range for H.264.
 VF="scale=out_color_matrix=bt709:out_range=tv,format=yuv420p"
 COLORTAGS=(-colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv)
-ENC=(-c:v libx264 -preset slow -crf 17 -profile:v high -movflags +faststart)
+# The film grain changes every frame, so uncapped CRF spends ~100 Mb/s on noise.
+# A 10 Mb/s cap (YouTube's 1080p60 range) is visually identical and keeps the
+# film under 100 MB.
+ENC=(-c:v libx264 -preset slow -crf 19 -maxrate 10M -bufsize 20M -profile:v high -movflags +faststart)
 
 # --- full film ---------------------------------------------------------------
 check_range 0 $((FPS * DURATION))
@@ -60,6 +63,10 @@ else
     "$OUT/oxidize.mp4"
 fi
 echo "wrote $OUT/oxidize.mp4"
+
+# Poster: the end card at 61.6 s.
+cp "$(printf '%s/f%06d.jpg' "$FRAMES" $((FPS * 616 / 10)))" "$OUT/oxidize-poster.jpg"
+echo "wrote $OUT/oxidize-poster.jpg"
 
 # --- teaser: 14.0 to 30.0 s ----------------------------------------------------
 T_START=14
