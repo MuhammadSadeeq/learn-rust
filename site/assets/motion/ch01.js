@@ -18,7 +18,7 @@
     { id: "r1", prop: "parcel", opts: { label: "GET /" }, x: 30, y: 96, size: 56, hidden: true },
     { id: "r2", prop: "parcel", opts: { label: "GET /" }, x: 30, y: 96, size: 56, hidden: true },
     { id: "r3", prop: "parcel", opts: { label: "GET /" }, x: 30, y: 96, size: 56, hidden: true },
-    { id: "build", text: "cargo build", x: 594, y: 112, hidden: true },
+    { id: "build", text: "cargo build", x: 500, y: 66, hidden: true },
     { id: "src-rs", prop: "scroll", opts: { label: "main.rs" }, x: 390, y: 246, size: 84, hidden: true },
     { id: "forge", cast: "forge", x: 500, y: 150, size: 116, pose: "sleep" },
     { id: "ingot", prop: "ingot", opts: { label: "binary" }, x: 500, y: 246, size: 92, hidden: true },
