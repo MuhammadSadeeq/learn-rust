@@ -389,7 +389,8 @@ def v_crash(amp=1.0, dur=3.2, tau=0.9, lp_sweep=None):
         x = lp1(x, 3000.0 + 9000.0 * np.exp(-t / 0.6))
     else:
         f0, f1, T = lp_sweep                 # darkening tail: f0 -> f1 (exponential) over T seconds
-        x = lp1(x, f0 * (f1 / f0) ** np.clip(t / T, 0.0, 1.0))
+        fcs = f0 * (f1 / f0) ** np.clip(t / T, 0.0, 1.0)
+        x = lp1(lp1(x, fcs), fcs)
     env = (1.0 - np.exp(-t / 0.004)) * np.exp(-t / tau)
     return fade_edges(amp * 0.6 * x * env, 0.001, 0.02)
 
@@ -413,8 +414,9 @@ def v_riser(dur, amp=1.0, f0=200.0, f1=4000.0, lo=300.0, hi=7000.0):
     t = tvec(n)
     u = np.clip(t / dur, 0.0, 1.0)
     fq = f0 * (f1 / f0) ** u
-    s = lp1(saw(fq, n), 1.5 * fq)
-    noise = lp1(hp1(nz(n), 400.0), lo * (hi / lo) ** u)
+    s = lp1(lp1(saw(fq, n), 1.5 * fq), 1.5 * fq)
+    fcn = lo * (hi / lo) ** u
+    noise = lp1(lp1(hp1(nz(n), 400.0), fcn), fcn)
     return fade_edges(amp * (0.35 * s * u ** 1.6 + 0.8 * noise * u ** 1.8), 0.003, 0.004)
 
 
@@ -515,8 +517,11 @@ def v_glass(f, amp=1.0, dur=2.4, f_from=None, glide_tau=0.12):
     """Glass pluck: a sine with a bright inharmonic partial and a fast partial. f_from gives a falling glide."""
     n = int(dur * SR)
     t = tvec(n)
-    fq = f if f_from is None else f + (f_from - f) * np.exp(-t / glide_tau)
-    ph = 2.0 * np.pi * np.cumsum(fq) / SR
+    if f_from is None:
+        ph = 2.0 * np.pi * f * t
+    else:
+        fq = f + (f_from - f) * np.exp(-t / glide_tau)
+        ph = 2.0 * np.pi * np.cumsum(fq) / SR
     y = np.sin(ph) + 0.32 * np.sin(2.01 * ph) * np.exp(-t / 0.6) + 0.1 * np.sin(3.99 * ph) * np.exp(-t / 0.22)
     return fade_edges(amp * y * env_ad(n, 0.002, 1.1), 0.001, 0.01)
 
@@ -757,7 +762,7 @@ def finish(g, duck=None, ir=None, wet_level=0.9):
 
 DRONE_GAIN = 0.30     # sub drone group gain (S1 sub share)
 BODY_GAIN = 0.25      # warm D2+A2+D3 body under the drone (S1 mid share)
-PLUCK_GAIN = 0.45    # glass plucks group gain
+PLUCK_GAIN = 0.40    # glass plucks group gain
 TICK_GAIN = 0.19     # S1 clock ticks (hats) gain
 CARD_BRIGHT = 2.5     # bright filter-opening layer on the S2 error stabs
 TP_LIMIT = 10.0 ** (-1.5 / 20.0)   # limiter ceiling, linear (-1.5 dBTP)

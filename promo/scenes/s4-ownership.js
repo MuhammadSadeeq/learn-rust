@@ -117,7 +117,8 @@
   .s-s4 .h2-capline.is-ok { color: var(--ok); }
   .s-s4 .h2-stamp { position: absolute; width: 400px; height: 170px; display: flex; align-items: center; justify-content: center; }
   .s-s4 .h2-stamp-in { border: 10px double var(--error); border-radius: 16px; padding: 0 28px; font: 900 120px/1 var(--font-display); letter-spacing: 0.04em; color: var(--error); background: color-mix(in srgb, var(--ink) 55%, transparent); white-space: nowrap; }
-  .s-s4 .h2-wipe { position: absolute; left: 0; top: -210px; width: 1400px; height: 1500px; background: linear-gradient(90deg, var(--oxide), var(--hot)); border-right: 2px solid var(--molten); }
+  .s-s4 .h2-content { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+  .s-s4 .h2-wipe { position: absolute; left: 0; top: -210px; width: 1100px; height: 1500px; background: linear-gradient(90deg, var(--oxide), var(--hot)); border-right: 2px solid var(--molten); }
   `;
   function injectCSS() {
     if (document.getElementById("h2-s4-css")) return;
@@ -289,12 +290,13 @@
       injectCSS();
       layer.innerHTML = "";
       const cam = el(layer, "h2-cam");
-      const stack = el(cam, "h2-zone h2-stack", `left:${LAY.stack.x}px; top:${LAY.stack.y}px; width:${LAY.stack.w}px; height:${LAY.stack.h}px;`);
+      const content = el(cam, "h2-content");
+      const stack = el(content, "h2-zone h2-stack", `left:${LAY.stack.x}px; top:${LAY.stack.y}px; width:${LAY.stack.w}px; height:${LAY.stack.h}px;`);
       el(stack, "h2-zlabel").textContent = "STACK · one frame per call";
-      const heap = el(cam, "h2-zone h2-heap", `left:${LAY.heap.x}px; top:${LAY.heap.y}px; width:${LAY.heap.w}px; height:${LAY.heap.h}px;`);
+      const heap = el(content, "h2-zone h2-heap", `left:${LAY.heap.x}px; top:${LAY.heap.y}px; width:${LAY.heap.w}px; height:${LAY.heap.h}px;`);
       el(heap, "h2-zlabel").textContent = "HEAP · allocated at runtime";
 
-      const code = el(cam, "h2-code", `left:${LAY.code.x}px; top:${LAY.code.y}px; width:${LAY.code.w}px; height:${LAY.code.h}px;`);
+      const code = el(content, "h2-code", `left:${LAY.code.x}px; top:${LAY.code.y}px; width:${LAY.code.w}px; height:${LAY.code.h}px;`);
       const lines = CODE.map((c) => {
         const d = el(code, "h2-line", `top:${CODE_PAD_Y + c.row * CODE_ROW}px;`);
         d._segSrc = c.segs;
@@ -308,17 +310,17 @@
       const links = document.createElementNS(NS, "svg");
       links.setAttribute("class", "h2-links");
       links.setAttribute("viewBox", "0 0 1920 1080");
-      cam.appendChild(links);
+      content.appendChild(links);
       const rope = svgEl(links, "path", { class: "h2-rope", d: "" });
       const blue = [0, 1, 2].map(() => svgEl(links, "path", { class: "h2-blue", d: "" }));
       const red = svgEl(links, "path", { class: "h2-red", d: "" });
 
-      const actors = el(cam, "h2-actors");
+      const actors = el(content, "h2-actors");
       const A = {};
       for (const k of Object.keys(ACT)) A[k] = makeActor(actors, ACT[k]);
       A.ga.g.style.opacity = "0";
 
-      const tags = el(cam, "h2-tags");
+      const tags = el(content, "h2-tags");
       const aTagY = ACT.a.y + (ACT.a.w * CRAB_H) / 2 + 52;
       const T_a = tag(tags, "a · String\n(owner)", ACT.a.x, aTagY, "is-oxide is-two");
       const T_moved = tag(tags, "a · moved", ACT.a.x, aTagY, "is-ghost");
@@ -334,10 +336,10 @@
       owns.innerHTML = '<div class="h2-owns">owns</div>';
 
       const ins = A.ins;
-      const stamp = el(cam, "h2-stamp", `left:${1130 - 200}px; top:${500 - 85}px;`);
+      const stamp = el(content, "h2-stamp", `left:${1130 - 200}px; top:${500 - 85}px;`);
       el(stamp, "h2-stamp-in").textContent = "E0502";
 
-      const capbox = el(cam, "h2-capbox", `left:${LAY.cap.x}px; top:${LAY.cap.y}px; width:1400px; height:150px;`);
+      const capbox = el(content, "h2-capbox", `left:${LAY.cap.x}px; top:${LAY.cap.y}px; width:1400px; height:150px;`);
       const hMove = el(capbox, "h2-capword");
       hMove.textContent = "MOVE";
       const sMove = el(capbox, "h2-capline");
@@ -364,7 +366,7 @@
       const wipe = el(cam, "h2-wipe");
 
       S.R = {
-        cam, stack, heap, code, lines, wave, rope, blue, red, A, T_a, T_moved, T_b, T_r, T_mut, T_fl, T_ins,
+        cam, content, stack, heap, code, lines, wave, rope, blue, red, A, T_a, T_moved, T_b, T_r, T_mut, T_fl, T_ins,
         owns, ins, stamp, hMove, sMove, hBorrow, sBorrow, sOk, wipe,
       };
     },
@@ -492,11 +494,19 @@
       rise(R.sBorrow, C.borrowStart + 0.35, 0.5, borrowOn);
       rise(R.sOk, C.stamp, 0.4, V.p(T, C.stamp, C.stamp + 0.1) * borrowOn);
 
-      // The wipe: one 1400 px oxide-to-hot band, skewed -18 degrees, with a 2 px molten leading edge.
-      // Its right edge crosses the frame over 31.5-31.85 (inExpo). It never sits on flat orange.
-      const wp = V.p(T, C.wipe, 31.85, E.inExpo);
-      const xl = lerp(-1700, 2200, wp);
+      // The wipe: a 1100 px oxide-to-hot band, skewed -18 degrees, with a 2 px molten leading edge.
+      // Its leading edge is off-screen left at 31.55 and its trailing edge leaves off-screen right at 32.0
+      // (inOutCubic). The band covers at most 1100 / 1920, about 57 % of the frame.
+      // Everything behind the trailing edge is clipped out, so the stage shows empty --ink.
+      const WIPE_W = 1100;
+      const SKEW = Math.tan((18 * Math.PI) / 180); // skewX(-18deg): x = xl + SKEW * (540 - y)
+      const xl = lerp(-(WIPE_W + 175), 1920 + 175, V.p(T, 31.55, C.end, E.inOutCubic));
       R.wipe.style.transform = `translate(${f(xl)}px, 0px) skewX(-18deg)`;
+      const yT = -120;
+      const yB = 1200;
+      const xT = xl + SKEW * (540 - yT);
+      const xB = xl + SKEW * (540 - yB);
+      R.content.style.clipPath = `polygon(${f(xT)}px ${yT}px, 2000px ${yT}px, 2000px ${yB}px, ${f(xB)}px ${yB}px)`;
     },
   });
 
