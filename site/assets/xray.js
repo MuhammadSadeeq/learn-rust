@@ -684,6 +684,9 @@
   }
   window.OxXray = { mount: mountXray, mountDiagram, build: buildStates, enter, viewControl };
   window.OxTimeline = { mount: mountTimeline };
-  if (window.Ox && window.Ox.ready) mountAll();
-  else document.addEventListener("ox:ready", mountAll);
+  // oxidize.js announces ox:ready while the deferred scripts are still
+  // running, so story.js (OxStory) is not in yet. DOMContentLoaded comes after
+  // every deferred script, so mount then. Mounting is idempotent (xrDone).
+  if (document.readyState === "loading" || document.readyState === "interactive") document.addEventListener("DOMContentLoaded", mountAll);
+  else mountAll();
 })();

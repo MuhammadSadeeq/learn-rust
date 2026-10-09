@@ -554,6 +554,7 @@
     $$(".ox-story[data-scenario]").forEach((el) => { if (!el.dataset.stDone) mountStory(el); });
   }
   window.OxStory = { mount: mountStory };
-  if (window.Ox && window.Ox.ready) mountAll();
-  else document.addEventListener("ox:ready", mountAll);
+  // Same timing as xray.js: after every deferred script (see there).
+  if (document.readyState === "loading" || document.readyState === "interactive") document.addEventListener("DOMContentLoaded", mountAll);
+  else mountAll();
 })();
