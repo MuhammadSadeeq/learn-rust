@@ -93,9 +93,10 @@
 @keyframes st-stamp { 0% { transform: translateX(-50%) rotate(-24deg) scale(2.4); opacity: 0; } 100% { transform: translateX(-50%) rotate(-10deg) scale(1); opacity: 1; } }
 
 /* The Forge's error scroll on any other compile error, in the stamp's place. */
-.st-scroll { position: absolute; left: 50%; top: 26px; z-index: 2; pointer-events: none; transform: translateX(-50%) rotate(-8deg); animation: st-scroll-in 0.5s cubic-bezier(.2, 1.4, .5, 1) both; animation-delay: 0.35s; }
-.st-scroll > .ca { display: block; width: 50px; height: 33px; }
-@keyframes st-scroll-in { 0% { transform: translateX(-50%) rotate(-24deg) scale(2); opacity: 0; } 100% { transform: translateX(-50%) rotate(-8deg) scale(1); opacity: 1; } }
+/* The Forge hands the rejected code back: the crab holds the error scroll in its claw. */
+.st-scroll { position: absolute; left: 70%; top: -6px; z-index: 2; pointer-events: none; transform: rotate(10deg); animation: st-scroll-in 0.5s cubic-bezier(.2, 1.4, .5, 1) both; animation-delay: 0.35s; }
+.st-scroll > .ca { display: block; width: 46px; height: 31px; }
+@keyframes st-scroll-in { 0% { transform: translate(40px, -20px) rotate(-20deg) scale(0.6); opacity: 0; } 100% { transform: rotate(10deg) scale(1); opacity: 1; } }
 
 /* ------------------------------------------------------------ fluffies (heap values) */
 .st-fluffy { position: relative; width: 104px; display: grid; justify-items: center; }
