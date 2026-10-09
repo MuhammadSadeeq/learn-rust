@@ -64,7 +64,8 @@
    BEHAVIOR
      Autoplay: each beat runs its ops, waits for them to finish, then waits a
      reading time (45 ms per character of say, at least 1.6 s, plus hold).
-     Autoplay pauses at an ask and at the end. Pause shows the current beat at once.
+     Autoplay pauses at an ask and resumes once it is answered; it stops at the end.
+     Pause shows the current beat at once.
      Restart and Back rebuild the exact state. Oxi talks on each new beat.
      Reduced motion: ops apply at once, with no delays, tweens, puffs or
      confetti. Poses, bubbles and visibility still change, so beats still read.
@@ -82,7 +83,7 @@
   const plain = (html) => String(html || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
   const award = (amount, reason, key) => { try { if (window.Ox && Ox.award) Ox.award(amount, reason, key); } catch (e) { /* XP is optional */ } };
   const CONFETTI = ["var(--oxide)", "var(--borrow)", "var(--mut)", "var(--ok)", "#f0c674"];
-  const DUR = { move: 600, arc: 700, fade: 300, pop: 420, poof: 300, shake: 380, pulse: 700, confetti: 1000, link: 420, unlink: 300 };
+  const DUR = { move: 600, arc: 700, fade: 300, pop: 420, poof: 300, shake: 380, pulse: 700, confetti: 1000 };
   const REVEAL = 420, FADE = 300;
   const INTRO = "<p>Press <b>▶ Play</b> to watch, or <b>Next ▶</b> to step through the beats.</p>";
   const KIND_CLASSES = ["is-ref", "is-mutref", "is-ghost", "is-ended"];
@@ -105,7 +106,7 @@
     const answered = new Map();  // beat index -> { right }
     const timers = new Set();
     const anims = new Set();
-    let rafId = 0, shown = -1, asking = -1, playing = false;
+    let rafId = 0, shown = -1, asking = -1, playing = false, resumeAfterAsk = false;
     let stage, linksSvg, sayBody, oxiNode, codePre = null, dots = [];
     const ctl = {};
 
@@ -398,6 +399,8 @@
       if (!el) return;
       let b = $(":scope > .mo-bubble", el);
       if (!b) { b = document.createElement("div"); b.className = "mo-bubble"; el.appendChild(b); }
+      // near a stage edge the bubble hangs off that side, so it never leaves the stage
+      b.dataset.align = m.x < W * 0.3 ? "left" : m.x > W * 0.7 ? "right" : "center";
       b.innerHTML = `<div class="mo-bubble-in">${html}</div>`;
       const tok = (b._tok = (b._tok || 0) + 1);
       if (!reduce()) anim($(".mo-bubble-in", b), [{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], { duration: 220, easing: "ease-out" });
@@ -626,6 +629,7 @@
     function showAsk(j) {
       const a = beats[j].ask;
       asking = j;
+      resumeAfterAsk = playing;   // autoplay stops here and resumes when answered
       playing = false;
       setOxi("think", 0);
       renderCode();
@@ -654,6 +658,9 @@
         burstOxi();
         award(5, "prediction", "motion:" + scene.id + ":" + j);
       }
+      playing = resumeAfterAsk;
+      resumeAfterAsk = false;
+      updateControls();
       later(700, () => playBeat(j));
     }
     function burstOxi() {
@@ -678,6 +685,7 @@
     // Shows beat j: animated (the beat plays) or instant (the state at once).
     function go(j, animate) {
       clearAll();
+      resumeAfterAsk = false;
       if (j < 0) return rebuild(-1);
       const g = gateOf(j);
       if (g >= 0) {

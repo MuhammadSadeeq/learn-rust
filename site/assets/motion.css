@@ -123,6 +123,8 @@
   transform-origin: 50% 100%;
   pointer-events: none;
 }
+.mo-bubble[data-align="left"] { left: 0; transform: scale(calc(1 / max(var(--mo-s, 1), 0.05))); transform-origin: 0 100%; }
+.mo-bubble[data-align="right"] { left: auto; right: 0; transform: scale(calc(1 / max(var(--mo-s, 1), 0.05))); transform-origin: 100% 100%; }
 .mo-bubble-in {
   padding: 6px 10px;
   border: 1.5px solid var(--ink);
