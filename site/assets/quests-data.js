@@ -7,6 +7,7 @@ window.OX_QUESTS = [
   "title": "First words",
   "summary": "Make the program compile and greet the world.",
   "boss": false,
+  "kind": "std",
   "tests": 2
  },
  {
@@ -16,6 +17,7 @@ window.OX_QUESTS = [
   "title": "Formatting",
   "summary": "Build strings with format! and inline arguments.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -25,6 +27,7 @@ window.OX_QUESTS = [
   "title": "Mutable on purpose",
   "summary": "Decide which bindings really need mut.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -34,6 +37,7 @@ window.OX_QUESTS = [
   "title": "Shadowing",
   "summary": "Reuse a name for a value of a different type.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -43,6 +47,7 @@ window.OX_QUESTS = [
   "title": "Constants",
   "summary": "Declare constants with explicit types.",
   "boss": false,
+  "kind": "std",
   "tests": 2
  },
  {
@@ -52,6 +57,7 @@ window.OX_QUESTS = [
   "title": "Pick the right integer",
   "summary": "Choose integer types that fit the data and don't overflow.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -61,6 +67,7 @@ window.OX_QUESTS = [
   "title": "Tuples",
   "summary": "Return several values at once and destructure them.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -70,6 +77,7 @@ window.OX_QUESTS = [
   "title": "Arrays",
   "summary": "Fixed-size arrays, indexing and length.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -79,6 +87,7 @@ window.OX_QUESTS = [
   "title": "Casting with as",
   "summary": "Convert between numeric types explicitly.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -88,6 +97,7 @@ window.OX_QUESTS = [
   "title": "Return values",
   "summary": "Fix signatures and the semicolon that swallows a return value.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -97,6 +107,7 @@ window.OX_QUESTS = [
   "title": "if is an expression",
   "summary": "Use if/else to produce a value.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -106,6 +117,7 @@ window.OX_QUESTS = [
   "title": "loop returns a value",
   "summary": "Break out of a loop with a result.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -115,6 +127,7 @@ window.OX_QUESTS = [
   "title": "FizzBuzz, the Rust way",
   "summary": "Ranges, for loops and a match on a tuple.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -124,6 +137,7 @@ window.OX_QUESTS = [
   "title": "Print a receipt",
   "summary": "Act I boss: totals, tax and aligned columns.",
   "boss": true,
+  "kind": "std",
   "tests": 6
  },
  {
@@ -133,6 +147,7 @@ window.OX_QUESTS = [
   "title": "Size it up",
   "summary": "Predict how many bytes common types take on the stack.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -142,6 +157,7 @@ window.OX_QUESTS = [
   "title": "Length vs capacity",
   "summary": "Watch a Vec's capacity grow and size a String once.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -151,6 +167,7 @@ window.OX_QUESTS = [
   "title": "Use after move",
   "summary": "Fix the classic E0382 without cloning.",
   "boss": false,
+  "kind": "std",
   "tests": 2
  },
  {
@@ -160,6 +177,7 @@ window.OX_QUESTS = [
   "title": "Ownership in, ownership out",
   "summary": "Take a String, change it, hand it back.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -169,6 +187,7 @@ window.OX_QUESTS = [
   "title": "Copy or move?",
   "summary": "Know which values are copied and which are moved.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -178,6 +197,7 @@ window.OX_QUESTS = [
   "title": "Loops consume",
   "summary": "Iterate a Vec without giving it away.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -187,6 +207,7 @@ window.OX_QUESTS = [
   "title": "Look, don't take",
   "summary": "Pass references instead of moving values.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -196,6 +217,7 @@ window.OX_QUESTS = [
   "title": "Mutable borrow",
   "summary": "Modify a value through &mut.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -205,6 +227,7 @@ window.OX_QUESTS = [
   "title": "Readers or a writer",
   "summary": "Untangle overlapping shared and mutable borrows.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -214,6 +237,7 @@ window.OX_QUESTS = [
   "title": "No dangling",
   "summary": "Return owned data instead of a reference to a local.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -223,6 +247,7 @@ window.OX_QUESTS = [
   "title": "String or &str",
   "summary": "Convert between owned and borrowed text.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -232,6 +257,7 @@ window.OX_QUESTS = [
   "title": "First word",
   "summary": "Return a slice into the input.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -241,6 +267,7 @@ window.OX_QUESTS = [
   "title": "Characters, not bytes",
   "summary": "Handle UTF-8 text correctly.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -250,6 +277,7 @@ window.OX_QUESTS = [
   "title": "Building strings",
   "summary": "Title-case words and build a URL slug.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -259,6 +287,7 @@ window.OX_QUESTS = [
   "title": "Text statistics",
   "summary": "Act II boss: analyze text without a single unnecessary clone.",
   "boss": true,
+  "kind": "std",
   "tests": 7
  },
  {
@@ -268,6 +297,7 @@ window.OX_QUESTS = [
   "title": "Define a struct",
   "summary": "Named fields, tuple structs and unit structs.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -277,6 +307,7 @@ window.OX_QUESTS = [
   "title": "Methods and new()",
   "summary": "impl blocks, &self, &mut self and constructors.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -286,6 +317,7 @@ window.OX_QUESTS = [
   "title": "Derive and compare",
   "summary": "derive Debug, Clone, PartialEq and update syntax.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -295,6 +327,7 @@ window.OX_QUESTS = [
   "title": "Enums with data",
   "summary": "Model messages whose variants carry different data.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -304,6 +337,7 @@ window.OX_QUESTS = [
   "title": "Exhaustive match",
   "summary": "An order status state machine.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -313,6 +347,7 @@ window.OX_QUESTS = [
   "title": "Option instead of null",
   "summary": "Return None when there is nothing to return.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -322,6 +357,7 @@ window.OX_QUESTS = [
   "title": "if let and let else",
   "summary": "Unwrap optional values without unwrap().",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -331,6 +367,7 @@ window.OX_QUESTS = [
   "title": "Return a Result",
   "summary": "Replace a panic with a recoverable error.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -340,6 +377,7 @@ window.OX_QUESTS = [
   "title": "The ? operator",
   "summary": "Propagate parse errors upward.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -349,6 +387,7 @@ window.OX_QUESTS = [
   "title": "Your own error type",
   "summary": "An error enum with Display.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -358,7 +397,28 @@ window.OX_QUESTS = [
   "title": "From conversions",
   "summary": "Let ? convert errors for you.",
   "boss": false,
+  "kind": "std",
   "tests": 4
+ },
+ {
+  "name": "cli1_args",
+  "chapter": 11,
+  "path": "11_errors/cli1_args.rs",
+  "title": "Read the command line",
+  "summary": "Turn the arguments into a Config, or a usage error.",
+  "boss": false,
+  "kind": "std",
+  "tests": 7
+ },
+ {
+  "name": "cli2_wordcount",
+  "chapter": 11,
+  "path": "11_errors/cli2_wordcount.rs",
+  "title": "Count lines, words and bytes",
+  "summary": "Count from any reader, one line at a time, the way wc does.",
+  "boss": false,
+  "kind": "std",
+  "tests": 5
  },
  {
   "name": "vecs1",
@@ -367,6 +427,7 @@ window.OX_QUESTS = [
   "title": "Vec basics",
   "summary": "retain, sort a copy, and get without panicking.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -376,6 +437,7 @@ window.OX_QUESTS = [
   "title": "Word counter",
   "summary": "Count words with the entry API.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -385,6 +447,7 @@ window.OX_QUESTS = [
   "title": "Group by",
   "summary": "Laravel's groupBy, by hand.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -394,6 +457,7 @@ window.OX_QUESTS = [
   "title": "Unique tags",
   "summary": "HashSet and BTreeSet for de-duplication and order.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -403,6 +467,7 @@ window.OX_QUESTS = [
   "title": "Closures capture",
   "summary": "Write closures that read, mutate and move.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -412,6 +477,7 @@ window.OX_QUESTS = [
   "title": "Collection pipeline",
   "summary": "Translate a Laravel collection chain into iterators.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -421,6 +487,7 @@ window.OX_QUESTS = [
   "title": "zip, scan and windows",
   "summary": "Combine iterators to compute results.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -430,6 +497,7 @@ window.OX_QUESTS = [
   "title": "Your own iterator",
   "summary": "Implement Iterator for a Fibonacci generator.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -439,6 +507,7 @@ window.OX_QUESTS = [
   "title": "Bank ledger",
   "summary": "Act III boss: enums, Results, maps and iterators together.",
   "boss": true,
+  "kind": "std",
   "tests": 8
  },
  {
@@ -448,6 +517,7 @@ window.OX_QUESTS = [
   "title": "Implement a trait",
   "summary": "Give two types the same ability.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -457,6 +527,7 @@ window.OX_QUESTS = [
   "title": "Default methods and impl Trait",
   "summary": "Share behavior and accept anything that can do it.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -466,6 +537,7 @@ window.OX_QUESTS = [
   "title": "Generic largest",
   "summary": "One function, many types, with trait bounds.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -475,6 +547,7 @@ window.OX_QUESTS = [
   "title": "Trait objects",
   "summary": "A Vec<Box<dyn Shape>> of different shapes.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -484,6 +557,7 @@ window.OX_QUESTS = [
   "title": "Display and From",
   "summary": "Implement the standard traits everyone expects.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -493,6 +567,7 @@ window.OX_QUESTS = [
   "title": "Longest",
   "summary": "Tie an output reference to its inputs.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -502,6 +577,7 @@ window.OX_QUESTS = [
   "title": "Structs that borrow",
   "summary": "A parser that holds a &str.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -511,6 +587,7 @@ window.OX_QUESTS = [
   "title": "Outlive me",
   "summary": "Fix borrowed values that don't live long enough.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -520,6 +597,7 @@ window.OX_QUESTS = [
   "title": "Visibility",
   "summary": "pub, private fields and constructors.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -529,6 +607,7 @@ window.OX_QUESTS = [
   "title": "Paths and use",
   "summary": "Nested modules, use, self and super.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -538,7 +617,18 @@ window.OX_QUESTS = [
   "title": "Testing toolkit",
   "summary": "Satisfy assert!, assert_eq!, should_panic and Result tests.",
   "boss": false,
+  "kind": "std",
   "tests": 4
+ },
+ {
+  "name": "clap1",
+  "chapter": 16,
+  "path": "pkgs/clap1",
+  "title": "A CLI with subcommands",
+  "summary": "Describe a command line as types and let clap parse it.",
+  "boss": false,
+  "kind": "cargo",
+  "tests": 7
  },
  {
   "name": "box1",
@@ -547,6 +637,7 @@ window.OX_QUESTS = [
   "title": "Recursive types",
   "summary": "Build a linked list with Box.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -556,6 +647,7 @@ window.OX_QUESTS = [
   "title": "Shared ownership",
   "summary": "Count owners with Rc.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -565,6 +657,7 @@ window.OX_QUESTS = [
   "title": "Interior mutability",
   "summary": "A test double that records calls through &self.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -574,6 +667,7 @@ window.OX_QUESTS = [
   "title": "Shared and mutable",
   "summary": "Rc<RefCell<T>> for a shared shopping cart.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -583,6 +677,7 @@ window.OX_QUESTS = [
   "title": "Mini Blade",
   "summary": "Act IV boss: a tiny template engine with traits and lifetimes.",
   "boss": true,
+  "kind": "std",
   "tests": 6
  },
  {
@@ -592,6 +687,7 @@ window.OX_QUESTS = [
   "title": "Spawn and join",
   "summary": "Run work on threads and collect the results.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -601,6 +697,7 @@ window.OX_QUESTS = [
   "title": "Message passing",
   "summary": "Several producers, one consumer.",
   "boss": false,
+  "kind": "std",
   "tests": 3
  },
  {
@@ -610,6 +707,7 @@ window.OX_QUESTS = [
   "title": "Shared counter",
   "summary": "Arc<Mutex<T>> across threads.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -619,6 +717,17 @@ window.OX_QUESTS = [
   "title": "Scoped threads",
   "summary": "Borrow local data from threads safely.",
   "boss": false,
+  "kind": "std",
+  "tests": 4
+ },
+ {
+  "name": "bounded1",
+  "chapter": 18,
+  "path": "18_concurrency/bounded1.rs",
+  "title": "A worker pool with a bounded queue",
+  "summary": "Bound the job queue with sync_channel, and count how full it gets.",
+  "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -628,6 +737,7 @@ window.OX_QUESTS = [
   "title": "Drive a future",
   "summary": "Write a tiny block_on and run async functions.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -637,7 +747,38 @@ window.OX_QUESTS = [
   "title": "Hand-written future",
   "summary": "Implement Future yourself and watch it get polled.",
   "boss": false,
+  "kind": "std",
   "tests": 3
+ },
+ {
+  "name": "tokio1",
+  "chapter": 19,
+  "path": "pkgs/tokio1",
+  "title": "Jobs with a timeout",
+  "summary": "Run every job at once with a time limit, and report the ones that timed out.",
+  "boss": false,
+  "kind": "cargo",
+  "tests": 4
+ },
+ {
+  "name": "tokio2",
+  "chapter": 19,
+  "path": "pkgs/tokio2",
+  "title": "At most N at a time",
+  "summary": "Limit concurrent jobs with a Semaphore and acquire_owned.",
+  "boss": false,
+  "kind": "cargo",
+  "tests": 4
+ },
+ {
+  "name": "sse1",
+  "chapter": 19,
+  "path": "19_async/sse1.rs",
+  "title": "Parse server-sent events",
+  "summary": "Turn chunks of bytes into events, even when a chunk ends mid-line.",
+  "boss": false,
+  "kind": "std",
+  "tests": 8
  },
  {
   "name": "http1",
@@ -646,6 +787,7 @@ window.OX_QUESTS = [
   "title": "Parse a request",
   "summary": "Turn raw HTTP text into a typed Request.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -655,6 +797,37 @@ window.OX_QUESTS = [
   "title": "A tiny router",
   "summary": "Laravel-style routes with path parameters.",
   "boss": false,
+  "kind": "std",
+  "tests": 4
+ },
+ {
+  "name": "serde1",
+  "chapter": 20,
+  "path": "pkgs/serde1",
+  "title": "Tagged JSON enums",
+  "summary": "Give a JSON enum a type tag, and keep tool arguments as any JSON.",
+  "boss": false,
+  "kind": "cargo",
+  "tests": 6
+ },
+ {
+  "name": "client1",
+  "chapter": 20,
+  "path": "pkgs/client1",
+  "title": "Call an API",
+  "summary": "Send a GET, check the status, and tell a 404 from a timeout.",
+  "boss": false,
+  "kind": "cargo",
+  "tests": 4
+ },
+ {
+  "name": "axum1",
+  "chapter": 20,
+  "path": "pkgs/axum1",
+  "title": "A handler with state and errors",
+  "summary": "Read state and JSON in a handler, and send an error as a 400 response.",
+  "boss": false,
+  "kind": "cargo",
   "tests": 4
  },
  {
@@ -664,6 +837,7 @@ window.OX_QUESTS = [
   "title": "Your first macro",
   "summary": "A hashmap! macro with macro_rules!.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -673,6 +847,7 @@ window.OX_QUESTS = [
   "title": "Newtypes guard invariants",
   "summary": "Make invalid emails unrepresentable.",
   "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -682,6 +857,17 @@ window.OX_QUESTS = [
   "title": "Builder pattern",
   "summary": "A fluent builder with sensible defaults.",
   "boss": false,
+  "kind": "std",
+  "tests": 4
+ },
+ {
+  "name": "proc1",
+  "chapter": 21,
+  "path": "21_mastery/proc1.rs",
+  "title": "Run a program with a timeout",
+  "summary": "Spawn a child, poll it with try_wait, and kill it at the deadline.",
+  "boss": false,
+  "kind": "std",
   "tests": 4
  },
  {
@@ -691,6 +877,7 @@ window.OX_QUESTS = [
   "title": "Job queue",
   "summary": "Final boss: a worker pool like Laravel queues, with threads and channels.",
   "boss": true,
+  "kind": "std",
   "tests": 6
  }
 ];

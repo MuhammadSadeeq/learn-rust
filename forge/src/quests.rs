@@ -10,6 +10,16 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+/// How a quest is checked.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Kind {
+    /// One `.rs` file, compiled with `rustc --test`.
+    #[default]
+    Std,
+    /// A small cargo package under `quests/pkgs/`, checked with `cargo test`.
+    Cargo,
+}
+
 /// One exercise, as described in `quests.toml`.
 #[derive(Debug, Clone, Default)]
 pub struct Quest {
@@ -20,17 +30,58 @@ pub struct Quest {
     pub summary: String,
     pub hint: String,
     pub boss: bool,
+    pub kind: Kind,
 }
 
 impl Quest {
-    /// Absolute path of the learner's file for this quest.
+    /// Absolute path of the learner's file for this quest. For a cargo quest
+    /// it is the package directory.
     pub fn file(&self, root: &Path) -> PathBuf {
         root.join("quests").join(&self.path)
     }
 
-    /// Absolute path of the reference solution.
+    /// Absolute path of the reference solution. For a cargo quest it is the
+    /// package directory.
     pub fn solution(&self, root: &Path) -> PathBuf {
         root.join("solutions").join(&self.path)
+    }
+
+    /// The file the learner is asked to open, relative to `quests/`.
+    pub fn edit_path(&self) -> String {
+        match self.kind {
+            Kind::Std => self.path.clone(),
+            Kind::Cargo => format!("{}/src/lib.rs", self.path),
+        }
+    }
+
+    /// The files a quest is made of, given its `file` or `solution` path. A
+    /// cargo quest has its manifest and every `.rs` file under `src/` and `tests/`.
+    pub fn source_files(&self, base: &Path) -> Vec<PathBuf> {
+        match self.kind {
+            Kind::Std => vec![base.to_path_buf()],
+            Kind::Cargo => {
+                let mut files = vec![base.join("Cargo.toml")];
+                collect_rs(&base.join("src"), &mut files);
+                collect_rs(&base.join("tests"), &mut files);
+                files.sort();
+                files
+            }
+        }
+    }
+}
+
+/// Adds every `.rs` file under `dir`, recursively, to `out`. A missing directory adds nothing.
+fn collect_rs(dir: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_rs(&path, out);
+        } else if path.extension().is_some_and(|ext| ext == "rs") {
+            out.push(path);
+        }
     }
 }
 
@@ -125,6 +176,18 @@ pub fn parse(text: &str) -> Result<Vec<Quest>, ParseError> {
             ("hint", Value::Text(s)) => quest.hint = s,
             ("chapter", Value::Number(n)) => quest.chapter = n,
             ("boss", Value::Bool(b)) => quest.boss = b,
+            ("kind", Value::Text(s)) => {
+                quest.kind = match s.as_str() {
+                    "std" => Kind::Std,
+                    "cargo" => Kind::Cargo,
+                    other => {
+                        return Err(ParseError {
+                            line: line_no,
+                            message: format!("unknown kind `{other}`. Use \"std\" or \"cargo\"."),
+                        });
+                    }
+                };
+            }
             _ => {} // unknown or mistyped keys are ignored
         }
     }
@@ -264,5 +327,59 @@ hint = """One line."""
     #[test]
     fn rejects_quest_without_path() {
         assert!(parse("[[quest]]\nname = \"x\"").is_err());
+    }
+
+    #[test]
+    fn parses_kind_and_defaults_to_std() {
+        let text =
+            "[[quest]]\nname = \"clap1\"\nchapter = 16\nkind = \"cargo\"\npath = \"pkgs/clap1\"\n";
+        let qs = parse(text).unwrap();
+        assert_eq!(qs[0].kind, Kind::Cargo);
+        assert_eq!(parse(SAMPLE).unwrap()[0].kind, Kind::Std);
+    }
+
+    #[test]
+    fn rejects_unknown_kind() {
+        let err = parse("[[quest]]\nname = \"x\"\npath = \"x.rs\"\nkind = \"wasm\"").unwrap_err();
+        assert_eq!(err.line, 4);
+    }
+
+    /// The real list must be consistent: unique names, a file or package for
+    /// each quest, a solution, and a [workspace] in every cargo package.
+    #[test]
+    fn shipped_quests_are_well_formed() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let text = fs::read_to_string(root.join("quests/quests.toml")).expect("read quests.toml");
+        let quests = parse(&text).expect("parse quests.toml");
+        let mut names = BTreeSet::new();
+        for q in &quests {
+            assert!(names.insert(q.name.clone()), "duplicate quest {}", q.name);
+            let file = q.file(&root);
+            assert!(q.solution(&root).exists(), "{} has no solution", q.name);
+            match q.kind {
+                Kind::Std => assert!(file.is_file(), "{} has no file", q.name),
+                Kind::Cargo => {
+                    let manifest = fs::read_to_string(file.join("Cargo.toml"))
+                        .unwrap_or_else(|_| panic!("{} has no Cargo.toml", q.name));
+                    // An empty [workspace] keeps the package out of the course workspace.
+                    assert!(
+                        manifest.contains("[workspace]"),
+                        "{} needs [workspace]",
+                        q.name
+                    );
+                    // The Forge cleans the package by this name (see runner.rs).
+                    assert!(
+                        manifest.contains(&format!("name = \"{}\"", q.name)),
+                        "{} needs a package named after it",
+                        q.name
+                    );
+                    assert!(
+                        file.join("src/lib.rs").is_file(),
+                        "{} has no src/lib.rs",
+                        q.name
+                    );
+                }
+            }
+        }
     }
 }

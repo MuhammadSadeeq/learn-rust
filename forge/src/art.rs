@@ -181,10 +181,13 @@ pub fn eyes(art: &[&str], eye: char) -> Vec<String> {
     art.iter().map(|line| line.replace('@', &eye)).collect()
 }
 
-/// A quest file's test count: its `#[test]` attributes.
+/// A quest's test count: its `#[test]` and `#[tokio::test]` attributes.
 pub fn count_tests(src: &str) -> usize {
     src.lines()
-        .filter(|line| line.trim_start().starts_with("#[test]"))
+        .filter(|line| {
+            let line = line.trim_start();
+            line.starts_with("#[test]") || line.starts_with("#[tokio::test")
+        })
         .count()
 }
 
@@ -322,6 +325,13 @@ mod tests {
     fn counts_test_attributes() {
         let src = "#[test]\nfn a() {}\n    #[test]\nfn b() {}\n// #[test]\n#[test]\nfn c() {}";
         assert_eq!(count_tests(src), 3);
+    }
+
+    #[test]
+    fn counts_tokio_test_attributes() {
+        let src =
+            "#[tokio::test]\nasync fn a() {}\n#[tokio::test(start_paused = true)]\nasync fn b() {}";
+        assert_eq!(count_tests(src), 2);
     }
 
     #[test]

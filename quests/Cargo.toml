@@ -178,6 +178,14 @@ name = "errors4"
 path = "11_errors/errors4.rs"
 
 [[bin]]
+name = "cli1_args"
+path = "11_errors/cli1_args.rs"
+
+[[bin]]
+name = "cli2_wordcount"
+path = "11_errors/cli2_wordcount.rs"
+
+[[bin]]
 name = "vecs1"
 path = "12_collections/vecs1.rs"
 
@@ -294,12 +302,20 @@ name = "scoped1"
 path = "18_concurrency/scoped1.rs"
 
 [[bin]]
+name = "bounded1"
+path = "18_concurrency/bounded1.rs"
+
+[[bin]]
 name = "async1"
 path = "19_async/async1.rs"
 
 [[bin]]
 name = "async2"
 path = "19_async/async2.rs"
+
+[[bin]]
+name = "sse1"
+path = "19_async/sse1.rs"
 
 [[bin]]
 name = "http1"
@@ -320,6 +336,10 @@ path = "21_mastery/newtype1.rs"
 [[bin]]
 name = "builder1"
 path = "21_mastery/builder1.rs"
+
+[[bin]]
+name = "proc1"
+path = "21_mastery/proc1.rs"
 
 [[bin]]
 name = "boss5_job_queue"

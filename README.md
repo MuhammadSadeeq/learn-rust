@@ -42,7 +42,7 @@ recompiles every time you save, and moves you on when the tests pass.
 | **Predict first** | Before every surprising step you commit to an answer. Being wrong first is what makes the right answer stick. |
 | **Become the compiler** | "Does this compile?" checks throughout, real `rustc` errors decoded, and a borrow-checker game. Once you can predict the compiler, Rust stops being a fight. |
 | **Start from PHP** | Every concept starts next to the PHP you write today (PHP 8.5, Laravel 13: arrays, Collections, Eloquent, middleware, queues, enums, property hooks, the pipe operator) and then shows exactly where the comparison breaks. |
-| **Write real code** | 77 quests and 5 boss projects, checked by the real compiler. |
+| **Write real code** | 88 quests and 5 boss projects, checked by the real compiler. |
 | **Remember it** | Recall cards at the end of every chapter, reviewed on a spaced-repetition schedule in the Recall Deck. |
 | **Agent era** | Every chapter shows how its concept appears in AI-written Rust, and the Agent Code Review Dojo trains you to review it. |
 
@@ -96,8 +96,13 @@ Every passed quest gets a hopping ASCII Oxi. Boss quests show their creature
 with an HP bar: one hit point per failing test, a knockout when the last one
 turns green. `NO_COLOR=1` or `FORGE_NO_ANIMATION=1` keeps the output plain.
 
+Most quests are one file. Some are small cargo projects that use real crates
+(clap, tokio, serde, reqwest, axum); they live under `quests/pkgs/`, and the
+Forge runs `cargo test` on them. The first check builds those crates, which can
+take a few minutes. Later checks reuse the build in `target/forge-pkgs`.
+
 Your progress is stored in `.forge-progress` at the repo root, so you can
-commit it with your work. The Forge is about 1,850 lines of std-only Rust (tests included) in
+commit it with your work. The Forge is about 2,200 lines of std-only Rust (tests included) in
 `forge/src`; Chapter 21 invites you to read it.
 
 ## What's in the repo

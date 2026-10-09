@@ -3,8 +3,9 @@
 # The order of this file is the order you play the quests in.
 # `cargo forge` reads it, `tools/sync-quests.mjs` copies it into the website.
 #
-# Fields: name (also the cargo bin name), chapter, path (relative to quests/),
-# title, summary, boss (optional), hint (multi-line string).
+# Fields: name, chapter, path (relative to quests/), title, summary, boss (optional),
+# kind (optional: "std" by default, or "cargo" for a small package under quests/pkgs/,
+# where path is the package directory), hint (multi-line string).
 
 [[quest]]
 name = "hello1"
@@ -535,6 +536,37 @@ hint = """
 """
 
 [[quest]]
+name = "cli1_args"
+chapter = 11
+path = "11_errors/cli1_args.rs"
+title = "Read the command line"
+summary = "Turn the arguments into a Config, or a usage error."
+hint = """
+1. Walk the list with an index: `let mut i = 0;` and `while i < args.len()`. Look
+   at `args[i]` each time round the loop.
+2. For `--limit`, the value is the next word. `args.get(i + 1)` is `None` when
+   `--limit` is the last word. Parse the value with `value.parse()`, then skip it
+   by adding one more to `i`.
+3. Keep the file as an `Option<String>`. A second file is a usage error, so check
+   before you store it. At the end, `None` is a usage error too.
+"""
+
+[[quest]]
+name = "cli2_wordcount"
+chapter = 11
+path = "11_errors/cli2_wordcount.rs"
+title = "Count lines, words and bytes"
+summary = "Count from any reader, one line at a time, the way wc does."
+hint = """
+1. Loop on `input.read_line(&mut line)`. Clear `line` at the top of each pass. The
+   return value is the number of bytes read, and 0 means the input is over.
+2. Add the bytes to `counts.bytes`, the words from `line.split_whitespace().count()`,
+   and one to `counts.lines` only when the line ends with `'\n'`.
+3. `read_line` can fail, so put `?` after it. The method changes the reader, so the
+   parameter needs `mut input: R`.
+"""
+
+[[quest]]
 name = "vecs1"
 chapter = 12
 path = "12_collections/vecs1.rs"
@@ -776,6 +808,22 @@ hint = """
 """
 
 [[quest]]
+name = "clap1"
+chapter = 16
+kind = "cargo"
+path = "pkgs/clap1"
+title = "A CLI with subcommands"
+summary = "Describe a command line as types and let clap parse it."
+hint = """
+1. Put `#[derive(Parser)]` on `Cli`, and `#[derive(Subcommand)]` on `Command`. The
+   `clap` import is already there.
+2. Mark the `command` field with `#[command(subcommand)]`, and `verbose` with
+   `#[arg(short, long)]`. Doc comments become the help text.
+3. `try_parse_from` comes from the `Parser` derive. If the tests cannot find it,
+   the derive is missing.
+"""
+
+[[quest]]
 name = "box1"
 chapter = 17
 path = "17_smart_pointers/box1.rs"
@@ -885,6 +933,22 @@ hint = """
 """
 
 [[quest]]
+name = "bounded1"
+chapter = 18
+path = "18_concurrency/bounded1.rs"
+title = "A worker pool with a bounded queue"
+summary = "Bound the job queue with sync_channel, and count how full it gets."
+hint = """
+1. Make the jobs channel with `mpsc::sync_channel::<u64>(queue)`. Share its receiver
+   with `Arc::new(Mutex::new(job_rx))`, and clone the Arc for each worker.
+2. Each worker loops on `recv()` while it holds the lock, then lets the lock go before
+   it runs `work`. When `recv()` returns an error, the queue is closed, so stop.
+   Add one to `taken` with `fetch_add` right after a receive.
+3. After each `send`, add one to `sent` and keep the largest `sent - taken`. Drop
+   your copy of `result_tx` before you collect, and drop `job_tx` after the last send.
+"""
+
+[[quest]]
 name = "async1"
 chapter = 19
 path = "19_async/async1.rs"
@@ -909,6 +973,54 @@ hint = """
 """
 
 [[quest]]
+name = "tokio1"
+chapter = 19
+kind = "cargo"
+path = "pkgs/tokio1"
+title = "Jobs with a timeout"
+summary = "Run every job at once with a time limit, and report the ones that timed out."
+hint = """
+1. Make a `JoinSet::new()`. For each job, copy the id and the delay out, then call
+   `set.spawn(async move { ... })`.
+2. Inside the task, `timeout(per_job, work).await` gives `Ok(value)` in time or
+   `Err(Elapsed)` when the limit passes. Return `(id, result)` from the task.
+3. Loop with `while let Some(joined) = set.join_next().await`. Sort `done` and
+   `timed_out` by id before you return the Report.
+"""
+
+[[quest]]
+name = "tokio2"
+chapter = 19
+kind = "cargo"
+path = "pkgs/tokio2"
+title = "At most N at a time"
+summary = "Limit concurrent jobs with a Semaphore and acquire_owned."
+hint = """
+1. Make `Arc::new(Semaphore::new(limit))`. In the loop, take a permit with
+   `semaphore.clone().acquire_owned().await` before you spawn each job.
+2. Move the permit into `tokio::spawn(async move { ... })`, with a clone of the gauge
+   Arc. Call `work(item, &gauge).await` inside. The permit is returned when it drops.
+3. Keep the join handles in order, then `handle.await` each one in that order to
+   build the output.
+"""
+
+[[quest]]
+name = "sse1"
+chapter = 19
+path = "19_async/sse1.rs"
+title = "Parse server-sent events"
+summary = "Turn chunks of bytes into events, even when a chunk ends mid-line."
+hint = """
+1. Add the new bytes to `self.buffer`. Find each `\n` with `position`, and take the
+   line up to it with `drain(..=end)`. Bytes after the last `\n` wait for the next chunk.
+2. Make the line text with `String::from_utf8_lossy`, and remove a trailing `\r`
+   with `strip_suffix`. Then check what the line starts with: `data:`, `event:`,
+   or something you ignore.
+3. A blank line ends the event. Take the name with `self.event.take()`. If there is
+   data, join the data lines with `"\n"` and push an `Event`.
+"""
+
+[[quest]]
 name = "http1"
 chapter = 20
 path = "20_web/http1.rs"
@@ -930,6 +1042,55 @@ hint = """
 1. Start with `match_pattern`. Split both strings on `/` and collect the segments. If the two lengths differ there is no match. Otherwise walk the segments side by side with `zip`.
 2. A segment like `{id}` is a parameter. `strip_prefix('{')` and `strip_suffix('}')` give the name inside the braces, and the path segment is its value, so `insert` it into the `Params` map. Any other segment must be equal to the path segment.
 3. In `dispatch`, loop over the routes and return as soon as the pattern matches and the method is equal. Keep a `bool` for whether any pattern matched the path. Only after the loop does that flag choose between 405 and 404.
+"""
+
+[[quest]]
+name = "serde1"
+chapter = 20
+kind = "cargo"
+path = "pkgs/serde1"
+title = "Tagged JSON enums"
+summary = "Give a JSON enum a type tag, and keep tool arguments as any JSON."
+hint = """
+1. Put `#[serde(tag = "type", rename_all = "snake_case")]` above `pub enum Block`.
+   The tag becomes the `type` field, and each variant name becomes snake_case.
+2. `to_json` and `from_json` are one call each: `serde_json::to_string(block)` and
+   `serde_json::from_str(text)`. Both return a `Result`, so return it as it is.
+3. An unknown or missing type makes `from_str` return an error. You do not need to
+   check for it yourself.
+"""
+
+[[quest]]
+name = "client1"
+chapter = 20
+kind = "cargo"
+path = "pkgs/client1"
+title = "Call an API"
+summary = "Send a GET, check the status, and tell a 404 from a timeout."
+hint = """
+1. Build the URL with `format!("{base_url}/users/{id}")`. Then
+   `client.get(url).send().await?` sends the request, and `error_for_status()` turns
+   4xx and 5xx responses into errors.
+2. In the `match`, a 404 is `err.status() == Some(reqwest::StatusCode::NOT_FOUND)`.
+   Every other error goes through `err.into()`.
+3. Write `impl From<reqwest::Error> for ApiError`. Use `err.is_timeout()` to pick
+   `Timeout`, and `Failed(err.to_string())` for everything else.
+"""
+
+[[quest]]
+name = "axum1"
+chapter = 20
+kind = "cargo"
+path = "pkgs/axum1"
+title = "A handler with state and errors"
+summary = "Read state and JSON in a handler, and send an error as a 400 response."
+hint = """
+1. In `create_note`, return `Err(AppError::EmptyText)` when `body.text.trim()` is
+   empty. Otherwise lock `state.notes`, push the text, and return
+   `Ok(Json(Saved { id }))`, where `id` is the index of the new note.
+2. In `into_response`, build the body with `serde_json::json!({ "error": message })`,
+   and return `(StatusCode::BAD_REQUEST, Json(...)).into_response()`.
+3. In `app`, use `Router::new().route("/notes", post(create_note)).with_state(state)`.
 """
 
 [[quest]]
@@ -966,6 +1127,23 @@ hint = """
 1. Each setter takes `mut self`, changes one field and returns `self`. Wrap the optional fields in `Some`, and turn each `&str` into a `String` with `to_string`. Headers live in a `Vec`, so `push` onto it.
 2. In `build`, `self.url.ok_or("url is required")?` turns a missing url into an early `Err`. `unwrap_or_else` and `unwrap_or` give the defaults for the other two fields. `build` takes `self` by value, so you can move the fields out instead of cloning them.
 3. The struct literal names every field. `headers: self.headers` moves the vector straight into the request.
+"""
+
+[[quest]]
+name = "proc1"
+chapter = 21
+path = "21_mastery/proc1.rs"
+title = "Run a program with a timeout"
+summary = "Spawn a child, poll it with try_wait, and kill it at the deadline."
+hint = """
+1. Build the command with `Command::new(cmd).args(args)`, set `stdout` and `stderr`
+   to `Stdio::piped()`, then call `spawn()`. Turn a spawn error into
+   `RunError::Spawn` with `.map_err`.
+2. Loop on `child.try_wait()`. `Ok(None)` means the child still runs. Compare
+   `started.elapsed()` with the timeout, and sleep a few milliseconds between checks.
+3. On timeout, call `child.kill()` and then `child.wait()`, and return
+   `RunError::TimedOut`. When the child exits in time, read `child.stdout.take()`
+   with `read_to_end`. That needs `use std::io::Read`.
 """
 
 [[quest]]

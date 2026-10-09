@@ -167,7 +167,7 @@ fn pick<'a>(ctx: &'a Ctx, name: Option<&str>) -> Result<&'a Quest, String> {
 
 fn check(ctx: &mut Ctx, i: usize) -> io::Result<Outcome> {
     let q = ctx.quests[i].clone();
-    let outcome = runner::run(&ctx.root, &q.file(&ctx.root), &q.name, ctx.style.color)?;
+    let outcome = runner::run(&ctx.root, &q, &q.file(&ctx.root), ctx.style.color)?;
     if outcome.passed() {
         ctx.progress.mark(&q, true)?;
     }
@@ -277,7 +277,7 @@ fn verify(ctx: &mut Ctx, solutions: bool) -> Result<ExitCode, Box<dyn std::error
             failed += 1;
             continue;
         }
-        let outcome = runner::run(&ctx.root, &file, &q.name, false)?;
+        let outcome = runner::run(&ctx.root, &q, &file, false)?;
         let ok = outcome.passed();
         if !solutions {
             ctx.progress.mark(&q, ok)?;
@@ -376,8 +376,8 @@ fn watch(ctx: &mut Ctx) -> io::Result<()> {
             );
         }
 
-        let mut seen = modified(&file);
-        let mut outcome = runner::run(&ctx.root, &file, &q.name, ctx.style.color)?;
+        let mut seen = snapshot(&q, &ctx.root);
+        let mut outcome = runner::run(&ctx.root, &q, &file, ctx.style.color)?;
         let mut passed = settle(ctx, i, &q, &outcome)?;
 
         loop {
@@ -412,17 +412,17 @@ fn watch(ctx: &mut Ctx) -> io::Result<()> {
                     }
                     _ => {
                         // Enter on an unsolved quest just re-checks it.
-                        outcome = runner::run(&ctx.root, &file, &q.name, ctx.style.color)?;
+                        outcome = runner::run(&ctx.root, &q, &file, ctx.style.color)?;
                         passed = settle(ctx, i, &q, &outcome)?;
                     }
                 },
                 None => {
-                    let now = modified(&file);
+                    let now = snapshot(&q, &ctx.root);
                     if now != seen {
                         seen = now;
                         // Editors often save in two steps; give the write a moment to land.
                         thread::sleep(Duration::from_millis(80));
-                        outcome = runner::run(&ctx.root, &file, &q.name, ctx.style.color)?;
+                        outcome = runner::run(&ctx.root, &q, &file, ctx.style.color)?;
                         passed = settle(ctx, i, &q, &outcome)?;
                     }
                 }
@@ -477,7 +477,7 @@ fn header(ctx: &Ctx, i: usize) {
     if !q.summary.is_empty() {
         println!("{}", q.summary);
     }
-    println!("Edit {}", s.cyan(&format!("quests/{}", q.path)));
+    println!("Edit {}", s.cyan(&format!("quests/{}", q.edit_path())));
     println!();
 }
 
@@ -552,7 +552,7 @@ fn report(ctx: &Ctx, q: &Quest, outcome: &Outcome) {
             if !warnings.trim().is_empty() {
                 let count = runner::strip_ansi(warnings)
                     .lines()
-                    .filter(|l| l.starts_with("warning"))
+                    .filter(|l| l.starts_with("warning") && !l.contains("generated"))
                     .count();
                 if count > 0 {
                     println!("{}", s.yellow(&format!("  rustc left {count} warning(s). Worth a look: they're often idiom hints.")));
@@ -609,9 +609,12 @@ fn boss_panel_for(ctx: &Ctx, q: &Quest, b: &art::Boss, outcome: &Outcome) -> Opt
     Some(boss_panel(ctx.style, b, hp, total, &mood, false))
 }
 
-/// A boss's full HP: the number of tests in the learner's file (0 if unreadable).
+/// A boss's full HP: the number of tests in the learner's files (0 if unreadable).
 fn full_hp(ctx: &Ctx, q: &Quest) -> usize {
-    fs::read_to_string(q.file(&ctx.root)).map_or(0, |src| art::count_tests(&src))
+    q.source_files(&q.file(&ctx.root))
+        .iter()
+        .map(|path| fs::read_to_string(path).map_or(0, |src| art::count_tests(&src)))
+        .sum()
 }
 
 /// The boss panel: the name, then the art with its HP line, weak spot and mood
@@ -775,4 +778,16 @@ fn check_toolchain(s: Style) {
 
 fn modified(path: &Path) -> Option<SystemTime> {
     fs::metadata(path).and_then(|m| m.modified()).ok()
+}
+
+/// Each file a quest is made of, with its modification time. Watch mode
+/// re-checks when this changes, so an edit to any file of a cargo quest counts.
+fn snapshot(q: &Quest, root: &Path) -> Vec<(PathBuf, Option<SystemTime>)> {
+    q.source_files(&q.file(root))
+        .into_iter()
+        .map(|path| {
+            let time = modified(&path);
+            (path, time)
+        })
+        .collect()
 }
