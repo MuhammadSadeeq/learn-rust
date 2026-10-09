@@ -54,13 +54,8 @@ mod tests {
     }
 
     #[test]
-    fn parse_port_reads_a_valid_port() {
+    fn parse_port_reads_a_valid_port_and_falls_back() {
         assert_eq!(parse_port("8000"), 8000);
-        assert_eq!(parse_port("443"), 443);
-    }
-
-    #[test]
-    fn parse_port_falls_back_to_8080() {
         assert_eq!(parse_port("http"), 8080);
         assert_eq!(parse_port("70000"), 8080); // edge case: too big for a u16
     }

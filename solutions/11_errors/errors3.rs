@@ -68,10 +68,6 @@ mod tests {
     fn invalid_port_has_a_message() {
         let err = get_port(&[("port", "abc")]).unwrap_err();
         assert_eq!(err.to_string(), "invalid value 'abc' for key 'port'");
-    }
-
-    #[test]
-    fn port_above_u16_is_invalid() {
         // Edge case: the text is a number, but it does not fit in a u16.
         let err = get_port(&[("port", "70000")]).unwrap_err();
         assert_eq!(err.to_string(), "invalid value '70000' for key 'port'");

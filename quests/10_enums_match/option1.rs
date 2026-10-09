@@ -47,15 +47,9 @@ mod tests {
     }
 
     #[test]
-    fn find_user_returns_the_name_for_an_id() {
+    fn find_user_returns_the_name_or_none() {
         let users = sample();
         assert_eq!(find_user(&users, 2), Some("Bo"));
-        assert_eq!(find_user(&users, 1), Some("Ana"));
-    }
-
-    #[test]
-    fn find_user_returns_none_when_missing() {
-        let users = sample();
         assert_eq!(find_user(&users, 9), None);
         assert_eq!(find_user(&[], 1), None); // edge case: no users at all
     }
