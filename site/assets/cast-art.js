@@ -172,7 +172,7 @@
     fields.forEach((fl, i) => { s += `<rect class="ca-cavity" x="16" y="${40 + i * 24}" width="148" height="18" rx="5"/><text class="ca-label ca-left" x="24" y="${53 + i * 24}">${esc(fl)}</text>`; });
     return `<svg class="ca-svg" viewBox="0 0 180 ${H}" aria-hidden="true">
       <rect class="ca-body" x="4" y="4" width="172" height="${H - 8}" rx="12"/><rect class="ca-light" x="10" y="8" width="70" height="4" rx="2"/>
-      <text class="ca-title" x="168" y="27" text-anchor="end">struct ${esc(name)}</text>
+      <text class="ca-title" x="50" y="27"${("struct " + name).length > 15 ? ' textLength="120" lengthAdjust="spacingAndGlyphs"' : ""}>struct ${esc(name)}</text>
       ${face({ x1: 24, x2: 40, y: 20, r: 5.2, mx: 32, my: 29, w: 4, cheeks: false })}
       ${s}
     </svg>`;

@@ -156,7 +156,8 @@
           hidden: !!d.hidden, base: d.pose || "", pose: d.pose || "", poseTok: 0,
           kind: d.kind || "", label: d.label || "",
           art: type === "char" ? { cast: d.cast, opts: d.opts || {} } : type === "prop" ? { prop: d.prop, opts: d.opts || {} } : null,
-          cls: new Set(), applied: new Set(), poofing: false,
+          // The actor's own classes are part of the model, so a cls op can take them away.
+          cls: new Set(String(d.cls || "").split(/\s+/).filter(Boolean)), applied: new Set(), poofing: false,
         });
       });
     }
@@ -168,7 +169,7 @@
         const d = m.def, el = document.createElement("div");
         el.dataset.id = m.id;
         if (m.type === "box") {
-          el.className = "mo-actor mo-box " + (d.cls || "");
+          el.className = "mo-actor mo-box";
           el.innerHTML = '<span class="mo-tag"></span>';
         } else if (m.type === "text") {
           el.className = "mo-actor mo-text";
@@ -201,6 +202,8 @@
         el.style.width = (d.w / W) * 100 + "%";
         el.style.height = (d.h / H) * 100 + "%";
         el.style.transform = "translate(-50%,-50%)";
+        el.style.opacity = m.opacity;
+        if (!m.poofing) el.style.visibility = m.hidden ? "hidden" : "";
       } else {
         el.style.zIndex = d.z ?? 3;
         if (m.type !== "text") el.style.width = (m.size / W) * 100 + "%";
@@ -711,8 +714,10 @@
 
     /* ------------------------------------------------------ the widget */
     function build() {
-      const broken = !!scene.check && scene.check !== "ok";
-      const check = broken ? (scene.check === "error" ? "does not compile" : "error " + scene.check) : "compiles";
+      // "skip" marks code that needs crates (tokio, axum, serde): neutral, not an error.
+      const needsCrates = scene.check === "skip", panics = scene.check === "panic";
+      const broken = !!scene.check && scene.check !== "ok" && !needsCrates && !panics;
+      const check = needsCrates ? "needs crates" : panics ? "compiles, panics at runtime" : broken ? (scene.check === "error" ? "does not compile" : "error " + scene.check) : "compiles";
       root.tabIndex = 0;
       root.setAttribute("role", "group");
       root.setAttribute("aria-label", "Motion explainer: " + (scene.title || scene.id));
@@ -722,7 +727,7 @@
           <span class="mo-title"></span>
         </div>
         <div class="mo-main${scene.rust ? " has-code" : ""}">
-          ${scene.rust ? `<div class="mo-code"><div class="mo-code-head"><span>Rust</span><span class="mo-check ${broken ? "is-err" : "is-ok"}">${esc(check)}</span></div><pre></pre></div>` : ""}
+          ${scene.rust ? `<div class="mo-code"><div class="mo-code-head"><span>Rust</span><span class="mo-check ${broken ? "is-err" : needsCrates ? "is-skip" : panics ? "is-panic" : "is-ok"}">${esc(check)}</span></div><pre></pre></div>` : ""}
           <div class="mo-stage" aria-hidden="true" style="aspect-ratio:${W} / ${H};--mo-w:${W};--mo-h:${H}"></div>
         </div>
         <div class="mo-foot">

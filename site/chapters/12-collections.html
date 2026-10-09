@@ -21,7 +21,7 @@
 <script src="../assets/scenarios/ch12.js" defer></script>
 <script src="../assets/motion/ch12.js" defer></script>
 <script src="../assets/oxidize.js" defer></script>
-<script src="../assets/cast-art.js" defer></script>
+<script src="../assets/cast-art.js"></script>
 <script src="../assets/cast.js" defer></script>
 <script src="../assets/motion.js" defer></script>
 <script src="../assets/xray.js" defer></script>
@@ -667,7 +667,10 @@ fn main() {
       log.appendChild(li);
       return;
     }
-    entries.slice(0, 8).forEach(function (text) {
+    // Oldest first, numbered by call order; keep the last eight.
+    var shown = entries.slice(-8);
+    log.start = entries.length - shown.length + 1;
+    shown.forEach(function (text) {
       var li = document.createElement("li");
       li.textContent = text;
       log.appendChild(li);
@@ -686,13 +689,13 @@ fn main() {
     if (names.indexOf(name) === -1) {
       names.push(name);
       lastNew = name;
-      entries.unshift('insert("' + name + '") returns true');
+      entries.push('insert("' + name + '") returns true');
       say('insert("' + name + '") returned true. ' + name + " is new, so the Bouncer lets them in.", "is-in");
       pose("happy");
       seen.in = true;
     } else {
       lastNew = null;
-      entries.unshift('insert("' + name + '") returns false');
+      entries.push('insert("' + name + '") returns false');
       say('insert("' + name + '") returned false. ' + name + " is already in the set, so the Bouncer turns them away.", "is-out");
       pose("oops");
       seen.out = true;

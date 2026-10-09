@@ -37,7 +37,7 @@
       ],
     },
     {
-      say: "<p><code>cargo build</code> hands the manifest and every crate to the Forge. The Forge checks them all before anything runs.</p>",
+      say: "<p><code>cargo build</code> gives the project and every crate to the Forge. The Forge checks them all before anything runs.</p>",
       do: [
         ["move", "cargo", { x: 400, y: 258 }, 800],
         ["arc", "toml", { x: 330, y: 150, scale: 0.3 }, 800, 0, 40],

@@ -209,7 +209,7 @@
       ],
     },
     {
-      say: "<p>Both fluffies in block two are freed. The one <code>Weak</code> never kept anything alive, so that pair does not leak.</p>",
+      say: "<p>Both fluffies in block two are freed. The one <code>Weak</code> never kept anything alive. The pair from block one is still on the heap: that is the leak.</p>",
       line: 21,
       do: [["pulse", "fd", 0]],
     },

@@ -64,7 +64,7 @@
       ],
     },
     {
-      say: "<p>At the closing brace the guard is dropped and the key goes back to the Keeper. <b>w1</b> is done, and its clone of the Arc is gone, so the count drops to 3.</p>",
+      say: "<p>At the closing brace the guard is dropped and the key goes back to the Keeper. <b>w1</b> is done, and its clone of the Arc is gone, so the Arc count drops to 3.</p>",
       line: 12,
       do: [
         ["arc", "key", { x: 206, y: 146, scale: 1 }, 800, 0, 50],

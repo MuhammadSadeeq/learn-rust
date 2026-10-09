@@ -170,3 +170,6 @@
   .mo-play.is-pulse { animation: none; }
   .mo-dot::before { transition: none; }
 }
+
+.mo-check.is-skip { color: var(--code-dim); }
+.mo-check.is-panic { color: #f0c674; }
