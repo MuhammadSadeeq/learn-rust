@@ -2,8 +2,8 @@
 //  QUEST boss1_receipt · Print a receipt             Chapter 04 · Control Flow
 // ----------------------------------------------------------------------------
 //  Act I boss. Build the receipt for an order, the way the invoice code in a
-//  Laravel app would. Each item is a tuple of (name, quantity, unit price in
-//  cents).
+//  Laravel app would. Each item is a tuple: its name, its quantity and its
+//  unit price in cents.
 //
 //    line_total    quantity times unit price
 //    subtotal      the sum of the line totals

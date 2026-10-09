@@ -313,7 +313,7 @@ fn main() {
 #execsim .es-card { min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); }
 #execsim .es-card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 #execsim .es-name { font-family: var(--font-display); font-weight: 900; font-size: 1.4rem; line-height: 1; }
-#execsim .es-state { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; background: var(--surface-3); color: var(--ink-2); font: 600 0.72rem/1.6 var(--font-mono); }
+#execsim .es-state { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; background: var(--surface-3); color: var(--ink-2); font: 600 0.72rem/1.6 var(--font-mono); white-space: nowrap; }
 #execsim .es-state.is-run { background: var(--oxide-soft); color: var(--oxide-ink); }
 #execsim .es-state.is-wait { background: var(--surface-3); color: var(--muted); }
 #execsim .es-state.is-ready { background: var(--borrow-soft); color: var(--borrow); }
@@ -1158,7 +1158,7 @@ fn main() {
         if (t === 0) { state = "Ready"; cls = "is-ready"; }
         else if (polled) { state = "Running"; cls = "is-run"; }
         else if (k.state === "pending") {
-          state = (st.threads ? "Blocked on I/O" : "Pending, waiting on I/O") + " · " + esTicks(k.left) + " left";
+          state = (st.threads ? "Blocked" : "Pending") + " · " + k.left + " left";
           cls = "is-wait";
         }
         else if (k.state === "ready") { state = "Ready"; cls = "is-ready"; }

@@ -749,7 +749,7 @@ fn main() {
 
 <h3>Check, then act, across two locks</h3>
 
-<p>Each <code>lock()</code> below is safe on its own, and there is no data race. The check and the withdrawal are two separate critical sections, though. Both threads can see 100, both pass the check, and both subtract 80. The balance ends at -60. The data is protected. The logic is not.</p>
+<p>Each <code>lock()</code> below is safe on its own, and there is no data race. The check and the withdrawal are two separate critical sections, though. If both threads see 100 before either one subtracts, both pass the check, and the balance ends at -60. The data is protected. The logic is not.</p>
 
 <pre class="rs" data-check="ok">
 use std::sync::Mutex;
@@ -776,7 +776,7 @@ fn main() {
 
 <h3>Leaks are safe</h3>
 
-<p>Leaking memory is not undefined behavior, so the compiler doesn't stop it. <code>std::mem::forget</code> leaks a value on purpose, and an <code>Rc</code> cycle leaks without anyone noticing. Chapter 17 showed the cycle. A leak is a waste rather than a memory-safety bug, and it is still a bug to fix.</p>
+<p>Leaking memory is not undefined behavior, so the compiler doesn't stop it. <code>std::mem::forget</code> leaks a value on purpose, and an <code>Rc</code> cycle leaks without anyone noticing (Chapter 17 covers <code>Rc</code>). A leak is a waste rather than a memory-safety bug, and it is still a bug to fix.</p>
 
 <h3>The easy button: rayon</h3>
 

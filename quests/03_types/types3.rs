@@ -1,9 +1,9 @@
 // ============================================================================
 //  QUEST types3 · Arrays                         Chapter 03 · Types Are Shapes
 // ----------------------------------------------------------------------------
-//  An array has a fixed length, and the length is part of its type. `[u32;
-//  7]` is seven u32 values, always. Index from 0, so `days[0]` is the first
-//  one.
+//  An array has a fixed length, and that length is part of its type. Index
+//  from 0, so `days[0]` is the first value. A `[u32; 7]` always holds seven
+//  u32 values.
 //
 //  `sum_week` adds up the hours in the week. `busiest_day` returns the index
 //  of the largest value. On a tie, the earlier day wins. Both bodies are
