@@ -100,7 +100,7 @@ for (const file of htmlFiles) {
 }
 
 // ---- JS data files
-const dataFiles = walk(path.join(SITE, "assets")).filter((f) => f.endsWith(".js") && !/oxidize\.js$|xray\.js$/.test(f));
+const dataFiles = walk(path.join(SITE, "assets")).filter((f) => f.endsWith(".js") && !/(oxidize|xray|story)\.js$/.test(f));
 for (const file of dataFiles) {
   if (only.length && !only.includes(file)) continue;
   const ctx = { window: {} };

@@ -37,7 +37,8 @@ window.OX_COURSE = {
     { slug: "errors",         title: "Error Museum",            blurb: "The 25 compiler errors you will meet most, decoded with fixes." },
     { slug: "rosetta",        title: "PHP → Rust Rosetta",      blurb: "A searchable phrasebook from the PHP and Laravel you know to the Rust you need." },
     { slug: "ai-dojo",        title: "Agent Code Review Dojo",  blurb: "Spot the smells in AI-written Rust before they reach production." },
-    { slug: "review",         title: "Recall Deck",             blurb: "Spaced-repetition flashcards from every chapter you have read." }
+    { slug: "review",         title: "Recall Deck",             blurb: "Spaced-repetition flashcards from every chapter you have read." },
+    { slug: "story",          title: "Ownership Story",         blurb: "Preview: the Memory X-Ray acted out by crabs, fluffies and the Inspector." }
   ],
   levels: [
     { xp: 0,    name: "Hatchling" },
