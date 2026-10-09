@@ -358,7 +358,7 @@ summary = "Return a slice into the input."
 hint = """
 1. `trim_matches(' ')` removes spaces at both ends. Then `find(' ')` returns an Option with the byte index of the first space. `match` on it: `Some(end)` gives `&s[..end]`, and `None` means the text is one word.
 2. `rfind(' ')` finds the last space. The last word starts one byte after that space. With no space, the last word is the whole text.
-3. Use `match` on the result of `rfind`, the same way: `Some(space) => &s[space + 1..]` and `None => s`. The Option box in Chapter 4 explains Some and None.
+3. Use `match` on the result of `rfind`, the same way: `Some(space) => &s[space + 1..]` and `None => s`. The "Option in one minute" section in Chapter 4 explains Some and None.
 """
 
 [[quest]]
