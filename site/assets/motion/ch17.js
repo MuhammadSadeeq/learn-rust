@@ -102,20 +102,16 @@
     "    back: RefCell<Option<Weak<Node>>>,",
     "}",
     "",
-    "fn node() -> Rc<Node> {",
-    "    Rc::new(Node { next: RefCell::new(None), back: RefCell::new(None) })",
-    "}",
-    "",
     "fn main() {",
     "    {",
-    "        let a = node();",
-    "        let b = node();",
+    "        let a = Rc::new(Node { next: RefCell::new(None), back: RefCell::new(None) });",
+    "        let b = Rc::new(Node { next: RefCell::new(None), back: RefCell::new(None) });",
     "        *a.next.borrow_mut() = Some(Rc::clone(&b));",
     "        *b.next.borrow_mut() = Some(Rc::clone(&a));",
     "    } // a and b leave, and neither count reaches 0: they leak",
     "    {",
-    "        let c = node();",
-    "        let d = node();",
+    "        let c = Rc::new(Node { next: RefCell::new(None), back: RefCell::new(None) });",
+    "        let d = Rc::new(Node { next: RefCell::new(None), back: RefCell::new(None) });",
     "        *c.next.borrow_mut() = Some(Rc::clone(&d));",
     "        *d.back.borrow_mut() = Some(Rc::downgrade(&c));",
     "    } // c and d leave: both are freed",
@@ -123,19 +119,19 @@
   ].join("\n"),
   check: "ok",
   actors: [
-    { id: "ca", cast: "crab", x: 44, y: 84, size: 56, label: "a", hidden: true },
-    { id: "fa", cast: "fluffy", x: 150, y: 104, size: 80, label: "Rc · 1", hidden: true },
-    { id: "fb", cast: "fluffy", x: 150, y: 214, size: 80, label: "Rc · 1", hidden: true },
-    { id: "cb", cast: "crab", x: 44, y: 232, size: 56, label: "b", hidden: true },
-    { id: "cc", cast: "crab", x: 360, y: 84, size: 56, label: "c", hidden: true },
-    { id: "fc", cast: "fluffy", x: 470, y: 104, size: 80, label: "Rc · 1", hidden: true },
-    { id: "fd", cast: "fluffy", x: 470, y: 214, size: 80, label: "Rc · 2", hidden: true },
-    { id: "cd", cast: "crab", x: 360, y: 232, size: 56, label: "d", hidden: true },
+    { id: "ca", cast: "crab", x: 40, y: 70, size: 56, label: "a", hidden: true },
+    { id: "fa", cast: "fluffy", x: 120, y: 100, size: 80, label: "Rc · 1", hidden: true },
+    { id: "fb", cast: "fluffy", x: 250, y: 190, size: 80, label: "Rc · 1", hidden: true },
+    { id: "cb", cast: "crab", x: 250, y: 252, size: 50, label: "b", hidden: true },
+    { id: "cc", cast: "crab", x: 360, y: 70, size: 56, label: "c", hidden: true },
+    { id: "fc", cast: "fluffy", x: 430, y: 100, size: 80, label: "Rc · 1", hidden: true },
+    { id: "fd", cast: "fluffy", x: 550, y: 190, size: 80, label: "Rc · 2", hidden: true },
+    { id: "cd", cast: "crab", x: 550, y: 252, size: 50, label: "d", hidden: true },
   ],
   beats: [
     {
       say: "<p>Block one: two <code>Rc</code> fluffies, <code>a</code> and <code>b</code>. Each crab holds one, and each count is 1.</p>",
-      line: 15,
+      line: 11,
       do: [
         ["pop", "ca", 0],
         ["pop", "fa", 0],
@@ -147,7 +143,7 @@
     },
     {
       say: "<p>Each one now holds the other as well, through <code>next</code>. Both links are strong, so each count goes to 2.</p>",
-      line: 18,
+      line: 14,
       do: [
         ["link", "ab", "fa", "fb", "own", 200],
         ["link", "ba", "fb", "fa", "own", 500],
@@ -157,7 +153,7 @@
     },
     {
       say: "<p>Block one ends and both crabs leave. Each count drops from 2 to 1, because the other fluffy still holds it.</p>",
-      line: 19,
+      line: 15,
       do: [
         ["unlink", "la", 0],
         ["unlink", "lb", 0],
@@ -177,7 +173,7 @@
     },
     {
       say: "<p>Neither fluffy is freed. Nothing ever sets a count to 0, so the memory leaks. Rust treats a leak as safe, so the compiler stays quiet.</p>",
-      line: 19,
+      line: 15,
       do: [
         ["pulse", "fa", 0],
         ["pulse", "fb", 0],
@@ -185,7 +181,7 @@
     },
     {
       say: "<p>Block two has the fix. <code>d</code> points back at <code>c</code> through a <code>Weak</code>, a thin line that adds nothing to the count.</p>",
-      line: 24,
+      line: 20,
       do: [
         ["pop", "cc", 0],
         ["pop", "fc", 0],
@@ -193,15 +189,17 @@
         ["pop", "cd", 300],
         ["pop", "fd", 300],
         ["link", "rd", "cd", "fd", "own", 600],
+        ["link", "rs", "fc", "fd", "own", 700],
         ["link", "rw", "fd", "fc", "arrow", 900],
       ],
     },
     {
       say: "<p>Block two ends. <code>d</code> lets go first, so its count drops to 1. Then <code>c</code> lets go, its count reaches 0, and <code>c</code> is freed. Its link to <code>d</code> goes with it, and <code>d</code> is freed too.</p>",
-      line: 25,
+      line: 21,
       do: [
         ["unlink", "rc", 0],
         ["unlink", "rd", 0],
+        ["unlink", "rs", 0],
         ["hide", "cc", 0],
         ["hide", "cd", 0],
         ["label", "fd", "Rc · 1"],
@@ -212,7 +210,7 @@
     },
     {
       say: "<p>Both fluffies in block two are freed. The one <code>Weak</code> never kept anything alive, so that pair does not leak.</p>",
-      line: 25,
+      line: 21,
       do: [["pulse", "fd", 0]],
     },
   ],

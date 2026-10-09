@@ -21,7 +21,7 @@
     { id: "inner", cast: "tick", opts: { level: 1 }, x: 300, y: 150, size: 80, label: "{ }", hidden: true },
     { id: "x", prop: "pebble", opts: { type: "i32", value: "5" }, x: 300, y: 240, size: 60, label: "x", hidden: true },
     { id: "r", cast: "crab", kind: "ref", x: 500, y: 150, size: 84, label: "r", hidden: true },
-    { id: "insp", cast: "inspector", x: 580, y: 245, size: 90, label: "Inspector", hidden: true },
+    { id: "insp", cast: "inspector", x: 580, y: 222, size: 90, label: "Inspector", hidden: true },
     { id: "err", prop: "errscroll", opts: { label: "E0597" }, x: 500, y: 45, size: 100, z: 5, hidden: true },
   ],
   beats: [
@@ -92,13 +92,13 @@ fn main() {
 }`,
   check: "E0597",
   actors: [
-    { id: "outer", cast: "tick", opts: { level: 1 }, x: 90, y: 150, size: 110, label: "main" },
-    { id: "x", cast: "fluffy", x: 220, y: 90, size: 80, label: "x", hidden: true },
-    { id: "inner", cast: "tick", opts: { level: 1 }, x: 330, y: 215, size: 70, label: "block", hidden: true },
-    { id: "y", cast: "fluffy", x: 430, y: 225, size: 70, label: "y", hidden: true },
-    { id: "result", cast: "crab", kind: "ref", x: 560, y: 150, size: 84, label: "result", hidden: true },
-    { id: "insp", cast: "inspector", x: 560, y: 252, size: 90, label: "Inspector", hidden: true },
-    { id: "err", prop: "errscroll", opts: { label: "E0597" }, x: 560, y: 52, size: 100, z: 5, hidden: true },
+    { id: "outer", cast: "tick", opts: { level: 1 }, x: 80, y: 150, size: 110, label: "main" },
+    { id: "x", cast: "fluffy", x: 210, y: 85, size: 80, label: "x", hidden: true },
+    { id: "inner", cast: "tick", opts: { level: 1 }, x: 320, y: 200, size: 66, label: "block", hidden: true },
+    { id: "y", cast: "fluffy", x: 420, y: 200, size: 60, label: "y", hidden: true },
+    { id: "result", cast: "crab", kind: "ref", x: 540, y: 130, size: 84, label: "result", hidden: true },
+    { id: "insp", cast: "inspector", x: 560, y: 235, size: 90, label: "Inspector", hidden: true },
+    { id: "err", prop: "errscroll", opts: { label: "E0597" }, x: 420, y: 265, size: 96, z: 5, hidden: true },
   ],
   beats: [
     {

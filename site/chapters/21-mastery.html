@@ -46,6 +46,10 @@
 <section>
 <h2 id="macros">Macros: code that writes code</h2>
 
+<style>
+.ox-motion .mo-text.is-arg .mo-text-body { color: var(--oxide-ink); font-weight: 700; }
+</style>
+
 <p>You have called macros since your first program. <code>println!</code>, <code>vec!</code> and <code>format!</code> all end in <code>!</code>, and that bang is the signal. A macro is not a function call. The compiler expands it early, before it type-checks anything. The macro replaces the tokens you wrote with other tokens, and then the compiler checks the result as if you had typed it yourself.</p>
 
 <p>That is why <code>println!</code> can check your format string when you compile. A function receives values, so it has to take a fixed number of arguments with fixed types. A macro receives the raw tokens, so it can accept any number of arguments and any syntax its author allows.</p>

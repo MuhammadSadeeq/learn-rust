@@ -84,6 +84,7 @@
       do: [
         ["poof", "err", 0],
         ["hide", "forge", 0],
+        ["hide", "semi", 0],
         ["label", "y", "y = 4", 0],
         ["pose", "y", "happy", 900, 0],
       ],
@@ -112,7 +113,7 @@ fn main() {
     { id: "cond", text: "if n > 0", x: 190, y: 150 },
     { id: "yes", text: '{ "positive" }', x: 340, y: 70, opacity: 0.4 },
     { id: "no", text: 'else { "zero or less" }', x: 340, y: 230, opacity: 0.4 },
-    { id: "lab", cast: "crab", x: 560, y: 150, size: 96, label: "label", hidden: true },
+    { id: "lab", cast: "crab", x: 500, y: 150, size: 96, label: "label", hidden: true },
     { id: "v1", text: '"positive"', x: 340, y: 150, hidden: true },
     { id: "v2", text: '"zero or less"', x: 340, y: 150, hidden: true },
   ],
@@ -131,7 +132,7 @@ fn main() {
       do: [
         ["pop", "lab", 0],
         ["pop", "v1", 0],
-        ["arc", "v1", { x: 560, y: 44 }, 700, 300, 50],
+        ["arc", "v1", { x: 500, y: 44 }, 700, 300, 50],
         ["hide", "v1", 1000],
         ["label", "lab", 'label = "positive"', 1000],
         ["pose", "lab", "happy", 900, 1000],
@@ -158,7 +159,7 @@ fn main() {
       say: "<p>The <code>else</code> value, <code>\"zero or less\"</code>, reaches <code>label</code> the same way.</p>",
       do: [
         ["pop", "v2", 0],
-        ["arc", "v2", { x: 560, y: 44 }, 700, 300, 50],
+        ["arc", "v2", { x: 500, y: 44 }, 700, 300, 50],
         ["hide", "v2", 1000],
         ["label", "lab", 'label = "zero or less"', 1000],
         ["pose", "lab", "happy", 900, 1000],
