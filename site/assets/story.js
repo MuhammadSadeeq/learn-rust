@@ -71,7 +71,7 @@
           <div class="xr-code st-code"><pre></pre></div>
           <div class="st-stage">
             <div class="st-zone is-stack"><span class="st-zone-title">Stack<small>one tide pool per call</small></span><div class="st-pools"></div></div>
-            <div class="st-zone is-heap"><span class="st-zone-title">Heap<small>where owned data lives</small></span><div class="st-bank"></div><div class="st-alloc" hidden></div></div>
+            <div class="st-zone is-heap"><span class="st-zone-title">Heap<small>owned data</small></span><div class="st-bank"></div><div class="st-alloc" hidden></div></div>
             <pre class="st-term" hidden></pre>
             <div class="st-inspector" hidden><div class="st-bubble"></div><div class="st-guard"></div></div>
             <svg class="st-leashes" aria-hidden="true"></svg>
