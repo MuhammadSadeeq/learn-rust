@@ -181,7 +181,7 @@ button.fg-art:hover { background: var(--surface-3); }
 /* The stamp: real text, a rotated double border, readable in both themes. It
    also styles the poster on the WANTED wall. */
 .ox-boss-stamp {
-  position: absolute; left: 50%; top: 42%; z-index: 2; pointer-events: none;
+  position: absolute; left: 50%; top: 70%; z-index: 2; pointer-events: none;
   padding: 4px 10px 3px; border: 3px double var(--bad); border-radius: 6px;
   background: color-mix(in srgb, var(--surface) 82%, transparent);
   color: var(--bad); font: 900 1.15rem/1 var(--font-display); letter-spacing: 0.14em; text-transform: uppercase; white-space: nowrap;
@@ -212,7 +212,8 @@ button.fg-art:hover { background: var(--surface-3); }
 @media (max-width: 559px) {
   .ox-boss { grid-template-columns: minmax(0, 1fr); justify-items: start; padding: 16px; }
   .ox-boss-art { width: 112px; justify-self: center; }
-  .ox-boss-oxi { top: auto; bottom: 12px; right: 12px; }
+  .ox-boss-oxi { position: static; display: none; margin-top: 8px; }
+  .ox-boss.is-oxi .ox-boss-oxi { display: flex; }
 }
 
 /* ------------------------------------------------------------ WANTED wall */
@@ -221,6 +222,10 @@ button.fg-art:hover { background: var(--surface-3); }
 .ox-wall-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 22px 16px; padding: 8px 4px; }
 @media (max-width: 920px) { .ox-wall-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .ox-wall-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; } }
+@media (max-width: 560px) and (min-width: 341px) {
+  /* Five posters in two columns: center the last one instead of leaving it alone on the left. */
+  .ox-wall-grid > .ox-wanted:last-child:nth-child(odd) { grid-column: 1 / -1; justify-self: center; width: calc(50% - 6px); }
+}
 @media (max-width: 340px) { .ox-wall-grid { grid-template-columns: minmax(0, 1fr); } }
 
 .ox-wanted { min-width: 0; transform: rotate(var(--tilt, 0deg)); transition: transform 0.2s ease; }
@@ -241,14 +246,14 @@ button.fg-art:hover { background: var(--surface-3); }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .ox-wanted-head, :root:not([data-theme="light"]) .ox-wanted-foot { color: #ffb07e; }
 }
-.ox-wanted-art { display: block; width: 100%; margin: 2px 0 0; padding: 4px 0; border: 0; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
+.ox-wanted-art { position: relative; display: block; width: 100%; margin: 2px 0 0; padding: 4px 0; border: 0; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
 .ox-wanted-art > .ca { display: block; width: 100%; max-width: 150px; margin: 0 auto; }
 .ox-wanted-art > .ca > svg { display: block; }
 .ox-wanted-name { margin: 0; font: 800 1.35rem/1.05 var(--font-display); letter-spacing: 0.02em; text-transform: uppercase; color: inherit; }
 .ox-wanted-seen, .ox-wanted-weak { margin: 0; font-size: 0.82rem; line-height: 1.35; }
 .ox-wanted-seen a { color: inherit; font-weight: 700; }
 .ox-wanted-foot { margin: 4px 0 0; font: 800 0.8rem/1.2 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: #7a2e12; }
-.ox-wanted .ox-boss-stamp { top: 52%; font-size: 1rem; }
+.ox-wanted .ox-boss-stamp { top: 68%; font-size: 1rem; }
 
 @keyframes ox-boss-loom {
   0% { opacity: 0; transform: translateY(12px); }

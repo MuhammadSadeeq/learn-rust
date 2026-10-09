@@ -467,12 +467,11 @@
     return `<article class="ox-wanted" data-boss="${b.id}" style="--tilt:${TILT[i % TILT.length]}deg">
       <div class="ox-wanted-paper">
         <p class="ox-wanted-head">Wanted</p>
-        <button type="button" class="ox-wanted-art" aria-label="${esc(b.name)}">${OxCast.boss(b.id)}</button>
+        <button type="button" class="ox-wanted-art" aria-label="${esc(b.name)}">${OxCast.boss(b.id)}<span class="ox-boss-stamp">Defeated</span></button>
         <h3 class="ox-wanted-name">${esc(b.name)}</h3>
         <p class="ox-wanted-seen">Last seen: <a href="${href}">Chapter ${String(b.ch).padStart(2, "0")} · ${esc(q.title || b.quest)}</a></p>
         <p class="ox-wanted-weak">Weak to: ${esc(b.weak)}</p>
         <p class="ox-wanted-foot"></p>
-        <span class="ox-boss-stamp">Defeated</span>
       </div>
     </article>`;
   }
