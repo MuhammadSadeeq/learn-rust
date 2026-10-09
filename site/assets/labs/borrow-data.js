@@ -171,7 +171,7 @@ fn main() {
   {
     id: "n06",
     tier: "novice",
-    chapter: 6,
+    chapter: 9,
     title: "A struct takes the string",
     check: "E0382",
     rule: "move",
@@ -284,7 +284,7 @@ fn main() {
   {
     id: "n09",
     tier: "novice",
-    chapter: 6,
+    chapter: 9,
     title: "Deriving Copy on a struct",
     check: "ok",
     rule: null,
@@ -304,7 +304,7 @@ fn main() {
   {
     id: "n10",
     tier: "novice",
-    chapter: 6,
+    chapter: 9,
     title: "The same struct without Copy",
     check: "E0382",
     rule: "move",
@@ -661,7 +661,7 @@ fn main() {
   {
     id: "a06",
     tier: "adept",
-    chapter: 8,
+    chapter: 13,
     title: "A slice, then clear",
     check: "E0502",
     rule: "shared-mut",
@@ -1466,7 +1466,7 @@ For more information about this error, try \`rustc --explain E0716\`.`,
     left[0] += right[0];
     println!("{v:?}");
 }`,
-    why: "<code>split_at_mut</code> turns one mutable borrow of <code>v</code> into two slices that cover different elements. The borrow checker sees a single borrow, and the standard library uses <code>unsafe</code> inside to make sure the two halves never overlap.",
+    why: "<code>split_at_mut</code> turns one mutable borrow of <code>v</code> into two slices that cover different elements. The borrow checker sees a single borrow, and the standard library uses <code>unsafe</code> inside to hand out the two halves. It checks the split point first, so the halves cannot overlap.",
   },
   {
     id: "m15",

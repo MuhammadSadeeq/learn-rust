@@ -149,15 +149,15 @@
 
   var RUN_LEN = 12, LIVES = 3, PASS = 75, AWARD_XP = 20;
   var TIERS = [
-    { id: "novice", label: "Novice", blurb: "Moves, Copy and scope. Almost all of it is Chapter 6." },
+    { id: "novice", label: "Novice", blurb: "Moves, Copy and scope, mostly from Chapter 6, with a few structs from Chapter 9." },
     { id: "adept", label: "Adept", blurb: "Borrows, slices, iterators and invalidation, from Chapters 6 to 13." },
     { id: "master", label: "Master", blurb: "Lifetimes, closures, threads and smart pointers, plus accepted code that looks wrong." },
-    { id: "mixed", label: "Mixed", blurb: "Puzzles from all three tiers, shuffled together." }
+    { id: "mixed", label: "Mixed", blurb: "Puzzles from every tier, shuffled together. Master puzzles need Chapters 15 to 18." }
   ];
   var TIER_LABEL = { novice: "Novice", adept: "Adept", master: "Master", mixed: "Mixed", review: "Review" };
   var RULES = {
     "move": "Moved a value, then used it again",
-    "shared-mut": "Changed a value while something was still reading it",
+    "shared-mut": "Read and write overlapped: a value was borrowed while another borrow of it was still in use",
     "two-mut": "Two mutable borrows of one value at the same time",
     "assign-borrowed": "Assigned to a value while it was borrowed",
     "dangling": "Kept a reference after the value it points to was gone",
