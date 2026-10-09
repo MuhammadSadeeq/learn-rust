@@ -65,7 +65,7 @@
       ],
     },
     {
-      say: "<p>Second run, with the readers gone first: <code>drop(r1)</code> and <code>drop(r2)</code> come before the call. The count falls back to 0.</p>",
+      say: "<p>Second run. The readers go first: <code>drop(r1)</code> and <code>drop(r2)</code> come before the call. The count falls back to 0.</p>",
       line: 8,
       do: [
         ["unlink", "l1", 0],
@@ -130,7 +130,7 @@
   ],
   beats: [
     {
-      say: "<p>Block one: two <code>Rc</code> fluffies, <code>a</code> and <code>b</code>. Each crab holds one, and each count is 1.</p>",
+      say: "<p>Block one has two <code>Rc</code> fluffies, <code>a</code> and <code>b</code>. Each crab holds one, and each count is 1.</p>",
       line: 11,
       do: [
         ["pop", "ca", 0],
@@ -209,7 +209,7 @@
       ],
     },
     {
-      say: "<p>Both fluffies in block two are freed. The one <code>Weak</code> never kept anything alive. The pair from block one is still on the heap: that is the leak.</p>",
+      say: "<p>Both fluffies in block two are freed. The one <code>Weak</code> never kept anything alive. The pair from block one is still on the heap. That is the leak.</p>",
       line: 21,
       do: [["pulse", "fd", 0]],
     },

@@ -37,7 +37,8 @@ recompiles every time you save, and moves you on when the tests pass.
 
 | | |
 |---|---|
-| **See the invisible** | Memory X-Ray step-throughs, lifetime timelines and a custom interactive in every chapter (a bit-level integer explorer, a UTF-8 byte explorer, a borrow desk, a lazy-iterator conveyor belt, a data-race simulator, an async executor simulator…). |
+| **Meet the cast** | Rustopia's characters each stand for one Rust idea and arrive in the chapter that teaches it: the Forge (the compiler), crabs (variables), Semi (the semicolon), fluffies (heap data) and Alloc (the allocator), the Inspector (the borrow checker), Glyph (UTF-8), Octo (`match`), the Switchman (`?`), Clo (closures), Tick (lifetimes), the Keeper (`Mutex`), the Waiter (async) and more. Your Field Guide collects everyone you have met. |
+| **See the invisible** | Every Memory X-Ray plays as a story (crabs holding leashes to fluffies, the Inspector stamping errors) or as a diagram. Short motion explainers walk through each chapter's key idea beat by beat, and every chapter has its own interactive: feed the Forge, sort pebbles into types, push a Vec until Alloc moves it, pass the leash, cut a UTF-8 caterpillar, pack Clo's backpack, a borrow desk, a data-race simulator, an async kitchen… |
 | **Predict first** | Before every surprising step you commit to an answer. Being wrong first is what makes the right answer stick. |
 | **Become the compiler** | "Does this compile?" checks throughout, real `rustc` errors decoded, and a borrow-checker game. Once you can predict the compiler, Rust stops being a fight. |
 | **Start from PHP** | Every concept starts next to the PHP you write today (PHP 8.5, Laravel 13: arrays, Collections, Eloquent, middleware, queues, enums, property hooks, the pipe operator) and then shows exactly where the comparison breaks. |
@@ -50,6 +51,10 @@ it ships, including the ones that are *supposed* to fail: the checker confirms
 they fail with exactly the error code the page claims.
 
 ## The route
+
+The home page draws the route as an island: five regions, one per act, and a
+trail of 21 stepping stones that fills in as you go. Oxi waits on your current
+chapter, and every level-up is a molt.
 
 | Act | Chapters |
 |---|---|
@@ -71,6 +76,7 @@ worker threads.
 - **PHP → Rust Rosetta**: 119 PHP 8.5 and Laravel 13 habits next to the Rust that replaces them, searchable.
 - **Agent Code Review Dojo**: 18 programs an AI agent wrote. Flag the lines a senior reviewer would question, then compare with the reviewed version.
 - **Recall Deck**: spaced-repetition review of every chapter's cards.
+- **Field Guide**: every character of Rustopia, in color once you have met it, with the Rust idea it stands for.
 
 ## The Forge
 
@@ -99,6 +105,7 @@ commit it with your work. The Forge is about 1,200 lines of std-only Rust (tests
 | `projects/notes-api/` | A complete JSON API in axum, built in Chapter 20, with a map to its Laravel equivalents. |
 | `tools/` | Maintainer scripts (see below). |
 | `docs/AUTHORING.md` | How chapters, quests and labs are written. |
+| `docs/CAST.md` | The characters, what each one stands for, and the motion rules. |
 
 ## For maintainers
 
