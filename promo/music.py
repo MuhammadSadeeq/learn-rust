@@ -81,9 +81,8 @@ def hz(name):
 
 
 def _ssm_lp(x, a):
-    """Exact one-pole y[n] = y[n-1] + a[n]*(x[n]-y[n-1]) computed with a
-    block-wise linear recurrence. For a constant a this is a plain IIR and is
-    evaluated by repeated doubling; for varying a we fall back to chunks."""
+    """Time-varying one-pole: 512-sample chunks use the chunk-mean coefficient,
+    and the filter state is carried across chunks, so the output is continuous."""
     a = np.broadcast_to(np.asarray(a, dtype=np.float64), x.shape)
     if np.ptp(a) < 1e-12:
         return _iir1_const(x, float(a[0]))
@@ -482,7 +481,7 @@ def v_bass(f, dur, amp=1.0, cut=380.0, square_mode=False):
     return fade_edges(amp * y * env_pad(n, 0.003, 0.03), 0.0005, 0.01)
 
 
-def v_pluck(f, dur=0.5, amp=1.0, pan_dummy=0.0):
+def v_pluck(f, dur=0.5, amp=1.0):
     """Arp pluck: saw/square blend with a fast-closing filter and a short decay."""
     n = int(dur * SR)
     t = tvec(n)
@@ -812,11 +811,10 @@ def compose():
         gR.mono(HAT, t, gain=0.12, pan=0.25 if k % 2 else -0.25)
     for i, t in enumerate(C["errorCards"]):
         gF.mono(CARD_A if i % 2 == 0 else CARD_B, t, gain=0.55, pan=-0.8 if i % 2 == 0 else 0.8)
-    SWELL_IN = SWELL
     for t in C["wordHits"]:
         gR.mono(TOM_LOW, t, gain=0.9)
         gD.mono(SUB_DROP, t, gain=0.5)
-        gF.mono(SWELL_IN, t - 0.4, gain=0.35)
+        gF.mono(SWELL, t - 0.4, gain=0.35)
     gF.mono(v_riser(3.5, amp=1.0), C["riserStart"], gain=0.8)
     roll = roll_times(14.0, C["breath"])
     for i, tr in enumerate(roll):
@@ -1023,7 +1021,7 @@ def db(x):
 def section_rms(mono):
     rows = []
     for name in ("s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8"):
-        a, b = C["sections"][name] if "sections" in C else CUE["sections"][name]
+        a, b = CUE["sections"][name]
         seg = mono[t2i(a):t2i(b)]
         rows.append((name, a, b, db(np.sqrt(np.mean(seg * seg))), db(np.max(np.abs(seg)))))
     return rows
@@ -1078,7 +1076,7 @@ def spectrogram_image(mono, path, groups_marks):
     fmax = 12000.0
     kmax = int(fmax / (SR / Wn))
     S = S[:, :kmax]
-    S = np.clip((S + 120.0) / 120.0, 0, 1)  # -120..0 dB
+    S = np.clip((S + 100.0) / 80.0, 0, 1)   # -100..-20 dB visible range
     stops = np.array([[0, 0, 0], [60, 20, 60], [200, 70, 20], [255, 140, 60], [255, 230, 190]], float)
     pos = np.linspace(0, 1, len(stops))
     rgb = np.stack([np.interp(S, pos, stops[:, c]) for c in range(3)], axis=-1).astype(np.uint8)

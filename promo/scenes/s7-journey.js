@@ -146,6 +146,8 @@
 .s7-links path { fill: none; stroke: var(--oxide); stroke-width: 4; stroke-linecap: round; opacity: 0.9; }
 .s7-cap { position: absolute; left: 0; top: 806px; width: 1920px; height: 120px; text-align: center; white-space: nowrap; }
 .s7-cap span { position: absolute; left: 0; right: 0; top: 0; font: 900 96px/1 var(--font-display); text-transform: uppercase; letter-spacing: 0.02em; color: var(--cream); }
+.s7-sea { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; background-color: #0f2638;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='40'><path d='M6 22 q8 -6 16 0 t16 0 M46 8 q8 -6 16 0 t16 0' stroke='%231d3d55' stroke-width='2' fill='none' stroke-linecap='round'/></svg>"); }
 .s7-world { position: absolute; left: 0; top: 0; width: 1000px; height: 660px; transform-origin: 0 0; }
 .s7-world .mp-svg { position: absolute; left: 0; top: 0; width: 1000px; height: 660px; }
 .s7-stone { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; background: #151920;
@@ -232,6 +234,7 @@
           <div class="s7-cap" data-k="cap1"><span>FROM THE PHP YOU KNOW…</span></div>
           <div class="s7-cap" data-k="cap2"><span>…TO THE RUST YOU'LL SHIP.</span></div>
         </div>
+        <div class="s7-sea" data-k="sea"></div>
         <div class="s7-world" data-k="world">
           ${window.OxMap.svg()}
           ${stoneHTML}
@@ -251,6 +254,7 @@
       const counters = ["c21", "c88", "c231"].map((k) => q(k));
       code.style.display = T < cue("mapIn", 50.0) ? "block" : "none";
       world.style.display = T >= cue("mapIn", 50.0) ? "block" : "none";
+      q("sea").style.display = world.style.display;
       counters.forEach((c) => (c.style.display = T >= cue("mapIn", 50.0) ? "block" : "none"));
       if (T < cue("mapIn", 50.0)) renderCode(layer, T);
       else renderMap(layer, T, q);
@@ -322,6 +326,11 @@
     const tx = 960 - cx * sc;
     const ty = 540 - cy * sc;
     world.style.transform = `translate(${round(tx)}px, ${round(ty)}px) scale(${round(sc)})`;
+    // The sea behind the map: the same wave tile (80 x 40 map units), locked to the camera,
+    // so no black shows past the island's edge at any point of the flight.
+    const sea = q("sea");
+    sea.style.backgroundSize = `${(80 * sc).toFixed(2)}px ${(40 * sc).toFixed(2)}px`;
+    sea.style.backgroundPosition = `${round(tx)}px ${round(ty)}px`;
 
     // The map's own region labels read at 2.6x (their text is 26 px or more there). They fade
     // out as the view pulls back, so no label is ever smaller than 26 px on screen.
