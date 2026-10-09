@@ -77,7 +77,9 @@ mod tests {
     }
 
     fn client() -> Client {
+        // The mock runs on this machine, so a system proxy must not see the request.
         Client::builder()
+            .no_proxy()
             .timeout(Duration::from_millis(300))
             .build()
             .expect("client")

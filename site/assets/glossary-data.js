@@ -345,7 +345,7 @@ fn main() {
 }`,
     stdout: "[3, 2, 1]" },
   { id: "as", term: "as", kind: "keyword", ch: 3,
-    def: "Converts a number to another number type. `as` cuts off the bits that do not fit, without an error. Use `From` or `TryFrom` when the conversion may lose data.",
+    def: "Converts a number to another number type, without an error. Going to a narrower integer keeps the low bits, so `300 as u8` is 44. A float is cut toward zero and clamped to the target's range. Use `From` or `TryFrom` when the conversion may lose data.",
     see: ["from", "tryfrom"],
     rust: `fn main() {
     let big: u16 = 300;
@@ -787,7 +787,7 @@ fn main() {
 }`,
     stdout: "4" },
   { id: "statement", term: "Statement", kind: "concept", ch: 4,
-    def: "A line that does something and produces no value, such as `let x = 1;`. A statement ends with a semicolon.",
+    def: "A line that does something and produces no value, such as `let x = 1;`. Most statements end with a semicolon. A block-like statement, such as an `if` or a `match`, does not.",
     see: ["expression", "semicolon"],
     rust: `fn main() {
     let x = 1;
@@ -858,8 +858,8 @@ fn main() {
   { id: "module", term: "Module", kind: "concept", ch: 16,
     def: "A named group of items inside a crate. Modules control privacy and give items their paths, such as `shop::open`. A module can live in its own file.",
     see: ["mod", "pub", "crate"] },
-  { id: "trait", term: "Trait", kind: "concept", ch: 14,
-    def: "A set of methods a type promises to provide. `impl Trait for Type` is the promise. You can write a trait for a type you did not define, within the orphan rule.",
+  { id: "trait", term: "trait", kind: "keyword", ch: 14,
+    def: "Declares a set of methods that a type can promise to provide. Each `impl Summary for Type` is the promise, and the orphan rule says where that `impl` may be written.",
     see: ["impl", "trait-bound", "dyn", "orphan-rule", "e0046"], codes: ["E0046"],
     rust: `trait Summary {
     fn summary(&self) -> String;
@@ -924,7 +924,7 @@ fn main() {
 }`,
     stdout: "5" },
   { id: "dyn-compatibility", term: "Dyn compatibility", kind: "concept", ch: 14,
-    def: "A trait can be used as `dyn Trait` only if its methods do not return `Self` and do not take their own type parameters. A method can be excluded with `where Self: Sized`. Otherwise the compiler reports E0038.",
+    def: "A trait can be used as `dyn Trait` only if the compiler can build one table of its methods for it. A method that returns `Self`, takes a type parameter, or takes `Self` in an argument breaks that, and so does an associated constant. A method can be excluded with `where Self: Sized`. Otherwise the compiler reports E0038.",
     see: ["trait-object", "dyn", "e0038"], codes: ["E0038"],
     rust: `trait Cloner {
     fn dup(&self) -> Self;
@@ -943,7 +943,7 @@ fn main() {
 }`,
     check: "E0038" },
   { id: "orphan-rule", term: "Orphan rule", kind: "concept", ch: 14,
-    def: "You may implement a trait for a type only when the trait or the type is defined in your crate. The rule stops two crates from writing conflicting impls. A newtype is the usual way around it.",
+    def: "You may implement a trait for a type only when the trait or the type is defined in your crate. A local type that appears as a trait parameter, as in `impl From<Mine> for Vec<u8>`, counts as yours too. The rule stops two crates from writing conflicting impls. A newtype is the usual way around it.",
     see: ["trait", "newtype", "e0117"], codes: ["E0117"],
     rust: `impl std::fmt::Display for Vec<u8> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -998,7 +998,7 @@ fn main() {}`,
     stdout: "built\nvisit 1\nvisit 2\nvisit 3\n[2, 4, 6]" },
   /* ---------------------------------------------------------------- concepts: smart pointers, concurrency, async */
   { id: "smart-pointer", term: "Smart pointer", kind: "concept", ch: 17,
-    def: "A type that owns the value it points to and adds behavior. `Box` stores it on the heap, `Rc` counts its owners and `RefCell` checks borrows at runtime. Smart pointers implement `Deref` and `Drop`.",
+    def: "A type that owns the value it points to and adds behavior. `Box` stores it on the heap and `Rc` counts its owners; both implement `Deref` and `Drop`. `RefCell` is not a pointer, but it is used with `Rc` for borrows that are checked at runtime.",
     see: ["box", "rc", "refcell", "deref", "drop-trait"],
     rust: `fn main() {
     let b = Box::new(String::from("heap"));
@@ -1343,7 +1343,7 @@ fn main() {
 }`,
     stdout: "[10, 20, 30]" },
   { id: "fn-trait", term: "Fn", kind: "trait", ch: 13,
-    def: "The trait of a closure that only reads its captures. It can be called again and again.",
+    def: "The trait of a closure that only reads its captures. Every `Fn` closure is also an `FnMut`, and every `FnMut` is also an `FnOnce`. It can be called again and again.",
     see: ["fnmut", "fnonce", "capture", "closure"],
     rust: `fn call<F: Fn() -> i32>(f: F) -> i32 {
     f()
@@ -1355,7 +1355,7 @@ fn main() {
 }`,
     stdout: "8" },
   { id: "fnmut", term: "FnMut", kind: "trait", ch: 13,
-    def: "The trait of a closure that changes a capture. It can be called many times, but calling it needs a `mut` binding.",
+    def: "The trait of a closure that changes a capture. It can be called many times, but calling it needs a `mut` binding. Every `Fn` closure also implements it.",
     see: ["fn-trait", "fnonce", "capture"],
     rust: `fn twice<F: FnMut()>(mut f: F) {
     f();
@@ -1369,7 +1369,7 @@ fn main() {
 }`,
     stdout: "2" },
   { id: "fnonce", term: "FnOnce", kind: "trait", ch: 13,
-    def: "The trait of a closure that moves a capture out of its body. It can be called only once.",
+    def: "The trait of a closure that moves a capture out of its body. A bound `F: FnOnce()` promises only one call. Every `FnMut` and `Fn` closure also implements `FnOnce`, so the bound accepts closures that can be called many times.",
     see: ["fn-trait", "fnmut", "move-closure"],
     rust: `fn once<F: FnOnce() -> String>(f: F) -> String {
     f()
@@ -1563,7 +1563,7 @@ mod tests {
   { id: "cargo-clippy", term: "cargo clippy", kind: "tool", ch: 16,
     def: "Lints the code for common mistakes and for patterns that are not idiomatic. `-- -D warnings` makes any warning fail the build." },
   { id: "cargo-forge", term: "cargo forge", kind: "tool", ch: 1,
-    def: "This course's practice tool. From the repo root it compiles each quest with the real compiler, runs its tests, and moves you on when they pass. `cargo forge hint` gives a hint." },
+    def: "This course's practice tool. From the repo root it compiles each quest with the real compiler, runs its tests, and offers the next quest when they pass (press Enter). `cargo forge hint` gives a hint." },
   { id: "cargo-toml", term: "Cargo.toml", kind: "tool", ch: 1,
     def: "The manifest of a package. It names the package, its edition and its dependencies. Each entry under `[dependencies]` is a crate Cargo should fetch.",
     see: ["cargo-lock", "cargo"] },
@@ -1580,7 +1580,7 @@ mod tests {
     def: "A crate with a derive macro that writes `Display` and `Error` for your error enum. Libraries use it to give their callers typed errors.",
     see: ["error", "anyhow"] },
   { id: "serde", term: "serde", kind: "tool", ch: 20,
-    def: "The standard crate for turning Rust values into JSON and back. `#[derive(Serialize, Deserialize)]` writes the code for a struct or an enum.",
+    def: "The crate that turns Rust values into other formats and back. It is not part of `std`. `#[derive(Serialize, Deserialize)]` writes the code for a struct or an enum. JSON comes from `serde_json`, a separate crate.",
     see: ["extractor", "derive-attr"] },
   { id: "tokio", term: "tokio", kind: "tool", ch: 19,
     def: "The async runtime most projects use. `#[tokio::main]` starts it, and `tokio::spawn` runs a task on it.",
@@ -1613,7 +1613,7 @@ fn main() {
 }`,
     check: "E0015" },
   { id: "e0038", term: "E0038", kind: "error", ch: 14,
-    def: "A trait is used as `dyn Trait`, but one of its methods returns `Self` or takes a type parameter. Such a trait is not dyn compatible.",
+    def: "A trait is used as `dyn Trait`, but the compiler cannot build a trait object for it. A method returns `Self`, takes a type parameter or takes `Self` in an argument, or the trait has an associated constant. Such a trait is not dyn compatible.",
     see: ["dyn-compatibility", "dyn"], codes: ["E0038"],
     rust: `trait Cloner {
     fn dup(&self) -> Self;
@@ -1649,7 +1649,7 @@ impl Area for Square {
 
 fn main() {}`,
     check: "E0046" },
-  { id: "e0061", term: "E0061", kind: "error", ch: 4,
+  { id: "e0061", term: "E0061", kind: "error", ch: null, lab: "errors",
     def: "A call passes the wrong number of arguments. Compare the call with the function's signature.",
     see: ["fn"],
     rust: `fn add(a: i32, b: i32) -> i32 {
@@ -1735,7 +1735,7 @@ fn main() {
     println!("{}", Crab);
 }`,
     check: "E0277" },
-  { id: "e0282", term: "E0282", kind: "error", ch: 12,
+  { id: "e0282", term: "E0282", kind: "error", ch: null, lab: "errors",
     def: "The compiler cannot work out a type from what the code does. Name the type, for example `Vec<i32>`, or write it on the variable.",
     see: ["vec", "collect"], codes: ["E0283"],
     rust: `fn main() {
@@ -1777,7 +1777,7 @@ fn main() {
 }`,
     check: "E0373" },
   { id: "e0381", term: "E0381", kind: "error", ch: 2,
-    def: "A binding is read before it has a value on every path through the code. Give it a value first.",
+    def: "A binding is read, but at least one path to that read never gave it a value. Give it a value on every path first.",
     see: ["let", "binding"],
     rust: `fn main() {
     let x: i32;
@@ -1822,7 +1822,7 @@ impl Speak for Dog {
 fn main() {}`,
     check: "E0407" },
   { id: "e0423", term: "E0423", kind: "error", ch: 1,
-    def: "A name is used as a value, but it names a function, a macro or a struct. For example, `print` is a macro, so the call is `println!`.",
+    def: "A name is used as a value or called like a function, but it names something else: a macro, a module, or a struct with named fields. For example, `print` is not a function. The printing macro is `println!`.",
     see: ["println", "fn"],
     rust: `fn main() {
     print("hello");
@@ -1986,7 +1986,7 @@ fn main() {
     r.push('a');
 }`,
     check: "E0596" },
-  { id: "e0597", term: "E0597", kind: "error", ch: 15,
+  { id: "e0597", term: "E0597", kind: "error", ch: 7,
     def: "A borrow outlives the value it points to. The value is dropped while the reference is still used.",
     see: ["lifetime", "scope"], codes: ["E0597"],
     rust: `fn main() {
@@ -2028,7 +2028,7 @@ fn main() {
     println!("{}", shop::secret());
 }`,
     check: "E0603" },
-  { id: "e0609", term: "E0609", kind: "error", ch: 9,
+  { id: "e0609", term: "E0609", kind: "error", ch: null, lab: "errors",
     def: "A field is read that the type does not have. Check the spelling of the field name.",
     see: ["struct", "e0616"],
     rust: `struct Cart {
@@ -2090,4 +2090,230 @@ fn main() {
     println!("{r}");
 }`,
     check: "E0716" },
+  /* ------------------------------------------- keywords and terms added in fix 3 */
+  { id: "in", term: "in", kind: "keyword", ch: 4,
+    def: "Separates the name from the collection in a `for` loop. `for x in list` takes each item in turn.",
+    see: ["for", "vec"],
+    rust: `fn main() {
+    let names = ["Ada", "Grace"];
+    for name in names {
+        println!("{name}");
+    }
+}`,
+    stdout: "Ada\nGrace" },
+  { id: "ref", term: "ref", kind: "keyword", ch: 7,
+    def: "In a pattern, `ref` borrows the part it names instead of moving it out. The value stays where it was, and it can still be used afterwards.",
+    see: ["borrow", "pattern"],
+    rust: `fn main() {
+    let greeting = Some(String::from("Ada"));
+    if let Some(ref name) = greeting {
+        println!("{name}");
+    }
+    println!("{greeting:?}");
+}`,
+    stdout: "Ada\nSome(\"Ada\")" },
+  { id: "self-type", term: "Self", kind: "keyword", ch: 9,
+    def: "Inside an `impl` block or a trait, `Self` is the type the block is for. `fn empty() -> Self` returns the same type as the impl, so the type name is not written twice.",
+    see: ["self", "impl"],
+    rust: `struct Tank {
+    litres: u32,
+}
+
+impl Tank {
+    fn empty() -> Self {
+        Tank { litres: 0 }
+    }
+}
+
+fn main() {
+    println!("{}", Tank::empty().litres);
+}`,
+    stdout: "0" },
+  { id: "extern", term: "extern", kind: "keyword", ch: 21,
+    def: "An `extern` block declares functions that another language, such as C, provides. Calling them needs `unsafe`. Chapter 21 shows the one place the course uses it." },
+  { id: "ordering", term: "Ordering", kind: "type", ch: 12,
+    def: "The result of a comparison: `Less`, `Equal` or `Greater`. `a.cmp(&b)` gives one, and sorting and `max_by` read it.",
+    see: ["trait", "reverse"],
+    rust: `use std::cmp::Ordering;
+
+fn main() {
+    let order = 1.cmp(&2);
+    match order {
+        Ordering::Less => println!("less"),
+        Ordering::Equal => println!("equal"),
+        Ordering::Greater => println!("greater"),
+    }
+}`,
+    stdout: "less" },
+  { id: "reverse", term: "Reverse", kind: "type", ch: 12,
+    def: "A wrapper that flips the order of what it holds, so `Reverse(a) < Reverse(b)` when `a > b`. Sorting by `Reverse(x)` runs from largest to smallest.",
+    see: ["ordering", "binaryheap"],
+    rust: `use std::cmp::Reverse;
+
+fn main() {
+    let mut v = vec![1, 3, 2];
+    v.sort_by_key(|&x| Reverse(x));
+    println!("{v:?}");
+}`,
+    stdout: "[3, 2, 1]" },
+  { id: "binaryheap", term: "BinaryHeap", kind: "type", ch: 12,
+    def: "A priority queue. `push` adds a value, and `pop` takes out the largest one still in the heap, as an `Option`.",
+    see: ["reverse", "vec"],
+    rust: `use std::collections::BinaryHeap;
+
+fn main() {
+    let mut heap = BinaryHeap::new();
+    heap.push(3);
+    heap.push(7);
+    heap.push(5);
+    println!("{:?}", heap.pop());
+}`,
+    stdout: "Some(7)" },
+  { id: "exitcode", term: "ExitCode", kind: "type", ch: 11,
+    def: "The status a program ends with. `main` can return `ExitCode::SUCCESS` or `ExitCode::FAILURE` instead of `()`.",
+    see: ["result"],
+    rust: `use std::process::ExitCode;
+
+fn main() -> ExitCode {
+    println!("checked");
+    ExitCode::SUCCESS
+}`,
+    stdout: "checked" },
+  { id: "command", term: "Command", kind: "type", ch: 21,
+    def: "Starts another program. `Command::new` names it, `.arg` adds one argument, and `.output()` runs it and waits. The arguments are passed as they are: there is no shell.",
+    see: ["stdio", "exitcode"],
+    rust: `use std::process::Command;
+
+fn main() {
+    let out = Command::new("echo").arg("hello").output().unwrap();
+    print!("{}", String::from_utf8_lossy(&out.stdout));
+}`,
+    stdout: "hello" },
+  { id: "stdio", term: "Stdio", kind: "type", ch: 21,
+    def: "Says where a child program's input or output goes. `Stdio::piped()` gives you a pipe, `Stdio::null()` throws the output away, and `Stdio::inherit()` shares your terminal. Set it before the program starts.",
+    see: ["command"],
+    rust: `use std::process::{Command, Stdio};
+
+fn main() {
+    let status = Command::new("true")
+        .stdout(Stdio::null())
+        .status()
+        .unwrap();
+    println!("{}", status.success());
+}`,
+    stdout: "true" },
+  { id: "lazylock", term: "LazyLock", kind: "type", ch: 18,
+    def: "A value that is built the first time it is used and kept for the rest of the program. Use it for a `static` that needs code to build it, such as a `String`.",
+    see: ["static", "oncelock"],
+    rust: `use std::sync::LazyLock;
+
+static NAME: LazyLock<String> = LazyLock::new(|| String::from("Oxi"));
+
+fn main() {
+    println!("{}", *NAME);
+}`,
+    stdout: "Oxi" },
+  { id: "oncelock", term: "OnceLock", kind: "type", ch: 18,
+    def: "A cell that is filled once, the first time someone asks for it. `get_or_init` runs its closure only while the cell is still empty.",
+    see: ["lazylock", "static"],
+    rust: `use std::sync::OnceLock;
+
+static LEVEL: OnceLock<u32> = OnceLock::new();
+
+fn main() {
+    println!("{}", LEVEL.get_or_init(|| 7));
+    println!("{}", LEVEL.get_or_init(|| 9));
+}`,
+    stdout: "7\n7" },
+  { id: "char", term: "char", kind: "type", ch: 3,
+    def: "One Unicode character, written in single quotes, such as `'c'` or `'é'`. A `char` is four bytes wide. In a `String`, `'é'` takes two bytes.",
+    see: ["string"],
+    rust: `fn main() {
+    let c = 'é';
+    println!("{c} {}", c.len_utf8());
+}`,
+    stdout: "é 2" },
+  { id: "integer", term: "Integer types", kind: "type", ch: 3,
+    def: "Whole numbers in sizes such as `i8`, `u16`, `i32` and `usize`. Arithmetic past the range panics in a debug build. The `wrapping_` methods wrap around on purpose instead.",
+    see: ["as", "char"],
+    rust: `fn main() {
+    let x: u8 = 255;
+    println!("{}", x.wrapping_add(1));
+}`,
+    stdout: "0" },
+  { id: "derive-attribute", term: "#[derive]", kind: "syntax", ch: 9,
+    def: "An attribute that writes a trait's code for you. `#[derive(Debug, Clone)]` above a struct gives it `{:?}` output and `.clone()`. Each derive works only when every field supports that trait.",
+    see: ["debug", "clone", "serialize"],
+    rust: `#[derive(Debug, Clone)]
+struct Point {
+    x: i32,
+}
+
+fn main() {
+    let p = Point { x: 1 };
+    println!("{:?}", p.clone());
+}`,
+    stdout: "Point { x: 1 }" },
+  { id: "anon-lifetime", term: "'_", kind: "syntax", ch: 15,
+    def: "The anonymous lifetime. It means some lifetime here, and the compiler works out which one. `impl Parser<'_>` saves a name you would not use again.",
+    see: ["lifetime"],
+    rust: `struct Parser<'a> {
+    text: &'a str,
+}
+
+impl Parser<'_> {
+    fn len(&self) -> usize {
+        self.text.len()
+    }
+}
+
+fn main() {
+    let p = Parser { text: "hello" };
+    println!("{}", p.len());
+}`,
+    stdout: "5" },
+  { id: "data-race", term: "Data race", kind: "concept", ch: 18,
+    def: "Two threads use the same memory at once, at least one of them writes, and nothing orders the two accesses. Safe Rust does not compile a data race: `Send`, `Sync` and the borrow rules rule it out." },
+  { id: "deadlock", term: "Deadlock", kind: "concept", ch: 18,
+    def: "Two or more threads each wait for a lock that another one holds, so none of them can go on. Taking locks in one fixed order avoids it." },
+  { id: "workspace", term: "Workspace", kind: "concept", ch: 16,
+    def: "A set of packages that share one `Cargo.lock` and one target folder. The root `Cargo.toml` declares it with `[workspace]`, and each member keeps its own `Cargo.toml`." },
+  { id: "pin", term: "Pin", kind: "type", ch: 19,
+    def: "A wrapper that promises the value inside it will not move in memory. Async code needs it for a future that refers to itself. You rarely write `Pin` by hand; `.await` and the runtime handle it." },
+  { id: "select-macro", term: "select!", kind: "syntax", ch: 19,
+    def: "From tokio. It waits for several futures at once and runs the branch of the first one that finishes. The other futures are dropped." },
+  { id: "joinset", term: "JoinSet", kind: "type", ch: 19,
+    def: "From tokio. A set of spawned tasks that you wait for one at a time with `join_next`. Dropping the set aborts the tasks still running." },
+  { id: "cancellation-token", term: "CancellationToken", kind: "type", ch: 19,
+    def: "From tokio-util. A flag that one task sets with `cancel()`. Other tasks wait on it with `cancelled()` and stop their work when it is set." },
+  { id: "serialize", term: "Serialize", kind: "trait", ch: 20,
+    def: "One of the serde traits. `#[derive(Serialize, Deserialize)]` writes the code that turns a struct into a data format and back. The format itself comes from a crate such as `serde_json`." },
+  { id: "router", term: "Router", kind: "type", ch: 20,
+    def: "The axum type that matches a request's method and path, such as `POST /notes`, to a handler. `with_state` gives every handler the same shared state." },
+  { id: "json-extractor", term: "Json", kind: "type", ch: 20,
+    def: "In axum, `Json` reads a request body into a type, as in the argument `Json(body): Json<NewNote>`. As a response, it writes a value out as JSON." },
+  { id: "reqwest", term: "reqwest", kind: "tool", ch: 20,
+    def: "The HTTP client crate. `Client` sends requests, and `error_for_status` turns 4xx and 5xx answers into errors." },
+  { id: "clap", term: "clap", kind: "tool", ch: 16,
+    def: "A crate that reads command-line arguments into a struct. `#[derive(Parser)]` writes the parsing, the help text and the error messages from the types." },
+  { id: "typestate", term: "Typestate", kind: "concept", ch: 21,
+    def: "A design where the state of a value is part of its type, so a call that is not allowed in that state does not compile. A builder can use it to make required fields come first." },
+
+  /* ----------------------------------------- keywords the course uses */
+  { id: "true", term: "true", kind: "keyword", ch: 3,
+    def: "The boolean value true. Its type is `bool`, which holds either `true` or `false`.",
+    see: ["integer"],
+    rust: `fn main() {
+    let ok = true;
+    println!("{}", ok);
+}`,
+    stdout: "true" },
+  { id: "false", term: "false", kind: "keyword", ch: 3,
+    def: "The boolean value false. `!` flips a bool, so `!false` is true.",
+    see: ["true"],
+    rust: `fn main() {
+    let done = false;
+    println!("{}", !done);
+}`,
+    stdout: "true" },
 ];

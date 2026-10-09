@@ -88,7 +88,7 @@ impl Agent {
         &self,
         prompt: &str,
         cancel: &CancellationToken,
-        on_text: &mut dyn FnMut(&str),
+        on_text: &mut (dyn FnMut(&str) + Send),
     ) -> Result<Answer, AgentError> {
         let mut messages = vec![Message::user_text(prompt)];
 
@@ -148,7 +148,7 @@ impl Agent {
         &self,
         request: &Request,
         cancel: &CancellationToken,
-        on_text: &mut dyn FnMut(&str),
+        on_text: &mut (dyn FnMut(&str) + Send),
     ) -> Result<Turn, AgentError> {
         let mut show = |event: &StreamEvent| {
             if let StreamEvent::TextDelta { text } = event {

@@ -155,4 +155,11 @@ mod tests {
         let events = parser.push("data: a\n\ndata: b\n\n".as_bytes());
         assert_eq!(events, vec![event(None, "a"), event(None, "b")]);
     }
+
+    #[test]
+    fn spaces_before_the_newline_are_data() {
+        // Only the '\r' of a CRLF line ending is removed. A space before the '\n' is data.
+        let mut parser = SseParser::new();
+        assert_eq!(parser.push("data: a \n\n".as_bytes()), vec![event(None, "a ")]);
+    }
 }

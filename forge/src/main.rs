@@ -9,6 +9,7 @@
 //! spawning) is something the course teaches.
 
 mod art;
+mod json;
 mod quests;
 mod runner;
 mod ui;
@@ -22,7 +23,7 @@ use std::thread;
 use std::time::{Duration, SystemTime};
 
 use quests::{Progress, Quest};
-use runner::Outcome;
+use runner::{Outcome, Stage};
 use ui::{Chapters, Style};
 
 const HELP: &str = "\
@@ -35,7 +36,7 @@ USAGE
     cargo forge check [QUEST]   compile and test one quest once
     cargo forge verify          re-check every quest and update your progress
     cargo forge solution QUEST  show where the reference solution is
-    cargo forge reset QUEST     restore a quest file to its original state (git)
+    cargo forge reset QUEST     restore a quest's tracked files (new files are kept)
     cargo forge help            this text
 
 IN WATCH MODE
@@ -309,19 +310,61 @@ fn verify(ctx: &mut Ctx, solutions: bool) -> Result<ExitCode, Box<dyn std::error
 fn reset(ctx: &mut Ctx, i: usize) -> io::Result<()> {
     let q = ctx.quests[i].clone();
     let rel = Path::new("quests").join(&q.path);
+    // A file you added to the index that HEAD does not have would be deleted by
+    // the restore. Unstage it first: it stays on disk, untracked, and is listed
+    // below with the other files the reset keeps.
+    let added = Command::new("git")
+        .args([
+            "diff",
+            "--cached",
+            "--name-only",
+            "--diff-filter=A",
+            "HEAD",
+            "--",
+        ])
+        .arg(&rel)
+        .current_dir(&ctx.root)
+        .output()?;
+    for file in String::from_utf8_lossy(&added.stdout).lines() {
+        Command::new("git")
+            .args(["rm", "--cached", "--quiet", "--"])
+            .arg(file)
+            .current_dir(&ctx.root)
+            .status()?;
+    }
+
+    // `git restore` puts back every tracked file under the quest, in the index
+    // and in the worktree. A file git does not track is never touched; those are
+    // listed below.
     let status = Command::new("git")
-        .arg("checkout")
-        .arg("--")
+        .args(["restore", "--source=HEAD", "--staged", "--worktree", "--"])
         .arg(&rel)
         .current_dir(&ctx.root)
         .status()?;
-    if status.success() {
-        ctx.progress.mark(&q, false)?;
-        println!("Restored {} to its original state.", rel.display());
-    } else {
+    if !status.success() {
         println!(
             "git couldn't restore {}. Is this a git checkout?",
             rel.display()
+        );
+        return Ok(());
+    }
+    ctx.progress.mark(&q, false)?;
+    println!("Restored {} to its original state.", rel.display());
+
+    let untracked = Command::new("git")
+        .args(["ls-files", "--others", "--exclude-standard", "--"])
+        .arg(&rel)
+        .current_dir(&ctx.root)
+        .output()?;
+    let untracked = String::from_utf8_lossy(&untracked.stdout);
+    let kept: Vec<&str> = untracked.lines().collect();
+    if !kept.is_empty() {
+        println!("Kept {} new file(s) that git does not track:", kept.len());
+        for file in kept {
+            println!("  {file}");
+        }
+        println!(
+            "Reset never deletes your own files. Remove them yourself if you don't want them."
         );
     }
     Ok(())
@@ -523,13 +566,28 @@ fn report(ctx: &Ctx, q: &Quest, outcome: &Outcome) {
                 println!("{}", s.dim(&format!("… {hidden} more lines.")));
             }
         }
-        Outcome::TimedOut => {
+        Outcome::TimedOut(Stage::Run) => {
             println!(
                 "{}",
-                s.red("✗ The tests ran for 20 seconds without finishing.")
+                s.red(&format!(
+                    "✗ The tests ran for {} seconds without finishing.",
+                    runner::TEST_TIMEOUT.as_secs()
+                ))
             );
             println!(
-                "Look for a loop that never ends, such as a `loop` with no `break` or a counter that never changes."
+                "Look for a loop that never ends, such as a `loop` with no `break`. An `.await` that never completes does the same."
+            );
+        }
+        Outcome::TimedOut(Stage::Build) => {
+            println!(
+                "{}",
+                s.red(&format!(
+                    "✗ Building the quest took more than {} minutes, so the Forge stopped it.",
+                    runner::CARGO_TIMEOUT.as_secs() / 60
+                ))
+            );
+            println!(
+                "The first build downloads and compiles the crates, and a slow connection is the usual cause. Run `cargo forge check` again. Work that finished is kept, so the next check starts further along."
             );
         }
         Outcome::Passed { tests, warnings } => {
@@ -591,7 +649,7 @@ fn boss_panel_for(ctx: &Ctx, q: &Quest, b: &art::Boss, outcome: &Outcome) -> Opt
             let total = full_hp(ctx, q);
             (total, total, b.taunt)
         }
-        Outcome::TimedOut => {
+        Outcome::TimedOut(_) => {
             let total = full_hp(ctx, q);
             (total, total, art::TIMEOUT_TAUNT)
         }

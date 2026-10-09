@@ -108,4 +108,49 @@ mod tests {
             }
         );
     }
+
+    /// Each job records the thread that ran it. A fn pointer cannot capture
+    /// anything, so the record is a static. Only the test below uses it.
+    static WHO: Mutex<Vec<thread::ThreadId>> = Mutex::new(Vec::new());
+
+    fn remember_thread(x: u64) -> u64 {
+        // Slow enough that the jobs spread across the workers.
+        thread::sleep(Duration::from_millis(5));
+        WHO.lock().unwrap().push(thread::current().id());
+        x
+    }
+
+    #[test]
+    fn jobs_run_on_several_worker_threads_not_on_the_callers() {
+        WHO.lock().unwrap().clear();
+        let run = run_pool((1..=12).collect(), 3, 2, remember_thread);
+        assert_eq!(run.results.len(), 12);
+        let ids: std::collections::HashSet<thread::ThreadId> =
+            WHO.lock().unwrap().iter().copied().collect();
+        assert!(ids.len() >= 2, "only {} thread ran the jobs", ids.len());
+        assert!(
+            !ids.contains(&thread::current().id()),
+            "a job ran on the test's own thread"
+        );
+    }
+
+    fn sleepy_square(x: u64) -> u64 {
+        thread::sleep(Duration::from_millis(50));
+        x * x
+    }
+
+    #[test]
+    fn a_slow_worker_fills_the_queue_but_never_passes_the_bound() {
+        // One worker that takes 50 ms a job, and a queue of 2. The producer is
+        // far faster, so the queue fills and the count reaches 2. It can never
+        // pass queue + workers, which is 3 here.
+        let run = run_pool((1..=6).collect(), 1, 2, sleepy_square);
+        assert_eq!(run.results.len(), 6);
+        assert!(
+            run.max_waiting >= 2,
+            "the queue never filled: max_waiting was {}",
+            run.max_waiting
+        );
+        assert!(run.max_waiting <= 3, "max_waiting was {}", run.max_waiting);
+    }
 }

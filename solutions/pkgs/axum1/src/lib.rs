@@ -11,8 +11,9 @@
 //    - create_note stores body.text in the shared list and answers with the
 //      note's position as {"id": N}. The first note has id 0. If the text is
 //      empty after trim(), it returns AppError::EmptyText and stores nothing.
-//    - impl IntoResponse for AppError answers 400 Bad Request with the JSON
-//      body {"error":"text is empty"}.
+//    - impl IntoResponse for AppError answers 422 Unprocessable Entity with the
+//      JSON body {"error":"text is empty"}. The body is valid JSON with a
+//      refused value, so the status is 422, not 400. Chapter 20 explains why.
 //    - app builds a Router with POST /notes, with the state attached.
 //
 //  The tests send requests straight to the Router with tower's oneshot, so no
@@ -56,7 +57,7 @@ impl IntoResponse for AppError {
             AppError::EmptyText => "text is empty",
         };
         (
-            StatusCode::BAD_REQUEST,
+            StatusCode::UNPROCESSABLE_ENTITY,
             Json(serde_json::json!({ "error": message })),
         )
             .into_response()
@@ -90,8 +91,15 @@ mod tests {
     use axum::http::Request;
     use tower::ServiceExt;
 
-    /// Sends one POST /notes request to the router and returns the status and body text.
-    async fn post_note(app: &Router, json: &str) -> (StatusCode, String) {
+    /// What the router answered: the status, the content type and the body text.
+    struct Answer {
+        status: StatusCode,
+        content_type: String,
+        body: String,
+    }
+
+    /// Sends one POST /notes request to the router and returns the answer.
+    async fn post_note(app: &Router, json: &str) -> Answer {
         let request = Request::builder()
             .method("POST")
             .uri("/notes")
@@ -100,17 +108,27 @@ mod tests {
             .expect("a valid request");
         let response = app.clone().oneshot(request).await.expect("the router answers");
         let status = response.status();
+        let content_type = response
+            .headers()
+            .get("content-type")
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or("")
+            .to_string();
         let bytes = to_bytes(response.into_body(), 1024).await.expect("a body");
-        (status, String::from_utf8(bytes.to_vec()).expect("utf-8"))
+        Answer {
+            status,
+            content_type,
+            body: String::from_utf8(bytes.to_vec()).expect("utf-8"),
+        }
     }
 
     #[tokio::test]
     async fn saves_a_note_and_returns_its_id() {
         let state = AppState::default();
         let app = app(state.clone());
-        let (status, body) = post_note(&app, r#"{"text":"buy milk"}"#).await;
-        assert_eq!(status, StatusCode::OK);
-        assert_eq!(body, r#"{"id":0}"#);
+        let answer = post_note(&app, r#"{"text":"buy milk"}"#).await;
+        assert_eq!(answer.status, StatusCode::OK);
+        assert_eq!(answer.body, r#"{"id":0}"#);
         assert_eq!(state.notes.lock().unwrap().len(), 1);
     }
 
@@ -118,24 +136,27 @@ mod tests {
     async fn ids_count_up_from_zero() {
         let app = app(AppState::default());
         post_note(&app, r#"{"text":"first"}"#).await;
-        let (_, body) = post_note(&app, r#"{"text":"second"}"#).await;
-        assert_eq!(body, r#"{"id":1}"#);
+        let answer = post_note(&app, r#"{"text":"second"}"#).await;
+        assert_eq!(answer.body, r#"{"id":1}"#);
     }
 
     #[tokio::test]
-    async fn blank_text_is_a_400_and_stores_nothing() {
+    async fn blank_text_is_a_422_json_answer_and_stores_nothing() {
+        // The body is valid JSON, but its value is refused, so the status is
+        // 422, not 400. A 400 is for a body that is not JSON at all.
         let state = AppState::default();
         let app = app(state.clone());
-        let (status, body) = post_note(&app, r#"{"text":"   "}"#).await;
-        assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert_eq!(body, r#"{"error":"text is empty"}"#);
+        let answer = post_note(&app, r#"{"text":"   "}"#).await;
+        assert_eq!(answer.status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(answer.content_type, "application/json");
+        assert_eq!(answer.body, r#"{"error":"text is empty"}"#);
         assert!(state.notes.lock().unwrap().is_empty());
     }
 
     #[tokio::test]
     async fn a_body_without_text_is_rejected_by_axum() {
         let app = app(AppState::default());
-        let (status, _) = post_note(&app, r#"{"body":"no text field"}"#).await;
-        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        let answer = post_note(&app, r#"{"body":"no text field"}"#).await;
+        assert_eq!(answer.status, StatusCode::UNPROCESSABLE_ENTITY);
     }
 }

@@ -103,4 +103,11 @@ mod tests {
         assert_eq!(err.kind(), ErrorKind::DisplayHelp);
         assert_eq!(err.exit_code(), 0);
     }
+
+    #[test]
+    fn the_short_flag_v_works() {
+        let cli = Cli::try_parse_from(["notes", "-v", "list"]).expect("valid input");
+        assert!(cli.verbose);
+        assert_eq!(cli.command, Command::List);
+    }
 }

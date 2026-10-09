@@ -119,4 +119,22 @@ mod tests {
         run_limited(vec![5, 6, 7], 1, Arc::clone(&gauge)).await;
         assert_eq!(gauge.peak(), 1);
     }
+
+    /// A job that waits for a permit is not a task yet. A solution that spawns
+    /// every job first, and makes each one wait inside its task, has all 12
+    /// tasks alive at once.
+    #[tokio::test]
+    async fn no_more_tasks_exist_than_the_limit() {
+        let gauge = Arc::new(Gauge::new());
+        let run = tokio::spawn(run_limited((0..12).collect(), 3, Arc::clone(&gauge)));
+        let metrics = tokio::runtime::Handle::current().metrics();
+        let mut most_alive = 0;
+        while !run.is_finished() {
+            most_alive = most_alive.max(metrics.num_alive_tasks());
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+        assert_eq!(run.await.expect("the run finishes").len(), 12);
+        // The run is one task, and the limit allows 3 jobs at once.
+        assert!(most_alive <= 4, "{most_alive} tasks were alive at once");
+    }
 }

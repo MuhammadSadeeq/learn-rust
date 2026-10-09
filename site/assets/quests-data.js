@@ -418,7 +418,7 @@ window.OX_QUESTS = [
   "summary": "Count from any reader, one line at a time, the way wc does.",
   "boss": false,
   "kind": "std",
-  "tests": 5
+  "tests": 7
  },
  {
   "name": "vecs1",
@@ -628,7 +628,7 @@ window.OX_QUESTS = [
   "summary": "Describe a command line as types and let clap parse it.",
   "boss": false,
   "kind": "cargo",
-  "tests": 7
+  "tests": 8
  },
  {
   "name": "box1",
@@ -728,7 +728,7 @@ window.OX_QUESTS = [
   "summary": "Bound the job queue with sync_channel, and count how full it gets.",
   "boss": false,
   "kind": "std",
-  "tests": 4
+  "tests": 6
  },
  {
   "name": "async1",
@@ -768,7 +768,7 @@ window.OX_QUESTS = [
   "summary": "Limit concurrent jobs with a Semaphore and acquire_owned.",
   "boss": false,
   "kind": "cargo",
-  "tests": 4
+  "tests": 5
  },
  {
   "name": "sse1",
@@ -778,7 +778,7 @@ window.OX_QUESTS = [
   "summary": "Turn chunks of bytes into events, even when a chunk ends mid-line.",
   "boss": false,
   "kind": "std",
-  "tests": 8
+  "tests": 9
  },
  {
   "name": "http1",
@@ -825,7 +825,7 @@ window.OX_QUESTS = [
   "chapter": 20,
   "path": "pkgs/axum1",
   "title": "A handler with state and errors",
-  "summary": "Read state and JSON in a handler, and send an error as a 400 response.",
+  "summary": "Read state and JSON in a handler, and send an error as a 422 response.",
   "boss": false,
   "kind": "cargo",
   "tests": 4
@@ -868,7 +868,7 @@ window.OX_QUESTS = [
   "summary": "Spawn a child, poll it with try_wait, and kill it at the deadline.",
   "boss": false,
   "kind": "std",
-  "tests": 4
+  "tests": 5
  },
  {
   "name": "boss5_job_queue",

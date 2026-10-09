@@ -18,7 +18,7 @@
 //
 //  Reading can fail, so count returns io::Result, and each read_line gets a ?.
 //  io::Result<T> is Result<T, io::Error>. The method needs `mut` on the input,
-//  because it changes the reader. Chapter 14 explains the R: BufRead bound.
+//  because it changes the reader. Chapter 14 explains trait bounds like `R: BufRead`.
 //  Don't edit the tests.
 //
 //  cargo forge          check your work (re-runs every time you save)
@@ -112,6 +112,82 @@ mod tests {
                 lines: 2,
                 words: 0,
                 bytes: 5,
+            }
+        );
+    }
+
+    use std::io::{BufReader, Read};
+
+    /// Hands out one line, then fails the way a broken disk does.
+    struct FailsAfterOneLine {
+        sent: bool,
+    }
+
+    impl Read for FailsAfterOneLine {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            if self.sent {
+                return Err(io::Error::other("the disk went away"));
+            }
+            self.sent = true;
+            let line = b"one two\n";
+            buf[..line.len()].copy_from_slice(line);
+            Ok(line.len())
+        }
+    }
+
+    #[test]
+    fn a_read_error_midway_is_returned() {
+        let input = BufReader::new(FailsAfterOneLine { sent: false });
+        assert!(count(input).is_err(), "the read error was swallowed");
+    }
+
+    /// Two hundred thousand lines, made as they are read, so the test needs no
+    /// file. Its `read` refuses bulk reads: a count that takes all the input at
+    /// once with read_to_string or read_to_end fails here.
+    struct Lines {
+        left: usize,
+        line: Vec<u8>,
+        pos: usize,
+    }
+
+    impl Read for Lines {
+        fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
+            Err(io::Error::other("read the input one line at a time"))
+        }
+    }
+
+    impl BufRead for Lines {
+        fn fill_buf(&mut self) -> io::Result<&[u8]> {
+            if self.pos == self.line.len() {
+                self.line.clear();
+                self.pos = 0;
+                if self.left > 0 {
+                    self.left -= 1;
+                    self.line.extend_from_slice(b"word\n");
+                }
+            }
+            Ok(&self.line[self.pos..])
+        }
+
+        fn consume(&mut self, amount: usize) {
+            self.pos += amount;
+        }
+    }
+
+    #[test]
+    fn a_long_input_is_counted_one_line_at_a_time() {
+        let input = Lines {
+            left: 200_000,
+            line: Vec::new(),
+            pos: 0,
+        };
+        let counts = count(input).expect("the count reads line by line");
+        assert_eq!(
+            counts,
+            Counts {
+                lines: 200_000,
+                words: 200_000,
+                bytes: 1_000_000,
             }
         );
     }

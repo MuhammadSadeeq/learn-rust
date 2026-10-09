@@ -3,9 +3,12 @@
 //! A single-file quest is compiled with `rustc --test` and run as a test
 //! binary, so one broken quest can never stop another from building.
 //!
-//! A cargo quest is a small package under `quests/pkgs/`. The Forge runs
-//! `cargo test` on it. Every cargo quest builds into the same directory,
-//! `target/forge-pkgs`, so a crate such as tokio is compiled once.
+//! A cargo quest is a small package under `quests/pkgs/`. The Forge builds its
+//! test programs with `cargo test --no-run`, under a long limit, because the
+//! first build downloads crates. Then it runs each test program itself, under
+//! the same short limit as a single-file quest. Every cargo quest builds into
+//! the same directory, `target/forge-pkgs`, so a crate such as tokio is
+//! compiled once.
 
 use std::fs;
 use std::io::{self, Read};
@@ -15,13 +18,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::json;
 use crate::quests::{Kind, Quest};
 
-/// How long a single-file quest's tests may run before the Forge assumes an infinite loop.
-const TEST_TIMEOUT: Duration = Duration::from_secs(20);
+/// How long one test program may run before the Forge assumes an infinite
+/// loop. A single-file quest has one program; a cargo quest may have several.
+pub const TEST_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Cargo quests build their crates first, which can take minutes on a cold cache.
-const CARGO_TIMEOUT: Duration = Duration::from_secs(15 * 60);
+pub const CARGO_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 
 /// The shared build directory for cargo quests, relative to the repo root.
 const PKG_TARGET: &str = "target/forge-pkgs";
@@ -39,8 +44,8 @@ pub enum Outcome {
         output: String,
         counts: Option<(usize, usize)>,
     },
-    /// The tests did not finish in time.
-    TimedOut,
+    /// A time limit passed. The stage says which step was running.
+    TimedOut(Stage),
     /// Compiled and every test passed.
     Passed { tests: usize, warnings: String },
 }
@@ -49,6 +54,15 @@ impl Outcome {
     pub fn passed(&self) -> bool {
         matches!(self, Outcome::Passed { .. })
     }
+}
+
+/// The step that ran out of time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Stage {
+    /// Cargo was building the package, which downloads and compiles crates.
+    Build,
+    /// A test program was running.
+    Run,
 }
 
 /// Compiles and tests one quest. `location` is what to test: the learner's
@@ -91,8 +105,8 @@ fn run_single(root: &Path, quest: &Quest, file: &Path, color: bool) -> io::Resul
     test.args(["--test-threads", "1", "--color", color_arg(color)])
         .env("RUST_BACKTRACE", "0")
         .current_dir(root);
-    Ok(match run_limited(&mut test, TEST_TIMEOUT, false)? {
-        None => Outcome::TimedOut,
+    Ok(match run_limited(&mut test, TEST_TIMEOUT, true)? {
+        None => Outcome::TimedOut(Stage::Run),
         Some(done) if done.status.success() => Outcome::Passed {
             tests: count_passed(&done.stdout),
             warnings: diagnostics,
@@ -104,7 +118,9 @@ fn run_single(root: &Path, quest: &Quest, file: &Path, color: bool) -> io::Resul
     })
 }
 
-/// Runs `cargo test` on the package in `package`, sharing one build directory.
+/// Builds the package's test programs with `cargo test --no-run`, then runs
+/// each one under TEST_TIMEOUT, the way cargo would: in order, stopping at the
+/// first program that fails.
 fn run_cargo(root: &Path, quest: &Quest, package: &Path, color: bool) -> io::Result<Outcome> {
     let target = root.join(PKG_TARGET);
     if !target.exists() && !BUILD_NOTE_SHOWN.swap(true, Ordering::Relaxed) {
@@ -112,35 +128,86 @@ fn run_cargo(root: &Path, quest: &Quest, package: &Path, color: bool) -> io::Res
     }
     forget_package(root, &quest.name, package);
 
-    let mut cargo_test = Command::new(cargo());
-    cargo_test
-        .args(["test", "--manifest-path"])
+    // Build only. The JSON on stdout names each test program; the human-readable
+    // diagnostics go to stderr, as they always did.
+    let mut build = Command::new(cargo());
+    build
+        .args(["test", "--no-run", "--manifest-path"])
         .arg(package.join("Cargo.toml"))
-        .args(["--color", color_arg(color)])
+        .args(["--message-format=json-render-diagnostics", "--color"])
+        .arg(color_arg(color))
         .env("CARGO_TARGET_DIR", &target)
         .env("RUST_BACKTRACE", "0")
         .current_dir(root);
-    let run =
-        run_limited(&mut cargo_test, CARGO_TIMEOUT, true).map_err(|e| missing_tool(e, "cargo"))?;
+    let Some(built) =
+        run_limited(&mut build, CARGO_TIMEOUT, true).map_err(|e| missing_tool(e, "cargo"))?
+    else {
+        return Ok(Outcome::TimedOut(Stage::Build));
+    };
+    if !built.status.success() {
+        // A failed build: the crates could not be fetched, or the code does not compile.
+        return Ok(Outcome::CompileError {
+            output: without_progress(&built.stderr),
+        });
+    }
+    let programs = test_programs(&built.stdout);
+    if programs.is_empty() {
+        return Ok(Outcome::CompileError {
+            output: "cargo built no test programs for this package.".to_string(),
+        });
+    }
 
-    Ok(match run {
-        None => Outcome::TimedOut,
-        Some(done) if done.status.success() => Outcome::Passed {
-            tests: count_passed(&done.stdout),
-            warnings: done.stderr,
-        },
-        // Tests ran and some failed.
-        Some(done) if ran_tests(&done.stdout) => Outcome::TestsFailed {
-            counts: count_results(&done.stdout),
-            // The test output is what the learner needs. Compiler warnings would fill
-            // the first lines and hide the failing test.
-            output: done.stdout,
-        },
-        // No test summary, so the build failed (or the crates could not be fetched).
-        Some(done) => Outcome::CompileError {
-            output: without_progress(&done.stderr),
-        },
+    let mut tests = 0;
+    for program in programs {
+        // Cargo runs each test program from the package directory, with this variable set.
+        let mut test = Command::new(&program);
+        test.args(["--color", color_arg(color)])
+            .env("RUST_BACKTRACE", "0")
+            .env("CARGO_MANIFEST_DIR", package)
+            .current_dir(package);
+        match run_limited(&mut test, TEST_TIMEOUT, true)? {
+            None => return Ok(Outcome::TimedOut(Stage::Run)),
+            Some(done) if done.status.success() => tests += count_passed(&done.stdout),
+            Some(done) => {
+                return Ok(Outcome::TestsFailed {
+                    counts: count_results(&done.stdout),
+                    output: format!("{}{}", done.stdout, done.stderr),
+                });
+            }
+        }
+    }
+    Ok(Outcome::Passed {
+        tests,
+        // Compiler warnings from the build. Cargo's progress lines are not warnings.
+        warnings: built.stderr,
     })
+}
+
+/// The paths of the test programs cargo built. Cargo prints one JSON message
+/// per line. A test program is an artifact whose `profile.test` is true. Its
+/// `target.test` is not enough: dependencies have it too, and their profile is
+/// not a test profile.
+fn test_programs(json_lines: &str) -> Vec<PathBuf> {
+    json_lines
+        .lines()
+        .filter_map(json::parse)
+        .filter(|message| {
+            message.get("reason").and_then(json::Value::as_str) == Some("compiler-artifact")
+        })
+        .filter(|message| {
+            message
+                .get("profile")
+                .and_then(|profile| profile.get("test"))
+                .and_then(json::Value::as_bool)
+                == Some(true)
+        })
+        .filter_map(|message| {
+            message
+                .get("executable")
+                .and_then(json::Value::as_str)
+                .map(PathBuf::from)
+        })
+        .collect()
 }
 
 /// Forgets the package's own build and keeps its dependencies. The learner's
@@ -169,8 +236,8 @@ struct Finished {
 
 /// Runs `command` and waits up to `limit`. Returns None when the limit passed,
 /// after killing the process. With `own_group`, on Unix, the process gets a
-/// group of its own, so the kill also reaches the programs it started. Cargo
-/// starts the test binaries, so cargo quests need that.
+/// group of its own, so the kill also reaches the programs it started. Test
+/// programs and cargo both start other programs, so both use the group.
 fn run_limited(
     command: &mut Command,
     limit: Duration,
@@ -213,6 +280,12 @@ fn run_limited(
         }
         thread::sleep(Duration::from_millis(20));
     };
+    // The child exited in time, but a program it started may still hold our
+    // pipes open. Stop those too, or reading the output would wait for them
+    // without any limit.
+    if own_group {
+        kill_group(child.id());
+    }
     Ok(Some(Finished {
         status,
         stdout: out_reader.join().unwrap_or_default(),
@@ -294,11 +367,6 @@ fn crate_name(name: &str) -> String {
     name.chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
         .collect()
-}
-
-/// True when a test binary ran at all: libtest always prints a "test result:" line.
-fn ran_tests(stdout: &str) -> bool {
-    strip_ansi(stdout).contains("test result: ")
 }
 
 /// Cargo's progress lines ("   Compiling clap1 v0.1.0") are noise on a
@@ -426,8 +494,6 @@ mod tests {
     #[test]
     fn no_summary_means_no_counts() {
         assert_eq!(count_results("thread 'main' panicked at x"), None);
-        assert!(!ran_tests("thread 'main' panicked at x"));
-        assert!(ran_tests("test result: ok. 0 passed; 0 failed"));
     }
 
     #[test]
@@ -444,6 +510,30 @@ mod tests {
     #[test]
     fn crate_names_are_identifiers() {
         assert_eq!(crate_name("boss1-receipt"), "boss1_receipt");
+    }
+
+    /// Only the test programs count. A dependency's `target.test` is true too,
+    /// but its profile is not a test profile.
+    #[test]
+    fn finds_the_test_programs_in_cargo_json() {
+        let messages = concat!(
+            r#"{"reason":"compiler-artifact","target":{"kind":["lib"],"name":"clap1","test":true},"profile":{"opt_level":"0","test":true},"executable":"/x/deps/clap1-abc"}"#,
+            "\n",
+            r#"{"reason":"compiler-artifact","target":{"kind":["lib"],"name":"serde","test":true},"profile":{"opt_level":"0","test":false},"executable":null}"#,
+            "\n",
+            r#"{"reason":"compiler-artifact","target":{"kind":["test"],"name":"api","test":true},"profile":{"test":true},"executable":"/x/deps/api-def"}"#,
+            "\n",
+            r#"{"reason":"build-finished","success":true}"#,
+            "\n",
+            "not json at all",
+        );
+        assert_eq!(
+            test_programs(messages),
+            vec![
+                PathBuf::from("/x/deps/clap1-abc"),
+                PathBuf::from("/x/deps/api-def")
+            ]
+        );
     }
 
     /// The shell starts a background subshell that writes a marker file a
@@ -463,5 +553,25 @@ mod tests {
         let survived = marker.exists();
         let _ = fs::remove_file(&marker);
         assert!(!survived, "the child kept running after the timeout");
+    }
+
+    /// A background child keeps the output pipe open after the shell has
+    /// exited. That is a clean exit, so it must not wait for the child: the
+    /// group is stopped, and the call returns long before the child would end.
+    #[cfg(unix)]
+    #[test]
+    fn a_background_child_does_not_hold_a_clean_exit_open() {
+        let mut command = Command::new("sh");
+        command.args(["-c", "sleep 30 & echo done"]);
+        let start = Instant::now();
+        let finished = run_limited(&mut command, Duration::from_secs(5), true)
+            .expect("runs")
+            .expect("the shell exited in time");
+        assert!(finished.status.success());
+        assert_eq!(finished.stdout.trim(), "done");
+        assert!(
+            start.elapsed() < Duration::from_secs(10),
+            "waited for the background child"
+        );
     }
 }

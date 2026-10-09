@@ -91,12 +91,15 @@ pub struct Client {
     http: reqwest::Client,
     base_url: String,
     api_key: Option<String>,
-    /// Covers the whole turn: connecting, waiting, and reading the stream.
+    /// Covers the whole turn: every try, the waits between tries, and the stream.
     timeout: Duration,
     retry: RetryPolicy,
 }
 
 impl Client {
+    /// The production client. It honors the system's proxy settings, such as
+    /// `HTTPS_PROXY`, and sends requests to a local mock only through the proxy
+    /// unless `NO_PROXY` says otherwise.
     pub fn new(base_url: impl Into<String>) -> Self {
         let http = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(10))
@@ -105,6 +108,12 @@ impl Client {
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .expect("the HTTP client should start with TLS support");
+        Self::with_http(base_url, http)
+    }
+
+    /// Uses a client you built yourself. The tests use this with `.no_proxy()`,
+    /// so a proxy on the test machine never sees the local mock.
+    pub fn with_http(base_url: impl Into<String>, http: reqwest::Client) -> Self {
         Client {
             http,
             base_url: base_url.into(),
@@ -132,10 +141,25 @@ impl Client {
 
     /// Sends one turn and reads its stream. `on_event` sees every event as it
     /// arrives, so the caller can print text before the answer is finished.
+    ///
+    /// One deadline covers the whole turn: the tries, the waits between them,
+    /// and the stream. The per-request timeout inside it is only a cap.
     pub async fn stream_turn(
         &self,
         request: &Request,
-        on_event: &mut dyn FnMut(&StreamEvent),
+        on_event: &mut (dyn FnMut(&StreamEvent) + Send),
+    ) -> Result<Turn, ClientError> {
+        let deadline = tokio::time::Instant::now() + self.timeout;
+        match tokio::time::timeout_at(deadline, self.one_turn(request, on_event)).await {
+            Ok(result) => result,
+            Err(_) => Err(ClientError::Timeout),
+        }
+    }
+
+    async fn one_turn(
+        &self,
+        request: &Request,
+        on_event: &mut (dyn FnMut(&StreamEvent) + Send),
     ) -> Result<Turn, ClientError> {
         let body = provider::encode_request(request)?;
         let response = self.send_with_retry(&body).await?;

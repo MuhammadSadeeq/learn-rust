@@ -90,7 +90,7 @@
   <header class="ox-lab-hero">
     <span class="ox-label">Lab</span>
     <h1 class="ox-title">Glossary &amp; keyword index</h1>
-    <p>Every keyword, core term, std type, cargo tool and error code the course uses. Each entry gives a plain definition and a checked example, and says the chapter where the term is introduced.</p>
+    <p>The keywords and core terms of the course, with its std types, cargo tools and error codes. Each entry gives a plain definition and, where one fits, a checked example. It names the chapter where the term is introduced, or the Error Museum for an error code that only the museum shows.</p>
     <p class="ox-label">Best after: any chapter. Use the drill to test what you have read.</p>
   </header>
 
@@ -175,6 +175,10 @@
         var intro = el("span", { class: "gl-intro" });
         intro.innerHTML = 'Introduced in <a href="' + Ox.chapterUrl(ch) + '">Chapter ' + ch.n + ": " + esc(ch.title) + "</a>";
         head.appendChild(intro);
+      } else if (e.lab === "errors") {
+        var seen = el("span", { class: "gl-intro" });
+        seen.innerHTML = 'Seen in <a href="errors.html">the Error Museum</a>';
+        head.appendChild(seen);
       }
       art.appendChild(head);
       art.appendChild(el("p", { class: "gl-def" })).innerHTML = inline(e.def);

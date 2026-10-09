@@ -88,7 +88,7 @@ hint = """
 1. The panic message says "attempt to add with overflow". Which variable is
    growing past its limit, and what type is it?
 2. A u8 holds at most 255. Choose a wider integer type for `total`, and convert
-   each age into it with `u32::from(age)`. That works because every u8 fits in a u32.
+   each age into it with `u32::from(age)` (Chapter 3 explains it). That works because every u8 fits in a u32.
 3. Divide the wide total by the count, then cast the result back to u8 with
    `as u8`. The average of u8 values always fits in a u8.
 """
@@ -383,7 +383,7 @@ summary = "Title-case words and build a URL slug."
 hint = """
 1. split_whitespace() splits on any run of spaces. Push each word's characters into a String, with one space between words.
 2. char_indices() gives each character with its position. For the first character (position 0), to_uppercase() can give more than one char, so loop over it and push each one. Push the other characters as they are.
-3. For slugify, loop over the chars. Keep each ASCII letter or digit, lowercased with to_ascii_lowercase(). For anything else, push one '-' unless the last char already is one. At the end, trim_matches('-') removes dashes at both ends.
+3. For slugify, loop over the chars. Keep each ASCII letter or digit, lowercased with `to_ascii_lowercase()` (Chapter 8 explains it). For anything else, push one '-' unless the last char already is one. At the end, trim_matches('-') removes dashes at both ends.
 """
 
 [[quest]]
@@ -469,7 +469,7 @@ hint = """
 1. find_user: loop over the list with `for (user_id, name) in users`. When
    `*user_id == id`, return `Some(name.as_str())`. If the loop ends with no match, return None.
 2. safe_divide: look for an integer method that returns an Option instead of
-   panicking, such as checked_div. It returns None for a zero divisor and for i32::MIN / -1.
+   panicking, such as `checked_div` (Chapter 3 covers the checked methods). It returns None for a zero divisor and for i32::MIN / -1.
 3. first_even: loop over v with `for x in v`. Each x is a reference, so `x % 2`
    works and `*x` is the number to return. Return `Some(*x)` at the first even
    value, and None after the loop.
@@ -1083,13 +1083,14 @@ chapter = 20
 kind = "cargo"
 path = "pkgs/axum1"
 title = "A handler with state and errors"
-summary = "Read state and JSON in a handler, and send an error as a 400 response."
+summary = "Read state and JSON in a handler, and send an error as a 422 response."
 hint = """
 1. In `create_note`, return `Err(AppError::EmptyText)` when `body.text.trim()` is
    empty. Otherwise lock `state.notes`, push the text, and return
    `Ok(Json(Saved { id }))`, where `id` is the index of the new note.
 2. In `into_response`, build the body with `serde_json::json!({ "error": message })`,
-   and return `(StatusCode::BAD_REQUEST, Json(...)).into_response()`.
+   and return `(StatusCode::UNPROCESSABLE_ENTITY, Json(...)).into_response()`.
+   422 is for valid JSON with a refused value. Chapter 20 explains the difference from 400.
 3. In `app`, use `Router::new().route("/notes", post(create_note)).with_state(state)`.
 """
 

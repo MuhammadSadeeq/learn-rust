@@ -23,11 +23,12 @@ use axum::Json;
 use axum::Router;
 use axum::body::Body;
 use axum::extract::State;
-use axum::http::{StatusCode, header};
+use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
+use tool_runner::client::Client;
 
 /// One scripted reply: how long to wait, then what to send.
 #[derive(Clone)]
@@ -40,6 +41,7 @@ pub struct Reply {
 enum Outcome {
     Events(Vec<Value>),
     Status { code: u16, retry_after: Option<u64> },
+    Redirect(String),
 }
 
 impl Reply {
@@ -70,6 +72,14 @@ impl Reply {
                 code,
                 retry_after: Some(seconds),
             },
+        }
+    }
+
+    /// A 307 redirect to another URL. The client must not follow it.
+    pub fn redirect(to: &str) -> Self {
+        Reply {
+            delay: Duration::ZERO,
+            outcome: Outcome::Redirect(to.to_string()),
         }
     }
 
@@ -118,6 +128,7 @@ struct Shared {
     replies: Vec<Reply>,
     served: AtomicUsize,
     requests: Mutex<Vec<Value>>,
+    authorizations: Mutex<Vec<String>>,
 }
 
 impl Shared {
@@ -126,6 +137,7 @@ impl Shared {
             replies,
             served: AtomicUsize::new(0),
             requests: Mutex::new(Vec::new()),
+            authorizations: Mutex::new(Vec::new()),
         }
     }
 }
@@ -141,6 +153,23 @@ impl Mock {
     pub fn requests(&self) -> Vec<Value> {
         self.shared.requests.lock().unwrap().clone()
     }
+
+    /// The Authorization header of each request, oldest first ("" when absent).
+    pub fn authorizations(&self) -> Vec<String> {
+        self.shared.authorizations.lock().unwrap().clone()
+    }
+}
+
+/// A client for the local mock. It builds its own reqwest client with
+/// `.no_proxy()`, so a proxy on this machine never sees the request. The
+/// production client, `Client::new`, still honors the system proxy.
+pub fn local_client(base_url: &str) -> Client {
+    let http = reqwest::Client::builder()
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .expect("the test client should start");
+    Client::with_http(base_url, http)
 }
 
 /// Starts the mock on a free port on 127.0.0.1.
@@ -178,7 +207,17 @@ fn router(shared: Arc<Shared>) -> Router {
         .with_state(shared)
 }
 
-async fn turn(State(shared): State<Arc<Shared>>, Json(body): Json<Value>) -> Response {
+async fn turn(
+    State(shared): State<Arc<Shared>>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    let authorization = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+    shared.authorizations.lock().unwrap().push(authorization);
     // The client always streams. A request that does not ask for a stream is
     // a bug in the client, so the mock says so.
     let wants_stream = body["stream"] == json!(true);
@@ -201,6 +240,14 @@ async fn turn(State(shared): State<Arc<Shared>>, Json(body): Json<Value>) -> Res
 
     match reply.outcome {
         Outcome::Events(events) => sse_response(&events),
+        Outcome::Redirect(to) => {
+            let mut response = StatusCode::TEMPORARY_REDIRECT.into_response();
+            response.headers_mut().insert(
+                header::LOCATION,
+                to.parse().expect("a valid location header"),
+            );
+            response
+        }
         Outcome::Status { code, retry_after } => {
             let mut response = StatusCode::from_u16(code)
                 .expect("a valid status code")

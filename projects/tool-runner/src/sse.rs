@@ -178,4 +178,16 @@ mod tests {
     fn a_blank_line_with_no_data_dispatches_nothing() {
         assert!(parse_all("\n\n").is_empty());
     }
+
+    #[test]
+    fn a_name_does_not_outlive_its_event() {
+        let mut parser = SseParser::new();
+        // The "ping" event has no data, so it sends nothing. Its name must not
+        // leak into the next event.
+        assert!(parser.push(b"event: ping\n\n").is_empty());
+        let events = parser.push(b"data: next\n\n");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event, None);
+        assert_eq!(events[0].data, "next");
+    }
 }

@@ -6,7 +6,10 @@
 //! 2. No `..` part. It would climb out of the folder.
 //! 3. Symbolic links are followed, and the real path must still be inside the
 //!    folder. A link inside the folder can point outside it.
-//! 4. The read stops at 64 KiB. One call cannot fill the model's context or
+//! 4. Only a regular file can be read. A folder, a named pipe (FIFO) or a
+//!    device is refused before it is opened. Opening a FIFO with no writer
+//!    waits forever, so the check must come first.
+//! 5. The read stops at 64 KiB. One call cannot fill the model's context or
 //!    our memory.
 //!
 //! This is a teaching sandbox. It checks the path once, and then it reads.
@@ -76,6 +79,14 @@ impl ReadFile {
                 "'{requested}' leads outside the sandbox"
             )));
         }
+        // Rule 4: metadata reads the file's type without opening it.
+        let meta = std::fs::metadata(&real)
+            .map_err(|e| ToolError::Failed(format!("could not look at '{requested}': {e}")))?;
+        if !meta.is_file() {
+            return Err(ToolError::Denied(format!(
+                "'{requested}' is not a regular file (a folder, a pipe or a device)"
+            )));
+        }
         Ok(real)
     }
 }
@@ -110,20 +121,19 @@ impl Tool for ReadFile {
 
             // Read one byte past the cap. Getting that byte proves the file is
             // too big. We never read more than the cap plus one.
-            let mut text = String::new();
+            let mut bytes = Vec::new();
             file.take(MAX_BYTES + 1)
-                .read_to_string(&mut text)
+                .read_to_end(&mut bytes)
                 .await
-                .map_err(|e| {
-                    ToolError::Failed(format!("could not read '{}' as UTF-8: {e}", input.path))
-                })?;
-            if text.len() as u64 > MAX_BYTES {
+                .map_err(|e| ToolError::Failed(format!("could not read '{}': {e}", input.path)))?;
+            if bytes.len() as u64 > MAX_BYTES {
                 return Err(ToolError::Failed(format!(
                     "'{}' is larger than 64 KiB",
                     input.path
                 )));
             }
-            Ok(text)
+            String::from_utf8(bytes)
+                .map_err(|_| ToolError::Failed(format!("'{}' is not UTF-8 text", input.path)))
         })
     }
 }

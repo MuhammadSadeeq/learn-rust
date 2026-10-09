@@ -89,4 +89,19 @@ mod tests {
         // It stopped at the deadline, long before the five seconds were up.
         assert!(start.elapsed() < Duration::from_secs(4));
     }
+
+    /// The shell would create a marker file one second from now. The timeout
+    /// must stop the shell first, so the file never appears.
+    #[test]
+    fn the_timed_out_child_is_really_killed() {
+        let marker = std::env::temp_dir().join(format!("oxidize-proc1-{}", std::process::id()));
+        let _ = std::fs::remove_file(&marker);
+        let script = format!("sleep 1; touch {}", marker.display());
+        let result = run_with_timeout("sh", &["-c", &script], Duration::from_millis(200));
+        assert!(matches!(result, Err(RunError::TimedOut)), "got {result:?}");
+        thread::sleep(Duration::from_millis(1500));
+        let survived = marker.exists();
+        let _ = std::fs::remove_file(&marker);
+        assert!(!survived, "the child kept running after the timeout");
+    }
 }

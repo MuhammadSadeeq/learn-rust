@@ -2,6 +2,8 @@
 name = "tool-runner"
 version = "0.1.0"
 edition = "2024"
+# The locked dependencies need 1.88 (checked with `cargo metadata`).
+rust-version = "1.88"
 
 # Standalone: not part of the Oxidize workspace at the repo root.
 [workspace]

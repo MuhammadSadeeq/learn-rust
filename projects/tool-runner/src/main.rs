@@ -36,7 +36,7 @@ struct Cli {
     root: PathBuf,
 
     /// A program that run_command may start. Repeat the flag to allow more.
-    #[arg(long = "allow", default_values = ["echo", "date", "wc"])]
+    #[arg(long = "allow", default_values = ["echo", "date"])]
     allow: Vec<String>,
 
     /// The most model turns before we stop a model that will not finish.
@@ -47,7 +47,7 @@ struct Cli {
     #[arg(long, default_value_t = 4, value_parser = clap::value_parser!(u32).range(1..))]
     parallel: u32,
 
-    /// Seconds allowed for one model turn, including its stream.
+    /// Seconds allowed for one model turn: every try, the waits, and the stream.
     #[arg(long, default_value_t = 60)]
     timeout: u64,
 }
@@ -140,7 +140,7 @@ mod tests {
     #[test]
     fn the_default_allowlist_is_small() {
         let cli = Cli::try_parse_from(["tool-runner", "hi"]).unwrap();
-        assert_eq!(cli.allow, ["echo", "date", "wc"]);
+        assert_eq!(cli.allow, ["echo", "date"]);
     }
 
     #[test]

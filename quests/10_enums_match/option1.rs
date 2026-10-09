@@ -10,7 +10,7 @@
 //
 //  Return None where a panic would otherwise happen. Don't edit the tests.
 //
-//  Both bodies are todo!() for now.
+//  All three bodies are todo!() for now.
 //
 //  cargo forge          check your work (re-runs every time you save)
 //  cargo forge hint     a nudge in the right direction

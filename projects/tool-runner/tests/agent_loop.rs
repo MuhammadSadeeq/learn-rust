@@ -8,14 +8,14 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use common::{Reply, start, text_turn, tool_turn};
+use common::{Reply, local_client, start, text_turn, tool_turn};
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 use tool_runner::agent::{Agent, AgentConfig, AgentError, Answer};
-use tool_runner::client::Client;
 use tool_runner::protocol::StopReason;
 use tool_runner::tools::calculator::Calculator;
 use tool_runner::tools::read_file::ReadFile;
+use tool_runner::tools::run_command::RunCommand;
 use tool_runner::tools::{Registry, Tool, ToolFuture};
 
 /// A folder for this test's files, under cargo's target directory. It is
@@ -58,7 +58,7 @@ async fn full_tool_loop_calls_the_tool_and_answers() {
     .await;
     let mut registry = Registry::new();
     registry.register(Calculator);
-    let agent = Agent::new(Client::new(&mock.base_url), registry, config(5, 2));
+    let agent = Agent::new(local_client(&mock.base_url), registry, config(5, 2));
 
     let (answer, streamed) = run(&agent, "What is 6 times 7?").await.unwrap();
 
@@ -91,7 +91,7 @@ async fn a_refused_tool_call_goes_back_to_the_model_as_an_error() {
     .await;
     let mut registry = Registry::new();
     registry.register(ReadFile::new(&root).unwrap());
-    let agent = Agent::new(Client::new(&mock.base_url), registry, config(5, 2));
+    let agent = Agent::new(local_client(&mock.base_url), registry, config(5, 2));
 
     let (answer, _) = run(&agent, "Read the secret").await.unwrap();
 
@@ -109,7 +109,7 @@ async fn an_unknown_tool_name_is_an_error_result() {
         Reply::events(text_turn(&["There is no such tool."])),
     ])
     .await;
-    let agent = Agent::new(Client::new(&mock.base_url), Registry::new(), config(5, 2));
+    let agent = Agent::new(local_client(&mock.base_url), Registry::new(), config(5, 2));
 
     let (answer, _) = run(&agent, "Teleport me").await.unwrap();
 
@@ -130,7 +130,7 @@ async fn max_turns_stops_a_runaway_model() {
     .await;
     let mut registry = Registry::new();
     registry.register(Calculator);
-    let agent = Agent::new(Client::new(&mock.base_url), registry, config(3, 2));
+    let agent = Agent::new(local_client(&mock.base_url), registry, config(3, 2));
 
     let error = run(&agent, "loop forever").await.unwrap_err();
 
@@ -145,7 +145,7 @@ async fn cancellation_stops_the_loop() {
         Reply::events(text_turn(&["too late"])).delayed(Duration::from_secs(5)),
     ])
     .await;
-    let agent = Agent::new(Client::new(&mock.base_url), Registry::new(), config(5, 2));
+    let agent = Agent::new(local_client(&mock.base_url), Registry::new(), config(5, 2));
     let cancel = CancellationToken::new();
     let trigger = cancel.clone();
     tokio::spawn(async move {
@@ -173,7 +173,7 @@ async fn max_tokens_returns_the_partial_answer_with_its_reason() {
         json!({"type": "done", "stop_reason": "max_tokens"}),
     ];
     let mock = start(vec![Reply::events(events)]).await;
-    let agent = Agent::new(Client::new(&mock.base_url), Registry::new(), config(5, 2));
+    let agent = Agent::new(local_client(&mock.base_url), Registry::new(), config(5, 2));
 
     let (answer, _) = run(&agent, "long question").await.unwrap();
 
@@ -231,7 +231,7 @@ async fn the_parallel_limit_is_honored() {
         in_flight: in_flight.clone(),
         high_water: high_water.clone(),
     });
-    let agent = Agent::new(Client::new(&mock.base_url), registry, config(5, 2));
+    let agent = Agent::new(local_client(&mock.base_url), registry, config(5, 2));
 
     let (answer, _) = run(&agent, "go").await.unwrap();
 
@@ -258,4 +258,75 @@ async fn the_parallel_limit_is_honored() {
         .map(|result| result["content"].as_str().unwrap())
         .collect();
     assert_eq!(contents, ["0", "1", "2", "3", "4"]);
+}
+
+/// A web handler runs the agent on its own task, so the future must be Send.
+#[tokio::test]
+async fn the_agent_can_run_in_a_spawned_task() {
+    let mock = start(vec![Reply::events(text_turn(&["from a task"]))]).await;
+    let agent = Agent::new(local_client(&mock.base_url), Registry::new(), config(5, 2));
+
+    let (answer, _) = tokio::spawn(async move { run(&agent, "go").await })
+        .await
+        .expect("the task finishes")
+        .expect("the run succeeds");
+
+    assert_eq!(answer.text, "from a task");
+}
+
+#[tokio::test]
+async fn a_zero_parallel_limit_still_runs_the_tools() {
+    // A limit of 0 would make every tool call wait forever. The agent treats
+    // it as 1, so the read finishes.
+    let root = fixture_dir("zero_parallel");
+    std::fs::write(root.join("note.txt"), "hello").unwrap();
+    let mut registry = Registry::new();
+    registry.register(ReadFile::new(&root).unwrap());
+    let mock = start(vec![
+        Reply::events(tool_turn("c1", "read_file", json!({"path": "note.txt"}))),
+        Reply::events(text_turn(&["read it"])),
+    ])
+    .await;
+    let agent = Agent::new(local_client(&mock.base_url), registry, config(5, 0));
+
+    let (answer, _) = tokio::time::timeout(Duration::from_secs(5), run(&agent, "go"))
+        .await
+        .expect("the run finishes")
+        .unwrap();
+
+    assert_eq!(answer.text, "read it");
+}
+
+#[tokio::test]
+async fn cancelling_stops_the_program_a_tool_started() {
+    // The program would write its file one second after it starts. The cancel
+    // comes first, so the program must be stopped before it writes.
+    let root = fixture_dir("cancel_tool");
+    let mut registry = Registry::new();
+    registry.register(RunCommand::new(&root, vec!["sh".to_string()]).unwrap());
+    let mock = start(vec![Reply::events(tool_turn(
+        "c1",
+        "run_command",
+        json!({"program": "sh", "args": ["-c", "sleep 1; touch finished.txt"]}),
+    ))])
+    .await;
+    let agent = Agent::new(local_client(&mock.base_url), registry, config(5, 2));
+    let cancel = CancellationToken::new();
+    let stopper = cancel.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        stopper.cancel();
+    });
+
+    let result = agent.run("go", &cancel, &mut |_: &str| {}).await;
+
+    assert!(
+        matches!(result, Err(AgentError::Cancelled)),
+        "the run should be cancelled"
+    );
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    assert!(
+        !root.join("finished.txt").exists(),
+        "the program kept running after the cancel"
+    );
 }
