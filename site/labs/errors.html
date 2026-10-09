@@ -307,7 +307,7 @@
             '<a class="ox-btn is-small" href="#' + next.id + '" rel="next">' + next.id + " →</a>" +
           "</nav></div>" +
         '<header class="em-ex-head">' +
-          '<span class="ox-label">error[' + e.id + "]</span>" +
+          '<span class="ox-label">' + (/^E\d{4}$/.test(e.id) ? "error[" + e.id + "]" : "error:") + "</span>" +
           '<h2 class="em-ex-title" tabindex="-1">' + esc(e.title) + "</h2>" +
           '<div class="em-ex-meta">' + e.tags.map(function (t) { return '<span class="ox-chip">' + esc(t) + "</span>"; }).join("") +
             '<button type="button" class="ox-btn is-small em-seen-btn" data-seen aria-pressed="' + seen + '">' +

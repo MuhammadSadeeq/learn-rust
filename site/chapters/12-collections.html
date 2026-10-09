@@ -769,6 +769,26 @@ fn main() {
         println!("run {job}");
     }
 }</pre>
+<h3>BinaryHeap: the largest item first</h3>
+
+<p>A <code>BinaryHeap</code> is a priority queue. <code>pop</code> returns the largest item, and each <code>push</code> keeps that true. The heap does not keep the whole list in order, so only the top item is cheap to read. A heap adds and removes an item in <code>O(log n)</code> time. For a min-heap, wrap each item in <code>Reverse</code>. The order flips, and the smallest job comes out first.</p>
+
+<pre class="rs" data-check="ok" data-stdout="[1, 3, 5, 8]">use std::cmp::Reverse;
+use std::collections::BinaryHeap;
+
+fn main() {
+    let mut heap = BinaryHeap::new();
+    for job in [5, 1, 8, 3] {
+        heap.push(Reverse(job));
+    }
+    let mut order = Vec::new();
+    while let Some(Reverse(job)) = heap.pop() {
+        order.push(job);
+    }
+    println!("{order:?}");
+}</pre>
+
+<p>Use a heap when work keeps arriving and you always need the next most urgent item. For a short list you read once, a sorted <code>Vec</code> is simpler.</p>
 </section>
 
 <section>

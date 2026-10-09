@@ -79,6 +79,73 @@ fn main() {
 }</pre>
 
 <p><code>String</code> implements <code>Deref&lt;Target = str&gt;</code>, so the compiler turns the <code>&amp;String</code> into a <code>&amp;str</code> at the call. This is called deref coercion. You will meet it in most functions that take text.</p>
+<h3>Deref is not inheritance</h3>
+
+<p>Deref coercion makes a wrapper look like the type it wraps. Method calls on the target work on the wrapper, and a <code>&amp;Dog</code> turns into an <code>&amp;Animal</code> in a function call. It is tempting to use <code>Deref</code> to get inheritance. Do not. Method calls and deref coercion follow the pointer, but trait impls do not. In this example, <code>Animal</code> derives <code>Debug</code>, and <code>Dog</code> does not:</p>
+
+<pre class="rs" data-check="E0277">use std::ops::Deref;
+
+#[derive(Debug)]
+struct Animal {
+    name: String,
+}
+
+impl Animal {
+    fn speak(&amp;self) -&gt; String {
+        format!("{} says hi", self.name)
+    }
+}
+
+struct Dog {
+    base: Animal,
+}
+
+impl Deref for Dog {
+    type Target = Animal;
+    fn deref(&amp;self) -&gt; &amp;Animal {
+        &amp;self.base
+    }
+}
+
+fn main() {
+    let dog = Dog { base: Animal { name: "Rex".into() } };
+    println!("{}", dog.speak());
+    println!("{:?}", dog);
+}</pre>
+
+<p>Use <code>Deref</code> for smart pointers, such as <code>Box</code> and <code>Rc</code>, and for newtype wrappers that exist only to stand in for one inner type. For a type with its own identity, write the methods you need as forwarding methods, and derive the traits on the wrapper. The fixed version prints:</p>
+
+<pre class="rs" data-check="ok" data-stdout="Rex says hi\nDog { base: Animal { name: &quot;Rex&quot; } }">use std::ops::Deref;
+
+#[derive(Debug)]
+struct Animal {
+    name: String,
+}
+
+impl Animal {
+    fn speak(&amp;self) -&gt; String {
+        format!("{} says hi", self.name)
+    }
+}
+
+#[derive(Debug)]
+struct Dog {
+    base: Animal,
+}
+
+impl Deref for Dog {
+    type Target = Animal;
+    fn deref(&amp;self) -&gt; &amp;Animal {
+        &amp;self.base
+    }
+}
+
+fn main() {
+    let dog = Dog { base: Animal { name: "Rex".into() } };
+    println!("{}", dog.speak());
+    println!("{:?}", dog);
+}</pre>
+
 </section>
 
 <section>

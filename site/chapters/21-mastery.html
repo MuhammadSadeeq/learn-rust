@@ -1075,6 +1075,252 @@ fn main() {
 </section>
 
 <section>
+<h2 id="processes">Running other programs</h2>
+
+<p>An agent harness starts other programs all the time. It runs a formatter after an edit, a test suite before it reports success, or a command the model asked for. In PHP you would reach for <code>Process::run()</code> or <code>shell_exec()</code>. In Rust the standard tool is <code>std::process::Command</code>. This section covers the calls, the mistake that does the most damage, and a timeout that stops a program that will not finish.</p>
+
+<p>Some examples start <code>sleep</code>, <code>env</code> or <code>pwd</code>. Those programs are on Linux and macOS. Run those examples on a Unix-like system.</p>
+
+<h3>Build a command, then pick how to run it</h3>
+
+<p>A <code>Command</code> describes a program before it runs. You name the program, then add arguments one at a time with <code>arg</code>, or all at once with <code>args</code>. Nothing starts until you call one of three methods. They differ in whether they wait, and in where the output goes.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Method</th><th>Waits for the program</th><th>Output</th><th>Returns</th></tr></thead>
+  <tbody>
+    <tr><td><code>output()</code></td><td>Yes</td><td>Captured. Stdout and stderr are read into memory, and the child's input is closed.</td><td><code>Output</code>, with <code>status</code>, <code>stdout</code> and <code>stderr</code></td></tr>
+    <tr><td><code>status()</code></td><td>Yes</td><td>Inherited. The child writes to your own terminal.</td><td><code>ExitStatus</code></td></tr>
+    <tr><td><code>spawn()</code></td><td>No</td><td>Inherited by default. Use <code>Stdio::piped()</code> to read it.</td><td><code>Child</code>, a handle to poll, wait on or kill</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>This program asks <code>rustc</code> for its version. <code>output()</code> waits for it and collects what it printed. <code>expect</code> stops the program with a message if <code>rustc</code> cannot start at all.</p>
+
+<pre class="rs" data-check="ok" data-stdout="ran: true\nstarts with rustc: true">use std::process::Command;
+
+fn main() {
+    let output = Command::new("rustc")
+        .arg("--version")
+        .output()
+        .expect("rustc should be on the PATH");
+    println!("ran: {}", output.status.success());
+    println!(
+        "starts with rustc: {}",
+        String::from_utf8_lossy(&amp;output.stdout).starts_with("rustc ")
+    );
+}</pre>
+
+<h3>Exit codes, and what a signal does</h3>
+
+<p><code>ExitStatus</code> has two useful methods. <code>success()</code> is true when the exit code is zero. <code>code()</code> returns the number as an <code>Option&lt;i32&gt;</code>. On Unix, <code>code()</code> returns <code>None</code> when a signal ended the process, because a signal leaves no exit code. Check <code>success()</code> first, and read <code>code()</code> only when you need the number.</p>
+
+<pre class="rs" data-check="ok" data-stdout="success: false\ncode: Some(1)">use std::process::Command;
+
+fn main() {
+    let output = Command::new("rustc")
+        .arg("--no-such-flag")
+        .output()
+        .expect("rustc should start");
+    println!("success: {}", output.status.success());
+    println!("code: {:?}", output.status.code());
+}</pre>
+
+<h3>Stdio: where each stream goes</h3>
+
+<p>Each standard stream can be set on its own. <code>Stdio::piped()</code> gives you a pipe that you can read. <code>Stdio::null()</code> throws the data away. <code>Stdio::inherit()</code> connects the stream to your own. <code>status</code> and <code>spawn</code> inherit all three streams by default, and <code>output</code> captures the two output streams.</p>
+
+<h3>Spawn, poll, and kill at a deadline</h3>
+
+<p>A timeout needs <code>spawn</code>. <code>wait</code> blocks until the child exits, so it can never give up. <code>try_wait</code> checks once and returns at once. It gives <code>Ok(None)</code> while the child runs, and <code>Ok(Some(status))</code> after it exits. Loop over it, sleep a little between checks so the loop does not spin, and kill the child when the deadline passes.</p>
+
+<pre class="rs" data-check="ok" data-stdout="killed, code is None">use std::process::Command;
+use std::thread;
+use std::time::{Duration, Instant};
+
+fn main() {
+    let mut child = Command::new("sleep")
+        .arg("30")
+        .spawn()
+        .expect("sleep should start");
+    let deadline = Instant::now() + Duration::from_millis(300);
+    loop {
+        if let Some(status) = child.try_wait().expect("try_wait should work") {
+            println!("finished: {status}");
+            return;
+        }
+        if Instant::now() &gt;= deadline {
+            let _ = child.kill();
+            let status = child.wait().expect("wait after kill");
+            println!("killed, code is {:?}", status.code());
+            return;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+}</pre>
+
+<p>After <code>kill</code>, call <code>wait</code>. It collects the exit status, so the child does not stay behind as a zombie process. Here the status has no code, because a signal ended the program. The Forge uses this same loop for its tests. The timeout part of <a href="#forge-source">Read the Forge CLI</a> shows it on real code.</p>
+
+<h3>Environment and folder</h3>
+
+<p><code>env_clear</code> removes every variable the child would inherit. <code>env</code> adds one back. <code>current_dir</code> sets the folder the child starts in. The tool-runner harness uses all three. It clears the environment, gives the child a short <code>PATH</code>, and runs it in the sandbox folder.</p>
+
+<pre class="rs" data-check="ok" data-stdout="ONLY_THIS=yes\n/">use std::process::Command;
+
+fn main() {
+    let env = Command::new("env")
+        .env_clear()
+        .env("ONLY_THIS", "yes")
+        .output()
+        .expect("env should start");
+    print!("{}", String::from_utf8_lossy(&amp;env.stdout));
+
+    let pwd = Command::new("pwd")
+        .current_dir("/")
+        .output()
+        .expect("pwd should start");
+    print!("{}", String::from_utf8_lossy(&amp;pwd.stdout));
+}</pre>
+
+<p>The first line is the only variable the child sees. The second line shows that <code>pwd</code> ran in <code>/</code>.</p>
+
+<h3>Never build a shell string from input</h3>
+
+<p>This is the mistake that does the most damage. A value such as <code>notes.txt; rm -rf ~</code> is a harmless file name, until you pass it to a shell. The shell reads the semicolon as the end of one command and the start of another. That is shell injection. Never write code like this:</p>
+
+<pre class="rs" data-check="skip" data-title="Do not write this">// The shell reads the ';' as the end of one command.
+let line = format!("echo {user_input}");
+Command::new("sh").arg("-c").arg(line).output()?;</pre>
+
+<p>The fix is an argument list. Each element becomes one argument for the program, and no shell reads it. The semicolon is only a character:</p>
+
+<pre class="rs" data-check="ok" data-stdout="notes.txt; rm -rf ~">use std::process::Command;
+
+fn main() {
+    // A value from a user. It is one argument, so ';' is just a character.
+    let user_input = "notes.txt; rm -rf ~";
+    let output = Command::new("echo")
+        .arg(user_input)
+        .output()
+        .expect("echo should start");
+    print!("{}", String::from_utf8_lossy(&amp;output.stdout));
+}</pre>
+
+<h3>Capping output</h3>
+
+<p>A program that prints forever fills your memory if you collect all of its output. Read a fixed amount instead. <code>take(n)</code> lets a reader stop after <code>n</code> bytes. Read one byte more than the cap. If you got that byte, the program had more to say, so stop it. The tool-runner's <code>read_capped</code> function in <code>run_command.rs</code> works the same way.</p>
+
+<pre class="rs" data-check="ok" data-stdout="kept 16 bytes, cut: true">use std::io::Read;
+use std::process::{Command, Stdio};
+
+const CAP: u64 = 16;
+
+fn main() {
+    let mut child = Command::new("rustc")
+        .arg("--version")
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("rustc should start");
+    let mut stdout = child.stdout.take().expect("stdout was piped");
+    let mut kept = Vec::new();
+    // Read at most CAP + 1 bytes. The one extra byte proves there was more.
+    stdout
+        .by_ref()
+        .take(CAP + 1)
+        .read_to_end(&amp;mut kept)
+        .expect("read");
+    let cut = kept.len() as u64 &gt; CAP;
+    kept.truncate(CAP as usize);
+    if cut {
+        // Stop the program. Waiting would hang if it kept writing.
+        let _ = child.kill();
+    }
+    let _status = child.wait().expect("wait");
+    println!("kept {} bytes, cut: {cut}", kept.len());
+}</pre>
+
+<p>Output is bytes, not text. A program can print bytes that are not valid UTF-8. <code>String::from_utf8_lossy</code> replaces each invalid piece with the replacement character, <code>U+FFFD</code>. It never fails.</p>
+
+<pre class="rs" data-check="ok" data-stdout="true">fn main() {
+    let bytes = [b'o', b'k', 0xff];
+    let text = String::from_utf8_lossy(&amp;bytes);
+    println!("{}", text.contains('\u{FFFD}'));
+}</pre>
+
+<h3>Async code: tokio::process</h3>
+
+<p>In async code, use <code>tokio::process::Command</code>. It has the same methods, and the waiting methods return futures. Two things make a timeout safe. <code>kill_on_drop(true)</code> kills the child when its <code>Child</code> is dropped. <code>tokio::time::timeout</code> drops the future it wraps when the time runs out. Put the wait inside a timeout, and a child that runs too long is dropped, and then killed.</p>
+
+<pre class="rs" data-check="ok" data-crates="tokio" data-stdout="timed out">use std::time::Duration;
+
+use tokio::process::Command;
+use tokio::time::timeout;
+
+#[tokio::main]
+async fn main() {
+    let child = Command::new("sleep")
+        .arg("10")
+        .kill_on_drop(true)
+        .spawn()
+        .expect("sleep should start");
+
+    // The wait lasts at most one second. When the timer wins, the future that
+    // owns `child` is dropped, and kill_on_drop stops the program.
+    match timeout(Duration::from_secs(1), child.wait_with_output()).await {
+        Ok(Ok(output)) =&gt; println!("finished: {}", output.status.success()),
+        Ok(Err(error)) =&gt; println!("error: {error}"),
+        Err(_) =&gt; println!("timed out"),
+    }
+}</pre>
+
+<p>The timer wins after one second. The future that owns the <code>Child</code> is dropped with it, and the 10-second <code>sleep</code> is killed. The program prints <code>timed out</code>. The <code>tokio</code> crate needs its <code>full</code> feature for <code>process</code> and <code>time</code>, and the course's crate examples use it.</p>
+
+<h3>The Laravel bridge</h3>
+
+<div class="ox-bridge">
+<pre class="php">use Illuminate\Support\Facades\Process;
+
+$result = Process::timeout(120)
+    -&gt;run(['php', 'artisan', 'migrate'])
+    -&gt;throw();
+
+echo $result-&gt;output();</pre>
+<pre class="rs" data-check="skip">// The same list of arguments, with no shell in between.
+let output = Command::new("php")
+    .args(["artisan", "migrate"])
+    .output()?;</pre>
+  <div class="ox-bridge-note"><p>Laravel builds the deadline into <code>timeout(120)</code>, and <code>throw()</code> turns a failed exit code into an exception. In Rust you write the deadline yourself, as shown above, or use tokio's timeout. The Laravel docs show the array form in their assertion examples. An array keeps each argument separate, which is the same rule as the argument list above. <code>Result</code> and <code>?</code> are in <a href="11-errors.html">Chapter 11</a>.</p></div>
+</div>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>Agents often write <code>sh -c</code> with a string they built, because it is the shortest way to chain two commands. Review every <code>Command::new</code>. If the program is <code>sh</code>, <code>bash</code>, <code>cmd</code> or <code>powershell</code>, ask why an argument list will not do. If an argument is built with <code>format!</code> or <code>+</code>, ask what happens to a file name that has a space, a quote or a semicolon. Also look for a missing timeout, and for output that is collected with no cap.</p>
+</aside>
+
+<p>The quest <code>proc1</code> practices this section. It asks for a <code>run_with_timeout</code> function. The function starts a program with piped output, checks it in a loop, kills it at the deadline, and returns what it printed. Its tests use <code>rustc</code> and <code>sleep</code>.</p>
+
+<div class="ox-quiz" data-id="21:proc-shell" data-label="Check yourself">
+  <p class="ox-q">What does this program print?</p>
+<pre class="rs" data-stdout="a; b">use std::process::Command;
+
+fn main() {
+    let name = "a; b";
+    let output = Command::new("echo")
+        .arg(name)
+        .output()
+        .expect("echo should start");
+    print!("{}", String::from_utf8_lossy(&amp;output.stdout));
+}</pre>
+  <ol class="ox-choices">
+    <li><code>a</code>, because a shell would run <code>echo a</code> and then <code>b</code></li>
+    <li data-correct><code>a; b</code>. <code>echo</code> gets the whole text as one argument, and no shell reads the semicolon.</li>
+    <li>An error, because <code>echo</code> cannot take a <code>;</code> in an argument</li>
+  </ol>
+  <div class="ox-why"><p>Without a shell, <code>;</code> is an ordinary character. The argument list reaches <code>echo</code> as one piece of text, so <code>echo</code> prints all of it. The shell version would print <code>a</code>, and then fail on <code>b</code>.</p></div>
+</div>
+</section>
+
+<section>
 <h2 id="forge-source">Read the Forge CLI</h2>
 
 <p>The course has its own trainer, the Forge CLI, which you run as <code>cargo forge</code>. It watches your quest files, compiles each one with <code>rustc</code>, runs its tests, and moves you on when they pass. It is about 1,200 lines of standard-library Rust with no dependencies, so every technique in it comes from this course.</p>
@@ -1091,7 +1337,7 @@ fn main() {
 </table>
 </div>
 
-<p>Start with two files: <code>main.rs</code> for the watch loop, and <code>runner.rs</code> for the timeout. Between them they use enums, threads, channels and a deadline, and each piece is something you have already met.</p>
+<p>Start with two files: <code>main.rs</code> for the watch loop, and <code>runner.rs</code> for the timeout. Between them they use enums, threads, channels and a deadline, and each piece is something you have already met. The timeout in <code>runner.rs</code> is the same kill-on-deadline loop that <a href="#processes">Running other programs</a> teaches.</p>
 
 <h3>The watch loop</h3>
 
@@ -1204,7 +1450,517 @@ error: let chains are only allowed in Rust 2024 or later
   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error: aborting due to 2 previous errors</pre>
+
+<p>The table in <a href="#edition-2024">What edition 2024 changed</a> lists the other changes that came with the edition.</p>
 </section>
+
+<section>
+<h2 id="capstone">Capstone: a tool-calling agent harness</h2>
+
+<p>An agent is a loop. You send the messages so far, and the model streams back its answer. If the answer asks for a tool, you run the tool, send the result back, and ask again. The loop stops when the model says it is done, or when you run out of turns. Most of the work is in the rules around that loop. Those rules decide what a tool may touch, how long it may run, and what happens when a server misbehaves.</p>
+
+<p>The companion project is <code>projects/tool-runner</code>, in this repository. It is a small agent harness that talks to a mock model server, so it needs no network and no API key. Every test runs offline. Each part of the project maps to a chapter you have read, and each safety rule is enforced in code and checked by a test. Read the project's README next to this section. The quotes below come from that README.</p>
+
+<h3>What the project is</h3>
+
+<aside class="ox-callout" data-kind="insight" data-label="From the README">
+<p>An agent harness in Rust. A model asks for tools, the harness runs them under strict rules, and the results go back to the model until it is done. It is the companion project for Oxidize Chapter 21, <em>Capstone: a tool-calling agent harness</em>.</p>
+</aside>
+
+<h3>Architecture</h3>
+
+<p>The README draws the modules like this:</p>
+
+<pre class="text">   you
+    |
+    v
+ +-----------------------------+
+ | main.rs                     |   flags, logs, Ctrl+C
+ +--------------+--------------+
+                |
+                v
+ +-----------------------------+
+ | agent.rs                    |   the loop: ask, run tools, repeat
+ +-------+----------------+----+
+         |                |
+         v                v
+ +---------------+   +------------------------+
+ | client.rs     |   | tools/                 |
+ | timeout,      |   |   Tool trait, Registry |
+ | retry, one    |   |   calculator           |
+ | streamed turn |   |   read_file (sandbox)  |
+ |   sse.rs      |   |   run_command (list)   |
+ |   provider.rs |   +------------------------+
+ +-------+-------+
+         |
+         v
+   model server: the mock, or a real provider</pre>
+
+<p>Each module has one job. The table lists each file, what it does, and the Laravel code it is closest to.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+<thead><tr><th>File</th><th>What it does</th><th>Laravel counterpart</th></tr></thead>
+<tbody>
+<tr><td><code>Cargo.toml</code>, <code>Cargo.lock</code></td><td>Dependencies, with exact versions locked</td><td><code>composer.json</code>, <code>composer.lock</code></td></tr>
+<tr><td><code>src/main.rs</code></td><td>The CLI: flags, logs, Ctrl+C</td><td>An artisan command. The <code>Cli</code> struct plays the part of <code>$signature</code>.</td></tr>
+<tr><td><code>src/lib.rs</code></td><td>The module list, and the reading order</td><td>The autoload section of <code>composer.json</code></td></tr>
+<tr><td><code>src/protocol.rs</code></td><td>The JSON we send, and the events we read</td><td>The arrays your API resources return. Tagged enums replace the <code>type</code> checks you would write by hand.</td></tr>
+<tr><td><code>src/sse.rs</code></td><td>Reads the stream one chunk at a time</td><td>No direct counterpart. It is the reader behind a <code>StreamedResponse</code>.</td></tr>
+<tr><td><code>src/client.rs</code></td><td>Sends one turn, with a timeout and retries</td><td><code>Http::withToken(...)-&gt;timeout(...)-&gt;retry(...)</code></td></tr>
+<tr><td><code>src/provider.rs</code></td><td>The only place that knows a provider's names</td><td>A mail transport chosen in <code>config/mail.php</code>. The rest of the app never sees the vendor's API.</td></tr>
+<tr><td><code>src/agent.rs</code></td><td>The loop: ask, run tools, repeat</td><td>A queued job with a <code>Tries</code> limit. The turn limit is the guard against a job that retries forever.</td></tr>
+<tr><td><code>src/tools/mod.rs</code></td><td>The <code>Tool</code> trait and the registry</td><td>Invokable action classes, each registered under a name in the container</td></tr>
+<tr><td><code>src/tools/calculator.rs</code></td><td>Adds, subtracts, multiplies and divides</td><td>A small action class with one <code>handle()</code> method</td></tr>
+<tr><td><code>src/tools/read_file.rs</code></td><td>Reads text files inside one folder</td><td>A filesystem disk, such as <code>Storage::disk('local')</code>, which is also rooted in one folder</td></tr>
+<tr><td><code>src/tools/run_command.rs</code></td><td>Runs allowlisted programs</td><td><code>Process::run(['php', 'artisan', 'migrate'])</code>, which takes an array of arguments, not one command string</td></tr>
+<tr><td><code>tests/common/mod.rs</code></td><td>The mock model server</td><td><code>Http::fake()</code>, which answers requests with canned responses</td></tr>
+<tr><td><code>tests/*.rs</code></td><td>Agent, client and sandbox tests</td><td>Feature tests that run against fakes</td></tr>
+<tr><td><code>examples/mock_server.rs</code></td><td>Runs the mock by hand</td><td>No direct counterpart. It is a fake API you can run while you try things out.</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>Where each chapter shows up</h3>
+
+<p>Each row names a chapter, the part of the project that uses it, and a line to search for in the code.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Chapter</th><th>Where it shows up in the project</th><th>Search for</th></tr></thead>
+  <tbody>
+    <tr><td>06 and 07, Ownership and Borrowing</td><td><code>agent.rs</code> owns the message list. Each turn sends a clone of it, so the loop keeps the original.</td><td><code>messages.clone()</code></td></tr>
+    <tr><td>08, Strings and Slices</td><td>Tool output is a <code>String</code>. Tool names are looked up as <code>&amp;str</code>.</td><td><code>fn name(&amp;self) -&gt; &amp;str</code></td></tr>
+    <tr><td>10, Enums and Pattern Matching</td><td><code>protocol.rs</code> models a content block and a stream event as enums. Serde reads the <code>type</code> field and picks the variant.</td><td><code>#[serde(tag = "type")]</code></td></tr>
+    <tr><td>11, Errors Are Values</td><td>Each layer has its own error type. A refused tool becomes an error result that the model reads, and the run goes on.</td><td><code>ToolError</code>, <code>ClientError</code>, <code>AgentError</code></td></tr>
+    <tr><td>13, Iterators and Closures</td><td>Each requested tool becomes a future, built with <code>map</code>. <code>filter_map</code> picks the tool calls out of a reply.</td><td><code>calls.iter().map</code> in <code>run_tools</code></td></tr>
+    <tr><td>14, Traits and Generics</td><td>The <code>Tool</code> trait gives every tool the same methods. The registry stores them as trait objects.</td><td><code>trait Tool</code></td></tr>
+    <tr><td>15, Lifetimes</td><td><code>Tool::call</code> ties its future to <code>&amp;self</code>, so the future cannot outlive the tool.</td><td><code>fn call&lt;'a&gt;</code></td></tr>
+    <tr><td>16, Modules, Crates and Tests</td><td><code>lib.rs</code> lists the modules. The tests in <code>tests/</code> use the library from outside. Clap reads the command line.</td><td><code>#[derive(Parser)]</code></td></tr>
+    <tr><td>17, Smart Pointers</td><td>The registry's <code>Box&lt;dyn Tool&gt;</code> owns each tool on the heap.</td><td><code>Box&lt;dyn Tool&gt;</code></td></tr>
+    <tr><td>19, Async Rust</td><td>Each turn is an <code>async</code> call under a timeout. <code>tokio::select!</code> lets Ctrl+C cancel a wait. A <code>Semaphore</code> limits the tools that run at once. A <code>CancellationToken</code> carries the cancel signal.</td><td><code>select!</code> and <code>Semaphore</code> in <code>agent.rs</code></td></tr>
+    <tr><td>19, Streams and Server-Sent Events</td><td><code>sse.rs</code> reads the bytes as they arrive and waits for the end of each event. <code>client.rs</code> reads the response as a stream.</td><td><code>SseParser::push</code>, <code>bytes_stream</code></td></tr>
+    <tr><td>20, Rust on the Web</td><td><code>client.rs</code> sends the request with reqwest, a timeout and a bearer token. It retries 429 and 5xx answers with backoff. Logs use <code>tracing</code>.</td><td><code>send_with_retry</code>, <code>tracing::info!</code></td></tr>
+    <tr><td>21, Running other programs</td><td><code>run_command</code> starts only programs on the allowlist. It clears the environment, sets a timeout, and kills the child on drop.</td><td><code>Command::new</code> in <code>run_command.rs</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Read the code</h3>
+
+<p>The excerpts below are copied from the project's files, with their line numbers. They are fragments, not programs, so the checker skips them. Each title names the file.</p>
+
+<p>Every message, tool call and result is a value of one enum type. Serde reads the <code>type</code> field to pick the variant.</p>
+
+<pre class="rs" data-check="skip" data-crates="serde,serde_json" data-title="projects/tool-runner/src/protocol.rs, lines 28 to 47">/// One piece of a message. The `type` field picks the variant.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ContentBlock {
+    /// Plain text.
+    Text { text: String },
+    /// The model asks us to run a tool. `id` ties our answer to this request.
+    ToolUse {
+        id: String,
+        name: String,
+        input: Value,
+    },
+    /// Our answer to a `tool_use`. `is_error` tells the model the tool refused
+    /// or failed, so it can try something else.
+    ToolResult {
+        tool_use_id: String,
+        content: String,
+        is_error: bool,
+    },
+}</pre>
+
+<p>The stream parser keeps the half-read line between chunks. This is the method that reads them.</p>
+
+<pre class="rs" data-check="skip" data-crates="" data-title="projects/tool-runner/src/sse.rs, lines 43 to 62">    /// Feeds one chunk and returns every event it completed. A chunk may
+    /// complete none, one or several.
+    pub fn push(&amp;mut self, chunk: &amp;[u8]) -&gt; Vec&lt;SseEvent&gt; {
+        let mut events = Vec::new();
+        for &amp;byte in chunk {
+            if byte != b'\n' {
+                self.line.push(byte);
+                continue;
+            }
+            // We split on `\n` only. That byte never appears inside a
+            // multi-byte UTF-8 character, so each full line decodes cleanly.
+            let bytes = std::mem::take(&amp;mut self.line);
+            let decoded = String::from_utf8_lossy(&amp;bytes);
+            let line: &amp;str = decoded.strip_suffix('\r').unwrap_or(&amp;decoded);
+            if let Some(event) = self.apply_line(line) {
+                events.push(event);
+            }
+        }
+        events
+    }</pre>
+
+<p>A tool returns a boxed future, so every tool, whatever its own code, returns the same type. The alias is on line 29, and the trait is below it.</p>
+
+<pre class="rs" data-check="skip" data-crates="" data-title="projects/tool-runner/src/tools/mod.rs, lines 27 to 29">/// What a tool call returns: a future that finishes with text or an error.
+/// It is boxed so that different tools share one type.
+pub type ToolFuture&lt;'a&gt; = Pin&lt;Box&lt;dyn Future&lt;Output = Result&lt;String, ToolError&gt;&gt; + Send + 'a&gt;&gt;;</pre>
+
+<pre class="rs" data-check="skip" data-crates="serde_json" data-title="projects/tool-runner/src/tools/mod.rs, lines 44 to 55">/// A capability the model can call.
+pub trait Tool: Send + Sync {
+    /// The name the model uses to call the tool.
+    fn name(&amp;self) -&gt; &amp;str;
+    /// One or two sentences the model reads when it picks a tool.
+    fn description(&amp;self) -&gt; &amp;str;
+    /// A JSON Schema for the input object.
+    fn input_schema(&amp;self) -&gt; Value;
+    /// Runs the tool. The `'a` ties the future to `&amp;self`, so the future
+    /// cannot outlive the tool it came from.
+    fn call&lt;'a&gt;(&amp;'a self, input: Value) -&gt; ToolFuture&lt;'a&gt;;
+}</pre>
+
+<p>The loop runs every tool a reply asked for. The semaphore lets only <code>max_parallel_tools</code> run at once. The <code>select!</code> lets Ctrl+C stop the wait.</p>
+
+<pre class="rs" data-check="skip" data-crates="tokio,futures,tokio-util" data-title="projects/tool-runner/src/agent.rs, lines 167 to 186">    /// Runs every requested tool, with at most `max_parallel_tools` running at
+    /// once. The results keep the order of the calls.
+    async fn run_tools(
+        &amp;self,
+        calls: Vec&lt;ToolCall&gt;,
+        cancel: &amp;CancellationToken,
+    ) -&gt; Result&lt;Vec&lt;ContentBlock&gt;, AgentError&gt; {
+        // A semaphore is a counter of free slots. A tool takes a slot while it
+        // runs and gives it back when it finishes.
+        let slots = Semaphore::new(self.config.max_parallel_tools);
+        // `join_all` polls all the futures in this one task. They run
+        // concurrently, not on separate threads. The semaphore decides how many
+        // may be inside a tool at once.
+        let runs = calls.iter().map(|call| self.run_one(call, &amp;slots));
+        tokio::select! {
+            biased;
+            _ = cancel.cancelled() =&gt; Err(AgentError::Cancelled),
+            results = join_all(runs) =&gt; Ok(results),
+        }
+    }</pre>
+
+<p>The retry logic is in <code>send_with_retry</code>. It retries only 429 and 5xx answers. It honors <code>Retry-After</code>, up to a cap.</p>
+
+<pre class="rs" data-check="skip" data-crates="reqwest,tokio,tracing" data-title="projects/tool-runner/src/client.rs, lines 192 to 216">            let busy = status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error();
+            if !busy || attempt &gt;= self.retry.max_attempts {
+                return Err(ClientError::Status {
+                    code: status.as_u16(),
+                });
+            }
+
+            // The server may name the wait. We honor it, but we never sleep
+            // longer than our own cap. If the server asks for more, we stop.
+            let wait = match retry_after(&amp;response) {
+                Some(wait) if wait &gt; self.retry.max_delay =&gt; {
+                    tracing::warn!(
+                        code = status.as_u16(),
+                        "server asked for a longer wait than we allow"
+                    );
+                    return Err(ClientError::Status {
+                        code: status.as_u16(),
+                    });
+                }
+                Some(wait) =&gt; wait,
+                None =&gt; self.retry.backoff(attempt),
+            };
+            tracing::warn!(code = status.as_u16(), attempt, wait = ?wait, "retrying after a busy answer");
+            tokio::time::sleep(wait).await;
+            attempt += 1;</pre>
+
+<p>The sandbox for <code>read_file</code> is the <code>resolve</code> method. Each check returns an error, and that error goes back to the model.</p>
+
+<pre class="rs" data-check="skip" data-crates="" data-title="projects/tool-runner/src/tools/read_file.rs, lines 48 to 80">    /// Checks a requested path and returns the real file path inside the root.
+    pub fn resolve(&amp;self, requested: &amp;str) -&gt; Result&lt;PathBuf, ToolError&gt; {
+        let relative = Path::new(requested);
+
+        // Rule 1: relative only.
+        if relative.is_absolute() || relative.has_root() {
+            return Err(ToolError::Denied(format!(
+                "'{requested}' is an absolute path. Use a path inside the sandbox."
+            )));
+        }
+
+        // Rule 2: no `..` part. We check one component at a time, so a name
+        // such as `a..b` is fine.
+        if relative
+            .components()
+            .any(|part| part == Component::ParentDir)
+        {
+            return Err(ToolError::Denied(format!("'{requested}' contains '..'")));
+        }
+
+        // Rule 3: follow symbolic links, then check the real path.
+        let real = self
+            .root
+            .join(relative)
+            .canonicalize()
+            .map_err(|e| ToolError::Failed(format!("could not open '{requested}': {e}")))?;
+        if !real.starts_with(&amp;self.root) {
+            return Err(ToolError::Denied(format!(
+                "'{requested}' leads outside the sandbox"
+            )));
+        }
+        Ok(real)
+    }</pre>
+
+<p><code>run_command</code> builds the child with the rules the README lists. The arguments form a list, the environment is cleared, the folder is fixed, and the child is killed on drop.</p>
+
+<pre class="rs" data-check="skip" data-crates="tokio" data-title="projects/tool-runner/src/tools/run_command.rs, lines 106 to 119">        let mut child = Command::new(&amp;input.program)
+            .args(&amp;input.args)
+            // Rule 4: the working folder is the sandbox root.
+            .current_dir(&amp;self.root)
+            // Rule 3: nothing from our environment, and a short PATH.
+            .env_clear()
+            .env("PATH", SAFE_PATH)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            // Rule 5, the backstop.
+            .kill_on_drop(true)
+            .spawn()
+            .map_err(|e| ToolError::Failed(format!("could not start '{}': {e}", input.program)))?;</pre>
+
+<p>The command line is a clap struct. Each field becomes an argument or a flag, and clap writes the help text from the doc comments.</p>
+
+<pre class="rs" data-check="skip" data-crates="clap" data-title="projects/tool-runner/src/main.rs, lines 21 to 40">#[derive(Debug, Parser)]
+#[command(
+    version,
+    about = "Runs a model with a few tools, and keeps the tools on a leash."
+)]
+struct Cli {
+    /// What to ask the model.
+    prompt: String,
+
+    /// The model server. The demo mock listens on 127.0.0.1:8080.
+    #[arg(long, default_value = "http://127.0.0.1:8080")]
+    base_url: String,
+
+    /// The folder that read_file and run_command are sandboxed to.
+    #[arg(long, default_value = ".")]
+    root: PathBuf,
+
+    /// A program that run_command may start. Repeat the flag to allow more.
+    #[arg(long = "allow", default_values = ["echo", "date", "wc"])]
+    allow: Vec&lt;String&gt;,</pre>
+
+<h3>The honesty note</h3>
+
+<p>The protocol is ours. The course defined it, and it has the common shape of current model APIs. We have not checked any provider's field names offline, and the README says so plainly:</p>
+
+<aside class="ox-callout" data-kind="insight" data-label="From the README">
+<p>Real providers use the same shape with their own field names, their own URLs and their own event names. This course does not claim any provider's exact names, and we have not checked them offline. The one module that maps our names onto a provider's names is <code>src/provider.rs</code>.</p>
+</aside>
+
+<p>So treat the mock tests as tests of our protocol. The README says that too:</p>
+
+<aside class="ox-callout" data-kind="insight" data-label="From the README">
+<p>The mock tests describe our protocol. They do not prove that a provider accepts it.</p>
+</aside>
+
+<h3>Run it</h3>
+
+<p>Edition 2024 needs Rust 1.85 or newer. We built and tested it with Rust 1.97 only, so older versions are unchecked.</p>
+
+<pre class="sh">cargo run --example mock_server     # terminal 1: the mock model on http://127.0.0.1:8080
+cargo run -- "What is 6 times 7?"   # terminal 2: the harness
+cargo test                          # 51 tests, all offline</pre>
+
+<p>The answer goes to stdout. The logs go to stderr, so <code>2&gt;/dev/null</code> leaves only the answer:</p>
+
+<pre class="text">6 times 7 is 42.</pre>
+
+<p>The demo mock plays one fixed script. It asks for the calculator once, then answers. Ignore the prompt. The integration tests in <code>tests/</code> script other conversations, including refusals, timeouts and retries.</p>
+
+<p>The README's table lists the options and their defaults:</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+<thead><tr><th>Flag</th><th>Default</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>--base-url</code></td><td><code>http://127.0.0.1:8080</code></td><td>The model server</td></tr>
+<tr><td><code>--root</code></td><td><code>.</code></td><td>The folder that <code>read_file</code> and <code>run_command</code> are sandboxed to</td></tr>
+<tr><td><code>--allow</code></td><td><code>echo date wc</code></td><td>A program <code>run_command</code> may start. Repeat the flag for more. Giving it replaces the default list.</td></tr>
+<tr><td><code>--max-turns</code></td><td><code>8</code></td><td>Model turns before the run stops</td></tr>
+<tr><td><code>--parallel</code></td><td><code>4</code></td><td>Tool calls that may run at once. Must be 1 or more.</td></tr>
+<tr><td><code>--timeout</code></td><td><code>60</code></td><td>Seconds allowed for one model turn, stream included</td></tr>
+</tbody>
+</table>
+</div>
+
+<p><code>TOOL_RUNNER_API_KEY</code> sets a bearer token. It comes from the environment and not from a flag, so it stays out of shell history and out of <code>ps</code>. <code>RUST_LOG</code> overrides the default log filter.</p>
+
+<h3>Safety rules</h3>
+
+<p>Each rule is enforced in code, and a test checks it.</p>
+
+<p>Each row names the rule, the file that enforces it, and the test that checks it.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+<thead><tr><th>Rule</th><th>Where</th><th>Test</th></tr></thead>
+<tbody>
+<tr><td>The model can only call the tools in the registry. Any other name is an error result.</td><td><code>agent.rs</code></td><td><code>an_unknown_tool_name_is_an_error_result</code></td></tr>
+<tr><td>A model that keeps asking for tools stops at <code>--max-turns</code>.</td><td><code>agent.rs</code></td><td><code>max_turns_stops_a_runaway_model</code></td></tr>
+<tr><td>At most <code>--parallel</code> tool calls run at once.</td><td><code>agent.rs</code></td><td><code>the_parallel_limit_is_honored</code></td></tr>
+<tr><td>A refused tool call goes back to the model as an error. The run goes on.</td><td><code>agent.rs</code></td><td><code>a_refused_tool_call_goes_back_to_the_model_as_an_error</code></td></tr>
+<tr><td>Retries cover only 429 and 5xx, and only before a stream starts. A stream is never sent twice.</td><td><code>client.rs</code></td><td><code>retry_after_503_then_success</code>, <code>a_400_is_not_retried</code></td></tr>
+<tr><td>A <code>Retry-After</code> longer than our cap is an error, not a long sleep.</td><td><code>client.rs</code></td><td><code>a_retry_after_longer_than_our_cap_is_not_waited_for</code></td></tr>
+<tr><td>Each turn has a timeout that covers the whole turn, stream included.</td><td><code>client.rs</code></td><td><code>the_per_request_timeout_fires</code></td></tr>
+<tr><td>Redirects are not followed, so the API key is never sent to another host.</td><td><code>client.rs</code></td><td>none</td></tr>
+<tr><td>The key comes from the environment. Logs never show it.</td><td><code>main.rs</code>, <code>client.rs</code></td><td>none</td></tr>
+<tr><td><code>read_file</code> takes relative paths only, refuses <code>..</code>, follows symbolic links and checks where they lead, and reads at most 64 KiB.</td><td><code>tools/read_file.rs</code></td><td><code>read_file_rejects_*</code>, <code>read_file_refuses_files_over_the_cap</code></td></tr>
+<tr><td><code>run_command</code> runs only exact program names from the allowlist.</td><td><code>tools/run_command.rs</code></td><td><code>run_command_refuses_a_program_that_is_not_on_the_list</code>, <code>run_command_matches_the_exact_name_not_a_path</code></td></tr>
+<tr><td><code>run_command</code> uses no shell, so <code>;</code>, <code>$VARIABLES</code> and pipes are plain text.</td><td><code>tools/run_command.rs</code></td><td><code>run_command_does_not_use_a_shell</code></td></tr>
+<tr><td><code>run_command</code> clears the environment and sets a short PATH.</td><td><code>tools/run_command.rs</code></td><td><code>run_command_clears_the_environment</code></td></tr>
+<tr><td><code>run_command</code> runs in the sandbox folder. Its arguments may not be absolute, contain <code>..</code>, or be a link that leads out.</td><td><code>tools/run_command.rs</code></td><td><code>run_command_refuses_arguments_that_point_outside</code>, <code>run_command_refuses_a_symlink_that_points_outside</code></td></tr>
+<tr><td><code>run_command</code> kills a program that runs too long, and stops one that prints more than 16 KiB per stream.</td><td><code>tools/run_command.rs</code></td><td><code>run_command_stops_a_program_that_runs_too_long</code>, <code>run_command_caps_the_output_and_stops_a_noisy_program</code></td></tr>
+<tr><td>Ctrl+C cancels the run. The loop stops at its next wait, and the exit code is 130.</td><td><code>main.rs</code>, <code>agent.rs</code></td><td><code>cancellation_stops_the_loop</code></td></tr>
+<tr><td>Logs name the turn and the tool. They never show tool inputs, tool outputs or the key.</td><td><code>agent.rs</code>, <code>client.rs</code></td><td>none</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>Read these limits before you point the harness at real files:</p>
+
+<ul>
+  <li><strong><code>run_command</code> is the riskiest tool.</strong> The argument check looks at each argument as a whole. An option that carries a path, such as <code>--option=/some/absolute/path</code>, gets past it, and an allowed program can then read that path. Keep the allowlist short. Run the harness as a user who has no secrets it should not read.</li>
+  <li><strong>The file checks run once, and then the file is read.</strong> A program that swaps a link between the check and the read could get past them. A real sandbox needs operating system features, such as a container or a separate user.</li>
+  <li><strong><code>run_command</code> runs on Unix only.</strong> Its PATH and program names assume Unix.</li>
+</ul>
+
+<h3>Known gaps</h3>
+
+<ul>
+  <li>Nothing is saved. Each run starts with an empty conversation, and there is no system prompt.</li>
+  <li>A tool's input arrives whole in one event. Real APIs often stream it in pieces.</li>
+  <li>Tool results are text only. There are no images and no structured results.</li>
+  <li>Retries cover HTTP status only. A connection that fails before any response is not retried.</li>
+  <li>The timeout covers the whole turn, so it must be longer than the longest answer.</li>
+  <li>There is no token counting and no context limit. A long conversation can grow past a real model's context window. The mock never does.</li>
+  <li>Tool calls share one task and run concurrently, not in parallel threads. A tool that does heavy computation without an <code>await</code> would block the others.</li>
+</ul>
+
+<h3>Exercises: extend it</h3>
+
+<ol>
+  <li>Add a <code>list_dir</code> tool. It must use the same checks as <code>read_file</code>. Write a test that proves <code>..</code> is refused before you write the code.</li>
+  <li>Make <code>calculator</code> read expressions such as <code>6 * 7</code>. Keep the grammar small, and refuse anything you do not recognize. Write the bad-input tests first.</li>
+  <li>Stream a tool's input in pieces, as real APIs often do. Give each piece an id, and join the pieces in <code>client.rs</code> before the tool runs. Keep <code>sse.rs</code> as it is.</li>
+  <li>Save the conversation to a file after each turn, and add <code>--resume &lt;file&gt;</code>. Decide what must never be written there, such as the API key.</li>
+  <li>Make the <code>run_command</code> argument check stronger. First write a test that shows the gap, an option that carries an absolute path. Then close it, or explain in the code why you cannot.</li>
+</ol>
+
+<p>Two checks close the chapter.</p>
+
+<div class="ox-order" data-id="21:capstone-loop" data-label="Put one turn in order">
+  <ol>
+    <li>Send the messages so far, with the tool definitions and <code>stream: true</code>.</li>
+    <li>Read the streamed events until a <code>done</code> event arrives. Print the text as it comes.</li>
+    <li>Run the tools the model asked for, at most <code>--parallel</code> at once.</li>
+    <li>Send the results back as <code>tool_result</code> blocks with the same ids, then ask again.</li>
+  </ol>
+  <div class="ox-why"><p>The model must see the messages before it can answer. It asks for tools only inside a streamed answer, so the tools run after the stream ends. The results go back before the next ask, because the model needs them to continue.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="21:capstone-refuse" data-label="Check yourself">
+  <p class="ox-q">The model asks <code>read_file</code> for <code>../.env</code>. What does the harness do?</p>
+  <ol class="ox-choices">
+    <li>It reads the file, because <code>.env</code> is inside the project folder.</li>
+    <li data-correct>It refuses the call. A path with <code>..</code> is an error. The model gets an error result, and the run goes on.</li>
+    <li>It stops the whole run with an error.</li>
+  </ol>
+  <div class="ox-why"><p>Rule 2 in <code>read_file</code> refuses any path with a <code>..</code> part. The refusal is a <code>ToolError::Denied</code>. <code>agent.rs</code> turns it into a <code>tool_result</code> with <code>is_error</code> set, so the model can try something else. The test is <code>read_file_rejects_parent_directory_escapes</code>.</p></div>
+</div>
+</section>
+
+
+<section>
+<h2 id="edition-2024">What edition 2024 changed</h2>
+
+<p>Edition 2024 came out with Rust 1.85, alongside async closures. Most of its changes are small. Some code that compiled on 2021 fails on 2024. Some code still compiles, but it means something different. Most of the changes concern how long a temporary value lives. You set the edition in <code>Cargo.toml</code> with <code>edition = "2024"</code>, and the tool-runner project does that too.</p>
+
+<h3>The edition changes you will meet</h3>
+
+<p>Each row was compiled with rustc 1.97 under both <code>--edition 2021</code> and <code>--edition 2024</code>.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Change</th><th>Edition 2021</th><th>Edition 2024</th></tr></thead>
+  <tbody>
+    <tr><td>Let chains</td><td>Refused. <code>if let Some(x) = a &amp;&amp; x &gt; 0</code> gives "let chains are only allowed in Rust 2024 or later".</td><td>Accepted, since Rust 1.88. The Forge section above shows one.</td></tr>
+    <tr><td>Temporaries in <code>if let</code></td><td>A temporary in the scrutinee lives until the whole <code>if let ... else</code> ends. The <code>else</code> block runs first.</td><td>The temporary is dropped before <code>else</code> runs. A lock taken in the scrutinee is no longer held inside <code>else</code>.</td></tr>
+    <tr><td>Temporaries in a tail expression</td><td><code>cell.borrow().len()</code> as the last line of a function fails with E0597. The <code>Ref</code> temporary outlives the <code>cell</code> it borrows.</td><td>Compiles. Temporaries in the tail expression are dropped before the local variables.</td></tr>
+    <tr><td><code>impl Trait</code> in return position</td><td>An <code>impl Iterator</code> return type does not capture the lifetime of a borrowed argument. Returning an iterator over that argument fails with E0700.</td><td>The return type captures every lifetime in scope. <code>+ use&lt;..&gt;</code> names exactly the lifetimes it captures, and <code>+ use&lt;&gt;</code> captures none.</td></tr>
+    <tr><td><code>unsafe extern</code></td><td>An <code>extern "C"</code> block may omit <code>unsafe</code>.</td><td>The block must say <code>unsafe extern</code>. A function marked <code>safe</code> inside it can be called without an <code>unsafe</code> block.</td></tr>
+    <tr><td>Unsafe attributes</td><td><code>#[no_mangle]</code> is accepted, and so is <code>#[unsafe(no_mangle)]</code>.</td><td>The bare <code>#[no_mangle]</code> is an error, "unsafe attribute used without unsafe". Write <code>#[unsafe(no_mangle)]</code>.</td></tr>
+    <tr><td><code>static mut</code></td><td>A shared reference to a <code>static mut</code> compiles, with a warning.</td><td>The same reference is an error, because the <code>static_mut_refs</code> lint is denied by default. Use <code>&amp;raw const</code> to make a raw pointer instead.</td></tr>
+    <tr><td><code>gen</code></td><td><code>let gen = 5;</code> compiles.</td><td><code>gen</code> is a reserved keyword. Write <code>r#gen</code> to use it as a name.</td></tr>
+    <tr><td><code>Box&lt;[T]&gt;</code> by value</td><td><code>boxed.into_iter()</code> yields references, so <code>collect</code> into a <code>Vec&lt;T&gt;</code> fails with E0277.</td><td><code>boxed.into_iter()</code> yields the values.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>This block uses the two attribute forms that edition 2024 requires. It compiles on both editions, and the bare forms do not compile on 2024.</p>
+
+<pre class="rs" data-check="ok" data-stdout="3\n1">unsafe extern "C" {
+    safe fn abs(input: i32) -&gt; i32;
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn course_hello() -&gt; i32 {
+    1
+}
+
+fn main() {
+    println!("{}", abs(-3));
+    println!("{}", course_hello());
+}</pre>
+
+<h3>Recent stable features worth knowing</h3>
+
+<p>Each feature below is stable in the release named. The examples are one line each. The library examples were compiled with rustc 1.97.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Feature</th><th>Stable since</th><th>One-line example</th></tr></thead>
+  <tbody>
+    <tr><td><code>OnceLock</code></td><td>1.70.0</td><td><code>static NAME: OnceLock&lt;String&gt; = OnceLock::new();</code></td></tr>
+    <tr><td><code>LazyLock</code></td><td>1.80.0</td><td><code>static GREETING: LazyLock&lt;String&gt; = LazyLock::new(|| "hi".into());</code></td></tr>
+    <tr><td><code>#[expect]</code></td><td>1.81</td><td><code>#[expect(unused_variables)] let unused = 1;</code></td></tr>
+    <tr><td><code>iter::repeat_n</code></td><td>1.82.0</td><td><code>std::iter::repeat_n('-', 5)</code></td></tr>
+    <tr><td><code>Option::is_none_or</code></td><td>1.82.0</td><td><code>opt.is_none_or(|n| n &gt; 2)</code></td></tr>
+    <tr><td>Async closures</td><td>1.85</td><td><code>let make = async |n: u32| n * 2;</code></td></tr>
+    <tr><td>Trait upcasting</td><td>1.86</td><td><code>let animal: &amp;dyn Animal = pet;</code>, where <code>pet</code> is a <code>&amp;dyn Pet</code> and <code>Pet: Animal</code></td></tr>
+    <tr><td><code>slice::get_disjoint_mut</code></td><td>1.86.0</td><td><code>let [a, c] = v.get_disjoint_mut([0, 2]).unwrap();</code></td></tr>
+    <tr><td><code>slice::chunk_by</code></td><td>1.77.0</td><td><code>v.chunk_by(|a, b| a == b)</code></td></tr>
+    <tr><td><code>Cell::update</code></td><td>1.88.0</td><td><code>counter.update(|n| n + 1);</code></td></tr>
+    <tr><td><code>HashMap::extract_if</code></td><td>1.88.0</td><td><code>map.extract_if(|_, v| *v &gt; 5)</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Let chains are in the first table. The <code>since</code> versions for the library items come from the standard library source, and the editions were checked by compiling.</p>
+
+<div class="ox-quiz" data-id="21:edition-tail" data-label="Check yourself">
+  <p class="ox-q">This program is written for edition 2024. What happens when you compile it with <code>--edition 2021</code>?</p>
+<pre class="rs" data-stdout="3">use std::cell::RefCell;
+
+fn count() -&gt; usize {
+    let cell = RefCell::new(vec![1, 2, 3]);
+    cell.borrow().len()
+}
+
+fn main() {
+    println!("{}", count());
+}</pre>
+  <ol class="ox-choices">
+    <li>It prints <code>3</code>, the same as on 2024.</li>
+    <li data-correct>It fails with E0597, because the <code>Ref</code> from <code>borrow()</code> outlives <code>cell</code>.</li>
+    <li>It compiles, prints a warning, and prints <code>0</code>.</li>
+  </ol>
+  <div class="ox-why"><p>On 2021 the temporary in the tail expression is dropped after the local <code>cell</code>, so the borrow outlives the value it points into. On 2024 the temporary goes first. On 2021 you can fix the code by binding the length first: <code>let n = cell.borrow().len(); n</code>.</p></div>
+</div>
+</section>
+
 
 <section>
 <h2 id="roadmap">Where to go next</h2>
@@ -1454,6 +2210,9 @@ fn main() {
     <li>Measure a release build, profile before you change code, and change one thing at a time.</li>
     <li>Idioms prevent specific bugs. Newtypes guard meaning, typestate puts state in the type, RAII guards clean up on every path, and <code>From</code> lets <code>?</code> convert errors.</li>
     <li>Review agent code for the smells that compile: needless clones, <code>unwrap</code> on input, stringly typed states, ignored results, and <code>unsafe</code> without a reason.</li>
+    <li>A process starts with <code>Command</code>. Pass the arguments as a list, never as a shell string built from input. <code>output()</code> waits and captures, <code>status()</code> waits and inherits, and <code>spawn()</code> returns a child that you can poll and kill at a deadline.</li>
+    <li>The capstone, <code>projects/tool-runner</code>, is one loop: ask the model, stream the answer, run the tools under rules, send the results, and repeat. Each rule is enforced in code and has a test.</li>
+    <li>Edition 2024 changed a few lifetimes and keywords. The table in <code>What edition 2024 changed</code> lists them, and each row was compiled under both editions.</li>
   </ul>
 </div>
 

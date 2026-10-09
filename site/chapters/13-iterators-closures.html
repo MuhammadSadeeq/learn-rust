@@ -529,6 +529,22 @@ fn main() {
 }</pre>
   <div class="ox-bridge-note"><p>Where it holds: you pass a name, and the function gets called. Where it breaks: <code>double(...)</code> builds a <code>Closure</code> object when the line runs, and every call goes through that object. Rust's <code>double</code> is its own zero-sized type, known at compile time, and <code>apply</code> gets a separate copy for it, the same as for a closure. The signature is checked at compile time, so passing a function with the wrong parameter type is a compile error.</p></div>
 </div>
+<h3>Closures of different types in one list</h3>
+
+<p><code>impl Fn(i32) -&gt; i32</code> accepts one closure at a time, and each closure has its own type. So a <code>Vec</code> cannot hold two different closures by that rule. <code>Box&lt;dyn Fn(i32) -&gt; i32&gt;</code> erases the closure's type and keeps only what it does. Each box holds one closure on the heap, so closures with different captures can share one list.</p>
+
+<pre class="rs" data-check="ok" data-stdout="[-3, -40, 4]">fn main() {
+    let offset = 10;
+    let steps: Vec&lt;Box&lt;dyn Fn(i32) -&gt; i32&gt;&gt; = vec![
+        Box::new(|x| x + 1),
+        Box::new(move |x| x * offset),
+        Box::new(i32::abs),
+    ];
+    let results: Vec&lt;i32&gt; = steps.iter().map(|f| f(-4)).collect();
+    println!("{results:?}");
+}</pre>
+
+<p>The first closure captures nothing. The second one captures <code>offset</code> with <code>move</code>, so it owns its copy. The third is a named function, and it fits in the same list.</p>
 </section>
 
 <section>
@@ -944,6 +960,47 @@ fn main() {
   <li><strong>String</strong> collects from characters, or from string pieces, and joins them.</li>
   <li><strong>Result&lt;Vec&lt;T&gt;, E&gt;</strong> is the all-or-nothing collect. You get <code>Ok</code> with every value, or the first <code>Err</code>. Once an error appears, <code>collect</code> stops pulling, and the items after it are never looked at.</li>
 </ul>
+
+<h3>iter::from_fn: an iterator from a closure</h3>
+
+<p><code>std::iter::from_fn</code> builds an iterator out of a closure. The closure returns <code>Some(item)</code> for each value, and <code>None</code> to stop. Use it when the next value depends on state that a range cannot express.</p>
+
+<pre class="rs" data-check="ok" data-stdout="[1, 2, 4, 8, 16, 32, 64]">fn main() {
+    let mut n = 1;
+    let powers: Vec&lt;i32&gt; = std::iter::from_fn(|| {
+        if n &gt; 100 {
+            None
+        } else {
+            let current = n;
+            n *= 2;
+            Some(current)
+        }
+    })
+    .collect();
+    println!("{powers:?}");
+}</pre>
+
+<h3>chunk_by: groups of neighbors</h3>
+
+<p><code>chunk_by</code> splits a slice into groups. A new group starts whenever the closure returns <code>false</code> for two neighbors. It groups runs, so equal values that are far apart land in separate groups. It is stable since Rust 1.77.</p>
+
+<pre class="rs" data-check="ok" data-stdout="[[1, 1], [2, 2, 2], [5], [1]]">fn main() {
+    let readings = [1, 1, 2, 2, 2, 5, 1];
+    let groups: Vec&lt;&amp;[i32]&gt; = readings.chunk_by(|a, b| a == b).collect();
+    println!("{groups:?}");
+}</pre>
+
+<h3>split_once: split at the first separator</h3>
+
+<p><code>str::split_once</code> splits a string at its first match. It returns the two halves as a tuple, or <code>None</code> when the separator is missing. For a line such as <code>key=value</code>, you get both parts in one call, with no index arithmetic. It is stable since Rust 1.52.</p>
+
+<pre class="rs" data-check="ok" data-stdout="name is oxidize\nNone">fn main() {
+    let line = "name=oxidize";
+    if let Some((key, value)) = line.split_once('=') {
+        println!("{key} is {value}");
+    }
+    println!("{:?}", "no equals sign".split_once('='));
+}</pre>
 
 <div class="ox-quiz" data-id="13:result-collect" data-label="Check yourself">
   <p class="ox-q">What does this program print?</p>

@@ -596,6 +596,32 @@ For more information about this error, try `rustc --explain E0004`.</pre>
   = note: `#[warn(unreachable_patterns)]` (part of `#[warn(unused)]`) on by default</pre>
   </div>
 </div>
+<h3>Slice patterns</h3>
+
+<p>A slice pattern matches a list by its shape. <code>[first, .., last]</code> matches a list with at least two items, and names the two ends. <code>[x, rest @ ..]</code> takes the first item, and binds the rest of the list to <code>rest</code>. The <code>..</code> stands for any number of items, and <code>rest @ ..</code> gives those items a name.</p>
+
+<pre class="rs" data-check="ok" data-stdout="first 1, last 4\nSome((7, [8, 9]))">fn describe(v: &amp;[i32]) -&gt; String {
+    match v {
+        [] =&gt; "empty".to_string(),
+        [only] =&gt; format!("one: {only}"),
+        [first, .., last] =&gt; format!("first {first}, last {last}"),
+    }
+}
+
+fn head_and_rest(v: &amp;[i32]) -&gt; Option&lt;(i32, &amp;[i32])&gt; {
+    match v {
+        [x, rest @ ..] =&gt; Some((*x, rest)),
+        [] =&gt; None,
+    }
+}
+
+fn main() {
+    println!("{}", describe(&amp;[1, 2, 3, 4]));
+    println!("{:?}", head_and_rest(&amp;[7, 8, 9]));
+}</pre>
+
+<p>Both functions take <code>&amp;[i32]</code>, so they accept any list, and the caller keeps ownership.</p>
+
 </section>
 
 <section>
@@ -860,6 +886,46 @@ fn main() {
   <pre class="rs" data-check="ok">let port: u16 = "8080".parse().expect("config was validated at startup");</pre>
   <p>Everywhere else, use the methods from the section above.</p>
 </aside>
+<h3>Let chains, and the if let rescope</h3>
+
+<p>Chapter 10 used <code>if let</code> for one pattern. Edition 2024 adds let chains. A let chain joins several conditions with <code>&amp;&amp;</code> in one <code>if</code>, and some of those conditions can be <code>let</code> patterns. Each <code>let</code> narrows the value for the conditions after it. Let chains arrived in Rust 1.88, and only edition 2024 accepts them.</p>
+
+<pre class="rs" data-check="ok" data-stdout="skip\nskip\nbig 12">fn main() {
+    let values = vec![Some(4), None, Some(12)];
+    for value in &amp;values {
+        if let Some(n) = value &amp;&amp; *n &gt; 5 {
+            println!("big {n}");
+        } else {
+            println!("skip");
+        }
+    }
+}</pre>
+
+<p>The same edition also changed where a temporary ends. In an <code>if let</code>, a temporary made in the scrutinee used to live until the whole <code>if let ... else</code> ended. On edition 2024 it is dropped before the <code>else</code> block runs. This matters for locks. A guard made in the scrutinee used to stay held inside <code>else</code>.</p>
+
+<pre class="rs" data-check="ok" data-stdout="drop scrutinee\nelse">struct Noisy(&amp;'static str);
+
+impl Drop for Noisy {
+    fn drop(&amp;mut self) {
+        println!("drop {}", self.0);
+    }
+}
+
+impl Noisy {
+    fn get(&amp;self) -&gt; Option&lt;i32&gt; {
+        None
+    }
+}
+
+fn main() {
+    if let Some(x) = Noisy("scrutinee").get() {
+        println!("then {x}");
+    } else {
+        println!("else");
+    }
+}</pre>
+
+<p>The value is <code>None</code>, so the <code>else</code> block runs. On edition 2024 the drop message appears first. On 2021 it appears last.</p>
 </section>
 
 <section>

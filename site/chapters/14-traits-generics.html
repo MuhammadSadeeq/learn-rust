@@ -179,6 +179,33 @@ impl Summary for Tweet {
 </div>
 
 <p>PHP 8.3 added <code>#[\Override]</code> for part of this check. Put it on a method, and PHP verifies that a parent or an interface really declares a method with that name. If the method is spelled <code>summarise</code>, the class fails to load. Rust checks every impl at compile time. A misspelled method is error E0407, and a missing required method is E0046.</p>
+<h3>Supertraits: a trait that needs another</h3>
+
+<p>A trait can require another trait. <code>trait Tool: Named</code> means every type that implements <code>Tool</code> must also implement <code>Named</code>. A default method on <code>Tool</code> can then call <code>Named</code>'s methods, because the compiler knows they exist. You can list <code>Send</code> and <code>Sync</code> the same way, as in <code>trait Job: Send + Sync</code>. That means every <code>Job</code> can cross threads.</p>
+
+<pre class="rs" data-check="ok" data-stdout="running clock">trait Named {
+    fn name(&amp;self) -&gt; String;
+}
+
+trait Tool: Named {
+    fn run(&amp;self) -&gt; String {
+        format!("running {}", self.name())
+    }
+}
+
+struct Clock;
+
+impl Named for Clock {
+    fn name(&amp;self) -&gt; String {
+        "clock".into()
+    }
+}
+
+impl Tool for Clock {}
+
+fn main() {
+    println!("{}", Clock.run());
+}</pre>
 </section>
 
 <section>
@@ -553,6 +580,22 @@ fn main() {
 <p>Calling <code>q.dist_from_origin()</code> on a <code>Point&lt;i32&gt;</code> is an error. The compiler reports that the method was found for <code>Point&lt;f64&gt;</code>, which is exactly the point of the specific impl.</p>
 
 <p><code>Option&lt;T&gt;</code> and <code>Result&lt;T, E&gt;</code> are generic enums built the same way. You have used them since Chapters 10 and 11. Your own enums can take type parameters too.</p>
+<h3>Const generics: a number as a parameter</h3>
+
+<p>A type parameter stands for a type. A const generic parameter stands for a value, usually a length. <code>[i32; N]</code> is an array of exactly <code>N</code> items, so <code>sum</code> accepts an array of any length. The compiler makes one copy of the function for each length it sees, the same way it stamps out copies for type parameters.</p>
+
+<pre class="rs" data-check="ok" data-stdout="6\n40">fn sum&lt;const N: usize&gt;(a: [i32; N]) -&gt; i32 {
+    let mut total = 0;
+    for x in a {
+        total += x;
+    }
+    total
+}
+
+fn main() {
+    println!("{}", sum([1, 2, 3]));
+    println!("{}", sum([10; 4]));
+}</pre>
 </section>
 
 <section>
@@ -851,6 +894,64 @@ struct Checkout {
 </div>
 
 <p>Choose <code>dyn</code> when the set of types is open or mixed: a registry of handlers, a list of plugins, a collection of heterogeneous items. Choose generics on a hot path where the types are known and you want the fastest calls. The iterator adapters from Chapter 13 are generic, which is why the compiler can specialize a whole chain for your types.</p>
+<h3>Trait objects that cross threads</h3>
+
+<p>A trait object that a thread will own needs the marker traits as well. <code>Box&lt;dyn Job + Send + Sync + 'static&gt;</code> is a boxed job that can move to another thread, can be shared between threads, and holds no borrowed data. Leave out <code>Send</code>, and <code>thread::spawn</code> refuses the box with E0277, because the trait object might not be safe to send.</p>
+
+<pre class="rs" data-check="ok" data-stdout="8">trait Job: Send + Sync {
+    fn run(&amp;self) -&gt; u32;
+}
+
+struct Double(u32);
+
+impl Job for Double {
+    fn run(&amp;self) -&gt; u32 {
+        self.0 * 2
+    }
+}
+
+fn main() {
+    let jobs: Vec&lt;Box&lt;dyn Job + Send + Sync + 'static&gt;&gt; = vec![Box::new(Double(4))];
+    for job in &amp;jobs {
+        println!("{}", job.run());
+    }
+}</pre>
+
+<h3>Trait upcasting</h3>
+
+<p>Since Rust 1.86, a <code>&amp;dyn Pet</code> can become a <code>&amp;dyn Animal</code> when <code>Pet</code> requires <code>Animal</code>. This is trait upcasting. You get the supertrait's methods through the same pointer, with a plain assignment and no helper method.</p>
+
+<pre class="rs" data-check="ok" data-stdout="dog sam">trait Animal {
+    fn name(&amp;self) -&gt; String;
+}
+
+trait Pet: Animal {
+    fn owner(&amp;self) -&gt; String;
+}
+
+struct Dog;
+
+impl Animal for Dog {
+    fn name(&amp;self) -&gt; String {
+        "dog".into()
+    }
+}
+
+impl Pet for Dog {
+    fn owner(&amp;self) -&gt; String {
+        "sam".into()
+    }
+}
+
+fn show(a: &amp;dyn Animal) -&gt; String {
+    a.name()
+}
+
+fn main() {
+    let pet: &amp;dyn Pet = &amp;Dog;
+    let animal: &amp;dyn Animal = pet;
+    println!("{} {}", show(animal), pet.owner());
+}</pre>
 </section>
 
 <section>
