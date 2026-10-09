@@ -306,17 +306,20 @@ def v_kick(amp=1.0):
     t = tvec(n)
     f = 46.0 + 120.0 * np.exp(-t / 0.028)
     body = drive(np.sin(2.0 * np.pi * np.cumsum(f) / SR), 1.4)
-    click = lp1(hp1(nz(n), 3000.0), 9000.0) * np.exp(-t / 0.0025) * 0.35
-    y = amp * (body * env_ad(n, 0.0012, 0.12) + click)
+    # beater click: band-passed noise 2.5-5 kHz, 6 ms, peak 18 dB under the kick body
+    cl = lp1(hp1(nz(n), 2500.0), 5000.0)
+    cl = cl * np.exp(-t / 0.0018) * (t < 0.006) * (0.5 + 0.5 * np.cos(np.pi * np.minimum(t, 0.006) / 0.006))
+    cl = cl / max(float(np.max(np.abs(cl))), 1e-12) * 10.0 ** (-18.0 / 20.0)
+    y = amp * (body * env_ad(n, 0.0012, 0.12) + cl)
     return fade_edges(y, 0.0005, 0.01)
 
 
-def v_snare(amp=1.0, body_f=190.0, noise_amt=0.55, dur=0.24, tau=0.11):
+def v_snare(amp=1.0, body_f=190.0, noise_amt=0.55, dur=0.24, tau=0.11, rattle_lp=9000.0):
     n = int(dur * SR)
     t = tvec(n)
     f = body_f * (1.0 + 0.5 * np.exp(-t / 0.02))
     body = np.sin(2.0 * np.pi * np.cumsum(f) / SR) * env_ad(n, 0.0008, 0.07)
-    rattle = lp1(hp1(nz(n), 1500.0), 9000.0) * env_ad(n, 0.0006, tau)
+    rattle = lp1(hp1(nz(n), 1500.0), rattle_lp) * env_ad(n, 0.0006, tau)
     return fade_edges(amp * (0.6 * body + noise_amt * rattle), 0.0005, 0.006)
 
 
@@ -377,12 +380,16 @@ def v_anvil(amp=1.0, f0=330.0):
     return fade_edges(amp * (y + click), 0.0002, 0.01)
 
 
-def v_crash(amp=1.0, dur=3.2, tau=0.9):
+def v_crash(amp=1.0, dur=3.2, tau=0.9, lp_sweep=None):
     """Filtered noise crash with a long tail that darkens as it decays."""
     n = int(dur * SR)
     t = tvec(n)
     x = hp1(nz(n), 1200.0)
-    x = lp1(x, 3000.0 + 9000.0 * np.exp(-t / 0.6))
+    if lp_sweep is None:
+        x = lp1(x, 3000.0 + 9000.0 * np.exp(-t / 0.6))
+    else:
+        f0, f1, T = lp_sweep                 # darkening tail: f0 -> f1 (exponential) over T seconds
+        x = lp1(x, f0 * (f1 / f0) ** np.clip(t / T, 0.0, 1.0))
     env = (1.0 - np.exp(-t / 0.004)) * np.exp(-t / tau)
     return fade_edges(amp * 0.6 * x * env, 0.001, 0.02)
 
@@ -444,6 +451,15 @@ def v_error_card(f, amp=1.0, dur=0.16):
     return fade_edges(amp * y * env_ad(n, 0.001, 0.05), 0.0005, 0.01)
 
 
+def v_error_bright(f, amp=1.0, dur=0.16):
+    """Bright layer for the error stabs: a saw whose filter opens from 500 Hz to about 4 kHz."""
+    n = int(dur * SR)
+    t = tvec(n)
+    fc = 500.0 + 3500.0 * (1.0 - np.exp(-t / 0.02))
+    y = lp1(saw(f, n), fc)
+    return fade_edges(amp * y * env_ad(n, 0.001, 0.06), 0.0005, 0.01)
+
+
 def v_buzz(amp=1.0, dur=0.26):
     n = int(dur * SR)
     t = tvec(n)
@@ -478,6 +494,11 @@ def v_bass(f, dur, amp=1.0, cut=380.0, square_mode=False):
     n = int(dur * SR)
     osc = square(f, n) if square_mode else saw(f, n)
     y = 0.6 * lp1(osc, cut) + 0.8 * np.sin(2.0 * np.pi * f * tvec(n))
+    # harmonic presence for small speakers: a tanh-driven copy, high-passed at 120 Hz, 10 dB under
+    har = hp1(hp1(drive(y, 3.0), 120.0), 120.0)
+    rms_y = np.sqrt(np.mean(y * y)) + 1e-12
+    rms_h = np.sqrt(np.mean(har * har)) + 1e-12
+    y = y + 10.0 ** (-10.0 / 20.0) * (rms_y / rms_h) * har
     return fade_edges(amp * y * env_pad(n, 0.003, 0.03), 0.0005, 0.01)
 
 
@@ -734,6 +755,14 @@ def finish(g, duck=None, ir=None, wet_level=0.9):
 
 # ---------------------------------------------------------------- composition
 
+DRONE_GAIN = 0.30     # sub drone group gain (S1 sub share)
+BODY_GAIN = 0.25      # warm D2+A2+D3 body under the drone (S1 mid share)
+PLUCK_GAIN = 0.40    # glass plucks group gain
+TICK_GAIN = 0.19     # S1 clock ticks (hats) gain
+CARD_BRIGHT = 1.0     # bright filter-opening layer on the S2 error stabs
+TP_LIMIT = 10.0 ** (-1.5 / 20.0)   # limiter ceiling, linear (-1.5 dBTP)
+
+
 def chord_pad(ch, n, cut, seed):
     """Supersaw chord: 7 detuned saws per note, low-passed, slow attack. Returns (2, n)."""
     st = np.zeros((2, n))
@@ -763,6 +792,7 @@ def compose():
     SN = v_snare(1.0)
     SN_SMALL = v_snare(0.6, dur=0.12, tau=0.06)
     SN_BIG = v_snare(1.0, body_f=170.0, noise_amt=0.9, dur=0.3, tau=0.15)
+    SN_DARK = v_snare(0.6, dur=0.12, tau=0.06, rattle_lp=4500.0)
     ANVIL = v_anvil(1.0)
     ANVIL_SM = v_anvil(0.35, f0=660.0)
     BOOM = v_boom(1.0)
@@ -797,13 +827,19 @@ def compose():
     DUCK = duck_curve(KS)
 
     # ---- S1 INVISIBLE (0-8): drone, clock ticks, glass motif, error stab
-    gD.mono(v_drone(hz("D1"), 0.0, 16.0, amp=0.55), 0.0, gain=0.5)
+    gD.mono(v_drone(hz("D1"), 0.0, 16.0, amp=0.55), 0.0, gain=DRONE_GAIN)
+    # audible body under the sub for small speakers: D2 + A2 + D3 saws, low-passed at 900 Hz, breathing
+    n16 = int(16.0 * SR)
+    body = sum(saw(midi_hz(m), n16) for m in (38, 45, 50)) / 3.0
+    body = lp1(body, 900.0) * (0.8 + 0.2 * np.sin(2.0 * np.pi * 0.11 * tvec(n16)))
+    body = fade_edges(body * env_pad(n16, 1.0, 0.4), 0.002, 0.01)
+    gD.mono(body, 0.0, gain=BODY_GAIN)
     for k, t in enumerate(hat_times(0.0, 8.0)):
-        gR.mono(HAT, t, gain=0.12, pan=0.25 if k % 2 else -0.25)
+        gR.mono(HAT, t, gain=TICK_GAIN, pan=0.25 if k % 2 else -0.25)
     motif = [(0.75, "A4", -0.45), (2.0, "D5", 0.45), (3.0, "F5", -0.25),
              (4.5, "E5", 0.30), (6.0, "A4", -0.40)]
     for t, note, pan in motif:
-        gG.mono(v_glass(hz(note), amp=1.0, dur=2.6), t, gain=0.25, pan=pan)
+        gG.mono(v_glass(hz(note), amp=1.0, dur=2.6), t, gain=PLUCK_GAIN, pan=pan)
     gF.mono(ERR_STAB, C["errorFlash"], gain=0.8)
 
     # ---- S2 THE WALL (8-16): pulse bass grows, error cards, word hits, riser, snare roll
@@ -812,8 +848,12 @@ def compose():
         gB.mono(PULSE, t, gain=0.35 * (0.25 + 0.75 * (t - 8.0) / 8.0))
     for k, t in enumerate(hat_times(8.0, 16.0)):
         gR.mono(HAT, t, gain=0.12, pan=0.25 if k % 2 else -0.25)
+    BRIGHT_A = v_error_bright(hz("D3"))
+    BRIGHT_B = v_error_bright(hz("G#3"))
     for i, t in enumerate(C["errorCards"]):
-        gF.mono(CARD_A if i % 2 == 0 else CARD_B, t, gain=0.55, pan=-0.8 if i % 2 == 0 else 0.8)
+        pan = -0.8 if i % 2 == 0 else 0.8
+        gF.mono(CARD_A if i % 2 == 0 else CARD_B, t, gain=0.55, pan=pan)
+        gF.mono(BRIGHT_A if i % 2 == 0 else BRIGHT_B, t, gain=CARD_BRIGHT, pan=pan)
     for t in C["wordHits"]:
         gR.mono(TOM_LOW, t, gain=0.9)
         gD.mono(SUB_DROP, t, gain=0.5)
@@ -840,7 +880,7 @@ def compose():
         if 56.0 <= t0 < 58.0:
             cut = 600.0                                  # pads filtered down, 56-58
         if ch == "D":
-            cut = 20000.0                                # unfiltered finale chord
+            cut = 7000.0                                # unfiltered finale chord
         if b == 27:                                      # filter sweep up into pullOut (52-54)
             u = np.clip(tvec(n) / BAR, 0.0, 1.0)
             cut = 400.0 * (6000.0 / 400.0) ** u
@@ -947,12 +987,12 @@ def compose():
     for t in np.arange(C["streamStart"], C["streamEnd"], 0.0625):
         f = (2800.0, 3600.0, 4400.0)[int(round(t * 16)) % 3]
         gF.mono(v_tick(amp=0.6, f=f), float(t), gain=0.5, pan=0.4 if int(round(t * 16)) % 2 else -0.4)
-    gF.mono(v_riser(2.0, amp=1.0, f0=150.0, f1=6000.0, lo=300.0, hi=9000.0), C["collapse"], gain=0.9)
+    gF.mono(v_riser(2.0, amp=1.0, f0=150.0, f1=3000.0, lo=300.0, hi=4000.0), C["collapse"], gain=0.9)
     for tr in roll_times(58.0, 59.95):
         frac = (tr - 58.0) / 1.95
-        gR.mono(SN_SMALL, tr, gain=0.3 + 0.6 * frac)
+        gR.mono(SN_DARK, tr, gain=0.3 + 0.6 * frac)
     gI.mono(ANVIL, C["finalHit"], gain=1.0)
-    gI.mono(v_crash(1.0, dur=3.2, tau=1.2), C["finalHit"], gain=0.7)
+    gI.mono(v_crash(1.0, dur=3.2, tau=1.2, lp_sweep=(12000.0, 4000.0, 1.5)), C["finalHit"], gain=0.55)
     gI.mono(BOOM, C["finalHit"], gain=0.9)
 
     groups = [gD, gB, gR, gP, gA, gG, gL, gE, gI, gF, gX]
@@ -976,6 +1016,48 @@ def brickwall(x, f_lo=19000.0, f_hi=20000.0):
     g = g * (1.0 - np.exp(-(f / 6.0) ** 2))      # kill DC and sub-6 Hz drift exactly
     X = np.fft.rfft(x, L, axis=1)
     return np.fft.irfft(X * g[None, :], L, axis=1)[:, :n]
+
+
+def upsample4(x):
+    """4x band-limited upsampling by FFT zero-padding. x: (2, n); returns (2, 4n)."""
+    n = x.shape[1]
+    X = np.fft.rfft(x, axis=1)
+    Y = np.zeros((x.shape[0], 2 * n + 1), dtype=complex)
+    Y[:, :X.shape[1]] = X
+    return np.fft.irfft(Y, n=4 * n, axis=1) * 4.0
+
+
+def _centred_min(x, r):
+    """Centred minimum over [i-r, i+r] (van Herk / Gil-Werman, O(n))."""
+    w = 2 * r + 1
+    y = np.concatenate([np.full(r, np.inf), x, np.full(r, np.inf)])
+    L = len(y)
+    nb = -(-L // w)
+    Yp = np.full(nb * w, np.inf)
+    Yp[:L] = y
+    B = Yp.reshape(nb, w)
+    g = np.minimum.accumulate(B, axis=1).ravel()
+    h = np.minimum.accumulate(B[:, ::-1], axis=1)[:, ::-1].ravel()
+    return np.minimum(h[:len(x)], g[w - 1:w - 1 + len(x)])
+
+
+def _centred_mean(x, r):
+    w = 2 * r + 1
+    xp = np.concatenate([np.full(r, x[0]), x, np.full(r, x[-1])])
+    c = np.concatenate([[0.0], np.cumsum(xp)])
+    return (c[w:] - c[:-w]) / w
+
+
+def true_peak_limit(st, ceiling, look=0.005):
+    """Stereo-linked true-peak limiter. Required gain comes from 4x oversampled peaks. It is widened by a
+    5 ms minimum filter and smoothed by a 5 ms mean, which keeps the gain at or below the requirement
+    at every sample, so the smoothing cannot let a peak through."""
+    up = np.abs(upsample4(st)).max(axis=0)
+    pk = up.reshape(-1, 4).max(axis=1)
+    req = np.minimum(1.0, ceiling / np.maximum(pk, 1e-12))
+    r = int(round(look * SR))
+    g = _centred_mean(_centred_min(req, r), r)
+    return st * g[None, :]
 
 
 def master_linear(mix):
@@ -1122,7 +1204,7 @@ def main():
     drv = breath_gate(brickwall(np.tanh(DRIVE_IN * lin_main))) + brickwall(np.tanh(DRIVE_IN * lin_sw))
     peak_drv = float(np.max(np.abs(drv)))
     scale = TARGET_PEAK / peak_drv
-    master = drv * scale
+    master = true_peak_limit(drv * scale, TP_LIMIT)
     write_wav(os.path.join(OUT_DIR, "music.wav"), master)
 
     if args.stems:
@@ -1134,6 +1216,8 @@ def main():
                 s = breath_gate(s)
             write_wav_float(os.path.join(STEM_DIR, f"{name}.wav"), s * lin_k)
 
+    tp = float(np.max(np.abs(upsample4(master))))
+    print(f"[music] true peak (4x oversampled) {db(tp):.2f} dBTP")
     mono = master.mean(axis=0)
     print(f"[music] rendered {N} samples ({N / SR:.3f} s) in {time.time() - t0:.1f} s")
     print(f"[music] peak {db(np.max(np.abs(master))):.2f} dBFS, L/R peak "
