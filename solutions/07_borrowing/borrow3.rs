@@ -23,9 +23,8 @@ fn push_and_report(v: &mut Vec<i32>, x: i32) -> String {
 /// Swaps the first two values in place. Shorter slices are left alone.
 fn swap_first_two(v: &mut [i32]) {
     if v.len() >= 2 {
-        let tmp = v[0];
-        v[0] = v[1];
-        v[1] = tmp;
+        // One &mut borrow of the whole slice. The swap method exchanges two places in it.
+        v.swap(0, 1);
     }
 }
 

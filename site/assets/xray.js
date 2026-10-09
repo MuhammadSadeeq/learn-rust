@@ -148,7 +148,7 @@
       case "alloc": {
         const [id, content, cap, opts = {}] = a;
         const cells = Array.isArray(content) ? content.map(String) : Array.from(String(content));
-        st.heap.push({ id, cells, cap: cap || cells.length, label: opts.label || "", rc: opts.rc, status: "" });
+        st.heap.push({ id, cells, cap: cap || cells.length, label: opts.label || "", show: opts.show, rc: opts.rc, status: "" });
         break;
       }
       case "heap": {

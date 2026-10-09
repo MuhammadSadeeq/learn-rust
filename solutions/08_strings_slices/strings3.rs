@@ -8,11 +8,7 @@
 // ============================================================================
 
 fn char_count(s: &str) -> usize {
-    let mut count = 0;
-    for _ in s.chars() {
-        count += 1;
-    }
-    count
+    s.chars().count()
 }
 
 fn reverse_chars(s: &str) -> String {
@@ -25,13 +21,12 @@ fn reverse_chars(s: &str) -> String {
 }
 
 fn truncate_chars(s: &str, max: usize) -> &str {
-    let mut count = 0;
-    for (byte_index, _) in s.char_indices() {
+    // enumerate (Chapter 13) numbers the characters as char_indices yields them.
+    for (count, (byte_index, _)) in s.char_indices().enumerate() {
         if count == max {
             // This is the first character we drop. Cut just before it.
             return &s[..byte_index];
         }
-        count += 1;
     }
     // Fewer than max + 1 characters: the whole string already fits.
     s

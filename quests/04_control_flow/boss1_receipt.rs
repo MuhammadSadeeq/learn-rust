@@ -39,8 +39,8 @@ fn format_money(cents: u32) -> String {
     let mut grouped = String::new();
     for (i, ch) in dollars.char_indices() {
         // Count from the right: a comma goes before every third digit,
-        // except at the very start.
-        if i > 0 && (digits - i) % 3 == 0 {
+        // except at the very start. is_multiple_of(3) means the remainder is zero.
+        if i > 0 && (digits - i).is_multiple_of(3) {
             grouped.push(',');
         }
         grouped.push(ch);

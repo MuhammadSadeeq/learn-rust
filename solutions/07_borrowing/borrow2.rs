@@ -11,10 +11,10 @@
 // ============================================================================
 
 fn add_tax(prices: &mut [u32], rate_pct: u32) {
-    for i in 0..prices.len() {
+    for price in prices {
         // Integer division rounds the tax down to a whole cent.
-        let with_tax = u64::from(prices[i]) * (100 + u64::from(rate_pct)) / 100;
-        prices[i] = with_tax as u32;
+        let with_tax = u64::from(*price) * (100 + u64::from(rate_pct)) / 100;
+        *price = with_tax as u32;
     }
 }
 

@@ -21,14 +21,13 @@ fn busiest_day(days: [u32; 7]) -> usize {
     let mut best_day: usize = 0;
     let mut best_hours: u32 = days[0];
 
-    let mut day = 0;
-    for hours in days {
+    // enumerate (Chapter 13) gives each value its position with the value.
+    for (day, &hours) in days.iter().enumerate() {
         // Strictly greater: a tie keeps the earlier day.
         if hours > best_hours {
             best_day = day;
             best_hours = hours;
         }
-        day += 1;
     }
     best_day
 }

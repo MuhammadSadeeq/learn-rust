@@ -308,12 +308,9 @@ path = "07_borrowing/borrow2.rs"
 title = "Mutable borrow"
 summary = "Modify a value through &mut."
 hint = """
-1. A `&mut` parameter lets the function change the caller's value. `prices[i] = ...`
-   writes into the caller's slice, and `prices.len()` counts its entries.
-2. Do the tax math in u64, because a price of one billion times 110 doesn't fit
-   in u32. Integer division rounds the tax down. Cast the result back with `as u32`.
-3. For wrap_in_stars, `insert(0, '*')` puts a character at the start of the
-   String, and `push('*')` adds one at the end. Both change the String the caller owns.
+1. A `&mut` parameter lets the function change the caller's value. `for price in prices` gives each price as a `&mut u32`, and `*price = ...` writes the new value back into the caller's slice.
+2. Do the tax math in u64, because a price of one billion times 110 doesn't fit in u32. Integer division rounds the tax down. Cast the result back with `as u32`.
+3. For wrap_in_stars, `insert(0, '*')` puts a character at the start of the String, and `push('*')` adds one at the end. Both change the String the caller owns.
 """
 
 [[quest]]
@@ -323,14 +320,9 @@ path = "07_borrowing/borrow3.rs"
 title = "Readers or a writer"
 summary = "Untangle overlapping shared and mutable borrows."
 hint = """
-1. Each error names a borrow that is still alive. E0502 is the reference `&v[0]`
-   that push_and_report keeps while it pushes. E0499 is two `&mut` borrows of
-   elements of the same slice, alive at the same time.
-2. Copy the first value out with `v[0]`. An i32 is Copy, so the copy is a plain
-   number, and no borrow of v remains when you push. An empty Vec has no first
-   value, so check `is_empty()` before you index.
-3. For swap_first_two, copy one value into a `tmp` variable, then assign the two
-   places one after the other: `v[0] = v[1]` and then `v[1] = tmp`.
+1. Each error names a borrow that is still alive. E0502 is the reference `&v[0]` that push_and_report keeps while it pushes. E0499 is two `&mut` borrows of elements of the same slice, alive at the same time.
+2. Copy the first value out with `v[0]`. An i32 is Copy, so the copy is a plain number, and no borrow of v remains when you push. An empty Vec has no first value, so check `is_empty()` before you index.
+3. For swap_first_two, slices have a `swap` method. It exchanges two places with a single `&mut` borrow of the slice, so no two element borrows overlap.
 """
 
 [[quest]]
