@@ -3,6 +3,8 @@
 use std::fs;
 use std::io::{self, IsTerminal, Write};
 use std::path::Path;
+use std::thread;
+use std::time::Duration;
 
 /// ANSI styling that switches itself off for pipes and `NO_COLOR`.
 #[derive(Clone, Copy)]
@@ -67,6 +69,61 @@ pub fn first_lines(text: &str, max: usize) -> (String, usize) {
         return (text.trim_end().to_string(), 0);
     }
     (lines[..max].join("\n"), lines.len() - max)
+}
+
+/// Breaks `text` into lines of at most `width` chars, on spaces. A word is never
+/// split, so a word longer than `width` gets a line of its own.
+pub fn wrap(text: &str, width: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    for word in text.split_whitespace() {
+        if !line.is_empty() && line.chars().count() + 1 + word.chars().count() > width {
+            lines.push(std::mem::take(&mut line));
+        }
+        if !line.is_empty() {
+            line.push(' ');
+        }
+        line.push_str(word);
+    }
+    if !line.is_empty() {
+        lines.push(line);
+    }
+    lines
+}
+
+/// Draws `frames` one after another in the same place, `delay` apart. Every
+/// frame must have the same number of lines. Without color, or with
+/// FORGE_NO_ANIMATION set, only the last frame is printed, as plain text.
+pub fn animate(style: Style, frames: &[Vec<String>], delay: Duration) {
+    let Some(last) = frames.last() else {
+        return;
+    };
+    debug_assert!(
+        frames.iter().all(|f| f.len() == last.len()),
+        "animation frames must all have the same height"
+    );
+    if !style.color || std::env::var_os("FORGE_NO_ANIMATION").is_some() {
+        for line in last {
+            println!("{line}");
+        }
+        return;
+    }
+    print!("\x1b[?25l");
+    let mut height = 0;
+    for (i, frame) in frames.iter().enumerate() {
+        if i > 0 {
+            thread::sleep(delay);
+            // Move back up over the previous frame, then redraw this one.
+            print!("\x1b[{height}F");
+        }
+        for line in frame {
+            println!("\x1b[2K{line}");
+        }
+        let _ = io::stdout().flush();
+        height = frame.len();
+    }
+    print!("\x1b[?25h");
+    let _ = io::stdout().flush();
 }
 
 /// Chapter titles and page slugs, read from the website's course map so the
@@ -145,5 +202,11 @@ mod tests {
         let (text, hidden) = first_lines("a\nb\nc\nd", 2);
         assert_eq!(text, "a\nb");
         assert_eq!(hidden, 2);
+    }
+
+    #[test]
+    fn wraps_on_spaces_only() {
+        assert_eq!(wrap("aa bb cc", 5), vec!["aa bb", "cc"]);
+        assert_eq!(wrap("abcdefgh ij", 5), vec!["abcdefgh", "ij"]);
     }
 }

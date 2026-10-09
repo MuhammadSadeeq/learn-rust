@@ -8,6 +8,7 @@
 //! it: everything here (enums, Result, iterators, threads, channels, process
 //! spawning) is something the course teaches.
 
+mod art;
 mod quests;
 mod runner;
 mod ui;
@@ -41,6 +42,7 @@ IN WATCH MODE
     save the file   re-check automatically
     Enter           next quest (after you pass)
     h / l / s / q   hint / list / skip for now / quit   (type the letter, then Enter)
+    NO_COLOR=1 / FORGE_NO_ANIMATION=1   plain output / no animations
 ";
 
 struct Ctx {
@@ -201,10 +203,10 @@ fn list(ctx: &Ctx) {
         } else {
             (s.dim("·"), format!("{:<18}", q.name))
         };
-        let boss = if q.boss {
-            s.oxide(" BOSS")
-        } else {
-            String::new()
+        let boss = match art::boss_for(&q.name) {
+            Some(b) => s.oxide(&format!(" BOSS · {}", b.name)),
+            None if q.boss => s.oxide(" BOSS"),
+            None => String::new(),
         };
         let here = if Some(i) == current {
             s.oxide("  ← you are here")
@@ -468,8 +470,18 @@ fn header(ctx: &Ctx, i: usize) {
     println!();
 }
 
+/// Boss panels and the Oxi celebration are drawn this many columns wide.
+const MOOD_WIDTH: usize = 50;
+
 fn report(ctx: &Ctx, q: &Quest, outcome: &Outcome) {
     let s = ctx.style;
+    let boss = art::boss_for(&q.name).filter(|_| q.boss);
+    if let Some(lines) = boss.and_then(|b| boss_panel_for(ctx, q, b, outcome)) {
+        for line in lines {
+            println!("{line}");
+        }
+        println!();
+    }
     match outcome {
         Outcome::CompileError { output } => {
             println!(
@@ -488,7 +500,7 @@ fn report(ctx: &Ctx, q: &Quest, outcome: &Outcome) {
                 );
             }
         }
-        Outcome::TestsFailed { output } => {
+        Outcome::TestsFailed { output, .. } => {
             println!(
                 "{} {}\n",
                 s.yellow("◐ It compiles. Some tests fail."),
@@ -510,16 +522,21 @@ fn report(ctx: &Ctx, q: &Quest, outcome: &Outcome) {
             );
         }
         Outcome::Passed { tests, warnings } => {
-            let n = if *tests == 1 {
-                "1 test".to_string()
-            } else {
-                format!("{tests} tests")
-            };
-            if q.boss {
-                println!("{}", s.green(&format!("✓ Boss defeated. {n} green.")));
-                println!("That one combined everything from the act. Well earned.");
-            } else {
-                println!("{}", s.green(&format!("✓ Quest passed. {n} green.")));
+            let n = tests_text(*tests);
+            match boss {
+                Some(b) => defeat(
+                    s,
+                    b,
+                    *tests,
+                    s.green(&format!("✓ Boss defeated. {n} green.")),
+                ),
+                None => celebrate(
+                    s,
+                    &[
+                        s.green(&format!("✓ Quest passed. {n} green.")),
+                        s.dim(art::oxi_flavor(&q.name, ctx.progress.solved.len())),
+                    ],
+                ),
             }
             if !warnings.trim().is_empty() {
                 let count = runner::strip_ansi(warnings)
@@ -555,6 +572,143 @@ fn footer(ctx: &Ctx, passed: bool) {
     }
 }
 
+/// The boss panel for an outcome, or None when there is nothing to draw. A pass
+/// has no panel: the defeat animation draws its own frames.
+fn boss_panel_for(ctx: &Ctx, q: &Quest, b: &art::Boss, outcome: &Outcome) -> Option<Vec<String>> {
+    let (hp, total, mood) = match outcome {
+        Outcome::CompileError { .. } => {
+            let total = full_hp(ctx, q);
+            (total, total, b.taunt)
+        }
+        Outcome::TimedOut => {
+            let total = full_hp(ctx, q);
+            (total, total, art::TIMEOUT_TAUNT)
+        }
+        Outcome::TestsFailed {
+            counts: Some((passed, failed)),
+            ..
+        } => (*failed, passed + failed, b.hurt),
+        Outcome::TestsFailed { counts: None, .. } => {
+            let total = full_hp(ctx, q);
+            (total, total, b.hurt)
+        }
+        Outcome::Passed { .. } => return None,
+    };
+    let mood = ui::wrap(mood, MOOD_WIDTH);
+    Some(boss_panel(ctx.style, b, hp, total, &mood, false))
+}
+
+/// A boss's full HP: the number of tests in the learner's file (0 if unreadable).
+fn full_hp(ctx: &Ctx, q: &Quest) -> usize {
+    fs::read_to_string(q.file(&ctx.root)).map_or(0, |src| art::count_tests(&src))
+}
+
+/// The boss panel: the name, then the art with its HP line, weak spot and mood
+/// beside it. A knocked-out boss is drawn dim, with `x` for eyes.
+fn boss_panel(
+    s: Style,
+    b: &art::Boss,
+    hp: usize,
+    total: usize,
+    mood: &[String],
+    knocked_out: bool,
+) -> Vec<String> {
+    let title = format!(
+        "{}{}",
+        s.oxide(b.name),
+        s.dim(&format!(" · Act {} boss", b.act))
+    );
+    let eye = if knocked_out { 'x' } else { b.eye };
+    let left: Vec<String> = art::eyes(b.art, eye)
+        .into_iter()
+        .map(|line| if knocked_out { s.dim(&line) } else { line })
+        .collect();
+    let mut right = Vec::new();
+    if total > 0 {
+        right.push(hp_line(s, hp, total, knocked_out));
+    }
+    right.push(s.dim(&format!("Weak to: {}", b.weak)));
+    right.push(String::new());
+    right.extend(mood.iter().cloned());
+    let mut lines = vec![title];
+    lines.extend(art::side_by_side(&left, &right, art::BOSS_WIDTH, 1));
+    lines
+}
+
+/// "HP ██████░░░░░░░░░░  3/8", with "   K.O." added once the boss is down.
+fn hp_line(s: Style, hp: usize, total: usize, knocked_out: bool) -> String {
+    let (filled, empty) = art::hp_cells(hp, total);
+    let mut line = format!(
+        "HP {}{}  {hp}/{total}",
+        s.red(&"█".repeat(filled)),
+        s.dim(&"░".repeat(empty))
+    );
+    if knocked_out {
+        line.push_str(&s.green("   K.O."));
+    }
+    line
+}
+
+/// The defeat: the boss goes down one HP at a time, 70 ms apart, then Oxi
+/// celebrates with the status line and the act's closing line.
+fn defeat(s: Style, b: &art::Boss, total: usize, status: String) {
+    let mood = ui::wrap(b.defeat, MOOD_WIDTH);
+    let blank = vec![String::new(); mood.len()];
+    let frames: Vec<Vec<String>> = (0..=total)
+        .rev()
+        .map(|hp| {
+            let knocked_out = hp == 0;
+            let lines = if knocked_out { &mood } else { &blank };
+            boss_panel(s, b, hp, total, lines, knocked_out)
+        })
+        .collect();
+    ui::animate(s, &frames, Duration::from_millis(70));
+    println!();
+    // Short on purpose: a line wider than the terminal wraps, and the
+    // animation's redraw would then land one row too low.
+    let act = format!("Act {} complete. Well earned.", b.act);
+    celebrate(s, &[status, act]);
+}
+
+/// Oxi hops (120 ms per frame) with `right` beside it, on rows 2 and 3 of the
+/// art. The crab is orange and the sparkles are yellow.
+fn celebrate(s: Style, right: &[String]) {
+    let frames: Vec<Vec<String>> = [
+        art::OXI_GROUND,
+        art::OXI_JUMP,
+        art::OXI_GROUND,
+        art::OXI_JUMP,
+        art::OXI_SPARKLE,
+    ]
+    .iter()
+    .map(|frame| {
+        let left: Vec<String> = frame.iter().map(|line| paint_oxi(s, line)).collect();
+        art::side_by_side(&left, right, art::OXI_WIDTH, 2)
+    })
+    .collect();
+    ui::animate(s, &frames, Duration::from_millis(120));
+}
+
+/// Colors one line of Oxi: sparkles yellow, the crab orange, blank rows left empty.
+fn paint_oxi(s: Style, line: &str) -> String {
+    if line.trim().is_empty() {
+        String::new()
+    } else if line.contains('*') {
+        s.yellow(line)
+    } else {
+        s.oxide(line)
+    }
+}
+
+/// "1 test" or "6 tests", as the status line says it.
+fn tests_text(n: usize) -> String {
+    if n == 1 {
+        "1 test".to_string()
+    } else {
+        format!("{n} tests")
+    }
+}
+
 fn finale(ctx: &Ctx) {
     let s = ctx.style;
     s.clear();
@@ -569,9 +723,24 @@ fn finale(ctx: &Ctx) {
         ))
     );
     println!();
+    celebrate(s, &bosses_defeated());
+    println!();
     println!("You have written ownership-correct, borrow-checked, thread-safe Rust from scratch,");
     println!("against the real compiler. Next: build something of your own. Chapter 21 has ideas.");
     println!();
+}
+
+/// The finale's right column: the five bosses, two names to a line so no
+/// name is split.
+fn bosses_defeated() -> Vec<String> {
+    let mut lines = vec!["All five bosses defeated:".to_string()];
+    let last = art::BOSSES.len() - 1;
+    for (i, pair) in art::BOSSES.chunks(2).enumerate() {
+        let names: Vec<&str> = pair.iter().map(|b| b.name).collect();
+        let end = if i * 2 + pair.len() > last { "." } else { "," };
+        lines.push(format!("{}{end}", names.join(", ")));
+    }
+    lines
 }
 
 /// The course targets Rust 1.88 or newer (edition 2024, let chains).

@@ -18,8 +18,12 @@ const TEST_TIMEOUT: Duration = Duration::from_secs(20);
 pub enum Outcome {
     /// `rustc` rejected the file. `output` holds the diagnostics.
     CompileError { output: String },
-    /// It compiled, but at least one test failed or panicked.
-    TestsFailed { output: String },
+    /// It compiled, but at least one test failed or panicked. `counts` holds
+    /// (passed, failed) when libtest's summary line was found.
+    TestsFailed {
+        output: String,
+        counts: Option<(usize, usize)>,
+    },
     /// The tests did not finish in time.
     TimedOut,
     /// Compiled and every test passed.
@@ -116,6 +120,7 @@ pub fn run(root: &Path, file: &Path, name: &str, color: bool) -> io::Result<Outc
             warnings: diagnostics,
         }),
         Some(_) => Ok(Outcome::TestsFailed {
+            counts: count_results(&stdout),
             output: format!("{stdout}{stderr}"),
         }),
     }
@@ -158,6 +163,25 @@ fn count_passed(stdout: &str) -> usize {
         .sum()
 }
 
+/// Reads "test result: FAILED. 3 passed; 2 failed; ..." from libtest's output.
+/// Returns (passed, failed), or None when there is no summary line.
+fn count_results(stdout: &str) -> Option<(usize, usize)> {
+    let plain = strip_ansi(stdout);
+    let summary = plain
+        .lines()
+        .find_map(|line| line.split_once("test result: ").map(|(_, rest)| rest))?;
+    Some((
+        number_before(summary, " passed")?,
+        number_before(summary, " failed")?,
+    ))
+}
+
+/// The number just before `word`, as 3 is before " passed" in "3 passed".
+fn number_before(text: &str, word: &str) -> Option<usize> {
+    let (before, _) = text.split_once(word)?;
+    before.split_whitespace().last()?.parse().ok()
+}
+
 /// Removes ANSI color sequences, for parsing colored output.
 pub fn strip_ansi(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
@@ -191,6 +215,23 @@ mod tests {
     fn counts_colored_tests() {
         let out = "test result: \u{1b}[32mok\u{1b}[0m. 2 passed; 0 failed;";
         assert_eq!(count_passed(out), 2);
+    }
+
+    #[test]
+    fn counts_failed_results() {
+        let out = "test result: FAILED. 3 passed; 2 failed; 0 ignored";
+        assert_eq!(count_results(out), Some((3, 2)));
+    }
+
+    #[test]
+    fn counts_colored_failed_results() {
+        let out = "test result: \u{1b}[1;31mFAILED\u{1b}[0m. 3 passed; 2 failed; 0 ignored";
+        assert_eq!(count_results(out), Some((3, 2)));
+    }
+
+    #[test]
+    fn no_summary_means_no_counts() {
+        assert_eq!(count_results("thread 'main' panicked at x"), None);
     }
 
     #[test]
