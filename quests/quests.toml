@@ -125,6 +125,12 @@ chapter = 6
 path = "06_ownership/move1.rs"
 title = "Use after move"
 summary = "Fix the classic E0382 without cloning."
+hint = """
+1. Read the error from the bottom up: which line uses `names` after it was moved?
+2. `let all = names;` moves the vector into `all`. Anything you need from `names`
+   has to happen before that line.
+3. Swap the two `let` lines, or drop `all` and use `names` directly.
+"""
 
 [[quest]]
 name = "move2"
