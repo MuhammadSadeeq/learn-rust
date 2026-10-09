@@ -95,21 +95,21 @@ mod tests {
     #[test]
     fn one_event_in_one_chunk() {
         let mut parser = SseParser::new();
-        assert_eq!(parser.push(b"data: hello\n\n"), vec![event(None, "hello")]);
+        assert_eq!(parser.push("data: hello\n\n".as_bytes()), vec![event(None, "hello")]);
     }
 
     #[test]
     fn a_name_and_several_data_lines() {
         let mut parser = SseParser::new();
-        let events = parser.push(b"event: tick\ndata: 1\ndata: 2\n\n");
+        let events = parser.push("event: tick\ndata: 1\ndata: 2\n\n".as_bytes());
         assert_eq!(events, vec![event(Some("tick"), "1\n2")]);
     }
 
     #[test]
     fn only_one_space_after_the_colon_is_removed() {
         let mut parser = SseParser::new();
-        assert_eq!(parser.push(b"data:  two\n\n"), vec![event(None, " two")]);
-        assert_eq!(parser.push(b"data:three\n\n"), vec![event(None, "three")]);
+        assert_eq!(parser.push("data:  two\n\n".as_bytes()), vec![event(None, " two")]);
+        assert_eq!(parser.push("data:three\n\n".as_bytes()), vec![event(None, "three")]);
     }
 
     #[test]
@@ -137,22 +137,22 @@ mod tests {
     #[test]
     fn comments_and_other_fields_are_ignored() {
         let mut parser = SseParser::new();
-        let events = parser.push(b": keep-alive\nid: 7\nretry: 1000\nnoise\ndata: ok\n\n");
+        let events = parser.push(": keep-alive\nid: 7\nretry: 1000\nnoise\ndata: ok\n\n".as_bytes());
         assert_eq!(events, vec![event(None, "ok")]);
     }
 
     #[test]
     fn a_blank_line_with_no_data_sends_nothing() {
         let mut parser = SseParser::new();
-        assert!(parser.push(b"event: ping\n\n").is_empty());
+        assert!(parser.push("event: ping\n\n".as_bytes()).is_empty());
         // The name "ping" was forgotten, so the next event has no name.
-        assert_eq!(parser.push(b"data: next\n\n"), vec![event(None, "next")]);
+        assert_eq!(parser.push("data: next\n\n".as_bytes()), vec![event(None, "next")]);
     }
 
     #[test]
     fn events_come_out_in_order() {
         let mut parser = SseParser::new();
-        let events = parser.push(b"data: a\n\ndata: b\n\n");
+        let events = parser.push("data: a\n\ndata: b\n\n".as_bytes());
         assert_eq!(events, vec![event(None, "a"), event(None, "b")]);
     }
 }
