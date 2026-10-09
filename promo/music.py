@@ -1114,7 +1114,8 @@ def main():
     for o in outs.values():
         mix += o
 
-    lin = master_linear(mix)
+    lin = breath_gate(master_linear(mix))        # exact silence: the 25 Hz high-pass tail is cut too
+    lin = lin + master_linear(outs["breath"])    # the reversed swell is the only sound in the breath
     drv = brickwall(np.tanh(DRIVE_IN * lin))     # clipper harmonics above 20 kHz are removed too
     peak_drv = float(np.max(np.abs(drv)))
     scale = TARGET_PEAK / peak_drv
@@ -1125,7 +1126,10 @@ def main():
         os.makedirs(STEM_DIR, exist_ok=True)
         lin_k = DRIVE_IN * scale          # stems are linear: they sum to the pre-clip mix at master gain
         for name, o in outs.items():
-            write_wav_float(os.path.join(STEM_DIR, f"{name}.wav"), master_linear_stem(o) * lin_k)
+            s = master_linear_stem(o)
+            if name != "breath":
+                s = breath_gate(s)
+            write_wav_float(os.path.join(STEM_DIR, f"{name}.wav"), s * lin_k)
 
     mono = master.mean(axis=0)
     print(f"[music] rendered {N} samples ({N / SR:.3f} s) in {time.time() - t0:.1f} s")
