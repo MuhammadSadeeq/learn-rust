@@ -16,7 +16,7 @@ fn to_u8_clamped(x: i32) -> u8 {
 }
 
 fn try_to_u8(x: i32) -> Option<u8> {
-    // try_from returns Err for a value that does not fit. .ok() turns Err into None.
+    // Err means the value does not fit. .ok() turns that Err into None.
     u8::try_from(x).ok()
 }
 

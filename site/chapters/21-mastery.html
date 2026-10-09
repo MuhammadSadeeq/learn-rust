@@ -234,7 +234,7 @@ fn main() {
     <pre class="ox-pre ox-ex-pre" data-pane="expanded" data-show="false" aria-hidden="true"></pre>
   </div>
   <p class="ox-ex-note" aria-live="polite"></p>
-  <p class="ox-caption">Expansions are simplified by hand, except <code>hashmap!</code>, which is our own macro. The real expansions of the others use compiler internals.</p>
+  <p class="ox-caption">Expansions are simplified by hand, except <code>hashmap!</code>, which is our own macro. The real <code>vec!</code> and derive call compiler-internal helpers. The real tokio macro is longer, but it builds the same runtime.</p>
 </div>
 
 <details class="ox-callout" data-kind="deep">

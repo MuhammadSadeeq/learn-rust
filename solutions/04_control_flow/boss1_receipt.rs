@@ -42,7 +42,7 @@ fn format_money(cents: u32) -> String {
     let digits = dollars.len();
     let mut grouped = String::new();
     for (i, ch) in dollars.char_indices() {
-        // Count from the right: a comma goes before every group of three digits,
+        // Count from the right: a comma goes before every third digit,
         // except at the very start.
         if i > 0 && (digits - i).is_multiple_of(3) {
             grouped.push(',');
@@ -64,7 +64,8 @@ fn render(items: &[(&str, u32, u32)], rate_bp: u32) -> String {
     let tax_cents = tax(sub, rate_bp);
     lines.push(format!("{:<19}{:>10}", "Subtotal", format_money(sub)));
     lines.push(format!("{:<19}{:>10}", "Tax", format_money(tax_cents)));
-    lines.push(format!("{:<19}{:>10}", "Total", format_money(sub + tax_cents)));
+    let total = sub + tax_cents;
+    lines.push(format!("{:<19}{:>10}", "Total", format_money(total)));
 
     lines.join("\n")
 }
