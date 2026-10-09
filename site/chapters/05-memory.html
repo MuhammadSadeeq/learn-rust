@@ -380,12 +380,8 @@ fn main() {
 <style>
 #pushvec .pv-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 14px; margin-bottom: 12px; }
 #pushvec .pv-modes { display: flex; flex-wrap: wrap; gap: 6px; }
-#pushvec .pv-mode, #pushvec .pv-btn { min-height: 36px; padding: 6px 12px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 600 0.88rem/1.2 var(--font-mono); cursor: pointer; }
-#pushvec .pv-mode:hover, #pushvec .pv-btn:hover:not(:disabled) { border-color: var(--ink-2); }
-#pushvec .pv-mode[aria-pressed="true"] { background: var(--oxide); border-color: var(--oxide); color: #fff; }
-#pushvec .pv-btn.is-primary { background: var(--oxide); border-color: var(--oxide); color: #fff; }
-#pushvec .pv-btn:disabled { opacity: 0.45; cursor: default; }
-#pushvec .pv-mode:focus-visible, #pushvec .pv-btn:focus-visible { outline: 2px solid var(--oxide); outline-offset: 2px; }
+#pushvec .pv-mode { font-family: var(--font-mono); }
+#pushvec .ox-btn:disabled { opacity: 0.45; cursor: default; }
 #pushvec .pv-stats { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-bottom: 12px; font: 600 0.84rem/1.3 var(--font-mono); color: var(--muted); }
 #pushvec .pv-stats b { display: block; font: 800 1.9rem/1 var(--font-display); color: var(--oxide-ink); }
 #pushvec .pv-stage { position: relative; display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 12px; align-items: center; padding: 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); }
@@ -428,8 +424,8 @@ fn main() {
   </div>
   <p class="pv-say" aria-live="polite">Press Push to add the first item.</p>
   <div class="pv-actions">
-    <button type="button" class="pv-btn is-primary" data-act="push">Push one item</button>
-    <button type="button" class="pv-btn" data-act="reset">Reset</button>
+    <button type="button" class="ox-btn is-primary" data-act="push">Push one item</button>
+    <button type="button" class="ox-btn" data-act="reset">Reset</button>
   </div>
   <details class="pv-code">
     <summary>The program behind these numbers</summary>
@@ -863,10 +859,19 @@ document.addEventListener("DOMContentLoaded", function () {
     state.mode = id;
     state.len = 0;
     state.re = 0;
-    modeBtns.forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.mode === id)); });
+    markMode();
     pre.innerHTML = window.Ox && Ox.highlight ? Ox.highlight(cur().rust, "rust") : esc(cur().rust);
     say.textContent = "Switched to " + cur().name + ". The Vec is empty again.";
     render();
+  }
+
+  // The chosen starting point is the primary button; the other one is plain.
+  function markMode() {
+    modeBtns.forEach(function (b) {
+      var on = b.dataset.mode === state.mode;
+      b.setAttribute("aria-pressed", String(on));
+      b.classList.toggle("is-primary", on);
+    });
   }
 
   function reset() {
