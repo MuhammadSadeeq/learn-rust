@@ -1,0 +1,49 @@
+/* Rustopia map colors (rustopia.js). Light and dark. */
+.mp-svg {
+  --mp-sea: #cfe6f3; --mp-wave: #a9cfe6; --mp-shallow: #e2f1f8; --mp-land: #f3e6c8; --mp-shore: #d9c49a;
+  --mp-r1: #ddd5c6; --mp-r2: #f6d8c2; --mp-r3: #e2e7ef; --mp-r4: #d5e3ef; --mp-r5: #ebdff5;
+  --mp-rock: #a59a8a; --mp-rock-2: #bdb3a3; --mp-peak: #7f97ad; --mp-peak-2: #9cb1c4;
+  --mp-ink: #5b4a33; --mp-trail: #8a5a12; --mp-label: #3b2f1e; --mp-sub: #6b5a43;
+  width: 100%; height: auto; display: block;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .mp-svg {
+    --mp-sea: #0f2638; --mp-wave: #1d3d55; --mp-shallow: #163247; --mp-land: #3a3226; --mp-shore: #57492f;
+    --mp-r1: #48433b; --mp-r2: #57382a; --mp-r3: #39404c; --mp-r4: #2f4253; --mp-r5: #40344f;
+    --mp-rock: #6f675b; --mp-rock-2: #5e574d; --mp-peak: #58708a; --mp-peak-2: #4a5f75;
+    --mp-ink: #c9b48d; --mp-trail: #e0b07a; --mp-label: #f1e2cc; --mp-sub: #c9b48d;
+  }
+}
+:root[data-theme="dark"] .mp-svg {
+  --mp-sea: #0f2638; --mp-wave: #1d3d55; --mp-shallow: #163247; --mp-land: #3a3226; --mp-shore: #57492f;
+  --mp-r1: #48433b; --mp-r2: #57382a; --mp-r3: #39404c; --mp-r4: #2f4253; --mp-r5: #40344f;
+  --mp-rock: #6f675b; --mp-rock-2: #5e574d; --mp-peak: #58708a; --mp-peak-2: #4a5f75;
+  --mp-ink: #c9b48d; --mp-trail: #e0b07a; --mp-label: #f1e2cc; --mp-sub: #c9b48d;
+}
+.mp-sea { fill: var(--mp-sea); }
+.mp-wave { stroke: var(--mp-wave); stroke-width: 2; fill: none; stroke-linecap: round; }
+.mp-shallows { fill: var(--mp-shallow); }
+.mp-land { fill: var(--mp-land); stroke: var(--mp-shore); stroke-width: 4; }
+.mp-blob { opacity: 0.9; }
+.mp-r1 { fill: var(--mp-r1); } .mp-r2 { fill: var(--mp-r2); } .mp-r3 { fill: var(--mp-r3); } .mp-r4 { fill: var(--mp-r4); } .mp-r5 { fill: var(--mp-r5); }
+.mp-rock { fill: var(--mp-rock); } .mp-rock-2 { fill: var(--mp-rock-2); }
+.mp-peak { fill: var(--mp-peak); } .mp-peak-2 { fill: var(--mp-peak-2); } .mp-snow { fill: #fff; opacity: 0.85; }
+.mp-mine { fill: #2b2620; } .mp-track { stroke: var(--mp-ink); stroke-width: 2; }
+.mp-chimney { fill: #6b7684; } .mp-furnace { fill: #4b5563; }
+.mp-smoke { fill: #b9c2cc; opacity: 0.7; animation: mp-smoke 3.2s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+.mp-smoke-2 { animation-delay: 1.6s; }
+.mp-lava { fill: #ff8a3d; } .mp-lava-2 { fill: #ffd166; }
+.mp-wall { fill: #fffaf0; stroke: var(--mp-ink); stroke-width: 1.2; } .mp-roof { fill: var(--oxide); } .mp-window { fill: #f2b632; }
+.mp-mold { fill: #64748b; } .mp-mold-cavity { fill: #475569; }
+.mp-anvil { fill: #4b5563; }
+.mp-tower { fill: #8e6ad8; } .mp-tower:nth-of-type(2n) { fill: #6d5bd0; }
+.mp-pole { stroke: var(--mp-ink); stroke-width: 3; } .mp-flag { fill: var(--oxide); }
+.mp-dock { fill: #a0703c; stroke: #7a5229; stroke-width: 1.5; }
+.mp-crate { fill: #c9955c; stroke: #8a5a12; stroke-width: 1; } .mp-crate-line { stroke: #8a5a12; stroke-width: 1; }
+.mp-note { fill: var(--mp-sub); font: 600 11px var(--font-mono); text-anchor: middle; }
+.mp-trail-base { stroke: var(--mp-land); stroke-width: 12; fill: none; stroke-linecap: round; opacity: 0.9; }
+.mp-trail { stroke: var(--mp-trail); stroke-width: 3; fill: none; stroke-dasharray: 2 9; stroke-linecap: round; }
+.mp-region { fill: var(--mp-label); font: 800 22px var(--font-display); text-anchor: middle; letter-spacing: 0.02em; text-transform: uppercase; }
+.mp-sub { fill: var(--mp-sub); font: 600 10.5px var(--font-mono); text-anchor: middle; }
+@keyframes mp-smoke { 0% { transform: translateY(4px) scale(0.6); opacity: 0; } 30% { opacity: 0.7; } 100% { transform: translateY(-16px) scale(1.4); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .mp-smoke { animation: none; } }
