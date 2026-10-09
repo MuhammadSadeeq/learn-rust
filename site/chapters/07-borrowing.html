@@ -187,6 +187,7 @@ help: consider dereferencing here
 
 For more information about this error, try `rustc --explain E0277`.</pre>
   </div>
+</div>
 
 <h3 id="ref-patterns">Patterns that take references apart</h3>
 
@@ -1024,7 +1025,7 @@ fn main() {
 help: consider cloning the value if the performance cost is acceptable
   |
 3 |     let r1 = &amp;s.clone();
-  |              ++++++++
+  |                ++++++++
 
 For more information about this error, try `rustc --explain E0505`.</pre>
 
@@ -1052,7 +1053,7 @@ fn main() {
 
 For more information about this error, try `rustc --explain E0515`.</pre>
 
-<p>This signature has an input, so the compiler can tie the result to it. It gets as far as the body, and there it finds that the reference points at <code>s</code>. <code>s</code> is dropped when the function returns. E0106 is the error for a signature with no input at all. E0515 is the error for a body that returns a reference to its own local. The fix is the same as before: return the owned <code>String</code>.</p>
+<p>This signature has an input, so the compiler can tie the result to it. It gets as far as the body, and there it finds that the reference points at <code>s</code>. <code>s</code> is dropped when the function returns. E0106 is the error for a returned reference that the compiler cannot tie to one input: a signature with no input at all, or one with several. E0515 is the error for a body that returns a reference to its own local. The fix is the same as before: return the owned <code>String</code>.</p>
 
 <h3>E0597: a borrow outlives its value</h3>
 
@@ -1240,7 +1241,7 @@ fn main() {
     <li data-left="Two &amp;mut of the same value are alive at once">E0499</li>
     <li data-left="A &amp;mut is taken while a shared borrow is still used later">E0502</li>
     <li data-left="A value is assigned while a borrow of it is still used">E0506</li>
-    <li data-left="A function with no reference parameter returns a reference">E0106</li>
+    <li data-left="A returned reference that no single input explains">E0106</li>
     <li data-left="A function returns a reference to one of its own locals">E0515</li>
     <li data-left="A value is moved while a borrow of it is still used">E0505</li>
     <li data-left="A borrow is still used after the value it points to is dropped">E0597</li>
@@ -1266,7 +1267,8 @@ fn main() {
     <li><code>&amp;mut s</code> is exclusive. While it is alive, no other borrow of <code>s</code> may exist, and the binding must be <code>mut</code>.</li>
     <li>Any number of <code>&amp;T</code>, or exactly one <code>&amp;mut T</code>, never both. A reference can't outlive its value.</li>
     <li>A borrow lasts until its last use, not until the end of its scope. That is NLL, short for non-lexical lifetimes.</li>
-    <li>E0502 and E0499 mean a conflicting borrow is still used later: end the earlier borrow first. E0506 means you assigned while borrowed, and E0505 means you moved while borrowed. E0106 means a returned reference has no input to borrow from. E0515 means you returned a reference to a local. For both, return the owned value. E0597 means a borrow outlives its value.</li>
+    <li>E0502 and E0499 mean a conflicting borrow is still used later: end the earlier borrow first. E0506 means you assigned while borrowed, and E0505 means you moved while borrowed. E0106 means the compiler cannot tell which input a returned reference borrows from: there is none, or there are several. Chapter 15 covers the several-input case. E0515 means you returned a reference to a local. For both, return the owned value. E0597 means a borrow outlives its value.</li>
+    <li>A pattern can take a reference apart. <code>for &amp;x in &amp;v</code> and <code>|&amp;x|</code> copy each number out, which works only for <code>Copy</code> types. The keyword <code>ref</code> borrows the value instead of moving it.</li>
   </ul>
 </div>
 

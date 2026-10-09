@@ -73,7 +73,7 @@ fn main() {
 <p>A struct literal names the type, then sets every field inside braces. The fields can appear in any order, but each one has to appear exactly once. Read a field with a dot, as in <code>u.name</code>. Change a field with an assignment, but only through a binding declared <code>mut</code>.</p>
 
 <aside class="ox-callout" data-kind="insight">
-  <p><code>mut</code> belongs to the binding, not to the fields. There is no way to make <code>logins</code> changeable while <code>name</code> stays fixed. Declare <code>u</code> as <code>mut</code> and every field can change. Leave it out and none of them can.</p>
+  <p><code>mut</code> belongs to the binding, not to the fields. With ordinary fields there is no way to make <code>logins</code> changeable while <code>name</code> stays fixed. Declare <code>u</code> as <code>mut</code> and every field can change. Leave it out and none of them can. The exception is a field such as <code>Cell</code>, which changes through a shared reference. Chapter 17 explains <code>Cell</code> and <code>RefCell</code>.</p>
 </aside>
 
 <p>Pour a few literals through the Mold and watch what comes out. The next question is about the one that leaves a field out.</p>

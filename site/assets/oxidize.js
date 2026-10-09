@@ -888,7 +888,7 @@
     if (!n || !recap) return;
     const sec = recap.closest("section") || recap.parentElement;
     loadGlossary().then((all) => {
-      const items = (all || []).filter((t) => t.ch === n);
+      const items = (all || []).filter((t) => t.ch !== null && t.ch === n);
       if (!items.length) return;
       const box = h("section", { class: "ox-terms", "aria-labelledby": "ox-terms-title" });
       box.innerHTML = `<h3 id="ox-terms-title">Terms you now know</h3><p class="ox-terms-note">Tap a term and say what it means before you look.</p><ul class="ox-terms-chips"></ul>`;

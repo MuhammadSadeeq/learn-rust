@@ -736,8 +736,8 @@ fn main() {
   <tbody>
     <tr><td><code>let name = value;</code></td><td>Gives a value a name. Add <code>mut</code> if it will change.</td><td>Chapter 02</td></tr>
     <tr><td><code>fn add(a: i32, b: i32) -&gt; i32 { a + b }</code></td><td>A function: inputs with their types, then <code>-&gt;</code> and the output type. The last line without <code>;</code> is the result.</td><td>Chapter 04</td></tr>
-    <tr><td><code>"hello"</code></td><td>Text written in quotes. Its type is <code>&amp;str</code> (often <code>&amp;'static str</code>).</td><td>Chapter 08</td></tr>
-    <tr><td><code>String::from("hi")</code>, <code>format!("{a} {b}")</code>, <code>n.to_string()</code></td><td>Text you build and own. <code>format!</code> works like <code>println!</code> but gives the text back instead of printing it.</td><td>Chapter 08</td></tr>
+    <tr><td><code>"hello"</code></td><td>Text written in quotes. Its type is <code>&amp;'static str</code>, usually written <code>&amp;str</code>.</td><td>Chapter 08</td></tr>
+    <tr><td><code>String::from("hi")</code>, <code>String::new()</code>, <code>s.push_str("…")</code>, <code>format!("{a} {b}")</code>, <code>n.to_string()</code></td><td>Text you build and own. <code>String::new()</code> starts an empty one, and <code>push_str</code> adds text to the end of it. <code>format!</code> works like <code>println!</code> but gives the text back instead of printing it.</td><td>Chapter 08</td></tr>
     <tr><td><code>vec![1, 2, 3]</code>, <code>Vec::new()</code>, <code>v.push(x)</code>, <code>v.len()</code>, <code>for x in &amp;v { … }</code></td><td>A list that can grow.</td><td>Chapter 12</td></tr>
     <tr><td><code>&amp;[T]</code> and <code>&amp;str</code> parameters</td><td>A function that only reads a list or text borrows it. Loop over a <code>&amp;[T]</code> with <code>for x in list</code>.</td><td>Chapters 07 and 08</td></tr>
     <tr><td><code>todo!()</code></td><td>A placeholder that compiles and panics if it runs. Quests use it to mark where your code goes.</td><td>—</td></tr>

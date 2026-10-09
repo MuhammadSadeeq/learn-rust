@@ -866,7 +866,7 @@ For more information about this error, try `rustc --explain E0308`.</pre>
   </div>
 </div>
 
-<p>Now write one yourself. Fill in the two blanks so this function uses a <code>let</code> that returns early when the parse fails.</p>
+<p>Now write one yourself. Fill in the two blanks so this function uses a <code>let</code> that returns early when the parse fails. <code>parse</code> returns a <code>Result</code>, and <code>.ok()</code> turns it into an <code>Option</code>, so the pattern is <code>Some(n)</code>.</p>
 
 <div class="ox-fill" data-id="10:fill-letelse">
   <p class="ox-q">Fill in the blanks. The first is the pattern. The second is the keyword that starts the else block.</p>
@@ -878,7 +878,7 @@ For more information about this error, try `rustc --explain E0308`.</pre>
 fn main() {
     println!("{}", double("21"));
 }</pre>
-  <div class="ox-why"><p>The pattern <code>Some(n)</code> says the parse worked, and <code>n</code> stays in scope for the rest of the function. The <code>else</code> block returns <code>0</code>, so it diverges and the compiler is satisfied. <code>main</code> prints <code>42</code>.</p></div>
+  <div class="ox-why"><p><code>parse</code> returns a <code>Result</code>, and <code>.ok()</code> turns it into an <code>Option</code>: <code>Some(n)</code> on success and <code>None</code> on failure (Chapter 11 covers <code>Result</code>). The pattern <code>Some(n)</code> says the parse worked, and <code>n</code> stays in scope for the rest of the function. The <code>else</code> block returns <code>0</code>, so it diverges and the compiler is satisfied. <code>main</code> prints <code>42</code>.</p></div>
 </div>
 
 <aside class="ox-callout" data-kind="insight" data-label="When unwrap is fine">
@@ -888,7 +888,7 @@ fn main() {
 </aside>
 <h3>Let chains, and the if let rescope</h3>
 
-<p>Chapter 10 used <code>if let</code> for one pattern. Edition 2024 adds let chains. A let chain joins several conditions with <code>&amp;&amp;</code> in one <code>if</code>, and some of those conditions can be <code>let</code> patterns. Each <code>let</code> narrows the value for the conditions after it. Let chains arrived in Rust 1.88, and only edition 2024 accepts them.</p>
+<p>Earlier in this chapter, <code>if let</code> handled one pattern. Edition 2024 adds let chains. A let chain joins several conditions with <code>&amp;&amp;</code> in one <code>if</code>, and some of those conditions can be <code>let</code> patterns. Each <code>let</code> narrows the value for the conditions after it. Let chains arrived in Rust 1.88, and only edition 2024 accepts them.</p>
 
 <pre class="rs" data-check="ok" data-stdout="skip\nskip\nbig 12">fn main() {
     let values = vec![Some(4), None, Some(12)];
@@ -901,7 +901,7 @@ fn main() {
     }
 }</pre>
 
-<p>The same edition also changed where a temporary ends. In an <code>if let</code>, a temporary made in the scrutinee used to live until the whole <code>if let ... else</code> ended. On edition 2024 it is dropped before the <code>else</code> block runs. This matters for locks. A guard made in the scrutinee used to stay held inside <code>else</code>.</p>
+<p>The same edition also changed where a temporary ends. In an <code>if let</code>, a temporary made in the scrutinee (the value after <code>if let</code> or <code>match</code> that is being matched) used to live until the whole <code>if let ... else</code> ended. On edition 2024 it is dropped before the <code>else</code> block runs. This matters for locks. A guard made in the scrutinee used to stay held inside <code>else</code>.</p>
 
 <pre class="rs" data-check="ok" data-stdout="drop scrutinee\nelse">struct Noisy(&amp;'static str);
 
@@ -1104,6 +1104,8 @@ final class Order
     <li><code>if let</code>, <code>while let</code> and <code>let ... else</code> handle one case. The <code>else</code> of <code>let ... else</code> must diverge.</li>
     <li>An enum costs its largest variant plus a tag, and the compiler can hide the tag in spare values. That is why an <code>Option</code> of a reference costs nothing extra.</li>
     <li>Model each state as a variant, so each state carries only the data that belongs to it.</li>
+    <li>A closure is a small function written inline, such as <code>|x| x * 2</code>. Pass one to <code>map</code>, <code>filter</code> or <code>unwrap_or_else</code>. Chapter 13 covers closures in full.</li>
+    <li>A let chain joins conditions with <code>&amp;&amp;</code> in one <code>if</code>, and a condition can be a <code>let</code> pattern: <code>if let Some(x) = a &amp;&amp; x &gt; 0</code>. Edition 2024 allows it from Rust 1.88.</li>
   </ul>
 </div>
 

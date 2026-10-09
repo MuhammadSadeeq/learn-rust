@@ -1646,7 +1646,7 @@ pub trait Tool: Send + Sync {
 
 <p>The retry logic is in <code>send_with_retry</code>. It retries only 429 and 5xx answers. It honors <code>Retry-After</code>, up to a cap.</p>
 
-<pre class="rs" data-check="skip" data-crates="reqwest,tokio,tracing" data-title="projects/tool-runner/src/client.rs, lines 192 to 216">            let busy = status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error();
+<pre class="rs" data-check="skip" data-crates="reqwest,tokio,tracing" data-title="projects/tool-runner/src/client.rs, lines 216 to 240">            let busy = status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error();
             if !busy || attempt &gt;= self.retry.max_attempts {
                 return Err(ClientError::Status {
                     code: status.as_u16(),
@@ -1674,7 +1674,7 @@ pub trait Tool: Send + Sync {
 
 <p>The sandbox for <code>read_file</code> is the <code>resolve</code> method. Each check returns an error, and that error goes back to the model.</p>
 
-<pre class="rs" data-check="skip" data-crates="" data-title="projects/tool-runner/src/tools/read_file.rs, lines 48 to 80">    /// Checks a requested path and returns the real file path inside the root.
+<pre class="rs" data-check="skip" data-crates="" data-title="projects/tool-runner/src/tools/read_file.rs, lines 51 to 83">    /// Checks a requested path and returns the real file path inside the root.
     pub fn resolve(&amp;self, requested: &amp;str) -&gt; Result&lt;PathBuf, ToolError&gt; {
         let relative = Path::new(requested);
 
@@ -1705,12 +1705,13 @@ pub trait Tool: Send + Sync {
                 "'{requested}' leads outside the sandbox"
             )));
         }
-        Ok(real)
-    }</pre>
+        // Rule 4: metadata reads the file's type without opening it.
+        let meta = std::fs::metadata(&amp;real)</pre>
 
 <p><code>run_command</code> builds the child with the rules the README lists. The arguments form a list, the environment is cleared, the folder is fixed, and the child is killed on drop.</p>
 
-<pre class="rs" data-check="skip" data-crates="tokio" data-title="projects/tool-runner/src/tools/run_command.rs, lines 106 to 119">        let mut child = Command::new(&amp;input.program)
+<pre class="rs" data-check="skip" data-crates="tokio" data-title="projects/tool-runner/src/tools/run_command.rs, lines 119 to 137">        let mut command = Command::new(&amp;input.program);
+        command
             .args(&amp;input.args)
             // Rule 4: the working folder is the sandbox root.
             .current_dir(&amp;self.root)
@@ -1721,9 +1722,13 @@ pub trait Tool: Send + Sync {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             // Rule 5, the backstop.
-            .kill_on_drop(true)
-            .spawn()
-            .map_err(|e| ToolError::Failed(format!("could not start '{}': {e}", input.program)))?;</pre>
+            .kill_on_drop(true);
+        // Rule 5: the program leads a process group, so one kill reaches
+        // everything it starts.
+        #[cfg(unix)]
+        command.process_group(0);
+        let mut child = command
+            .spawn()</pre>
 
 <p>The command line is a clap struct. Each field becomes an argument or a flag, and clap writes the help text from the doc comments.</p>
 
@@ -1745,7 +1750,7 @@ struct Cli {
     root: PathBuf,
 
     /// A program that run_command may start. Repeat the flag to allow more.
-    #[arg(long = "allow", default_values = ["echo", "date", "wc"])]
+    #[arg(long = "allow", default_values = ["echo", "date"])]
     allow: Vec&lt;String&gt;,</pre>
 
 <h3>The honesty note</h3>
@@ -1764,11 +1769,11 @@ struct Cli {
 
 <h3>Run it</h3>
 
-<p>Needs Rust 1.88 or newer. Edition 2024 itself needs 1.85, and the locked dependencies need 1.88. We built and tested it with Rust 1.97 only, so older versions are unchecked.</p>
+<p>The locked dependencies need Rust 1.88 or newer. <code>rust-version</code> in <code>Cargo.toml</code> says so, and Cargo refuses an older compiler. Edition 2024 alone needs 1.85. We built and tested with Rust 1.97 only, so 1.88 to 1.96 are unchecked.</p>
 
 <pre class="sh">cargo run --example mock_server     # terminal 1: the mock model on http://127.0.0.1:8080
 cargo run -- "What is 6 times 7?"   # terminal 2: the harness
-cargo test                          # 51 tests, all offline</pre>
+cargo test                          # 68 tests, all offline</pre>
 
 <p>The answer goes to stdout. The logs go to stderr, so <code>2&gt;/dev/null</code> leaves only the answer:</p>
 
@@ -1783,11 +1788,11 @@ cargo test                          # 51 tests, all offline</pre>
 <thead><tr><th>Flag</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
 <tr><td><code>--base-url</code></td><td><code>http://127.0.0.1:8080</code></td><td>The model server</td></tr>
-<tr><td><code>--root</code></td><td><code>.</code></td><td>The folder that <code>read_file</code> and <code>run_command</code> are sandboxed to</td></tr>
-<tr><td><code>--allow</code></td><td><code>echo date wc</code></td><td>A program <code>run_command</code> may start. Repeat the flag for more. Giving it replaces the default list.</td></tr>
+<tr><td><code>--root</code></td><td><code>.</code></td><td>The folder that <code>read_file</code> and <code>run_command</code> are sandboxed to. The whole folder is readable, so see the limits below.</td></tr>
+<tr><td><code>--allow</code></td><td><code>echo date</code></td><td>A program <code>run_command</code> may start. Repeat the flag for more. Giving it replaces the default list. See the default programs below.</td></tr>
 <tr><td><code>--max-turns</code></td><td><code>8</code></td><td>Model turns before the run stops</td></tr>
 <tr><td><code>--parallel</code></td><td><code>4</code></td><td>Tool calls that may run at once. Must be 1 or more.</td></tr>
-<tr><td><code>--timeout</code></td><td><code>60</code></td><td>Seconds allowed for one model turn, stream included</td></tr>
+<tr><td><code>--timeout</code></td><td><code>60</code></td><td>Seconds allowed for one model turn: every try, the waits between tries, and the stream</td></tr>
 </tbody>
 </table>
 </div>
@@ -1810,15 +1815,18 @@ cargo test                          # 51 tests, all offline</pre>
 <tr><td>A refused tool call goes back to the model as an error. The run goes on.</td><td><code>agent.rs</code></td><td><code>a_refused_tool_call_goes_back_to_the_model_as_an_error</code></td></tr>
 <tr><td>Retries cover only 429 and 5xx, and only before a stream starts. A stream is never sent twice.</td><td><code>client.rs</code></td><td><code>retry_after_503_then_success</code>, <code>a_400_is_not_retried</code></td></tr>
 <tr><td>A <code>Retry-After</code> longer than our cap is an error, not a long sleep.</td><td><code>client.rs</code></td><td><code>a_retry_after_longer_than_our_cap_is_not_waited_for</code></td></tr>
-<tr><td>Each turn has a timeout that covers the whole turn, stream included.</td><td><code>client.rs</code></td><td><code>the_per_request_timeout_fires</code></td></tr>
-<tr><td>Redirects are not followed, so the API key is never sent to another host.</td><td><code>client.rs</code></td><td>none</td></tr>
+<tr><td>Each turn has one deadline that covers every try, the waits between tries, and the stream. The per-request timeout is only a cap inside it.</td><td><code>client.rs</code></td><td><code>one_deadline_covers_the_retries_and_their_waits</code>, <code>the_per_request_timeout_fires</code></td></tr>
+<tr><td>The key is sent as a bearer token on each request.</td><td><code>client.rs</code></td><td><code>the_key_is_sent_as_a_bearer_token</code></td></tr>
+<tr><td>The agent can run on a spawned task, so its future is <code>Send</code>. A parallel limit of 0 is treated as 1.</td><td><code>agent.rs</code></td><td><code>the_agent_can_run_in_a_spawned_task</code>, <code>a_zero_parallel_limit_still_runs_the_tools</code></td></tr>
+<tr><td>Redirects are not followed, so the API key is never sent to another host.</td><td><code>client.rs</code></td><td><code>a_redirect_is_not_followed_so_the_key_stays_home</code></td></tr>
 <tr><td>The key comes from the environment. Logs never show it.</td><td><code>main.rs</code>, <code>client.rs</code></td><td>none</td></tr>
-<tr><td><code>read_file</code> takes relative paths only, refuses <code>..</code>, follows symbolic links and checks where they lead, and reads at most 64 KiB.</td><td><code>tools/read_file.rs</code></td><td><code>read_file_rejects_*</code>, <code>read_file_refuses_files_over_the_cap</code></td></tr>
+<tr><td><code>read_file</code> takes relative paths only, refuses <code>..</code>, follows symbolic links and checks where they lead, reads only regular files, and reads at most 64 KiB.</td><td><code>tools/read_file.rs</code></td><td><code>read_file_rejects_*</code>, <code>read_file_refuses_files_over_the_cap</code>, <code>read_file_refuses_a_named_pipe</code>, <code>read_file_refuses_a_folder</code></td></tr>
 <tr><td><code>run_command</code> runs only exact program names from the allowlist.</td><td><code>tools/run_command.rs</code></td><td><code>run_command_refuses_a_program_that_is_not_on_the_list</code>, <code>run_command_matches_the_exact_name_not_a_path</code></td></tr>
 <tr><td><code>run_command</code> uses no shell, so <code>;</code>, <code>$VARIABLES</code> and pipes are plain text.</td><td><code>tools/run_command.rs</code></td><td><code>run_command_does_not_use_a_shell</code></td></tr>
 <tr><td><code>run_command</code> clears the environment and sets a short PATH.</td><td><code>tools/run_command.rs</code></td><td><code>run_command_clears_the_environment</code></td></tr>
-<tr><td><code>run_command</code> runs in the sandbox folder. Its arguments may not be absolute, contain <code>..</code>, or be a link that leads out.</td><td><code>tools/run_command.rs</code></td><td><code>run_command_refuses_arguments_that_point_outside</code>, <code>run_command_refuses_a_symlink_that_points_outside</code></td></tr>
-<tr><td><code>run_command</code> kills a program that runs too long, and stops one that prints more than 16 KiB per stream.</td><td><code>tools/run_command.rs</code></td><td><code>run_command_stops_a_program_that_runs_too_long</code>, <code>run_command_caps_the_output_and_stops_a_noisy_program</code></td></tr>
+<tr><td><code>run_command</code> runs in the sandbox folder. No argument may be absolute or contain <code>..</code>. The check covers the whole argument, the text after each <code>=</code>, and the text after a short flag such as <code>-f</code>. A name that exists must not be a link that leads out.</td><td><code>tools/run_command.rs</code></td><td><code>run_command_refuses_arguments_that_point_outside</code>, <code>run_command_refuses_a_path_hidden_inside_an_option</code>, <code>run_command_refuses_a_link_named_inside_an_option</code>, <code>run_command_refuses_a_symlink_that_points_outside</code></td></tr>
+<tr><td><code>run_command</code> kills a program that runs too long, and stops one that prints more than 16 KiB per stream. A timeout or a cancel stops the program's whole process group, and a clean exit does not wait for a background child.</td><td><code>tools/run_command.rs</code>, <code>agent.rs</code></td><td><code>run_command_stops_a_program_that_runs_too_long</code>, <code>run_command_caps_the_output_and_stops_a_noisy_program</code>, <code>a_timeout_stops_the_programs_the_program_started</code>, <code>a_background_child_does_not_turn_a_clean_exit_into_a_timeout</code>, <code>cancelling_stops_the_program_a_tool_started</code></td></tr>
+<tr><td>The SSE reader does not carry an <code>event:</code> name into the next event.</td><td><code>sse.rs</code></td><td><code>a_name_does_not_outlive_its_event</code></td></tr>
 <tr><td>Ctrl+C cancels the run. The loop stops at its next wait, and the exit code is 130.</td><td><code>main.rs</code>, <code>agent.rs</code></td><td><code>cancellation_stops_the_loop</code></td></tr>
 <tr><td>Logs name the turn and the tool. They never show tool inputs, tool outputs or the key.</td><td><code>agent.rs</code>, <code>client.rs</code></td><td>none</td></tr>
 </tbody>
@@ -1828,10 +1836,13 @@ cargo test                          # 51 tests, all offline</pre>
 <p>Read these limits before you point the harness at real files:</p>
 
 <ul>
-  <li><strong><code>run_command</code> is the riskiest tool.</strong> The argument check looks at each argument as a whole. An option that carries a path, such as <code>--option=/some/absolute/path</code>, gets past it, and an allowed program can then read that path. Keep the allowlist short. Run the harness as a user who has no secrets it should not read.</li>
+  <li><strong>The sandbox is the whole folder.</strong> With the default <code>--root .</code>, the model can read <code>.env</code>, <code>.git/config</code> and every other file under the folder you run it from. Point <code>--root</code> at an empty or dedicated folder.</li>
+  <li><strong><code>run_command</code> is a trust decision, not a sandbox.</strong> Its argument check is a guard rail, and the next two sections say what it cannot see. Keep the allowlist short. Run the harness as a user who has no secrets it should not read.</li>
   <li><strong>The file checks run once, and then the file is read.</strong> A program that swaps a link between the check and the read could get past them. A real sandbox needs operating system features, such as a container or a separate user.</li>
-  <li><strong><code>run_command</code> runs on Unix only.</strong> Its PATH and program names assume Unix.</li>
+  <li><strong><code>run_command</code> runs on Unix only.</strong> Its PATH, its process groups and its <code>kill</code> command assume Unix.</li>
 </ul>
+
+<p>The README explains why <code>wc</code> is not on the default list. Its <code>--files0-from=FILE</code> option reads a list of names from a file and opens each one, and the argument check cannot see those names. You can still allow <code>wc</code> with <code>--allow wc</code> when you trust what is in the sandbox.</p>
 
 <h3>Known gaps</h3>
 
@@ -1841,6 +1852,8 @@ cargo test                          # 51 tests, all offline</pre>
   <li>Tool results are text only. There are no images and no structured results.</li>
   <li>Retries cover HTTP status only. A connection that fails before any response is not retried.</li>
   <li>The timeout covers the whole turn, so it must be longer than the longest answer.</li>
+  <li>The backoff has no jitter, so clients that fail together also retry together.</li>
+  <li>The SSE reader keeps a whole line in memory before it reads it, with no size limit. It does not remove a byte-order mark at the start of a stream.</li>
   <li>There is no token counting and no context limit. A long conversation can grow past a real model's context window. The mock never does.</li>
   <li>Tool calls share one task and run concurrently, not in parallel threads. A tool that does heavy computation without an <code>await</code> would block the others.</li>
 </ul>
