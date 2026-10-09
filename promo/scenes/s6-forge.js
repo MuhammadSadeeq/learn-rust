@@ -395,7 +395,13 @@
       term.style.width = `${round(w.w)}px`;
       term.style.height = `${round(w.h)}px`;
       const push = T < 44.0 ? 1 + 0.03 * P(T, 40.0, 44.0, E.inOutSine) : 1;
-      const tilt = 8 * (1 - P(T, 40.0, 40.6, E.outExpo));
+      // The whip-in: S5 ends with a whip-pan, so the window slides in from the right as its
+      // continuation (40.0 - 40.35, outExpo), blurred while it moves and sharp once it lands.
+      // The 3D tilt-in starts after the slide (40.15 - 40.6).
+      const whipU = P(T, 40.0, 40.35, E.outExpo);
+      const whipX = 1500 * (1 - whipU);
+      const blurPx = 24 * (1 - whipU);
+      const tilt = 8 * (1 - P(T, 40.15, 40.6, E.outExpo));
       const forgeOut = P(T, cue("forgeOut", 47.5), 48.0, E.inExpo);
       const shk = V.shake(T, hits, 6, 0.3);
       const koShk = V.shake(T, [cue("ko", 46.5)], 8, 0.35);
@@ -403,7 +409,8 @@
       const cy = w.y + w.h / 2;
       const sx = shk.x + koShk.x + (960 - cx) * forgeOut;
       const sy = shk.y + koShk.y + (540 - cy) * forgeOut;
-      term.style.transform = `perspective(2400px) translate(${round(sx)}px, ${round(sy)}px) rotateX(${round(tilt)}deg) scale(${round(push * (1 - forgeOut))})`;
+      term.style.transform = `perspective(2400px) translate(${round(sx + whipX)}px, ${round(sy)}px) rotateX(${round(tilt)}deg) scale(${round(push * (1 - forgeOut))})`;
+      term.style.filter = blurPx > 0.05 ? `blur(${round(blurPx)}px)` : "none";
       term.style.opacity = T >= 47.99 ? 0 : 1;
 
       // The screens: fail (40.0 - 42.0), pass (42.0 - 44.0), boss (44.0 - 48.0).

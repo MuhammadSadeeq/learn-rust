@@ -319,7 +319,7 @@ def v_snare(amp=1.0, body_f=190.0, noise_amt=0.55, dur=0.24, tau=0.11, rattle_lp
     t = tvec(n)
     f = body_f * (1.0 + 0.5 * np.exp(-t / 0.02))
     body = np.sin(2.0 * np.pi * np.cumsum(f) / SR) * env_ad(n, 0.0008, 0.07)
-    rattle = lp1(hp1(nz(n), 1500.0), rattle_lp) * env_ad(n, 0.0006, tau)
+    rattle = lp1(lp1(hp1(nz(n), 1500.0), rattle_lp), rattle_lp) * env_ad(n, 0.0006, tau)   # two-pole roll-off
     return fade_edges(amp * (0.6 * body + noise_amt * rattle), 0.0005, 0.006)
 
 
@@ -376,7 +376,7 @@ def v_anvil(amp=1.0, f0=330.0):
     for ratio, a, tau in ANVIL_PARTIALS:
         y += a * np.sin(2.0 * np.pi * f0 * ratio * t) * np.exp(-t / tau)
     y *= np.minimum(1.0, t / 0.0008)
-    click = lp1(hp1(nz(n), 1500.0), 6500.0) * np.exp(-t / 0.003) * 0.7
+    click = lp1(lp1(hp1(nz(n), 1500.0), 6500.0), 6500.0) * np.exp(-t / 0.003) * 0.7
     return fade_edges(amp * (y + click), 0.0002, 0.01)
 
 
@@ -757,9 +757,9 @@ def finish(g, duck=None, ir=None, wet_level=0.9):
 
 DRONE_GAIN = 0.30     # sub drone group gain (S1 sub share)
 BODY_GAIN = 0.25      # warm D2+A2+D3 body under the drone (S1 mid share)
-PLUCK_GAIN = 0.40    # glass plucks group gain
+PLUCK_GAIN = 0.45    # glass plucks group gain
 TICK_GAIN = 0.19     # S1 clock ticks (hats) gain
-CARD_BRIGHT = 1.0     # bright filter-opening layer on the S2 error stabs
+CARD_BRIGHT = 2.5     # bright filter-opening layer on the S2 error stabs
 TP_LIMIT = 10.0 ** (-1.5 / 20.0)   # limiter ceiling, linear (-1.5 dBTP)
 
 
@@ -848,8 +848,9 @@ def compose():
         gB.mono(PULSE, t, gain=0.35 * (0.25 + 0.75 * (t - 8.0) / 8.0))
     for k, t in enumerate(hat_times(8.0, 16.0)):
         gR.mono(HAT, t, gain=0.12, pan=0.25 if k % 2 else -0.25)
-    BRIGHT_A = v_error_bright(hz("D3"))
-    BRIGHT_B = v_error_bright(hz("G#3"))
+    # an octave up: a saw at 2x has its harmonics in 1-4 kHz, where the bite lives
+    BRIGHT_A = v_error_bright(2.0 * hz("D3"))
+    BRIGHT_B = v_error_bright(2.0 * hz("G#3"))
     for i, t in enumerate(C["errorCards"]):
         pan = -0.8 if i % 2 == 0 else 0.8
         gF.mono(CARD_A if i % 2 == 0 else CARD_B, t, gain=0.55, pan=pan)
