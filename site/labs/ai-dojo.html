@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Agent Code Review Dojo · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<style>
+  /* Agent Code Review Dojo. Tokens from oxidize.css only. */
+  .dj-intro { display: grid; gap: 14px; margin: 0 0 1.8rem; }
+  .dj-intro > p { margin: 0; max-width: 48rem; color: var(--ink-2); }
+  .dj-legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12.5rem), 1fr)); gap: 8px; margin: 0; }
+  .dj-legend > div { margin: 0; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); font-size: 0.9rem; color: var(--ink-2); }
+  .dj-legend dt { margin: 0 0 6px; }
+  .dj-legend dd { margin: 0; line-height: 1.4; }
+  .dj-keys { margin: 0; font-size: 0.88rem; color: var(--muted); }
+
+  .dj-sev { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 999px; font: 700 0.7rem/1.4 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; background: var(--surface-3); color: var(--ink-2); }
+  .dj-sev[data-sev="bug"] { background: var(--bad-soft); color: var(--bad); }
+  .dj-sev[data-sev="perf"] { background: var(--warn-soft); color: var(--warn); }
+  .dj-sev[data-sev="idiom"] { background: var(--stack-soft); color: var(--stack); }
+  .dj-sev[data-sev="design"] { background: var(--ai-soft); color: var(--ai); }
+
+  .dj-layout { display: grid; gap: 20px; align-items: start; }
+  @media (min-width: 960px) { .dj-layout { grid-template-columns: 17rem minmax(0, 1fr); } }
+  .dj-list { display: grid; gap: 10px; min-width: 0; }
+  @media (min-width: 960px) {
+    .dj-list { position: sticky; top: calc(var(--top-h) + 16px); max-height: calc(100vh - var(--top-h) - 32px); overflow-y: auto; padding-right: 4px; }
+  }
+  .dj-progress { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 0 2px; }
+  .dj-progress-text { font: 600 0.78rem/1 var(--font-mono); color: var(--muted); }
+  .dj-cases { display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 6px; }
+  @media (min-width: 960px) { .dj-cases { flex-direction: column; gap: 3px; overflow: visible; padding: 0; } }
+  .dj-case-btn { position: relative; flex: 0 0 auto; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 36px; padding: 6px 10px; border: 1px solid transparent; border-radius: var(--radius); background: transparent; color: var(--ink-2); font: 500 0.92rem/1.3 var(--font-body); text-align: left; white-space: nowrap; cursor: pointer; }
+  @media (min-width: 960px) { .dj-case-btn { white-space: normal; } }
+  .dj-case-btn:hover { background: var(--surface); border-color: var(--line); color: var(--ink); }
+  .dj-case-btn[aria-current="true"] { background: var(--surface); border-color: var(--oxide); color: var(--ink); font-weight: 700; }
+  .dj-case-btn:focus-visible, .ox-btn:focus-visible, .dj-rules:focus-visible { outline: 2px solid var(--oxide); outline-offset: 2px; }
+  .dj-case-n { font: 600 0.7rem/1 var(--font-mono); color: var(--muted); }
+  .dj-case-st { display: inline-flex; align-items: center; gap: 4px; font: 600 0.7rem/1 var(--font-mono); color: var(--muted); }
+  .dj-case-done { display: inline-flex; width: 16px; height: 16px; color: var(--ok); }
+  .dj-case-done svg { width: 16px; height: 16px; }
+  .dj-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  .dj-view { min-width: 0; display: grid; gap: 18px; align-content: start; }
+  .dj-empty { margin: 0; padding: 18px; border: 1px dashed var(--line); border-radius: var(--radius-lg); color: var(--ink-2); }
+  .dj-case-head { display: grid; gap: 6px; }
+  .dj-case-head .ox-label a { color: inherit; }
+  .dj-view h2, .dj-playbook h2 { margin: 0; font-size: var(--step-2); line-height: 1.15; }
+  .dj-view h2:focus { outline: none; }
+  .dj-task { margin: 0; }
+  .dj-task p { margin: 6px 0 0; }
+  .dj-plate { margin: 0; }
+  .dj-plate .ox-code-scroll { container-type: inline-size; }
+  .dj-rows { width: max-content; min-width: 100%; padding: 12px 0 14px; font: 400 0.86rem/1.62 var(--font-mono); color: var(--code-ink); tab-size: 4; }
+  .ox-code .dj-row { display: grid; grid-template-columns: 2.6rem minmax(0, 1fr); margin-inline: 0; padding-inline: 16px; white-space: pre; }
+  .ox-code .dj-row.dj-hit { background: color-mix(in srgb, var(--c-st) 16%, transparent); box-shadow: inset 3px 0 0 var(--c-st); }
+  .ox-code .dj-row.dj-missed { background: color-mix(in srgb, var(--c-nu) 14%, transparent); box-shadow: inset 3px 0 0 var(--c-nu); }
+  .ox-code .dj-row.dj-gone { background: color-mix(in srgb, var(--bad) 24%, transparent); box-shadow: inset 3px 0 0 var(--bad); }
+  .ox-code .dj-row.dj-new { background: color-mix(in srgb, var(--c-st) 18%, transparent); box-shadow: inset 3px 0 0 var(--c-st); }
+  .dj-num { appearance: none; box-sizing: border-box; width: 2.6rem; margin: 0; padding: 0 0.7rem 0 0; border: 0; border-radius: 3px; background: none; color: var(--code-dim); font: inherit; text-align: right; cursor: pointer; user-select: none; }
+  .dj-num:hover { color: var(--code-ink); }
+  .dj-num:focus-visible { outline: 2px solid var(--c-kw); outline-offset: 1px; }
+  .dj-num[aria-pressed="true"] { color: var(--c-kw); font-weight: 700; }
+  .dj-num[aria-disabled="true"] { cursor: default; }
+  .dj-n { display: block; box-sizing: border-box; width: 2.6rem; padding-right: 0.7rem; text-align: right; color: var(--code-dim); user-select: none; }
+  .dj-src { white-space: pre; min-width: 0; }
+  .dj-note { box-sizing: border-box; width: min(44rem, calc(100cqi - 2rem)); margin: 6px 16px 14px; padding: 12px 14px 13px; display: grid; gap: 8px; background: var(--code-bg-2); border: 1px solid var(--code-line); border-left: 4px solid var(--code-dim); border-radius: var(--radius); color: var(--code-ink); font: 400 0.95rem/1.5 var(--font-body); white-space: normal; animation: ox-rise 0.25s ease-out; }
+  .dj-note[data-sev="bug"] { border-left-color: var(--bad); }
+  .dj-note[data-sev="perf"] { border-left-color: var(--warn); }
+  .dj-note[data-sev="idiom"] { border-left-color: var(--stack); }
+  .dj-note[data-sev="design"] { border-left-color: var(--ai); }
+  .dj-note-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font: 600 0.74rem/1.3 var(--font-mono); color: var(--code-dim); }
+  .dj-note-kind { color: var(--code-ink); font: 700 0.8rem/1.3 var(--font-mono); }
+  .dj-note-status.is-found { color: var(--c-st); }
+  .dj-note-status.is-missed { color: var(--c-nu); }
+  .dj-note-body p { margin: 0; }
+  .dj-note-body code { font-size: 0.88em; padding: 0 0.3em; border-radius: 3px; background: color-mix(in srgb, var(--code-ink) 12%, transparent); color: var(--code-ink); }
+
+  .dj-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .dj-count { margin-left: 4px; font: 600 0.8rem/1 var(--font-mono); color: var(--muted); }
+  .dj-result { display: grid; gap: 10px; padding: 16px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow); }
+  .dj-result[hidden] { display: none; }
+  .dj-result:focus { outline: 2px solid var(--oxide); outline-offset: 2px; }
+  .dj-score { margin: 0; font-size: 1.02rem; color: var(--ink-2); }
+  .dj-score b { font: 900 1.9rem/1 var(--font-display); color: var(--ink); margin-right: 6px; }
+  .dj-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+  .dj-msg { margin: 0; color: var(--ink-2); font-size: 0.95rem; }
+  .dj-best { margin: 0; color: var(--muted); font-size: 0.88rem; }
+  .dj-takeaway { display: grid; gap: 6px; padding: 14px 18px; background: color-mix(in srgb, var(--ai-soft) 55%, var(--surface)); border: 1px solid var(--line); border-left: 4px solid var(--ai); border-radius: var(--radius-lg); }
+  .dj-takeaway p { margin: 0; color: var(--ink); }
+
+  .dj-reviewed { display: grid; gap: 12px; min-width: 0; }
+  .dj-reviewed-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .dj-reviewed-head h3 { margin: 0; font-size: var(--step-1); }
+  .dj-reviewed-head h3:focus { outline: none; }
+  .dj-compare { display: grid; gap: 14px; min-width: 0; }
+  @media (min-width: 900px) { .dj-compare { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+
+  .dj-pager { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .dj-pager .ox-btn[disabled] { opacity: 0.45; }
+
+  .dj-playbook { display: grid; gap: 14px; max-width: 46rem; margin-top: 3.2rem; padding-top: 2rem; border-top: 1px solid var(--line); }
+  .dj-playbook > p { margin: 0; color: var(--ink-2); }
+  .dj-tips { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+  .dj-tips li { padding-left: 14px; border-left: 3px solid var(--line); color: var(--ink-2); }
+  .dj-tips b { color: var(--ink); }
+  .dj-copy { display: grid; min-width: 0; border: 1px solid var(--code-line); border-radius: var(--radius-lg); overflow: hidden; background: var(--code-bg); box-shadow: var(--shadow); }
+  .dj-copy-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 38px; padding: 6px 8px 6px 14px; background: var(--code-bg-2); border-bottom: 1px solid var(--code-line); }
+  .dj-copy-head .ox-label { color: var(--code-dim); }
+  .dj-rules { margin: 0; padding: 14px 16px 16px; overflow-x: auto; color: var(--code-ink); font: 400 0.84rem/1.6 var(--font-mono); white-space: pre; tab-size: 4; }
+</style>
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/labs/dojo-data.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+</head>
+<body data-crumb="Lab · Agent Code Review Dojo">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<main class="ox-lab" id="main">
+  <header class="ox-lab-hero">
+    <span class="ox-label">Lab</span>
+    <h1 class="ox-title">Agent Code Review Dojo</h1>
+    <p>Read Rust that an AI agent wrote, flag the lines a senior reviewer would question, then compare your review with the version you would merge.</p>
+  </header>
+
+  <section class="dj-intro">
+    <p>Each case is a short program an agent wrote for a task. Click the line numbers you would question, then submit. You score on the smells you found and on the false flags you raised, so flag what a careful reviewer would question, and nothing else.</p>
+    <dl class="dj-legend">
+      <div><dt><span class="dj-sev" data-sev="bug">Bug</span></dt><dd>Wrong or unsafe at runtime.</dd></div>
+      <div><dt><span class="dj-sev" data-sev="perf">Performance</span></dt><dd>Needless copies, allocations or passes.</dd></div>
+      <div><dt><span class="dj-sev" data-sev="idiom">Idiom</span></dt><dd>Compiles, but is not how Rust is usually written.</dd></div>
+      <div><dt><span class="dj-sev" data-sev="design">Design</span></dt><dd>An API or function shape that will hurt later.</dd></div>
+    </dl>
+    <p class="dj-keys">Keyboard: Tab moves between line numbers, and Enter or Space flags a line.</p>
+  </section>
+
+  <div class="dj-layout">
+    <nav class="dj-list" aria-label="Review cases">
+      <div class="dj-progress"><span class="ox-label">Cases</span><span class="dj-progress-text" id="dj-progress"></span></div>
+      <div class="dj-cases" id="dj-cases"></div>
+    </nav>
+    <section class="dj-view" id="dj-view">
+      <p class="dj-empty">Pick a case to start. Flag the lines you would question, submit your review, then compare it with the reviewed version. Each case takes a few minutes.</p>
+    </section>
+  </div>
+
+  <section class="dj-playbook" id="playbook">
+    <span class="ox-label">After the dojo</span>
+    <h2>Prompting playbook</h2>
+    <p>An agent is good at making code compile and making the one test it was shown pass. It is less likely to ask whether the code is the code you would merge. Most of the smells in this lab are cheap to prevent in the prompt, and expensive to find in review.</p>
+    <ul class="dj-tips">
+      <li><b>Name the versions.</b> Say which crate and which version to use, such as tokio 1 with the full feature set. An agent that does not know the version guesses, and guessed APIs are a common reason code fails to compile.</li>
+      <li><b>Ask for evidence, not a summary.</b> Ask it to run <code>cargo fmt</code>, <code>cargo clippy --all-targets -- -D warnings</code> and <code>cargo test</code>, and to paste the last lines of each. "Make sure it is clean" gets a yes. Pasted output is something you can check.</li>
+      <li><b>Set the error policy first.</b> Libraries return typed errors, and binaries may use anyhow. Without that rule, agents reach for <code>unwrap()</code> and <code>Box&lt;dyn Error&gt;</code>, because those make the code compile fastest.</li>
+      <li><b>Ask it to justify each clone.</b> After the feature works, ask it to list every <code>clone()</code> and <code>to_string()</code> in the diff, and to say why each one needs an owned copy. An agent that has to justify a clone usually removes it.</li>
+      <li><b>Put the rules in the repository.</b> A <code>CLAUDE.md</code> or <code>AGENTS.md</code> file applies to every session. A rule typed once into a chat applies to that one chat.</li>
+      <li><b>Review the diff, not the summary.</b> The summary says what the agent meant to do. The diff shows what it did. Read the diff first, and use the smells in this lab as your checklist.</li>
+    </ul>
+    <div class="dj-copy">
+      <div class="dj-copy-head"><span class="ox-label">CLAUDE.md or AGENTS.md</span><button type="button" class="ox-btn is-small" data-copy="dj-rules">Copy</button></div>
+      <pre class="dj-rules" id="dj-rules" tabindex="0"># Rust rules for this repository
+
+## Before you finish
+- Run `cargo fmt --all`.
+- Run `cargo clippy --all-targets -- -D warnings` and fix every warning. Do not add `#[allow]` to hide one.
+- Run `cargo test` and make sure it passes.
+- In your final message, paste the last lines of each command.
+
+## Errors
+- No `unwrap()` or `expect()` outside tests and `main`.
+- Libraries return typed errors built with `thiserror`. Binaries may use `anyhow`.
+- Never ignore a `Result`. Propagate it with `?`, or handle it and say why.
+
+## Borrowing and types
+- Take `&amp;str` and `&amp;[T]` parameters, not `&amp;String` and `&amp;Vec&lt;T&gt;`.
+- Clone only when an independent owned value is needed, and say why in a comment.
+- Model states as enums, not strings.
+
+## Async
+- No blocking calls inside `async fn`: no `std::thread::sleep`, no `std::fs`, no blocking locks. Use the async version, or `spawn_blocking`.
+- Never hold a `Mutex` or `RwLock` guard across `.await`.
+
+## Unsafe
+- Every `unsafe` block needs a `// SAFETY:` comment that names the invariant it relies on.
+
+## Dependencies
+- Pin crate versions in `Cargo.toml`, and name them in your summary.</pre>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  function start() {
+    var CASES = window.OX_DOJO || [];
+    var listEl = document.getElementById("dj-cases");
+    var viewEl = document.getElementById("dj-view");
+    var progressEl = document.getElementById("dj-progress");
+    if (!CASES.length || !listEl || !viewEl || !window.Ox) return;
+
+    var store = Ox.state();
+    store.game = store.game || {};
+    store.game.dojo = store.game.dojo || {};
+
+    var SEV_LABEL = { bug: "Bug", perf: "Performance", idiom: "Idiom", design: "Design" };
+    var runs = {};   // per-visit state: flags and reveal. Only the best score is saved.
+    var index = 0;
+
+    function pad(n) { return String(n).padStart(2, "0"); }
+    function plural(n, word) { return n + " " + word + (n === 1 ? "" : "s"); }
+    function lineList(ns) { return (ns.length === 1 ? "Line " : "Lines ") + ns.join(", "); }
+    function bestOf(id) { var r = store.game.dojo[id]; return r && r.best ? r.best : null; }
+    function isDone(id) { var r = store.game.dojo[id]; return !!(r && r.done); }
+    function runOf(c) {
+      if (!runs[c.id]) runs[c.id] = { flags: new Set(), revealed: false, score: null, message: "", reviewedOpen: false };
+      return runs[c.id];
+    }
+    function linesOf(src) { return Ox.splitLines(Ox.highlight(src, "rust")); }
+
+    // Score: a smell is found when any of its lines is flagged. A flag on a
+    // line that no smell names is a false flag.
+    function score(c, flags) {
+      var lineOnSmell = {}, missed = [], found = 0;
+      c.smells.forEach(function (sm, k) {
+        sm.lines.forEach(function (n) { lineOnSmell[n] = true; });
+        if (sm.lines.some(function (n) { return flags.has(n); })) found++;
+        else missed.push(k);
+      });
+      var falseFlags = [];
+      flags.forEach(function (n) { if (!lineOnSmell[n]) falseFlags.push(n); });
+      falseFlags.sort(function (a, b) { return a - b; });
+      return { found: found, total: c.smells.length, missed: missed, falseFlags: falseFlags, lineOnSmell: lineOnSmell };
+    }
+
+    // Line-level diff (LCS on trimmed lines) for the side-by-side view.
+    function diff(a, b) {
+      var n = a.length, m = b.length, t = [], i, j;
+      for (i = 0; i <= n; i++) t.push(new Array(m + 1).fill(0));
+      for (i = n - 1; i >= 0; i--) {
+        for (j = m - 1; j >= 0; j--) {
+          t[i][j] = a[i] === b[j] ? t[i + 1][j + 1] + 1 : Math.max(t[i + 1][j], t[i][j + 1]);
+        }
+      }
+      var keepA = {}, keepB = {};
+      i = 0; j = 0;
+      while (i < n && j < m) {
+        if (a[i] === b[j]) { keepA[i] = true; keepB[j] = true; i++; j++; }
+        else if (t[i + 1][j] >= t[i][j + 1]) i++;
+        else j++;
+      }
+      return { a: keepA, b: keepB };
+    }
+
+    function actionsHtml(r) {
+      if (r.revealed) {
+        return '<button type="button" class="ox-btn is-primary" data-act="reviewed" aria-expanded="' + (r.reviewedOpen ? "true" : "false") + '">' +
+          (r.reviewedOpen ? "Hide the reviewed version" : "See the reviewed version") + '</button>' +
+          '<button type="button" class="ox-btn" data-act="again">Review again</button>';
+      }
+      return '<button type="button" class="ox-btn is-primary" data-act="submit">Submit review</button>' +
+        '<button type="button" class="ox-btn" data-act="clear">Clear flags</button>' +
+        '<span class="dj-count" aria-live="polite"></span>';
+    }
+
+    function resultHtml(c, r) {
+      var s = r.score, best = bestOf(c.id);
+      var chips = '<li class="ox-chip is-ok">Found ' + s.found + ' of ' + s.total + '</li>';
+      if (s.missed.length) chips += '<li class="ox-chip is-bad">Missed ' + s.missed.length + '</li>';
+      chips += '<li class="ox-chip">' + (s.falseFlags.length ? plural(s.falseFlags.length, "false flag") + " on " + (s.falseFlags.length === 1 ? "line " : "lines ") + s.falseFlags.join(", ") : "No false flags") + '</li>';
+      var missedText = s.missed.length
+        ? '<p class="dj-msg">Missed: ' + s.missed.map(function (k) { return Ox.esc(c.smells[k].kind); }).join(", ") + '. Each one is marked in the code below.</p>'
+        : '';
+      var bestText = best
+        ? '<p class="dj-best">Best on this case: ' + best.found + ' of ' + best.total + ' found, ' + plural(best.falseFlags, "false flag") + '.</p>'
+        : '';
+      return '<p class="dj-score"><b>' + s.found + ' of ' + s.total + '</b> smell' + (s.total === 1 ? '' : 's') + ' found</p>' +
+        '<ul class="dj-chips">' + chips + '</ul>' + missedText +
+        '<p class="dj-msg">' + r.message + '</p>' + bestText;
+    }
+
+    function reviewedHtml(c) {
+      var agent = linesOf(c.rust), reviewed = linesOf(c.idiomatic);
+      var d = diff(c.rust.split("\n").map(function (s) { return s.trim(); }), c.idiomatic.split("\n").map(function (s) { return s.trim(); }));
+      var left = agent.map(function (html, k) {
+        return '<div class="ln dj-row' + (d.a[k] ? '' : ' dj-gone') + '"><span class="dj-n">' + (k + 1) + '</span><span class="dj-src">' + (html || " ") + '</span></div>';
+      }).join("");
+      var right = reviewed.map(function (html, k) {
+        return '<div class="ln dj-row' + (d.b[k] ? '' : ' dj-new') + '"><span class="dj-n">' + (k + 1) + '</span><span class="dj-src">' + (html || " ") + '</span></div>';
+      }).join("");
+      return '<section class="dj-reviewed" aria-labelledby="dj-reviewed-title">' +
+        '<div class="dj-reviewed-head"><h3 id="dj-reviewed-title" tabindex="-1">The reviewed version</h3>' +
+        '<button type="button" class="ox-btn is-small" data-act="copy-reviewed">Copy</button></div>' +
+        '<p class="dj-msg">Red lines are in the agent\'s version and gone from the reviewed one. Green lines are new. Other lines are the same.</p>' +
+        '<div class="dj-compare">' +
+        '<figure class="ox-code dj-plate" data-lang="rust"><div class="ox-code-bar"><span class="ox-code-lang">Rust</span><span class="ox-code-title">agent</span></div><div class="ox-code-scroll"><div class="dj-rows">' + left + '</div></div></figure>' +
+        '<figure class="ox-code dj-plate" data-lang="rust"><div class="ox-code-bar"><span class="ox-code-lang">Rust</span><span class="ox-code-title">reviewed</span></div><div class="ox-code-scroll"><div class="dj-rows">' + right + '</div></div></figure>' +
+        '</div></section>';
+    }
+
+    function renderCase() {
+      var c = CASES[index], r = runOf(c);
+      var rows = linesOf(c.rust).map(function (html, k) {
+        var n = k + 1;
+        return '<div class="ln dj-row" data-n="' + n + '"><button type="button" class="dj-num" aria-pressed="false" aria-label="Line ' + n + ', not flagged. Press to flag.">' + n + '</button><span class="dj-src">' + (html || " ") + '</span></div>';
+      }).join("");
+      var ch = Ox.chapterByNum(c.chapter);
+      var chapterLink = ch ? ' · <a href="' + Ox.chapterUrl(ch) + '">Chapter ' + pad(ch.n) + ': ' + Ox.esc(ch.title) + '</a>' : '';
+      viewEl.innerHTML =
+        '<header class="dj-case-head"><span class="ox-label">Case ' + pad(index + 1) + ' of ' + CASES.length + chapterLink + '</span>' +
+          '<h2 id="dj-case-title" tabindex="-1">' + Ox.esc(c.title) + '</h2></header>' +
+        '<div class="ox-panel dj-task"><span class="ox-label">The agent was asked</span><p>' + Ox.esc(c.task) + '</p></div>' +
+        '<figure class="ox-code dj-plate" data-lang="rust"><div class="ox-code-bar"><span class="ox-code-lang">Rust</span><span class="ox-code-title">src/main.rs, the agent\'s version</span></div>' +
+          '<div class="ox-code-scroll"><div class="dj-rows">' + rows + '</div></div></figure>' +
+        '<div class="dj-actions">' + actionsHtml(r) + '</div>' +
+        '<div class="dj-result" id="dj-result" tabindex="-1"' + (r.revealed ? '' : ' hidden') + '>' + (r.revealed ? resultHtml(c, r) : '') + '</div>' +
+        (r.revealed ? '<div class="dj-takeaway"><span class="ox-label">Takeaway</span><p>' + c.takeaway + '</p></div>' : '') +
+        (r.revealed && r.reviewedOpen ? reviewedHtml(c) : '') +
+        '<nav class="dj-pager" aria-label="Move between cases">' +
+          '<button type="button" class="ox-btn" data-act="prev"' + (index > 0 ? '' : ' disabled') + '>← Previous case</button>' +
+          '<button type="button" class="ox-btn" data-act="next"' + (index < CASES.length - 1 ? '' : ' disabled') + '>Next case →</button>' +
+        '</nav>';
+      placeNotes(c, r);
+      paintRows(c, r);
+      updateCount();
+    }
+
+    // Annotations go under the last line of each smell, once the review is revealed.
+    function placeNotes(c, r) {
+      viewEl.querySelectorAll(".dj-note").forEach(function (el) { el.remove(); });
+      if (!r.revealed) return;
+      var s = r.score;
+      c.smells.forEach(function (sm, k) {
+        var anchor = Math.max.apply(null, sm.lines);
+        var row = viewEl.querySelector('.dj-row[data-n="' + anchor + '"]');
+        if (!row) return;
+        var at = row;
+        while (at.nextElementSibling && at.nextElementSibling.classList.contains("dj-note")) at = at.nextElementSibling;
+        var found = s.missed.indexOf(k) < 0;
+        var note = document.createElement("div");
+        note.className = "dj-note";
+        note.setAttribute("data-sev", sm.severity);
+        note.innerHTML =
+          '<div class="dj-note-head"><span class="dj-sev" data-sev="' + sm.severity + '">' + SEV_LABEL[sm.severity] + '</span>' +
+          '<span class="dj-note-kind">' + Ox.esc(sm.kind) + '</span>' +
+          '<span>' + lineList(sm.lines) + '</span>' +
+          '<span class="dj-note-status ' + (found ? "is-found" : "is-missed") + '">' + (found ? "You flagged this" : "You missed this") + '</span></div>' +
+          '<div class="dj-note-body">' + sm.explain + '</div>';
+        at.after(note);
+      });
+    }
+
+    // Flag styling. Before reveal: flagged lines are highlighted. After reveal:
+    // hits, false flags and missed smell lines are marked.
+    function paintRows(c, r) {
+      var s = r.score;
+      viewEl.querySelectorAll(".dj-row").forEach(function (row) {
+        var n = +row.getAttribute("data-n");
+        var btn = row.querySelector(".dj-num");
+        if (!btn) return;
+        var flagged = r.flags.has(n);
+        row.classList.remove("is-hl", "is-err", "dj-hit", "dj-missed");
+        var label = "Line " + n;
+        if (!r.revealed) {
+          if (flagged) row.classList.add("is-hl");
+          label += flagged ? ", flagged. Press to unflag." : ", not flagged. Press to flag.";
+          btn.setAttribute("aria-disabled", "false");
+        } else {
+          var onSmell = !!s.lineOnSmell[n];
+          if (flagged) row.classList.add(onSmell ? "dj-hit" : "is-err");
+          else if (onSmell) row.classList.add("dj-missed");
+          label += flagged
+            ? (onSmell ? ", flagged, matches a smell." : ", flagged, no smell on this line.")
+            : (onSmell ? ", not flagged, but a smell is on this line." : ", not flagged.");
+          btn.setAttribute("aria-disabled", "true");
+        }
+        btn.setAttribute("aria-pressed", flagged ? "true" : "false");
+        btn.setAttribute("aria-label", label);
+      });
+    }
+
+    function updateCount() {
+      var el = viewEl.querySelector(".dj-count");
+      if (!el) return;
+      var n = runOf(CASES[index]).flags.size;
+      el.textContent = n === 0 ? "No lines flagged" : (n === 1 ? "1 line flagged" : n + " lines flagged");
+    }
+
+    function renderList() {
+      var doneN = 0;
+      listEl.innerHTML = CASES.map(function (c, i) {
+        var d = isDone(c.id), b = bestOf(c.id);
+        if (d) doneN++;
+        return '<button type="button" class="dj-case-btn" data-i="' + i + '" aria-current="' + (i === index ? "true" : "false") + '">' +
+          '<span class="dj-case-n">' + pad(i + 1) + '</span>' +
+          '<span>' + Ox.esc(c.title) + '</span>' +
+          '<span class="dj-case-st">' +
+            (b ? '<span>' + b.found + '/' + b.total + '</span>' : '') +
+            (d ? '<span class="dj-case-done" title="Reviewed">' + Ox.icon.win + '<span class="dj-sr">reviewed</span></span>' : '') +
+          '</span></button>';
+      }).join("");
+      progressEl.textContent = doneN + " of " + CASES.length + " reviewed";
+    }
+
+    function toggleLine(n) {
+      var c = CASES[index], r = runOf(c);
+      if (r.revealed) return;
+      if (r.flags.has(n)) r.flags.delete(n); else r.flags.add(n);
+      paintRows(c, r);
+      updateCount();
+    }
+
+    function submit() {
+      var c = CASES[index], r = runOf(c);
+      var s = score(c, r.flags);
+      var prev = store.game.dojo[c.id] || {};
+      var cur = { found: s.found, total: s.total, falseFlags: s.falseFlags.length };
+      var pb = prev.best || null;
+      var better = !pb || cur.found > pb.found || (cur.found === pb.found && cur.falseFlags < pb.falseFlags);
+      store.game.dojo[c.id] = { done: true, best: better ? cur : pb, tries: (prev.tries || 0) + 1 };
+      Ox.save();
+      var perfect = s.found === s.total && s.falseFlags.length <= 1;
+      var got = perfect ? Ox.award(15, "review", "dojo:" + c.id) : false;
+      r.revealed = true;
+      r.score = s;
+      r.reviewedOpen = false;
+      r.message = perfect
+        ? (got ? "You earned 15 XP for this case." : "This case already earned its 15 XP.")
+        : "Find every smell with at most one false flag to earn 15 XP.";
+      renderCase();
+      renderList();
+      var res = document.getElementById("dj-result");
+      if (res) res.focus();
+    }
+
+    function focusTitle() {
+      var t = document.getElementById("dj-case-title");
+      if (t) t.focus({ preventScroll: window.innerWidth >= 960 });
+    }
+
+    function go(i, moveFocus) {
+      index = i;
+      try { history.replaceState(null, "", "#" + CASES[index].id); } catch (e) {}
+      renderList();
+      renderCase();
+      if (moveFocus) focusTitle();
+    }
+
+    // Copy with navigator.clipboard; if that is refused, select the text so the
+    // reader can press Ctrl+C or Cmd+C.
+    function copy(btn, text, pre) {
+      var label = btn.textContent;
+      function flash(msg) {
+        btn.textContent = msg;
+        setTimeout(function () { btn.textContent = label; }, 1800);
+      }
+      function fallback() {
+        try {
+          if (pre) {
+            var range = document.createRange();
+            range.selectNodeContents(pre);
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+            flash("Selected. Press Ctrl+C");
+            return;
+          }
+          var ta = document.createElement("textarea");
+          ta.value = text;
+          ta.setAttribute("readonly", "");
+          ta.style.position = "fixed";
+          ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.select();
+          var ok = document.execCommand("copy");
+          ta.remove();
+          flash(ok ? "Copied" : "Copy not available");
+        } catch (e) { flash("Copy not available"); }
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { flash("Copied"); }, fallback);
+      } else {
+        fallback();
+      }
+    }
+
+    listEl.addEventListener("click", function (e) {
+      var b = e.target.closest(".dj-case-btn");
+      if (b) go(+b.getAttribute("data-i"), true);
+    });
+
+    viewEl.addEventListener("click", function (e) {
+      var num = e.target.closest(".dj-num");
+      if (num) {
+        var row = num.closest(".dj-row");
+        if (row) toggleLine(+row.getAttribute("data-n"));
+        return;
+      }
+      var b = e.target.closest("[data-act]");
+      if (!b || b.disabled) return;
+      var c = CASES[index], r = runOf(c);
+      switch (b.getAttribute("data-act")) {
+        case "submit": submit(); break;
+        case "clear": r.flags.clear(); paintRows(c, r); updateCount(); break;
+        case "again": delete runs[c.id]; renderCase(); focusTitle(); break;
+        case "reviewed":
+          r.reviewedOpen = !r.reviewedOpen;
+          renderCase();
+          var h = document.getElementById(r.reviewedOpen ? "dj-reviewed-title" : "dj-case-title");
+          if (h) h.focus({ preventScroll: window.innerWidth >= 960 });
+          break;
+        case "copy-reviewed": copy(b, c.idiomatic, null); break;
+        case "prev": if (index > 0) go(index - 1, true); break;
+        case "next": if (index < CASES.length - 1) go(index + 1, true); break;
+      }
+    });
+
+    document.querySelectorAll("[data-copy]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var pre = document.getElementById(btn.getAttribute("data-copy"));
+        if (pre) copy(btn, pre.textContent, pre);
+      });
+    });
+
+    var want = decodeURIComponent((location.hash || "").slice(1));
+    var startIdx = CASES.findIndex(function (c) { return c.id === want; });
+    index = startIdx >= 0 ? startIdx : 0;
+    renderList();
+    renderCase();
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+  else start();
+})();
+</script>
+</body>
+</html>

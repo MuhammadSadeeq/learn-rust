@@ -1,6 +1,7 @@
 /* Error Museum exhibits (window.OX_ERRORS).
    Each `error` is the real output of rustc 1.97, edition 2024, for the
-   `rust` program next to it. The temporary path is shown as src/main.rs.
+   `rust` program next to it. The temporary path is shown as src/main.rs, and
+   notes that point into the standard library source are left out.
    Every `fixes[].rust` compiles. Checked by tools/check-snippets.mjs. */
 window.OX_ERRORS = [
   {
@@ -927,7 +928,7 @@ fn main() {
     let p = Point { x: 3, y: 4 };
     println!("{p:?}, x + y = {}", p.x + p.y);
 }`,
-        note: `\`{:?}\` uses the Debug trait, which \`#[derive(Debug)]\` writes for you. It is for developers, not for users. The derive does not count as reading the fields, so this line also uses them.`
+        note: `\`{:?}\` uses the Debug trait, which \`#[derive(Debug)]\` writes for you. It is meant for developers reading logs, not for users. The \`x + y\` part only reads both fields, so rustc does not warn that they are unused.`
       },
       {
         title: "Implement Display",

@@ -20,10 +20,12 @@
 
   /* anatomy of an error */
   .em-lead { color: var(--ink-2); margin-bottom: 1.2rem; }
-  .em-anatomy-grid { display: grid; gap: 18px; align-items: start; }
-  @media (min-width: 900px) { .em-anatomy-grid { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); } }
+  .em-anatomy-grid { display: grid; gap: 14px; align-items: start; grid-template-columns: minmax(0, 1fr); }
+  .em-anatomy-grid > * { min-width: 0; }
   .em-anatomy-grid .ox-code { margin: 0; }
-  .em-legend { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; min-width: 0; }
+  .em-legend { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; min-width: 0; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 640px) { .em-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (min-width: 1100px) { .em-legend { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
   .em-legend li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; margin: 0; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); font-size: 0.92rem; color: var(--ink-2); }
   .em-legend b { display: block; color: var(--ink); }
   .em-legend p { margin: 0; }
@@ -45,7 +47,7 @@
   .em-count { margin: 0 0 14px; font-size: 0.9rem; color: var(--muted); }
   .em-grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
   @media (min-width: 760px) { .em-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  .em-card { display: grid; gap: 10px; align-content: start; min-width: 0; padding: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow); color: var(--ink); text-decoration: none; }
+  .em-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-content: start; min-width: 0; padding: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow); color: var(--ink); text-decoration: none; }
   .em-card:hover { border-color: var(--oxide); }
   .em-card-head { display: flex; align-items: center; gap: 8px; }
   .em-code { font: 700 0.8rem/1 var(--font-mono); color: var(--oxide-ink); background: var(--oxide-soft); padding: 5px 7px; border-radius: 4px; }
@@ -74,6 +76,7 @@
   .em-fixes { margin: 0.4rem 0 0; }
   .em-fixes .ox-tabpanel > .ox-code { margin-top: 12px; }
   .ox-lab .ox-callout { margin: 1.2rem 0; }
+  @media (max-width: 560px) { .em-exhibit .ox-code-title { display: none; } }
 </style>
 <script src="../assets/course-data.js" defer></script>
 <script src="../assets/labs/errors-data.js" defer></script>
