@@ -2,7 +2,9 @@
    16.0: an anvil strike. A molten-then-white flash, the word OXIDIZE is forged
    letter by letter from the center out (white -> molten -> hot -> oxide), 120
    seeded sparks arc up under gravity, a 14 px shake, and an oxide underline grows.
-   18.0: Oxi pops onto the logo and hops. The subtitle and tagline arrive.
+   16.9 - 17.1: the forged letters cool into the settled .ox-logo metal.
+   18.0: Oxi pops onto the logo and hops. The subtitle arrives; at 20.0 the tagline
+   arrives and a light sweep crosses the logo.
    22.0 - 24.0: the camera dives into the counter of the O and cuts to S4. */
 (function () {
   "use strict";
@@ -13,11 +15,15 @@
   const clamp = V.clamp;
 
   const IMPACT = 16.0;
+  const COOL_A = 16.9; // the forged letters cross into the settled metal
+  const COOL_B = 17.1;
   const OXI_POP = 18.0;
   const SUB_AT = 18.0;
   const TAG_AT = 20.0;
   const ZOOM_A = 22.0;
   const ZOOM_B = 24.0;
+  const FADE_A = 23.2; // the word fades to ink so the frame reads as one dark counter at 23.8 s
+  const FADE_B = 23.8;
   const WORD = "OXIDIZE";
   const CENTER_I = 3; // the D
   const GRAV = 1900; // px/s^2
@@ -40,6 +46,7 @@
 .s3-logo, .s3-glow { position: absolute; left: 0; top: 300px; width: 1920px; height: 270px; text-align: center; font: 900 300px/270px var(--font-display); letter-spacing: 0.06em; text-transform: uppercase; white-space: pre; }
 .s3-logo .ch { display: inline-block; }
 .s3-glow { color: var(--oxide); filter: blur(34px); opacity: 0; }
+.s3-settle { font-size: 300px; line-height: 270px; letter-spacing: 0.06em; }
 .s3-uline { position: absolute; left: 410px; top: 604px; width: 1100px; height: 6px; background: var(--oxide); box-shadow: 0 0 18px 2px rgba(255,138,61,0.55); }
 .s3-oxi { position: absolute; left: 1392px; top: 172px; width: 200px; height: 170px; display: none; }
 .s3-oxi .ca { display: block; width: 200px; height: 170px; }
@@ -62,10 +69,11 @@
       <div class="s3-cam">
         <div class="s3-glow">${WORD}</div>
         <div class="s3-logo"></div>
+        <div class="s3-wrap s3-settle-wrap" style="top:300px"><div class="ox-display ox-logo s3-settle">${WORD}</div></div>
         <div class="s3-uline"></div>
         <div class="s3-oxi"></div>
-        <div class="s3-wrap" style="top:660px"><div class="s3-sub">THE RUST COURSE YOU CAN SEE.</div></div>
-        <div class="s3-wrap" style="top:772px"><div class="s3-tag">Made for PHP &amp; Laravel developers.</div></div>
+        <div class="s3-wrap s3-sub-wrap" style="top:660px"><div class="s3-sub">THE RUST COURSE YOU CAN SEE.</div></div>
+        <div class="s3-wrap s3-tag-wrap" style="top:772px"><div class="s3-tag">Made for PHP &amp; Laravel developers.</div></div>
         <svg class="s3-sparks" viewBox="0 0 1920 1080"></svg>
       </div>
       <div class="s3-flash"></div>`;
@@ -118,11 +126,14 @@
       q, letters, sparks, oxi, oCx, oCy,
       cam: q(".s3-cam"),
       glow: q(".s3-glow"),
+      logo,
+      settle: q(".s3-settle"),
+      settleWrap: q(".s3-settle-wrap"),
       uline: q(".s3-uline"),
       sub: q(".s3-sub"),
       tag: q(".s3-tag"),
-      subWrap: layer.querySelectorAll(".s3-wrap")[0],
-      tagWrap: layer.querySelectorAll(".s3-wrap")[1],
+      subWrap: q(".s3-sub-wrap"),
+      tagWrap: q(".s3-tag-wrap"),
       flash: q(".s3-flash"),
     };
   }
@@ -138,7 +149,7 @@
 
   function render(t, layer, T) {
     if (!st) return;
-    const { letters, sparks, oxi, oCx, oCy, cam, glow, uline, sub, tag, subWrap, tagWrap, flash } = st;
+    const { letters, sparks, oxi, oCx, oCy, cam, glow, logo, settle, settleWrap, uline, sub, tag, subWrap, tagWrap, flash } = st;
 
     // Camera: shake on the impact, then the dive into the O from 22 to 24 s.
     const sh = V.shake(T, [IMPACT], 14, 0.4);
@@ -160,23 +171,33 @@
     const glowOn = T >= IMPACT;
     glow.style.opacity = glowOn ? String(0.95 * (1 - P(T, IMPACT, IMPACT + 1.5, E.linear))) : "0";
 
-    // The letters: struck 40 ms apart from the D outward; each drops in, then heats and cools.
-    letters.forEach((el, i) => {
-      const strike = IMPACT + Math.abs(i - CENTER_I) * 0.04;
-      const dt = T - strike;
-      if (dt < 0) {
-        el.style.visibility = "hidden";
-        return;
-      }
-      el.style.visibility = "visible";
-      el.style.color = heat(dt);
-      const drop = lerp(-70, 0, E.outBack(clamp(dt / 0.35, 0, 1)));
-      const sc = lerp(1.25, 1, E.outExpo(clamp(dt / 0.4, 0, 1)));
-      const bl = i === 0 ? 0 : blur;
-      V.set(el, { y: drop, s: sc, blur: bl });
-      // The O darkens to ink as the dive ends, so the frame reads as one dark counter at 23.8 s.
-      if (i === 0 && T >= 23.2) el.style.color = V.mixColor(V.pal.oxide, V.pal.ink, P(T, 23.2, 23.8, E.linear));
-    });
+    // The forged letters: struck 40 ms apart from the D outward; each drops in, then heats and cools.
+    if (T < COOL_B) {
+      letters.forEach((el, i) => {
+        const strike = IMPACT + Math.abs(i - CENTER_I) * 0.04;
+        const dt = T - strike;
+        if (dt < 0) {
+          el.style.visibility = "hidden";
+          return;
+        }
+        el.style.visibility = "visible";
+        el.style.color = heat(dt);
+        const drop = lerp(-70, 0, E.outBack(clamp(dt / 0.35, 0, 1)));
+        const sc = lerp(1.25, 1, E.outExpo(clamp(dt / 0.4, 0, 1)));
+        V.set(el, { y: drop, s: sc, blur: i === 0 ? 0 : blur });
+      });
+    }
+
+    // Cool into the settled .ox-logo metal: the forged letters fade out as the gradient fades in.
+    const cool = P(T, COOL_A, COOL_B, E.linear);
+    logo.style.display = T >= COOL_B ? "none" : "block";
+    logo.style.opacity = String(1 - cool);
+    settleWrap.style.display = T >= COOL_A ? "flex" : "none";
+    const fade = P(T, FADE_A, FADE_B, E.linear); // the dive ends in ink
+    settle.style.opacity = String(cool * (1 - fade));
+    settle.style.setProperty("--ox-blur", blur.toFixed(2) + "px");
+    // The light sweep across the settled logo at the tagline (20.0 s), 500 ms.
+    V.glint(settle, T, TAG_AT, 0.5);
 
     // The underline grows from the center, 0 -> 1100 px.
     uline.style.display = T >= IMPACT ? "block" : "none";

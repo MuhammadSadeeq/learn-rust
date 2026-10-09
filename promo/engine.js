@@ -68,6 +68,18 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .scene { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: hidden; }
 .scene * { box-sizing: border-box; }
 .ox-display { font-family: var(--font-display); font-weight: 900; text-transform: uppercase; letter-spacing: 0.02em; line-height: 0.9; white-space: nowrap; }
+/* .ox-logo (the forged brand logo, any scene): <div class="ox-display ox-logo">OXIDIZE</div>.
+   Molten-to-dark-oxide metal fill (background-clip text), a 1 px top highlight and one 18 px glow.
+   V.glint(el, T, t0, dur) sweeps a cream band across it; --ox-blur (px) softens it for camera moves. */
+.ox-logo {
+  display: inline-block; color: transparent; -webkit-text-fill-color: transparent;
+  background-image: linear-gradient(105deg, rgba(255,244,227,0) 46%, rgba(255,244,227,0.9) 50%, rgba(255,244,227,0) 54%),
+    linear-gradient(180deg, var(--molten) 0%, var(--hot) 22%, var(--oxide) 55%, #9c3b05 100%);
+  background-size: 300% 100%, 100% 100%; background-repeat: no-repeat, no-repeat;
+  background-position: calc((1 - var(--glint, 0)) * 100%) 0, 0 0;
+  -webkit-background-clip: text; background-clip: text;
+  filter: blur(var(--ox-blur, 0px)) drop-shadow(0 -1px 0 rgba(255,244,227,0.35)) drop-shadow(0 0 18px rgba(232,89,12,0.45));
+}
 .ox-mono { font-family: var(--font-mono); font-weight: 500; white-space: pre; }
 .ox-body { font-family: var(--font-body); font-weight: 400; }
 .ch { display: inline-block; }
@@ -225,6 +237,13 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
       if (dt >= 0 && dt < dur) o = Math.max(o, peak * (1 - dt / dur));
     }
     return round3(o);
+  };
+
+  // Light sweep for .ox-logo: --glint goes 0 -> 1 over dur seconds from t0, moving a cream band left to right.
+  V.glint = function (el, T, t0, dur = 0.5) {
+    const g = clamp((T - t0) / dur, 0, 1);
+    if (el) el.style.setProperty("--glint", String(round3(g)));
+    return g;
   };
 
   // Calls on the course's characters (site/assets/cast-art.js, rustopia.js).

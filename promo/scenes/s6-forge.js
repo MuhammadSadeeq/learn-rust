@@ -346,7 +346,8 @@
         document.head.appendChild(st);
       }
       const hits = cue("bossHits", [44.5, 44.75, 45.0, 45.25, 45.5, 45.75, 46.0, 46.25]);
-      const floaters = hits.map((h, i) => `<div class="s6-float" data-float="${i}">−1 HP</div>`).join("");
+      // the floaters alternate sides, so two live ones never sit on top of each other
+      const floaters = hits.map((h, i) => `<div class="s6-float" data-float="${i}" style="left:${90 + (i % 2 ? 44 : -44)}px">−1 HP</div>`).join("");
       layer.innerHTML = `
         <div class="s6-bg"></div>
         <div class="s6-cam" data-k="cam">

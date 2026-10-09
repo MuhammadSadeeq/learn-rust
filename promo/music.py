@@ -702,14 +702,17 @@ def pingpong(st, d=0.375, fb=0.42):
 
 
 def breath_gate(st):
-    """Total silence from @breath (15.5) to @impact (16.0). 3 ms fade out ahead of the cut."""
+    """Total silence from @breath (15.5) to @impact (16.0), with smooth edges.
+    A 3 ms raised-cosine fade out before 15.5 and a 3 ms rise that ends exactly on 16.0,
+    so the impact's first sample is never touched and nothing splatters into the band above 20 kHz."""
     i0 = t2i(C["breath"])
     i1 = t2i(C["impact"])
     f = int(0.003 * SR)
-    st[:, i0:i1] = 0.0
-    ramp = 0.5 + 0.5 * np.cos(np.pi * np.arange(f) / f)
-    st[:, i0 - f:i0] *= ramp
-    return st
+    mask = np.ones(st.shape[1])
+    mask[i0 - f:i0] = 0.5 + 0.5 * np.cos(np.pi * np.arange(f) / f)
+    mask[i0:i1 - f] = 0.0
+    mask[i1 - f:i1] = 0.5 - 0.5 * np.cos(np.pi * np.arange(f) / f)
+    return st * mask[None, :]
 
 
 def finish(g, duck=None, ir=None, wet_level=0.9):
