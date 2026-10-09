@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>One Owner · Oxidize</title>
+<script>try{var t=JSON.parse(localStorage.getItem("oxidize:v1")||"{}").theme;if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/oxidize.css">
+<script src="../assets/course-data.js" defer></script>
+<script src="../assets/quests-data.js" defer></script>
+<script src="../assets/cards/ch06.js" defer></script>
+<script src="../assets/scenarios/ch06.js" defer></script>
+<script src="../assets/oxidize.js" defer></script>
+<script src="../assets/xray.js" defer></script>
+</head>
+<body data-chapter="6">
+<a class="ox-skip" href="#main">Skip to content</a>
+<header class="ox-top"></header>
+<div class="ox-page">
+<aside class="ox-rail" aria-label="Chapter contents"></aside>
+<main class="ox-main" id="main">
+
+<header class="ox-hero" data-auto>
+  <ul>
+    <li>State the three ownership rules and explain why each one exists.</li>
+    <li>Predict, line by line, when a value is moved, copied or dropped.</li>
+    <li>Fix "use of moved value" errors in three different ways, and pick the right one.</li>
+    <li>Read a function signature and say who owns what before and after the call.</li>
+  </ul>
+</header>
+
+<section>
+<h2 id="problem">Somebody has to free the memory</h2>
+
+<p>Every running program borrows memory from the operating system. The string you build, the array of users you load from the database, the JSON response you assemble: each one occupies bytes, and at some point those bytes have to be handed back. Programming languages differ in <em>who</em> does that and <em>when</em>.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th></th><th>Manual<br>C, C++</th><th>At runtime<br>PHP, JS, Java, Go</th><th>At compile time<br>Rust</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Who frees?</strong></td><td>You call <code>free()</code></td><td>A reference counter or garbage collector, while the program runs</td><td>The compiler writes the free for you, at the end of the owner's scope</td></tr>
+    <tr><td><strong>Typical bugs</strong></td><td>Double free, use after free, leaks</td><td>Pauses, extra memory, leaks through cycles</td><td>Those bugs can't compile. You pay by following the ownership rules.</td></tr>
+    <tr><td><strong>Runtime cost</strong></td><td>None</td><td>Counting, scanning, pausing</td><td>None</td></tr>
+  </tbody>
+</table>
+</div>
+
+<aside class="ox-callout" data-kind="php">
+  <p>PHP keeps a reference count on every value. When the count reaches zero, the value is freed immediately, and a cycle collector occasionally cleans up objects that point at each other. On top of that, a classic PHP-FPM request throws away <em>all</em> of its memory when the response is sent. That is why you have rarely had to think about memory: most leaks die with the request.</p>
+  <p>Rust programs are usually long-running: servers, CLIs, agents, game loops. There is no end-of-request reset to clean up after you, so the language needs a precise rule for when every single value is freed.</p>
+</aside>
+
+<details class="ox-think">
+  <summary>Rust has no garbage collector and you never call free(). So how does it know when to free a String?</summary>
+  <div class="ox-think-body">
+    <p>At every line of your program the compiler knows exactly <strong>one variable that owns</strong> that String. When that variable's scope ends, the compiler inserts the code that frees it.</p>
+    <p>That is the whole trick. The rest of this chapter is the small set of rules that keeps "exactly one owner" true at every line.</p>
+  </div>
+</details>
+</section>
+
+<section>
+<h2 id="rules">The three rules</h2>
+
+<p>Here they are. Read them slowly. Everything in Act II follows from them.</p>
+
+<div class="ox-rules">
+  <div class="ox-rule"><div><p>Each value in Rust has an <span class="c-own">owner</span>.</p><p>Usually a variable; it can also be a struct field, a vector slot or a function parameter.</p></div></div>
+  <div class="ox-rule"><div><p>There can only be <strong>one owner at a time</strong>.</p><p>Ownership can be handed over (a <em>move</em>), but it is never shared by two variables at once.</p></div></div>
+  <div class="ox-rule"><div><p>When the owner goes out of scope, the value is <strong>dropped</strong>.</p><p>Dropping runs cleanup code and frees any heap memory. It happens at a <code>}</code> you can point to.</p></div></div>
+</div>
+
+<p class="ox-pull">A value is a parcel with exactly one name on its label.</p>
+
+<aside class="ox-callout" data-kind="insight">
+  <p>Picture every heap value as a parcel with a shipping label. The label has room for <strong>one name</strong>. Whoever is on the label must dispose of the parcel when they leave the room (the end of their scope). You can:</p>
+  <ul>
+    <li><strong>hand it over</strong>: the label is rewritten with a new name. That is a <em>move</em>.</li>
+    <li><strong>photocopy it</strong>: a brand-new parcel with its own label. That is a <em>clone</em>.</li>
+    <li><strong>let someone look at it</strong> without taking it. That is a <em>borrow</em>, and it's the next chapter.</li>
+  </ul>
+</aside>
+</section>
+
+<section>
+<h2 id="scope">Scope is the owner's lifetime</h2>
+
+<p>A <strong>scope</strong> is the region between a <code>{</code> and its matching <code>}</code>. A variable is valid from the line that declares it until the end of its scope. Step through this program and watch the heap.</p>
+
+<div class="ox-xray ox-wide" data-scenario="scope-drop"></div>
+
+<p>The important line is 6. The inner block ends, <code>s</code> goes out of scope, and its heap bytes are freed <em>right there</em>. Nobody wrote <code>free</code> or <code>unset</code>. The compiler saw that <code>s</code> owns a <code>String</code> and inserted a call to <code>drop</code> at the closing brace.</p>
+
+<h3>Watching drops happen</h3>
+
+<p>You can attach your own code to the moment a value is dropped by implementing the <code>Drop</code> trait. You'll learn <code>impl</code> blocks in Chapter 09 and traits in Chapter 14; for now, read it as "run this when a <code>Noisy</code> is dropped".</p>
+
+<div class="ox-quiz" data-id="06:drop-order">
+  <p class="ox-q">What does this program print?</p>
+  <pre class="rs" data-run data-stdout="drop c\nend of main\ndrop b\ndrop a">
+struct Noisy(&'static str);
+
+impl Drop for Noisy {
+    fn drop(&amp;mut self) {
+        println!("drop {}", self.0);
+    }
+}
+
+fn main() {
+    let _a = Noisy("a");
+    let _b = Noisy("b");
+    {
+        let _c = Noisy("c");
+    }
+    println!("end of main");
+}</pre>
+  <ol class="ox-choices">
+    <li><code>end of main</code>, <code>drop a</code>, <code>drop b</code>, <code>drop c</code></li>
+    <li data-correct><code>drop c</code>, <code>end of main</code>, <code>drop b</code>, <code>drop a</code></li>
+    <li><code>drop c</code>, <code>end of main</code>, <code>drop a</code>, <code>drop b</code></li>
+    <li>The order isn't defined; it depends on the allocator.</li>
+  </ol>
+  <div class="ox-why">
+    <p><code>_c</code> lives in the inner block, so it's dropped when that block closes, before <code>end of main</code> prints. At the end of <code>main</code>, locals are dropped in <strong>reverse order of declaration</strong>: <code>_b</code>, then <code>_a</code>. Later values may depend on earlier ones, so they have to go first.</p>
+    <p>The order is fully deterministic. You can rely on it for things like closing files, releasing locks, or committing transactions.</p>
+  </div>
+</div>
+
+<div class="ox-bridge">
+  <pre class="php">
+class Noisy {
+    public function __construct(
+        public string $name
+    ) {}
+
+    public function __destruct() {
+        echo "drop {$this->name}\n";
+    }
+}
+
+$a = new Noisy("a");
+// __destruct runs when the refcount
+// reaches zero, which might be much
+// later if something else (a cache,
+// a closure, a cycle) still holds $a.</pre>
+  <pre class="rs" data-check="skip">
+struct Noisy(&amp;'static str);
+
+impl Drop for Noisy {
+    fn drop(&amp;mut self) {
+        println!("drop {}", self.0);
+    }
+}
+
+let a = Noisy("a");
+// drop runs at the end of a's scope.
+// Always. You can see the exact line
+// by finding the closing brace.</pre>
+  <div class="ox-bridge-note"><p><code>__destruct</code> and <code>Drop</code> look alike, but PHP's timing depends on who else holds a reference at runtime. Rust's timing is decided at compile time and is visible in the source.</p></div>
+</div>
+
+<aside class="ox-callout" data-kind="trap">
+  <p><code>let _ = value;</code> is not the same as <code>let _x = value;</code>. A plain underscore doesn't bind anything, so a temporary like <code>let _ = Noisy("t");</code> is dropped at the end of that statement, immediately. <code>_x</code> is a real variable that lives to the end of the scope. This matters later with locks: <code>let _ = mutex.lock();</code> releases the lock straight away.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="move">Move: handing over the parcel</h2>
+
+<p>Now the line that surprises every PHP developer. Before you step through it, decide what you think <code>let b = a;</code> does.</p>
+
+<div class="ox-xray ox-wide" data-scenario="move-error"></div>
+
+<p>Here is the real compiler output for that program. Learn to read it from the top: the error code and summary, then the arrows that tell the story in order: <em>move occurs because…</em>, <em>value moved here</em>, <em>value borrowed here after move</em>.</p>
+
+<pre class="rustc">
+error[E0382]: borrow of moved value: `a`
+ --> src/main.rs:4:16
+  |
+2 |     let a = String::from("hi");
+  |         - move occurs because `a` has type `String`, which does not implement the `Copy` trait
+3 |     let b = a;
+  |             - value moved here
+4 |     println!("{a}");
+  |                ^ value borrowed here after move
+  |
+help: consider cloning the value if the performance cost is acceptable
+  |
+3 |     let b = a.clone();
+  |              ++++++++
+
+For more information about this error, try `rustc --explain E0382`.</pre>
+
+<h3>Why a move, and not one of the alternatives?</h3>
+
+<p>The <code>String</code> on the stack is just three numbers: pointer, length, capacity. When you write <code>let b = a;</code> Rust copies those three numbers. Now there are two pointers to the same heap bytes, and the language has to choose what that means.</p>
+
+<figure class="ox-figure">
+<svg viewBox="0 0 640 210" width="640" role="img" aria-label="Two stack variables a and b both pointing to the same heap buffer. If both owned it, both would free it.">
+  <text x="20" y="22" class="t-muted" font-size="12">STACK</text>
+  <text x="400" y="22" class="t-muted" font-size="12">HEAP</text>
+  <rect x="20" y="36" width="210" height="52" rx="6" class="f-ghost" stroke-width="1.5"/>
+  <text x="34" y="60" font-size="15" font-weight="700" class="t-muted">a</text>
+  <text x="34" y="78" font-size="11" class="t-muted">ptr · len 2 · cap 2</text>
+  <text x="150" y="68" font-size="12" class="t-muted">moved</text>
+  <rect x="20" y="120" width="210" height="52" rx="6" class="f-own" stroke-width="1.5"/>
+  <text x="34" y="144" font-size="15" font-weight="700" class="t-own">b</text>
+  <text x="34" y="162" font-size="11" class="t-own">ptr · len 2 · cap 2</text>
+  <rect x="400" y="80" width="120" height="48" rx="6" class="f-heap" stroke-width="1.5"/>
+  <text x="430" y="110" font-size="18" font-weight="700">h  i</text>
+  <path d="M230 62 C 320 62, 330 100, 398 100" class="s-muted" stroke-width="2" stroke-dasharray="4 4"/>
+  <path d="M230 146 C 320 146, 330 108, 398 108" class="s-own" stroke-width="2.5"/>
+  <text x="250" y="200" font-size="12" class="t-muted">Two pointers, one owner. Only b will free the buffer.</text>
+</svg>
+<figcaption>After <code>let b = a;</code> both variables hold the same pointer, but only <code>b</code> is the owner. Using <code>a</code> is a compile error.</figcaption>
+</figure>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Option</th><th>What would happen</th><th>Verdict</th></tr></thead>
+  <tbody>
+    <tr><td>Both own the buffer</td><td>Both would free it at the end of <code>main</code>: a <strong>double free</strong>, which corrupts memory.</td><td class="c-bad">unsafe</td></tr>
+    <tr><td>Silently deep-copy the heap</td><td>Every assignment could allocate and copy megabytes behind your back.</td><td class="c-bad">slow and invisible</td></tr>
+    <tr><td>Count references at runtime</td><td>That is PHP's model. It costs a counter update on every copy and still needs a cycle collector.</td><td class="c-bad">runtime cost</td></tr>
+    <tr><td><strong>Transfer ownership</strong></td><td>Copy the 24 stack bytes, mark <code>a</code> as unusable. Zero heap work, exactly one free.</td><td class="c-ok">Rust's choice</td></tr>
+  </tbody>
+</table>
+</div>
+
+<aside class="ox-callout" data-kind="php">
+  <p>In PHP, <code>$b = $a</code> means one of two different things depending on the type:</p>
+  <ul>
+    <li><strong>Arrays and strings</strong> act like copies (copy-on-write: they share memory until one side changes, then PHP copies quietly).</li>
+    <li><strong>Objects</strong> are handles: <code>$b</code> and <code>$a</code> point at the <em>same</em> object, and a change through one is visible through the other.</li>
+  </ul>
+  <p>Rust's <code>let b = a;</code> is neither. It is a <strong>transfer</strong>. After it, there is still one value and still one owner; only the owner's name has changed. If you want PHP-array behaviour, you write <code>.clone()</code>. If you want PHP-object behaviour (shared handles), you use <code>Rc</code>, covered in Chapter 17.</p>
+</aside>
+
+<details class="ox-callout" data-kind="deep">
+  <summary>What does a move compile to?</summary>
+  <p>A move is a plain copy of the stack bytes (for a <code>String</code>, 24 bytes on a 64-bit machine), and the optimiser usually removes even that. The old slot isn't zeroed or flagged. The compiler simply refuses to compile any later use of it.</p>
+  <p>When a move happens only on some paths, for example inside an <code>if</code>, Rust keeps a hidden one-byte "drop flag" so that the value is freed exactly once whichever path runs. That is the only runtime trace ownership ever leaves.</p>
+</details>
+</section>
+
+<section>
+<h2 id="copy-clone">Copy and Clone</h2>
+
+<p>Try the same thing with an integer:</p>
+
+<pre class="rs" data-run data-stdout="5 5">
+fn main() {
+    let x = 5;
+    let y = x;
+    println!("{x} {y}");
+}</pre>
+
+<p>This compiles. An <code>i32</code> has no heap part: its four bytes on the stack <em>are</em> the whole value. Copying them is as cheap as moving them, and there's nothing to free twice. Types like this implement the <code>Copy</code> trait, and for them assignment copies instead of moving.</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Copy (assignment copies)</th><th>Not Copy (assignment moves)</th></tr></thead>
+  <tbody>
+    <tr><td><code>i32</code>, <code>u8</code>, <code>usize</code> and all other integers</td><td><code>String</code></td></tr>
+    <tr><td><code>f32</code>, <code>f64</code></td><td><code>Vec&lt;T&gt;</code></td></tr>
+    <tr><td><code>bool</code>, <code>char</code></td><td><code>Box&lt;T&gt;</code>, <code>HashMap&lt;K, V&gt;</code></td></tr>
+    <tr><td>shared references <code>&amp;T</code></td><td>mutable references <code>&amp;mut T</code></td></tr>
+    <tr><td>tuples and arrays of Copy types: <code>(i32, bool)</code>, <code>[u8; 4]</code></td><td>anything containing a non-Copy type: <code>(i32, String)</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>When you really do want two independent copies of heap data, ask for one with <code>.clone()</code>:</p>
+
+<div class="ox-xray ox-wide" data-scenario="clone-string"></div>
+
+<aside class="ox-callout" data-kind="insight">
+  <p><strong>Copy</strong> is implicit, and Rust only allows it for types where copying is guaranteed to be cheap. <strong>Clone</strong> is explicit because it may allocate. When you see <code>.clone()</code> in a code review, you're looking at a deliberate cost.</p>
+</aside>
+
+<div class="ox-quiz" data-id="06:copy-tuple">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0382">
+fn main() {
+    let point = (3, String::from("north"));
+    let copy = point;
+    println!("{}", point.0);
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. <code>point.0</code> is an integer, and integers are Copy.</li>
+    <li data-correct>No. The tuple contains a <code>String</code>, so the whole tuple moved into <code>copy</code>.</li>
+    <li>No, because tuples can never be copied.</li>
+  </ol>
+  <div class="ox-why"><p>A tuple is Copy only if <em>every</em> element is Copy. <code>(i32, String)</code> isn't, so <code>let copy = point;</code> moves the whole tuple and <code>point</code> can't be used afterwards, not even its integer field. (Moving out of individual fields is possible, but here the whole tuple was moved.) <code>(3, 4)</code> would have compiled.</p></div>
+</div>
+</section>
+
+<section>
+<h2 id="functions">Functions move values too</h2>
+
+<p>Passing a value to a function works exactly like assigning it to a variable: the parameter becomes the new owner. Returning a value moves it out to the caller. Pick a scenario and step through it:</p>
+
+<div class="ox-xray ox-wide" data-scenario="fn-move,give-back"></div>
+
+<p>That means a function signature tells you who owns what, before you read a single line of its body:</p>
+
+<div class="ox-table-wrap">
+<table class="ox-table">
+  <thead><tr><th>Signature</th><th>What happens to the caller's value</th></tr></thead>
+  <tbody>
+    <tr><td><code>fn f(s: String)</code></td><td>Moved in. The caller can't use it afterwards. <code>f</code> drops it unless it hands it on.</td></tr>
+    <tr><td><code>fn f() -&gt; String</code></td><td><code>f</code> creates a value and moves it out. The caller becomes the owner.</td></tr>
+    <tr><td><code>fn f(s: String) -&gt; String</code></td><td>Taken and given back (maybe changed). Works, but clumsy.</td></tr>
+    <tr><td><code>fn f(s: &amp;String)</code></td><td>Borrowed: <code>f</code> looks, the caller keeps ownership. This is the next chapter.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="ox-fill" data-id="06:fill-bang">
+  <p class="ox-q">Complete the signature so <code>add_bang</code> takes ownership, changes the string, and hands it back.</p>
+  <pre class="rs" data-stdout="hi!">
+fn add_bang([[mut]] s: String) -> [[String]] {
+    s.push('!');
+    s
+}
+
+fn main() {
+    let a = String::from("hi");
+    let b = add_bang(a);
+    println!("{b}");
+}</pre>
+  <div class="ox-why"><p>A parameter is a variable like any other, so it needs <code>mut</code> before you can change it. Declaring <code>-&gt; String</code> and ending with <code>s</code> (no semicolon) moves ownership back out to <code>b</code>. Note that <code>a</code> is unusable after the call; ownership went in and came back under a new name.</p></div>
+</div>
+
+<p>Taking ownership and giving it back works, but it gets tiresome fast. Imagine every function that only needs to <em>read</em> a string having to return it again. That frustration is exactly what borrowing fixes in Chapter 07.</p>
+</section>
+
+<section>
+<h2 id="fixes">Three ways out of a move error</h2>
+
+<p>When the compiler says "use of moved value", you have three tools. Each one says something different about your intent, so choose deliberately.</p>
+
+<div class="ox-tabs">
+  <div data-tab="1 · Reorder">
+    <pre class="rs" data-run data-stdout="hi\nhi">
+fn main() {
+    let a = String::from("hi");
+    println!("{a}");     // use a while you still own it
+    let b = a;           // then hand it over
+    println!("{b}");
+}</pre>
+    <p><strong>Use when</strong> you're finished with the original anyway. It costs nothing.</p>
+  </div>
+  <div data-tab="2 · Clone">
+    <pre class="rs" data-run data-stdout="hi hi!">
+fn main() {
+    let a = String::from("hi");
+    let mut b = a.clone(); // a second, independent String
+    b.push('!');
+    println!("{a} {b}");
+}</pre>
+    <p><strong>Use when</strong> you really need two independent values that can change separately. It costs an allocation and a copy.</p>
+  </div>
+  <div data-tab="3 · Borrow">
+    <pre class="rs" data-run data-stdout="hi hi">
+fn main() {
+    let a = String::from("hi");
+    let b = &amp;a;            // b looks at a, a keeps ownership
+    println!("{a} {b}");
+}</pre>
+    <p><strong>Use when</strong> the other code only needs to read. It costs nothing, and it's what you'll reach for most often. Details in the next chapter.</p>
+  </div>
+</div>
+
+<aside class="ox-callout" data-kind="ai">
+  <p>AI coding agents love option 2. When an agent hits a borrow-checker error, the fastest way to make the error disappear is to sprinkle <code>.clone()</code> until it compiles. The code works, but it allocates on every call and hides the real ownership design.</p>
+  <p>When you review agent-written Rust, treat every <code>.clone()</code> as a question: <em>does this code need its own copy, or does it only need to look?</em> If it only looks, the fix is a borrow. You'll practise this in the <a href="../labs/ai-dojo.html">Agent Code Review Dojo</a>.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="checker">Be the borrow checker</h2>
+
+<p>Four short programs. For each one, decide whether <code>rustc</code> accepts it before you look at the answers. Every snippet on this page has been compiled with the real compiler.</p>
+
+<div class="ox-quiz" data-id="06:bc-vec">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0382">
+fn main() {
+    let v = vec![1, 2, 3];
+    let w = v;
+    println!("{}", v.len());
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. It's a Vec of integers, and integers are Copy.</li>
+    <li data-correct>No. <code>v</code> moved into <code>w</code>.</li>
+  </ol>
+  <div class="ox-why"><p>The <em>elements</em> are Copy, but a <code>Vec</code> owns a heap buffer, so the <code>Vec</code> itself is not. <code>let w = v;</code> moves it. Error E0382.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="06:bc-for">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0382">
+fn main() {
+    let names = vec![String::from("Ana"), String::from("Bo")];
+    for n in names {
+        println!("{n}");
+    }
+    println!("{}", names.len());
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. The loop only reads the names.</li>
+    <li data-correct>No. The <code>for</code> loop took ownership of <code>names</code>.</li>
+  </ol>
+  <div class="ox-why"><p><code>for n in names</code> calls <code>names.into_iter()</code>, which consumes the vector and hands you each <code>String</code> by value. After the loop the vector is gone. Write <code>for n in &amp;names</code> to borrow it instead. This catches almost everyone, and it's quest <code>move4</code>.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="06:bc-shadow">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="ok" data-stdout="new hi">
+fn main() {
+    let s = String::from("hi");
+    let t = s;
+    let s = String::from("new");
+    println!("{s} {t}");
+}</pre>
+  <ol class="ox-choices">
+    <li data-correct>Yes. It prints <code>new hi</code>.</li>
+    <li>No. <code>s</code> was moved on line 3.</li>
+  </ol>
+  <div class="ox-why"><p>Line 4 doesn't reuse the moved <code>s</code>; it declares a <em>brand-new</em> variable that happens to have the same name (shadowing, from Chapter 02). The old, moved <code>s</code> is never read again.</p></div>
+</div>
+
+<div class="ox-quiz" data-id="06:bc-fn">
+  <p class="ox-q">Does this compile?</p>
+  <pre class="rs" data-check="E0382">
+fn shout(s: String) -> String {
+    s.to_uppercase()
+}
+
+fn main() {
+    let word = String::from("rust");
+    let loud = shout(word);
+    println!("{word} became {loud}");
+}</pre>
+  <ol class="ox-choices">
+    <li>Yes. <code>shout</code> returns a new String, so <code>word</code> is untouched.</li>
+    <li data-correct>No. <code>word</code> was moved into <code>shout</code>.</li>
+  </ol>
+  <div class="ox-why"><p><code>shout</code> takes <code>String</code> by value, so calling it moves <code>word</code> in. It returns a <em>different</em> String; the original was dropped at the end of <code>shout</code>. Changing the parameter to <code>s: &amp;str</code> and calling <code>shout(&amp;word)</code> fixes it.</p></div>
+</div>
+
+<p>Want more? The <a href="../labs/borrow-checker.html">Be the Borrow Checker</a> lab has dozens of these, with a streak counter.</p>
+</section>
+
+<section>
+<h2 id="php-map">Map it to what you know</h2>
+
+<div class="ox-match" data-id="06:match-php" data-left-label="PHP" data-right-label="Closest Rust idea">
+  <ul>
+    <li data-left="$b = $a; (array)">let b = a.clone(); (but explicit and eager)</li>
+    <li data-left="$b = $a; (object)">two Rc handles to one value</li>
+    <li data-left="unset($a);">drop(a);</li>
+    <li data-left="__destruct()">impl Drop</li>
+    <li data-left="garbage collector">drop calls inserted by the compiler</li>
+    <li data-left="function f(string $s)">fn f(s: &amp;str) (a borrow)</li>
+  </ul>
+</div>
+
+<aside class="ox-callout" data-kind="trap">
+  <p>Analogies are scaffolding, not foundations. PHP's <code>unset()</code> only decrements a counter, so the value may live on if something else refers to it. Rust's <code>drop(a)</code> really ends <code>a</code>'s ownership, and the compiler forbids any later use of <code>a</code>.</p>
+</aside>
+</section>
+
+<section>
+<h2 id="quests">Forge quests</h2>
+<p>Reading builds recognition. Writing code builds the skill. These quests run locally against the real compiler.</p>
+<div class="ox-quests" data-chapter="6"></div>
+</section>
+
+<section>
+<h2 id="recap">Recap</h2>
+
+<div class="ox-recap">
+  <h3>One owner</h3>
+  <ul>
+    <li>Every value has exactly <strong>one owner</strong>. When the owner's scope ends, the value is <strong>dropped</strong>, in reverse order of declaration.</li>
+    <li><code>let b = a;</code> and passing <code>a</code> to a function <strong>move</strong> non-Copy values: the stack part is copied, the heap is untouched, and <code>a</code> becomes unusable.</li>
+    <li><strong>Copy</strong> types (numbers, <code>bool</code>, <code>char</code>, <code>&amp;T</code>, tuples and arrays of them) are copied instead. <strong>Clone</strong> is an explicit, possibly expensive deep copy.</li>
+    <li>Returning a value moves it out to the caller.</li>
+    <li>To fix E0382: <strong>reorder</strong>, <strong>clone</strong> deliberately, or <strong>borrow</strong>.</li>
+  </ul>
+</div>
+
+<div class="ox-deck" data-chapter="6"></div>
+
+<details class="ox-think">
+  <summary>Explain it back: a PHP colleague asks why <code>let b = a;</code> "breaks" <code>a</code>. What do you say in three sentences?</summary>
+  <div class="ox-think-body">
+    <p>One good answer: "A <code>String</code> owns heap memory, and Rust frees heap memory when its single owner goes out of scope. If <code>a</code> and <code>b</code> both owned the same buffer it would be freed twice, so assignment transfers ownership to <code>b</code> instead of sharing it. If you want two copies, call <code>.clone()</code>; if you just want to look at it, borrow it with <code>&amp;a</code>."</p>
+    <p>If your version mentioned <em>one owner</em>, <em>scope end frees</em>, and <em>double free</em>, you've got it.</p>
+  </div>
+</details>
+
+<div class="ox-complete-host"></div>
+</section>
+
+</main>
+</div>
+</body>
+</html>

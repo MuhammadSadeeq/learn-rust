@@ -1,0 +1,8 @@
+[[quest]]
+name = "move1"
+hint = """
+1. Read the error from the bottom up: which line uses `names` after it was moved?
+2. `let all = names;` moves the vector into `all`. Anything you need from `names`
+   has to happen before that line.
+3. Swap the two `let` lines, or drop `all` and use `names` directly.
+"""

@@ -1,0 +1,9 @@
+# Oxidize workspace.
+#   forge   the quest trainer (`cargo forge`)
+#   quests  your exercises; every quest is its own binary so one broken file
+#           never blocks the others, and rust-analyzer checks each one live.
+[workspace]
+members = ["forge", "quests"]
+default-members = ["forge"]
+exclude = ["projects", "solutions"]
+resolver = "3"
