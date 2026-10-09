@@ -6,6 +6,8 @@
 //       function returns (E0515).
 //    2. main borrows long_word from an inner block, then uses the result after
 //       the block has ended and long_word is gone (E0597).
+//  The test module also reports one E0277. It has the same cause as 1, so it
+//  goes away when build_label returns an owned String.
 //
 //  Fix both. Return an owned String, and make sure each owner lives at least
 //  as long as its borrows. Don't use Box::leak to fake a 'static lifetime.
