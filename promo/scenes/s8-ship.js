@@ -69,9 +69,6 @@
 .s8-logowrap { position: absolute; left: 0; top: 300px; width: 1920px; text-align: center; white-space: nowrap; }
 /* the shared brand logo (engine .ox-logo: metal fill, highlight, one glow); tracking as in S3 */
 .s8-logowrap .ox-logo { font-size: 260px; line-height: 1; letter-spacing: 0.06em; }
-.s8-cta { position: absolute; left: 0; top: 821px; width: 1920px; text-align: center; white-space: nowrap; opacity: 0; }
-.s8-cta-text { position: relative; display: inline-block; font: 500 32px/1.2 var(--font-mono); color: var(--cream); }
-.s8-cta-line { position: absolute; left: 0; bottom: -10px; width: 100%; height: 2px; background: var(--oxide); transform-origin: 0 50%; transform: scaleX(0); }
 .s8-oxi { position: absolute; left: 0; top: 0; width: 230px; height: 230px; }
 .s8-oxi > .ca { width: 230px; height: 230px; display: block; }
 .s8-oxi > .ca > .ca-svg { width: 230px; height: 230px; }
@@ -147,7 +144,6 @@
           <div class="s8-sparks">${sparks}</div>
           <div class="s8-tag" data-k="tag">THE RUST COURSE YOU CAN SEE.</div>
           <div class="s8-sub" data-k="sub">For PHP &amp; Laravel developers · 21 chapters · 88 quests · real compiler</div>
-          <div class="s8-cta" data-k="cta"><span class="s8-cta-text">github.com/MuhammadSadeeq/learn-rust<span class="s8-cta-line" data-k="ctaline"></span></span></div>
         </div>
         <div class="s8-flash" data-k="flash"></div>
         <div class="s8-fade" data-k="fade"></div>`;
@@ -214,12 +210,6 @@
         // one light sweep across the logo, just before the hold
         V.glint(logo, T, 61.0, 0.6);
         // the call to action: the real repo URL (README), fading in at 61.4, underline drawn in 400 ms
-        const cta = q("cta");
-        const ctaIn = P(T, 61.4, 61.7, E.outQuad);
-        const ctaOut = P(T, 62.5, 63.0, E.inQuad);
-        cta.style.opacity = String(clamp(ctaIn - ctaOut, 0, 1).toFixed(3));
-        V.set(cta, { y: 10 * (1 - ctaIn) });
-        V.set(q("ctaline"), { sx: P(T, 61.4, 61.8, E.outCubic), sy: 1, origin: "0 50%" });
         // Oxi lands on the logo's top right (outBack), and blinks once at 61.8.
         const oxi = q("oxi");
         const pop = P(T, fT + 0.05, fT + 0.5, E.outBack);
