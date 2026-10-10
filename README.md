@@ -18,7 +18,7 @@ it says it; and you write real code against the real compiler in **the Forge**.
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # 2. Get the course
-git clone <repository-url> learn-rust
+git clone https://github.com/MuhammadSadeeq/learn-rust.git
 cd learn-rust
 
 # 3. Open the course in your browser

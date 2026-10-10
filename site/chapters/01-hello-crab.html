@@ -766,7 +766,7 @@ fn main() {
 <p>Each chapter works the same way. You read and interact in the browser, then you write code in your editor, and <code>cargo forge</code> checks it with the real compiler, <code>rustc</code>.</p>
 
 <ol class="ox-steps">
-  <li><div><p><strong>Clone the repo.</strong></p><pre class="sh">git clone &lt;repository-url&gt; learn-rust
+  <li><div><p><strong>Clone the repo.</strong></p><pre class="sh">git clone https://github.com/MuhammadSadeeq/learn-rust.git
 cd learn-rust</pre></div></li>
   <li><div><p><strong>Open the course.</strong> Serve the site folder and visit it in your browser, or open <code>site/index.html</code> directly.</p><pre class="sh">python3 -m http.server -d site 8000</pre></div></li>
   <li><div><p><strong>Start <code>cargo forge</code>.</strong> In a second terminal, from the repo root. It opens your next quest and rechecks it on every save. When the tests pass, press Enter to move on.</p><pre class="sh">cargo forge            # watch mode: your next quest, rechecked on every save
