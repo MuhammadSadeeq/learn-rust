@@ -146,3 +146,9 @@ It publishes `site/` as it is; there is no build step.
 Progress, XP and quiz answers are stored in your browser's `localStorage`.
 Nothing is sent anywhere. The "Run" buttons on code samples send that code to
 the official Rust Playground (play.rust-lang.org).
+
+## License
+
+[MIT](LICENSE): the course text, the site, the quests, the Forge, the
+companion projects and the launch film. The fonts bundled in `promo/fonts/`
+keep their own licenses (SIL Open Font License 1.1), included next to them.
